@@ -1,0 +1,25 @@
+<?php
+// $Id: extlink.install,v 1.2 2009/12/20 01:00:17 quicksketch Exp $
+
+/**
+ * Implementation of hook_install().
+ */
+function extlink_install() {
+  // Weight needs to be 1 for compatibility with SpamSpan.
+  db_query("UPDATE {system} SET weight = 1 WHERE name = 'extlink'");
+}
+
+/**
+* Implementation of hook_uninstall().
+*/
+function extlink_uninstall() {
+  // Delete the external links variables
+  variable_del('extlink_target');
+  variable_del('extlink_class');
+  variable_del('extlink_subdomains');
+  variable_del('extlink_exclude');
+  variable_del('extlink_include');
+  variable_del('extlink_alert');
+  variable_del('extlink_alert_text');
+  variable_del('extlink_mailto_class');
+}

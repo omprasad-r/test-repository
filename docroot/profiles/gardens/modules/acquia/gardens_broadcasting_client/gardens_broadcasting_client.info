@@ -1,0 +1,6 @@
+name = Drupal Gardens broadcasting client
+description = Pulls, stores and distributes tasks from the Acquia Gardener.
+core = 7.x
+dependencies[] = gardens_client
+package = Drupal Gardens
+hidden = TRUE

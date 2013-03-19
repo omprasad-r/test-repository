@@ -1,0 +1,78 @@
+/* @override http://gardens-css.dev:8888/modules/acquia/themebuilder/themebuilder_bar/page.css?Z */
+
+body.themebuilder {
+  margin-bottom: 292px !important;
+}
+body.themebuilder #toolbar .shadow {
+  display:none;
+}
+
+/* for element selector */
+
+.style-clickable-hover, .style-clickable-ohover {
+  cursor: pointer;
+  position: relative;
+}
+
+body.style-clickable-hover, #page-wrapper.style-clickable-hover {
+  outline-style: none !important;
+}
+
+.style-outline {
+  outline-width: 1px !important;
+  outline-color: #ff0000 !important;
+  outline-style: dashed !important;
+}
+
+/* click to go to this link */
+
+.link-hover {
+  position:absolute;
+  top:0;
+  left:0;
+  padding: 5px 10px;
+  margin: 5px;
+  background-color: lightblue;
+  color:black;
+  border: 1px solid #99C0FF;
+  -moz-border-radius: 10px;
+  z-index: 200000;
+}
+
+.link-hover a {
+  font-weight:bold;
+  font-size: 14px;
+  color: darkBlue;
+}
+
+/* @group Admin Toolbar Integration */
+
+/* Disable the "Appearance" link if overlay is open (or if TB is disabled). */
+body.themebuilder-disabled #toolbar-link-admin-appearance {
+  color: #444;
+}
+
+/** loading indicator **/
+
+.themebuilder-loader {
+  width: 48px;
+  height: 48px;
+  padding: 10px;
+  /* border: 2px solid #8F8F8F; */
+  opacity: .9;
+  -moz-border-radius: 15px;
+  -webkit-border-radius: 15px;
+  background-color: #232323;
+  border-radius: 5px;
+  background-image: url(loading.gif);
+  background-position: 10px 10px;
+  background-repeat:no-repeat;
+  position:fixed;
+  left:50%;
+  top:50%;
+  margin-left: -34px;
+  margin-top: -34px;
+  z-index:1000;
+}
+
+/* @end */

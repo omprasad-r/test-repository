@@ -1,0 +1,81 @@
+<?php
+
+/**
+ * @file
+ * Install and update hooks for broadcasted notification handler module.
+ */
+
+/**
+ * Implements hook_schema().
+ */
+function gardens_broadcasting_client_notifications_schema() {
+  $schema = array();
+
+  $schema['gardens_broadcasting_client_notifications'] = array(
+    'description' => 'Holds notifications data.',
+    'fields' => array(
+      'tid' => array(
+        'type' => 'int',
+        'unsigned' => TRUE,
+        'not null' => TRUE,
+        'description' => 'Task id.',
+      ),
+      'created' => array(
+        'type' => 'int',
+        'unsigned' => TRUE,
+        'not null' => TRUE,
+        'description' => 'The UNIX timestamp when the notification was created.',
+      ),
+      'expire' => array(
+        'type' => 'int',
+        'unsigned' => TRUE,
+        'not null' => TRUE,
+        'description' => 'The UNIX timestamp when the notification should no longer show.',
+      ),
+      'has_expired' => array(
+        'type' => 'int',
+        'unsigned' => TRUE,
+        'not null' => TRUE,
+        'description' => 'Flag storing if the notification has expired.',
+      ),
+      'notification' => array(
+        'type' => 'text',
+        'not null' => TRUE,
+        'description' => 'The notification text.',
+      ),
+    ),
+    'primary key' => array('tid'),
+    'indexes' => array(
+      'query_idx' => array('has_expired', 'created'),
+      'expire_idx' => array('has_expired', 'expire'),
+    ),
+  );
+
+  $schema['gardens_broadcasting_client_read_notifications'] = array(
+    'description' => 'Holds data which notifications need to be hidden for a given user.',
+    'fields' => array(
+      'uid' => array(
+        'type' => 'int',
+        'unsigned' => TRUE,
+        'not null' => TRUE,
+        'description' => 'User id.',
+      ),
+      'tid' => array(
+        'type' => 'int',
+        'unsigned' => TRUE,
+        'not null' => TRUE,
+        'description' => 'Task id.',
+      ),
+    ),
+    'primary key' => array('tid', 'uid'),
+  );
+
+  return $schema;
+}
+
+/**
+ * Force menu rebuilding to activate the menu changes.
+ */
+function gardens_broadcasting_client_notifications_update_7001() {
+  menu_rebuild();
+}

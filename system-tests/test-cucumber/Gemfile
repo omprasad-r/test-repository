@@ -1,0 +1,18 @@
+source :rubygems
+
+gem 'cucumber'
+gem 'rspec'
+gem 'capybara'
+gem 'excon'
+gem 'syntax' #because we feel fancy today and want syntax highlighted output
+gem 'log4r'
+
+gem 'capybara-screenshot', '=0.1.7'
+gem 'nokogiri'
+gem 'poltergeist'
+gem 'axlsx'
+gem 'pry'
+
+#nobody using it at the moment
+#gem 'sauce' , :git => 'git://github.com/saucelabs/sauce_ruby.git'
+#gem 'capybara-mechanize', '~> 0.3.0.pre'

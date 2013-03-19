@@ -1,0 +1,311 @@
+<?php
+
+/**
+ * @file
+ * Handles and distributes tasks broadcasted from Acquia Gardener.
+ *
+ * User defines tasks on www.drupalgardens.com which then gets pulled on all the
+ * other gardeners. On every tangle the first managed node pulls the new tasks
+ * from the associated gardener with the gardens-broadcast-client-tasks-get
+ * drush script and places it on the file system where every site on the tangle
+ * can access it when they run their own cron jobs.
+ */
+
+/**
+ * Implements hook_menu().
+ */
+function gardens_broadcasting_client_menu() {
+  $items = array();
+
+  $items['admin/config/development/gardens_broadcasting_client/settings'] = array(
+    'title' => 'Base settings',
+    'description' => 'Base broadcasting client settings',
+    'type' => MENU_DEFAULT_LOCAL_TASK,
+  );
+
+  return $items;
+}
+
+/**
+ * Loads a task from the database.
+ *
+ * @param int $tid
+ *   Task id.
+ *
+ * @return array
+ *   Associative array defining a task.
+ */
+function gardens_broadcasting_client_task_load($tid) {
+  return db_query('SELECT * FROM {gardens_broadcasting_client_tasks} WHERE tid = :tid', array(':tid' => $tid))->fetchAssoc();
+}
+
+/**
+ * Determines if a task has not yet been handled.
+ *
+ * @param int $tid
+ *   Task id.
+ *
+ * @return bool
+ *   TRUE if the task has not yet been met, FALSE otherwise.
+ */
+function gardens_broadcasting_client_task_is_new($tid) {
+  return !db_query('SELECT tid FROM {gardens_broadcasting_client_tasks} WHERE tid = :tid', array(':tid' => $tid))->fetchField();
+}
+
+/**
+ * Checks if a task is intended for the current site.
+ *
+ * @param array $task
+ *   Task definition array.
+ *
+ * @return bool
+ *   TRUE if the task is intended for this site.
+ */
+function gardens_broadcasting_client_domain_restriction_check($task) {
+  // If the target_domain is empty the task is intended for every site.
+  // Otherwise the target_domains will be a comma separated list of domains.
+  $site_domain = str_replace(array('http://', 'https://'), '', $GLOBALS['base_url']);
+  return empty($task['target_domains']) || in_array($site_domain, explode(',', $task['target_domains']));
+}
+
+/**
+ * Implements hook_cron().
+ */
+function gardens_broadcasting_client_cron() {
+  // Make sure this cron is not being ran too often to protect the file system.
+  if (REQUEST_TIME >= variable_get('gardens_broadcasting_client_next_cron_run', 0)) {
+    // Next allowed cron will be in the next 1 - 3 hours.
+    variable_set('gardens_broadcasting_client_next_cron_run', REQUEST_TIME + mt_rand(3600, 10800));
+
+    // Get new tasks from the file system.
+    $last_update = variable_get('gardens_broadcasting_client_last_task', 0);
+    // If this is the first time the cron has been run then do not get all old
+    // tasks, only go back n days.
+    if (!$last_update) {
+      $last_update = strtotime(variable_get('gardens_broadcasting_client_prepopulate_range', '-14 days'));
+    }
+    $new_tasks = gardens_broadcasting_client_file_tasks_get($last_update);
+    // Process new tasks.
+    foreach ($new_tasks as $new_task) {
+      // Only handle new tasks which are intended for the current site.
+      if (gardens_broadcasting_client_task_is_new($new_task['tid']) && gardens_broadcasting_client_domain_restriction_check($new_task)) {
+        // Queue up new task to be sent to the appropriate task handler module.
+        // We'll use queue in case a task handling takes long, or fails in which
+        // case we would need to try again later anyway.
+        $queue = DrupalQueue::get('gardens_broadcasting_client_task_handler');
+        $queue->createItem($new_task['tid']);
+        drupal_write_record('gardens_broadcasting_client_tasks', $new_task);
+        variable_set('gardens_broadcasting_client_last_task', $new_task['created']);
+      }
+    }
+
+    // Clean up old tasks.
+    gardens_broadcasting_client_old_task_cleanup();
+  }
+}
+
+/**
+ * Implements hook_cron_queue_info().
+ */
+function gardens_broadcasting_client_cron_queue_info() {
+  return array(
+    'gardens_broadcasting_client_task_handler' => array(
+      'worker callback' => 'gardens_broadcasting_client_task_handler_worker',
+    ),
+  );
+}
+
+/**
+ * Queue worker to feed tasks to their handlers.
+ */
+function gardens_broadcasting_client_task_handler_worker($tid) {
+  $task = gardens_broadcasting_client_task_load($tid);
+  if ($task) {
+    $handling_succeeded = FALSE;
+    try {
+      $handling_succeeded = gardens_broadcasting_client_task_handle($task);
+    }
+    catch (Exception $e) {
+    }
+    if (!$handling_succeeded) {
+      // Task handling failed, try again if the task is not too old.
+      $task_cleanup_age = variable_get('gardens_broadcasting_client_task_cleanup_age', '-90 days');
+      $old_task_timestamp = strtotime($task_cleanup_age);
+      if ($task['created'] > $old_task_timestamp) {
+        $queue = DrupalQueue::get('gardens_broadcasting_client_task_handler');
+        $queue->createItem($tid);
+      }
+    }
+  }
+}
+
+/**
+ * Sends new task to the handler module.
+ *
+ * @param array $task
+ *   Associative array that defines a task.
+ *
+ * @return bool
+ *   TRUE if the task has been handled successfully.
+ */
+function gardens_broadcasting_client_task_handle($task) {
+  $handler = 'gardens_broadcasting_client_' . $task['task_provider'] . '_task_handler';
+  return function_exists($handler) ? $handler($task) : FALSE;
+}
+
+/**
+ * Cleans out old tasks from the table.
+ *
+ * @param int $timestamp
+ *   The UNIX timestamp from which all older tasks are to be deleted. Optional
+ *   argument.
+ */
+function gardens_broadcasting_client_old_task_cleanup($timestamp = NULL) {
+  if (!isset($timestamp) && ($task_cleanup_age = variable_get('gardens_broadcasting_client_task_cleanup_age', '-90 days'))) {
+    $timestamp = strtotime($task_cleanup_age);
+  }
+  if ($timestamp) {
+    // @index cleanup_idx
+    db_query('DELETE FROM {gardens_broadcasting_client_tasks} WHERE created < :cutoff', array(':cutoff' => $timestamp));
+  }
+}
+
+/**
+ * Returns the filepath where the tasks are stored for distribution.
+ */
+function gardens_broadcasting_client_tasks_filepath_get() {
+  $filepath = variable_get('gardens_broadcasting_client_tasks_filepath_override', '');
+  if (!$filepath) {
+    $hosting_info = variable_get('acquia_hosting_site_info', array());
+    $filepath = '/mnt/files/' . $hosting_info['name'] . '/tasks/tasklist.csv';
+  }
+  return $filepath;
+}
+
+/**
+ * Loads tasks from the file system into the memory.
+ *
+ * We rarely use this file: when on cron job we retrieve new tasks from the
+ * gardener or on a gardens cron run a site is updating the task list from the
+ * file system. We'll keep this file relative small to avoid memory issues.
+ */
+function gardens_broadcasting_client_file_tasks_load() {
+  $tasks = &drupal_static('gardens_broadcasting_client_file_tasks', array());
+  if (!$tasks) {
+    $filename = gardens_broadcasting_client_tasks_filepath_get();
+    if (is_file($filename) && ($fp = fopen($filename, 'r'))) {
+      while ($task = fgetcsv($fp)) {
+        $tasks[$task[0]] = array(
+          'tid' => $task[0],
+          'created' => $task[1],
+          'task_provider' => $task[2],
+          'task' => $task[3],
+          'target_domains' => $task[4],
+        );
+      }
+      fclose($fp);
+    }
+  }
+  return $tasks;
+}
+
+/**
+ * Retrieves new tasks from the file system.
+ *
+ * @param int $timestamp
+ *   Optional variable which contains a UNIX timestamp. If unspecified the
+ *   function will return all the last task or tasks if more than one shares
+ *   the same timestamp at the end of the file.
+ *
+ * @return array
+ *   Array of tasks not older than $timestamp ordered from oldest to newest.
+ */
+function gardens_broadcasting_client_file_tasks_get($timestamp = NULL) {
+  $new_tasks = array();
+
+  // Items comes from oldest to newest. We are mainly interested in the newest
+  // ones.
+  $tasks = array_reverse(gardens_broadcasting_client_file_tasks_load());
+  foreach ($tasks as $task) {
+    // When $timestamp is not set we have to retrieve the last task, or last few
+    // that share the same creation time. When this gets executed we have the
+    // newest item at hand, so just initialize it from the $task and then we'll
+    // end up with what we need.
+    if (!isset($timestamp)) {
+      $timestamp = $task['created'];
+    }
+
+    if ($task['created'] >= $timestamp) {
+      // Item of interest!
+      $new_tasks[] = $task;
+    }
+    else {
+      // Since $tasks is ordered by creation time, no use going ahead, all items
+      // are just going to be too old for the request.
+      break;
+    }
+  }
+
+  // Reverse resulting tasks to keep the oldest to newest order.
+  return array_reverse($new_tasks);
+}
+
+/**
+ * Writes out new tasks to the file system and trims old tasks.
+ *
+ * @param array $new_tasks
+ *   An array of new tasks to be appended to the file ordered from oldest to
+ *   newest.
+ */
+function gardens_broadcasting_client_file_tasks_save($new_tasks) {
+  // Oldest to newest list of tasks.
+  $tasks = gardens_broadcasting_client_file_tasks_load();
+  // Make sure $new_tasks is also ordered oldest to newest.
+  usort($new_tasks, '_gardens_broadcasting_client_tasks_sort');
+  // Add new tasks to the list.
+  $task_list_changed = FALSE;
+  foreach ($new_tasks as $new_task) {
+    $new_task_tid = $new_task['tid'];
+    if (!isset($tasks[$new_task_tid])) {
+      $tasks[$new_task_tid] = $new_task;
+      $task_list_changed = TRUE;
+    }
+  }
+
+  if ($task_list_changed) {
+    // To keep the file's size under control, we rewrite the file completely and
+    // throw away old items. Only the last n items stay.
+    $task_count = count($tasks);
+    $max_task_count = variable_get('gardens_broadcasting_client_file_task_count', 100);
+    if ($task_count > $max_task_count) {
+      $tasks = array_slice($tasks, $task_count - $max_task_count);
+    }
+
+    // Create new task updates file.
+    $current_task_filepath = gardens_broadcasting_client_tasks_filepath_get();
+    $new_task_filepath = $current_task_filepath . '.new';
+    $fp = fopen($new_task_filepath, 'w');
+    foreach ($tasks as $task) {
+      // Ensure proper field order.
+      $csv = array(
+        $task['tid'],
+        $task['created'],
+        $task['task_provider'],
+        $task['task'],
+        $task['target_domains'],
+      );
+      fputcsv($fp, $csv);
+    }
+    fclose($fp);
+
+    // Overwrite the old task file with the new one.
+    copy($new_task_filepath, $current_task_filepath);
+  }
+}
+
+/**
+ * Helper function to sort a task list by creation time, oldest to newest.
+ */
+function _gardens_broadcasting_client_tasks_sort($a, $b) {
+  return $b['created'] - $a['created'];
+}

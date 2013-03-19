@@ -1,0 +1,373 @@
+; Palette Ids were generated using http://www.uuidgenerator.com/
+; though anything unique would work.
+
+; Andover by kuler
+palette[Andover][id] = "8A0AA0D8-FAB1-DAB0-6C9BBF82780E04F92"
+palette[Andover][author] = kuler
+palette[Andover][a][hex] = 3e1928
+palette[Andover][b][hex] = 4b3c24
+palette[Andover][c][hex] = 766455
+palette[Andover][d][hex] = c2a337
+palette[Andover][e][hex] = e1c887
+palette[Andover][black][hex] = 000000
+palette[Andover][white][hex] = FFFFFF
+
+; Baikal by Acquia
+palette[Baikal][id] = "8A0AA0E7-B275-851C-132D28497D5D133B"
+palette[Baikal][author] = Acquia
+palette[Baikal][a][hex] = 102456
+palette[Baikal][b][hex] = 28579d
+palette[Baikal][c][hex] = eda773
+palette[Baikal][d][hex] = ffc978
+palette[Baikal][e][hex] = fff1b9
+palette[Baikal][black][hex] = 000a2a
+palette[Baikal][white][hex] = FFFFFF
+
+; Bare Bones by Acquia
+palette[Bare Bones][id] = "8CCDAEC0-9178-59FF-D77BE8D82070696B"
+palette[Bare Bones][author] = 'Acquia'
+palette[Bare Bones][white][hex] = 'ffffff'
+palette[Bare Bones][white][name] = 'White'
+palette[Bare Bones][black][hex] = '000000'
+palette[Bare Bones][black][name] = 'Black'
+palette[Bare Bones][a][hex] = '333333'
+palette[Bare Bones][a][name] = 'Dark Gray'
+palette[Bare Bones][b][hex] = '551a8b'
+palette[Bare Bones][b][name] = 'HTML Purple'
+palette[Bare Bones][c][hex] = '666666'
+palette[Bare Bones][c][name] = 'Medium Gray'
+palette[Bare Bones][d][hex] = '0000ee'
+palette[Bare Bones][d][name] = 'HTML Blue'
+palette[Bare Bones][e][hex] = '999999'
+palette[Bare Bones][e][name] = 'Gray'
+
+; Broadway by Acquia
+palette[Broadway][id] = "8A0AA0F7-E1CB-5AD0-04E2F8C20CF48645"
+palette[Broadway][author] = "Acquia"
+palette[Broadway][a][hex] = e0db52
+palette[Broadway][a][name] = "Type"
+palette[Broadway][b][hex] = c2bf70
+palette[Broadway][b][name] = "Light Blue"
+palette[Broadway][c][hex] = 93a9c0
+palette[Broadway][c][name] = "Muted Green"
+palette[Broadway][d][hex] = aaaaaa
+palette[Broadway][d][name] = "Bright Green"
+palette[Broadway][e][hex] = eeeeee
+palette[Broadway][e][name] = "Grey"
+palette[Broadway][white][hex] = FFFFFF
+palette[Broadway][white][name] = "White"
+palette[Broadway][black][hex] = 333333
+palette[Broadway][black][name] = "Charcoal"
+
+; Burgundy by Acquia
+palette[Burgundy][id] = "8A0AA0C8-F77F-80BB-6259E0C64E62FF6D"
+palette[Burgundy][author] = Acquia
+palette[Burgundy][white][hex] = fffdfb
+palette[Burgundy][white][name] = "White"
+palette[Burgundy][black][hex] = 1d1d2a
+palette[Burgundy][black][name] = "Charcoal"
+palette[Burgundy][a][hex] = 5d0604
+palette[Burgundy][a][name] = "Ruby Red"
+palette[Burgundy][b][hex] = 333333
+palette[Burgundy][b][name] = "Dark Blue"
+palette[Burgundy][c][hex] = c18939
+palette[Burgundy][c][name] = "Burnt Orange"
+palette[Burgundy][d][hex] = 666666
+palette[Burgundy][d][name] = "Tan"
+palette[Burgundy][e][hex] = e6dbc8
+palette[Burgundy][e][name] = "Offwhite"
+
+; Campaign by Acquia
+palette[Campaign][id] = "8A0AA107-EE01-35ED-3936AFE868E23B7A"
+palette[Campaign][author] = 'Acquia'
+palette[Campaign][a][hex] = 'a42470'
+palette[Campaign][a][name] = 'Dark Purple'
+palette[Campaign][b][hex] = '444444'
+palette[Campaign][b][name] = 'Purple'
+palette[Campaign][c][hex] = 'cd1069'
+palette[Campaign][c][name] = 'Light Purple'
+palette[Campaign][d][hex] = 'e1267c'
+palette[Campaign][d][name] = 'Light Blue'
+palette[Campaign][e][hex] = '4dabf5'
+palette[Campaign][e][name] = 'Dark Gray'
+palette[Campaign][white][hex] = 'ffffff'
+palette[Campaign][white][name] = 'White'
+palette[Campaign][black][hex] = '212121'
+palette[Campaign][black][name] = 'Charcoal'
+
+; Candy by Acquia
+palette[Candy][id] = "8A0AA145-F148-064F-4B86BD0994F37DA5"
+palette[Candy][author] = Acquia
+palette[Candy][a][hex] = ec5094
+palette[Candy][b][hex] = ff56fa
+palette[Candy][c][hex] = cccccc
+palette[Candy][d][hex] = ff8c53
+palette[Candy][e][hex] = f5f5f5
+palette[Candy][black][hex] = 111111
+palette[Candy][white][hex] = FFFFFF
+
+; Canyon by Acquia
+palette[Canyon][id] = "8A0AA116-A216-D511-7F56425FF53AF07F"
+palette[Canyon][author] = Acquia
+palette[Canyon][a][hex] = 2a2005
+palette[Canyon][b][hex] = 73490d
+palette[Canyon][c][hex] = 80641b
+palette[Canyon][d][hex] = deaf2d
+palette[Canyon][e][hex] = ffe990
+palette[Canyon][black][hex] = 000000
+palette[Canyon][white][hex] = FFFFFF
+
+; Carbon by Acquia
+palette[Carbon][id] = "633C5CB2-D65F-8637-CC6BDF76A6036062"
+palette[Carbon][author] = Acquia
+palette[Carbon][white][hex] = 'ffffff'
+palette[Carbon][white][name] = 'White'
+palette[Carbon][black][hex] = '333333'
+palette[Carbon][black][name] = 'Black'
+palette[Carbon][a][hex] = '1d1d2a'
+palette[Carbon][a][name] = 'Dark Gray'
+palette[Carbon][b][hex] = '545454'
+palette[Carbon][b][name] = 'Medium Gray'
+palette[Carbon][c][hex] = 'ff8400'
+palette[Carbon][c][name] = 'Orange'
+palette[Carbon][d][hex] = 'ffc34a'
+palette[Carbon][d][name] = 'Light Orange'
+palette[Carbon][e][hex] = 'cdcdcd'
+palette[Carbon][e][name] = 'Light Gray'
+
+; Dijon by kuler
+palette[Dijon][id] = "8A0AA126-B629-ADB8-3C5161F42F496992"
+palette[Dijon][author] = kuler
+palette[Dijon][a][hex] = 211d1c
+palette[Dijon][b][hex] = 854040
+palette[Dijon][c][hex] = 60a8b2
+palette[Dijon][d][hex] = f0cb46
+palette[Dijon][e][hex] = edddbd
+palette[Dijon][black][hex] = 000000
+palette[Dijon][white][hex] = FFFFFF
+
+; Fiesta by Acquia
+palette[Fiesta][id] = "8A0AA155-ADB7-8A3C-19B3AC444A7504FC"
+palette[Fiesta][author] = Acquia
+palette[Fiesta][a][hex] = d4470a
+palette[Fiesta][b][hex] = 00dfa5
+palette[Fiesta][c][hex] = cccccc
+palette[Fiesta][d][hex] = fff45c
+palette[Fiesta][e][hex] = f5f5f5
+palette[Fiesta][black][hex] = 111111
+palette[Fiesta][white][hex] = FFFFFF
+
+; Impact by Acquia
+palette[Impact][id] = "8A0AA135-0AEB-F0C9-F773BC173B064C48"
+palette[Impact][author] = "Acquia"
+palette[Impact][a][hex] = 62a734
+palette[Impact][a][name] = "Green"
+palette[Impact][b][hex] = 00a5ff
+palette[Impact][b][name] = "Light Green"
+palette[Impact][c][hex] = cccccc
+palette[Impact][c][name] = "Light Grey"
+palette[Impact][d][hex] = d3fec1
+palette[Impact][d][name] = "Light Blue"
+palette[Impact][e][hex] = f5f5f5
+palette[Impact][e][name] = "Grey"
+palette[Impact][white][hex] = FFFFFF
+palette[Impact][white][name] = "White"
+palette[Impact][black][hex] = 121212
+palette[Impact][black][name] = "Charcoal"
+
+; Irises by Acquia
+palette[Irises][id] = "8A0AA155-ADB7-8A3C-19B3AC444A75AAAA"
+palette[Irises][author] = Acquia
+palette[Irises][a][hex] = 5a87af
+palette[Irises][b][hex] = 8cb4b9
+palette[Irises][c][hex] = 8cc87d
+palette[Irises][d][hex] = faa330
+palette[Irises][e][hex] = fac80a
+palette[Irises][black][hex] = 000000
+palette[Irises][white][hex] = FFFFFF
+
+; Kenwood by Acquia
+palette[Kenwood][id] = "8A0AA164-ECCA-0E4E-BE824CA8DF22D011"
+palette[Kenwood][author] = "Acquia"
+palette[Kenwood][a][hex] = 272a0f
+palette[Kenwood][b][hex] = 63591b
+palette[Kenwood][c][hex] = 646a2c
+palette[Kenwood][d][hex] = bbab56
+palette[Kenwood][e][hex] = dfdb92
+palette[Kenwood][black][hex] = 2a1911
+palette[Kenwood][white][hex] = FFFFFF
+
+; Lilac by Acquia
+palette[Lilac][id] = "8A0AA174-9FF5-BA04-1DCF97E89F77D367"
+palette[Lilac][author] = Acquia
+palette[Lilac][a][hex] = 501a4b
+palette[Lilac][b][hex] = 423a6a
+palette[Lilac][c][hex] = 8b6e9a
+palette[Lilac][d][hex] = b3a6d4
+palette[Lilac][e][hex] = eaceec
+palette[Lilac][black][hex] = 000000
+palette[Lilac][white][hex] = FFFFFF
+
+; Minima (Builder-base) by Acquia
+palette[Minima][id] = "8A0AA183-A2BD-21A5-8C16817D4AC0B9C6"
+palette[Minima][author] = 'Acquia'
+palette[Minima][a][hex] = 'ff7800'
+palette[Minima][a][name] = 'Grey Tint 1'
+palette[Minima][b][hex] = '333333'
+palette[Minima][b][name] = 'Orange'
+palette[Minima][c][hex] = '666666'
+palette[Minima][c][name] = 'Charcoal'
+palette[Minima][d][hex] = '999999'
+palette[Minima][d][name] = 'Grey Tint 2'
+palette[Minima][e][hex] = 'eeeeee'
+palette[Minima][e][name] = 'Grey Tint 3'
+palette[Minima][white][hex] = 'ffffff'
+palette[Minima][white][name] = 'White'
+palette[Minima][black][hex] = '000000'
+palette[Minima][black][name] = 'Black'
+
+; Moderne by Acquia
+palette[Moderne][id] = "8A0AA193-F933-DA64-9FE5C41A9A6F1149"
+palette[Moderne][author] = Acquia
+palette[Moderne][a][hex] = 8c0000
+palette[Moderne][b][hex] = 3d3589
+palette[Moderne][c][hex] = e57502
+palette[Moderne][d][hex] = ffc71b
+palette[Moderne][e][hex] = ffffab
+palette[Moderne][black][hex] = 000000
+palette[Moderne][white][hex] = FFFFFF
+
+; Perignon by kuler
+palette[Perignon][id] = "8A0AA1A3-BEAA-E0A7-471D25DB72113124"
+palette[Perignon][author] = kuler
+palette[Perignon][a][hex] = 737f70
+palette[Perignon][b][hex] = 93a696
+palette[Perignon][c][hex] = e8c43c
+palette[Perignon][d][hex] = c9c98c
+palette[Perignon][e][hex] = ffed71
+palette[Perignon][black][hex] = 000000
+palette[Perignon][white][hex] = FFFFFF
+ 
+; Sonoma by Acquia
+palette[Sonoma][id] = "8A0AA1B2-D33B-10DC-EE9ADC855F128DF1"
+palette[Sonoma][author] = 'Acquia'
+palette[Sonoma][a][hex] = '23496b'
+palette[Sonoma][a][name] = 'Primary Blue'
+palette[Sonoma][b][hex] = '666666'
+palette[Sonoma][b][name] = 'Secondary Blue'
+palette[Sonoma][c][hex] = '2c70c5'
+palette[Sonoma][c][name] = 'Heading Dark Blue'
+palette[Sonoma][d][hex] = '8bbfff'
+palette[Sonoma][d][name] = 'Light Grey'
+palette[Sonoma][e][hex] = 'eeeeee'
+palette[Sonoma][e][name] = 'Lighter Grey'
+palette[Sonoma][white][hex] = 'ffffff'
+palette[Sonoma][white][name] = 'White'
+palette[Sonoma][black][hex] = '333333'
+palette[Sonoma][black][name] = 'Charcoal'
+
+; Sparks by Acquia
+palette[Sparks][id] = "8A0AA1C2-0FBD-DDF0-3F517B0B188D29A7"
+palette[Sparks][author] = "Acquia"
+palette[Sparks][a][hex] = 1d1d2a
+palette[Sparks][a][name] = "Slate Blue"
+palette[Sparks][b][hex] = 333333
+palette[Sparks][b][name] = "Olive Green"
+palette[Sparks][c][hex] = 666666
+palette[Sparks][c][name] = "Dark Charcoal"
+palette[Sparks][d][hex] = 7b7b8b
+palette[Sparks][d][name] = "Light Grey"
+palette[Sparks][e][hex] = 707969
+palette[Sparks][e][name] = "Black"
+palette[Sparks][white][hex] = FFFFFF
+palette[Sparks][white][name] = "White"
+palette[Sparks][black][hex] = 000000
+palette[Sparks][black][name] = "Charcoal"
+
+; Spring Rain by Acquia
+palette[Spring Rain][id] = "8A0AA1D2-F4F7-F0A7-884CF15136489379"
+palette[Spring Rain][author] = Acquia
+palette[Spring Rain][a][hex] = 475959
+palette[Spring Rain][b][hex] = 6e734d
+palette[Spring Rain][c][hex] = 79a54e
+palette[Spring Rain][d][hex] = 7ecb3d
+palette[Spring Rain][e][hex] = c4ef94
+palette[Spring Rain][black][hex] = 000000
+palette[Spring Rain][white][hex] = FFFFFF
+
+; Sprout by kuler
+palette[Sprout][id] = "8A0AA1E1-D154-0D2A-DBDEFD20895FC0E1"
+palette[Sprout][author] = kuler
+palette[Sprout][a][hex] = 59361f
+palette[Sprout][b][hex] = 5c992e
+palette[Sprout][c][hex] = a3cc52
+palette[Sprout][d][hex] = ff5933
+palette[Sprout][e][hex] = e5e573
+palette[Sprout][black][hex] = 000000
+palette[Sprout][white][hex] = FFFFFF
+
+; Starry by Acquia
+palette[Starry][id] = "8A0AA1E1-D154-0D2A-DBDEFD20895FCBBB"
+palette[Starry][author] = Acquia
+palette[Starry][a][hex] = 004d9d
+palette[Starry][b][hex] = 8aabcd
+palette[Starry][c][hex] = c6e0ea
+palette[Starry][d][hex] = e1c350
+palette[Starry][e][hex] = efed87
+palette[Starry][black][hex] = 000000
+palette[Starry][white][hex] = FFFFFF
+
+; Sunflower by kuler
+palette[Sunflower][id] = "8A0AA1F1-079D-0E9A-A56082981E3210EB"
+palette[Sunflower][author] = 'kuler'
+palette[Sunflower][white][hex] = 'ffffff'
+palette[Sunflower][black][hex] = '000000'
+palette[Sunflower][a][hex] = '37154a'
+palette[Sunflower][b][hex] = '0f2459'
+palette[Sunflower][c][hex] = '7500c3'
+palette[Sunflower][d][hex] = 'c43911'
+palette[Sunflower][e][hex] = 'f79000'
+
+; Tropica by kuler
+palette[Tropica][id] = "8A0AA200-C545-9919-FACAECBF87B5E233"
+palette[Tropica][author] = kuler
+palette[Tropica][a][hex] = 2c2233
+palette[Tropica][b][hex] = 5e0042
+palette[Tropica][c][hex] = 005869
+palette[Tropica][d][hex] = 00856a
+palette[Tropica][e][hex] = 8db500
+palette[Tropica][black][hex] = 000000
+palette[Tropica][white][hex] = FFFFFF
+
+; Van Gogh by Acquia
+palette[Van Gogh][id] = "8A0AA210-CDB8-0BDF-C64D368E554B7CCC"
+palette[Van Gogh][author] = Acquia
+palette[Van Gogh][a][hex] = 0f5078
+palette[Van Gogh][b][hex] = 8cb4b9
+palette[Van Gogh][c][hex] = c5e3e1
+palette[Van Gogh][d][hex] = b25f16
+palette[Van Gogh][e][hex] = eadabe
+palette[Van Gogh][black][hex] = 000000
+palette[Van Gogh][white][hex] = FFFFFF
+
+; Veranda by kuler
+palette[Veranda][id] = "8A0AA210-CDB8-0BDF-C64D368E554B7058"
+palette[Veranda][author] = kuler
+palette[Veranda][a][hex] = 002f2f
+palette[Veranda][b][hex] = 046380
+palette[Veranda][c][hex] = a7a37e
+palette[Veranda][d][hex] = e6e2af
+palette[Veranda][e][hex] = efecca
+palette[Veranda][black][hex] = 000000
+palette[Veranda][white][hex] = FFFFFF
+
+; Wintry by kuler
+palette[Wintry][id] = "8A0AA220-07EB-0511-DC886151EFE5A4E8"
+palette[Wintry][author] = kuler
+palette[Wintry][a][hex] = 593b43
+palette[Wintry][b][hex] = 733f49
+palette[Wintry][c][hex] = 4d6c73
+palette[Wintry][d][hex] = a69c9c
+palette[Wintry][e][hex] = f2f2f2
+palette[Wintry][black][hex] = 000000
+palette[Wintry][white][hex] = FFFFFF

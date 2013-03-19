@@ -1,0 +1,56 @@
+<?php
+
+/**
+ * @file
+ * Module for holding various enterprise specific features.
+ */
+
+/**
+ * Implements hook_menu().
+ */
+function gardens_enterprise_misc_menu() {
+  $items = array();
+
+  $items['admin/modules/status'] = array(
+    'title' => 'Status',
+    'description' => 'See the status of all modules (even those that are hidden)',
+    'access arguments' => array('administer modules'),
+    'page callback' => 'gardens_enterprise_misc_modules_status',
+    'type' => MENU_LOCAL_TASK,
+  );
+
+  return $items;
+}
+
+/**
+ * Page callback to show status of all modules.
+ */
+function gardens_enterprise_misc_modules_status() {
+  $header = array(
+    t('Enabled'),
+    t('Name'),
+    t('Version'),
+    t('File name'),
+    t('Hidden'),
+  );
+  // Get current list of modules.
+  $files = system_rebuild_module_data();
+  uasort($files, 'system_sort_modules_by_info_name');
+  $rows = array();
+  // Iterate through each of the modules.
+  foreach ($files as $filename => $module) {
+    $row = array();
+    $row[] = $module->status ? 'X' : '';
+    $row[] = check_plain($module->info['name']);
+    $row[] = check_plain($module->info['version']);
+    $row[] = check_plain($module->filename);
+    $row[] = $module->info['hidden'] ? 'X' : '';
+    $rows[] = $row;
+  }
+  $build = array(
+    '#theme' => 'table',
+    '#header' => $header,
+    '#rows' => $rows,
+  );
+  return $build;
+}

@@ -1,0 +1,776 @@
+<?php
+// $Id:$
+
+/**
+ * @file
+ *   Theme builder layout selector prototype.
+ */
+
+/**
+ * Implementation of hook_init().
+ */
+function themebuilder_styleedit_init() {
+  if (!themebuilder_compiler_in_edit_mode()) {
+    return;
+  }
+  $settings = array(
+    'themebuilderSelectorVisibility' => 'styleedit-set-selector-visibility',
+  );
+  drupal_add_js($settings, array('type' => 'setting'));
+}
+
+/**
+ * Implementation of hook_menu().
+ */
+function themebuilder_styleedit_menu() {
+  $items = array();
+  // Used to invoke the editor UI.
+  $items['styleedit-edit'] = array(
+    'title' => 'Style wizard',
+    'page callback' => 'themebuilder_styleedit_edit',
+    'type' => MENU_CALLBACK,
+  );
+  $items['styleedit-palette'] = array(
+    'title' => 'Palette',
+    'page callback' => 'themebuilder_bar_ajax_request',
+    'page arguments' => array('themebuilder_styleedit_get_palette'),
+    'type' => MENU_CALLBACK,
+  );
+  $items['styleedit-palettes'] = array(
+    'title' => 'Palettes',
+    'page callback' => 'themebuilder_bar_ajax_request',
+    'page arguments' => array('themebuilder_styleedit_get_palettes'),
+    'type' => MENU_CALLBACK,
+  );
+  $items['styleedit-palette-set'] = array(
+    'page callback' => 'themebuilder_bar_ajax_request',
+    'page arguments' => array('themebuilder_styleedit_set_palette'),
+    'type' => MENU_CALLBACK,
+  );
+  $items['styleedit-palette-info'] = array(
+    'page callback' => 'themebuilder_bar_ajax_request',
+    'page arguments' => array('themebuilder_styleedit_get_palette_info_json'),
+    'type' => MENU_CALLBACK,
+  );
+  // Used to save the selection.
+  $items['styleedit-save'] = array(
+    'title' => 'Style wizard submission',
+    'page callback' => 'themebuilder_bar_ajax_request',
+    'page arguments' => array('themebuilder_styleedit_save'),
+    'type' => MENU_CALLBACK,
+  );
+  $items['styleedit-file-upload'] = array(
+    'title' => 'File upload',
+    'page callback' => 'themebuilder_bar_ajax_request',
+    'page arguments' => array('themebuilder_styleedit_upload', 1),
+    'type' => MENU_CALLBACK,
+  );
+  $items['styleedit-set-selector-visibility'] = array(
+    'title' => t('Set selector visibility'),
+    'page callback' => 'themebuilder_bar_ajax_request',
+    'page arguments' => array('themebuilder_styleedit_set_selector_visibility'),
+    'type' => MENU_CALLBACK,
+  );
+
+  foreach ($items as $path => &$item) {
+    $item['access callback'] = 'themebuilder_compiler_access';
+    $item['access arguments'] = array($path);
+  }
+
+  return $items;
+}
+
+/**
+ * Implements hook_themebuilder_bar_tab_permissions().
+ */
+function themebuilder_styleedit_themebuilder_bar_tab_permissions() {
+  return array(
+    'access themebuilder styles tab' => array(
+      'title' => t('Access the styles tab'),
+      'description' => t('Edit basic style properties of a theme.'),
+    ),
+  );
+}
+
+/**
+ * Ajax callback for uploading themebuilder images.
+ *
+ * @return string $path
+ *   The path to the image, relative to the site install.
+ */
+function themebuilder_styleedit_upload($image_type = FALSE) {
+  $validators = array();
+  if ($image_type === 'favicon') {
+    $validators['file_validate_extensions'] = array('ico jpg jpeg gif png');
+    $validators['themebuilder_styleedit_validate_is_favicon'] = array();
+  }
+  else {
+    $validators['file_validate_is_image'] = array();
+  }
+  // Save file to /tmp, if it is in fact an image.
+  $file = file_save_upload('styleedit', $validators);
+  if ($file && $image_type === 'favicon') {
+    $favicon = themebuilder_styleedit_convert_to_favicon($file);
+    if ($favicon) {
+      $file = $favicon;
+    }
+  }
+
+  // TODO: Copy file to the media library as a managed file (using file_copy).
+  $theme =& themebuilder_compiler_get_current_theme();
+  $filepath = $theme->addImage($file);
+  if ($filepath) {
+    // We have the absolute path to the image on the filesystem. Return a path
+    // relative to the theme being edited.
+    $relative_path = 'images/' . basename($filepath);
+    print $relative_path;
+    exit(0);
+  }
+}
+
+/**
+ * Convert an image file into .ico format.
+ *
+ * @param $file
+ *   A Drupal file object. Must represent a valid image.
+ * @return mixed
+ *   The new .ico file object, or FALSE if the conversion didn't succeed.
+ */
+function themebuilder_styleedit_convert_to_favicon($file) {
+  // No conversion needed if the file is already an ICO file.
+  if (strtolower(pathinfo($file->filename, PATHINFO_EXTENSION)) == 'ico') {
+    return $file;
+  }
+
+  $filename = tempnam(sys_get_temp_dir(), 'favicon');
+  $command = "convert " . escapeshellarg(drupal_realpath($file->uri)) . " -background none -resize '16x16' -gravity Center -extent '16x16' ico:" . escapeshellarg($filename);
+  exec($command, $output = array(), $return_val);
+  if ($return_val === 0) {
+    // The conversion was successful, and the new favicon is in /tmp.
+    // Rename it and create a real file object to represent it.
+    $filepath = file_unmanaged_copy($filename, 'temporary://favicon.ico', FILE_EXISTS_RENAME);
+    global $user;
+    $new_file = new stdClass();
+    $new_file->uid      = $user->uid;
+    $new_file->status   = 0;
+    $new_file->filename = basename($filepath);
+    $new_file->uri      = 'temporary://' . basename($filepath);
+    $new_file->filemime = file_get_mimetype($new_file->filename);
+    $new_file->filesize = filesize($filepath);
+    return $new_file;
+  }
+  return FALSE;
+}
+
+/**
+ * Validate that an uploaded image is a valid favicon, or can be converted to a valid favicon.
+ *
+ * @see themebuilder_styleedit_convert_to_favicon()
+ */
+function themebuilder_styleedit_validate_is_favicon($file) {
+  $errors = array();
+
+  // If an ICO file was uploaded, it will be used without conversion. Otherwise,
+  // ensure that the image toolkit recognizes the file as an image (not just
+  // that the filename has an image extension), and assume that if it does, then
+  // the convert utility used by themebuilder_styleedit_convert_to_favicon()
+  // will as well.
+  if (strtolower(pathinfo($file->filename, PATHINFO_EXTENSION)) != 'ico') {
+    $info = image_get_info($file->uri);
+    if (!$info || empty($info['extension'])) {
+      $errors[] = t('Only ICO, JPEG, PNG, and GIF images are allowed.');
+    }
+  }
+
+  return $errors;
+}
+
+/**
+ * Implementation of hook_themebuilder_bar_items().
+ *
+ * If user has sufficient privileges, add layout picker tool to the page.
+ */
+function themebuilder_styleedit_themebuilder_bar_items($base_weight) {
+  if (user_access('access themebuilder styles tab')) {
+    $path = drupal_get_path('module', 'themebuilder_styleedit');
+
+    drupal_add_css($path .'/palettepicker/css/palettepicker.css', array('preprocess' => TRUE));
+    drupal_add_css($path .'/palettepicker/css/ie/ie-gte-8-palettepicker.css',
+      array(
+        'preprocess' => TRUE,
+        'browsers' => array(
+          'IE' => 'gte IE 8',
+          '!IE' => FALSE,
+        ),
+      )
+    );
+    drupal_add_css($path .'/colorpicker/css/colorpicker.css', array('preprocess' => TRUE));
+
+    // Don't preprocess highlighter.css; it needs to be available for client-
+    // side manipulation.
+    drupal_add_css($path .'/css/highlighter.css', array('preprocess' => FALSE));
+
+    drupal_add_js(
+      array(
+        'styleEditorPath'     => 'styleedit-edit',
+        'styleGetPaletteInfoPath'=> 'styleedit-palette-info',
+        'styleSetPalettePath' => 'styleedit-palette-set',
+        'styleUploadToken'    => drupal_get_token('styleedit-file-upload'),
+        'styleBackgroundNoImageSrc'  => "/" . $path . '/no-image.png',
+      ),
+      array('type' => 'setting')
+    );
+
+    return array(array('name' => 'style', 'title' => t('Styles'), 'link' => 'styleedit-edit', 'weight' => -20));
+  }
+}
+
+function themebuilder_styleedit_themebuilder_bar_editor() {
+  $path = drupal_get_path('module', 'themebuilder_styleedit');
+  return array(array(
+    'css' => array(
+      array(
+        'data' => $path .'/palettepicker/css/palettepicker.css',
+      ),
+      array(
+        'data' => $path .'/colorpicker/css/colorpicker.css',
+      ),
+      array(
+        'data' => $path .'/themebuilder_styleedit.css',
+      ),
+    ),
+    'js'  => array($path . '/jquery.rule-1.0.1.js', // Note: The minimized version hasn't been patched, so it won't work as of jquery 1.4.2.
+                   $path . '/colorpicker/js/colorpicker.js',
+                   $path . '/palettepicker/js/PalettePicker.js',
+                   $path . '/js/Palette-new.js',
+                   $path . '/js/ColorManager.js',
+                   $path . '/ajaxupload.3.2.js',
+                   $path . '/js/inputslider.js',
+                   $path . '/js/ThemeMarkup1Filter.js',
+                   $path . '/js/ThemeMarkup2Filter.js',
+                   $path . '/js/Selector.js',
+                   $path . '/js/ElementPicker.js',
+                   $path . '/js/SelectorEditor.js',
+                   $path . '/js/SelectorNode.js',
+                   $path . '/js/SimpleNavigator.js',
+                   $path . '/js/PowerNavigator.js',
+                   $path . '/js/util.js',
+                   $path . '/js/Editor.js',
+                   $path . '/js/FontEditor.js',
+                   $path . '/js/BoxEditor.js',
+                   $path . '/js/RadioButton.js',
+                   $path . '/js/BackgroundEditor.js',
+                   $path . '/js/Stylesheet.js',
+                   $path . '/js/Declaration.js',
+                   $path . '/js/SwatchModification.js',
+                   $path . '/js/palette.js',
+                   $path . '/themebuilder_styleedit.js')
+  ));
+}
+
+/**
+ * Called via AJAX. Returns a JS object with the current palette.
+ */
+function themebuilder_styleedit_get_palette() {
+  $palette = themebuilder_compiler_get_current_palette();
+  themebuilder_compiler_json_output($palette->id);
+}
+
+/**
+ * Called via AJAX. Returns a JS representation of all the available palettes.
+ */
+function themebuilder_styleedit_get_palettes() {
+  $palettes = array();
+  $palette_objects = themebuilder_compiler_get_palettes();
+  foreach ($palette_objects as $palette_id => $palette_object) {
+    $palettes[$palette_id] = themebuilder_styleedit_flatten_palette($palette_id, $palette_object);
+  }
+  themebuilder_compiler_json_output($palettes);
+}
+
+/**
+ * Returns all available palette info.
+ */
+function themebuilder_styleedit_get_palette_info() {
+  $info = array();
+
+  $colorManager = themebuilder_compiler_get_color_manager();
+
+  $info['current_palette'] = $colorManager->getPaletteId();
+
+  $available_palettes = $colorManager->getPalettes();
+  foreach ($available_palettes as $available_palette) {
+    $info['palettes'][$available_palette->id] = themebuilder_styleedit_flatten_palette($available_palette->id, $available_palette);
+  }
+
+  $info['indexes'] = Palette::getIndexes();
+  $info['mainIndexes'] = Palette::getMainIndexes();
+
+  $info['customColors'] = $colorManager->getCustomColorArray();
+  return $info;
+}
+
+/**
+ * Called via AJAX. Returns a JS representation of all available palette info.
+ */
+function themebuilder_styleedit_get_pallete_info_json() {
+  $info = themebuilder_styleedit_get_palette_info();
+  themebuilder_compiler_json_output($info);
+}
+
+/**
+ * Convert a palette object into an array form that Javascript can handle.
+ *
+ * @param int $palette_id
+ * @param Palette $palette_object
+ * @return array
+ */
+function themebuilder_styleedit_flatten_palette($palette_id, $palette_object) {
+  $palette = array(
+    'id' => $palette_id,
+    'name' => $palette_object->name,
+    'author' => $palette_object->author,
+  );
+  foreach ($palette_object->colors as $color) {
+    $palette[$color->index] = $color->hex;
+  }
+  return $palette;
+}
+
+/**
+ * Stores selected style. Called via AJAX with form data.
+ */
+function themebuilder_styleedit_set_palette() {
+  $ret = array();
+  $ret['error'] = '';
+
+  if (isset($_POST['palette_id'])){
+    $palette_id = intval($_POST['palette_id']);
+    $palette = themebuilder_compiler_set_palette($palette_id);
+    $ret['palette'] = themebuilder_styleedit_flatten_palette($palette->id, $palette);
+  } else {
+    $ret['error'] = 'Wrong Arguments';
+  }
+  themebuilder_compiler_json_output($ret);
+}
+
+/**
+ * Menu callback. Generates the contents of the style tab.
+ */
+function themebuilder_styleedit_edit() {
+  global $base_path;
+  $top = '';
+  $path = drupal_get_path('module', 'themebuilder_styleedit');
+  $scripts = array('/themebuilder_styleedit.js',
+                           '/js/inputslider.js',
+                           '/js/ElementPicker.js',
+                           '/js/util.js',
+                           '/js/Editor.js',
+                           '/js/FontEditor.js',
+                           '/js/BoxEditor.js',
+                           '/js/BackgroundEditor.js',
+                           '/js/Stylesheet.js',
+                           '/js/Declaration.js',
+                           '/js/SwatchModification.js',
+                           '/js/palette.js');
+  foreach($scripts as $script){
+//    $top .= '<script src="' . $path . $script . '"></script>';
+  }
+  $selector = '<div id="path-selector"></div>';
+  $bodies = '<div class="contents">';
+
+  $tabs = array('font'      =>t('Font'),
+                'spacing'   =>t('Borders & Spacing'),
+                'background'=>t('Background'));
+  //create tabs
+  $top .= '<div class="tabs tb-tabs-vert"><ul class="tabnav">';
+  foreach ($tabs as $name => $title){
+    $top .= '<li class="' . $name . '"><a href="#themebuilder-style-'.$name.'" title="' . t("First Select an element to theme") . '">' . $title . '</a></li>';
+    $func = "themebuilder_styleedit_tab_" . $name;
+    $bodies .= '<div id="themebuilder-style-' . $name . '">' . $func() . '</div>';
+  }
+  $top .= '</ul></div>';
+  $bodies .= '</div>';
+
+  echo $selector . $top . $bodies;
+}
+
+function themebuilder_styleedit_tab_font(){
+  $fontFamilyTip = t('Font family');
+  $sizeTip = t('Text size');
+  $sizeUnitsTip = t('Text size units');
+  $colorTip = t('Element color and theme palette');
+  $boldTip = t('Bold text');
+  $italicsTip = t('Italics text');
+  $underlineTip = t('Underline text');
+  $alignLeftTip = t('Align left');
+  $alignCenterTip = t('Align center');
+  $alignRightTip = t('Align right');
+  $alignJustifiedTip = t('Align fully justified');
+  $uppercaseTip = t('Uppercase text');
+  $leadingTip = t('Leading (% of font size)');
+  $kerningTip = t('Kerning (pixels)');
+
+  $html = '<div class="font-table"><div class="fieldset">';
+  $html .= "<select id=\"style-font-family\" title=\"$fontFamilyTip\">";
+  $html .= themebuilder_styleedit_get_font_dropdown();
+  $html .= '</select>';
+  if (module_exists('font_management')) {
+    $html .= l(t('configure professional fonts'), 'admin/config/user-interface/font-management', array(
+      // TODO: Remove the 'typekit-link' class after the 1.03 release.
+      'attributes' => array('class' => 'typekit-link font-management-link override-controls-veil'),
+      'query' => array('destination' => ''),
+    ));
+    // $html .= "<a class='font-management-link' id='typekit-toggle' href='javascript:void(0)'>show site without Typekit fonts</a>";
+  }
+  $html .= <<<HERE
+    </div>
+    <div id="themebuilder-font-editor" class="top-bottom-borders fieldset">
+    <div class="text-format-panel">
+      <div id="style-font-size-image">&nbsp;</div>
+      <input id="style-font-size" class="inputslider-large" title="$sizeTip"/>
+      <select id="style-font-size-u" title="$sizeUnitsTip"><option value="px">px</option><option value="em">em</option></select>
+      <div class="panel-separator">&nbsp;</div>
+    </div>
+    <div class="text-format-panel">
+      <div class="colorSelector" id="style-font-color" title="$colorTip"></div>
+      <div class="panel-separator"></div>
+    </div>
+    <div class="text-format-panel">
+      <div class="fg-buttonset fg-buttonset-multi font-buttons">
+        <button id="style-font-weight" class="fg-button ui-round ui-state-default ui-corner-all bold" title="$boldTip"><span class="letter"><b>B</b></span></button>
+        <button id="style-font-style" class="fg-button ui-round ui-state-default ui-corner-all italic" title="$italicsTip"><span class="letter"><i>I</i></span></button>
+        <button id="style-text-decoration" class="fg-button ui-round ui-state-default ui-corner-all underline" title="$underlineTip"><span class="letter">U</span></button>
+        <!-- not bothering with this yet -->
+        <!--<button class="fg-button ui-state-default strike"><span class="strike">S</span></button-->
+      </div>
+      <div class="panel-separator"></div>
+    </div>
+    <div class="text-format-panel">
+      <div class="text-align-panel font-panel">
+        <div id="text-align-left" class="text-align" title="$alignLeftTip"></div>
+        <div id="text-align-center" class="text-align" title="$alignCenterTip"></div>
+        <div id="text-align-right" class="text-align" title="$alignRightTip"></div>
+        <div id="text-align-justify" class="text-align" title="$alignJustifiedTip"></div>
+      <div class="panel-separator"></div>
+      </div>
+    </div>
+    <div class="text-format-panel">
+      <div class="fg-buttonset fg-buttonset-multi font-buttons">
+        <button id="style-font-transform" title="$uppercaseTip" class="fg-button ui-round ui-state-default ui-corner-all uppercase"><span class="letter"><b>ABC</b></span></button>
+      </div>
+      <div class="panel-separator"></div>
+    </div>
+    <div class="text-format-panel">
+      <div id="style-line-height-image" />
+      <input id="style-line-height" class="inputslider-large" title="$leadingTip"/>
+      <div id="style-letter-spacing-image"/>
+    <input id="style-letter-spacing" class="inputslider-large" title="$kerningTip"/>
+      <div class="panel-separator"/>
+    </div>
+
+  </div>
+</div>
+HERE;
+  return $html;
+}
+
+/**
+ * Return a list of available font stacks.
+ *
+ * @see FontStack.inc
+ *
+ * @param string class
+ *   Optional. A class name to which to limit the results.
+ *
+ * @return array
+ *   An array with the font stack names as keys and the stack objects as items.
+ */
+function themebuilder_styleedit_get_font_stacks($class = NULL) {
+  $stacks = &drupal_static(__FUNCTION__);
+  if (!isset($stacks)) {
+    include_once(drupal_get_path('module', 'themebuilder_styleedit') . '/FontStack.inc');
+    $stacks = themebuilder_invoke_all('themebuilder_font_stacks');
+    drupal_alter('themebuilder_font_stacks', $stacks);
+  }
+  if (empty($class)) {
+    return $stacks;
+  }
+  else {
+    $subset = array();
+    foreach ($stacks as $name => $stack) {
+      if ($stack instanceof $class) {
+        $subset[$name] = $stack;
+      }
+    }
+    return $subset;
+  }
+}
+
+/**
+ * Return data on all the available fonts in Themebuilder, for client-side use.
+ */
+function themebuilder_styleedit_get_font_data() {
+  themebuilder_log_trace_enter(__FUNCTION__);
+  $stacks = themebuilder_styleedit_get_font_stacks();
+  $font_faces = array();
+  foreach ($stacks as $stack) {
+    $font_face = array();
+    $font_face['name'] = $stack->getName();
+    $font_face['fontFaceRule'] = $stack->getFontFaceRule();
+    $font_face['fontFamily'] = $stack->getFontFamily();
+    $font_face['isClientSide'] = $stack->isClientSide();
+    $font_faces[] = $font_face;
+  }
+  themebuilder_log_trace_exit(__FUNCTION__);
+  return $font_faces;
+}
+
+/**
+ * Return <option> elements for all the available fonts.
+ */
+function themebuilder_styleedit_get_font_dropdown() {
+  $output = '';
+  $fonts = array();
+  $groups = array();
+  $groups['Web-safe fonts'] = themebuilder_styleedit_get_font_stacks('ClientFontStack');
+  $groups['@font-face fonts'] = themebuilder_styleedit_get_font_stacks('FontFaceFontStack');
+  if (themebuilder_typekit_enabled()) {
+    $groups['Typekit fonts'] = themebuilder_styleedit_get_font_stacks('TypekitFontStack');
+  }
+  if (themebuilder_monotype_enabled()) {
+    $groups['Fonts.com Web Fonts'] = themebuilder_styleedit_get_font_stacks('MonotypeFontStack');
+  }
+  foreach ($groups as $type => $stacks) {
+    if (count($stacks) === 0) {
+      $type .= ' (none configured)';
+    }
+    $output .= "<optgroup label='&nbsp;&nbsp;&nbsp;$type'>";
+    foreach ($stacks as $name => $stack) {
+      $type = $stack->isClientSide() ? 'tb-client-font' : 'tb-server-font';
+      $family = $stack->getFontFamily();
+      $output .= "<option value=\"$family\" class=\"$type\" style=\"font-family: $family\">$name</option>";
+    }
+    $output .= '</optgroup>';
+  }
+  return $output;
+}
+
+/**
+ * Implement hook_themebuilder_font_stacks().
+ */
+function themebuilder_styleedit_themebuilder_font_stacks() {
+  // Font stacks where the fonts are expected to be on the client.
+  $stacks = array();
+  $stack = new ClientFontStack('default', array('inherit'));
+  $stacks[$stack->getName()] = $stack;
+  $stack = new ClientFontStack('Arial', array('Arial', 'Helvetica', 'sans-serif'));
+  $stacks[$stack->getName()] = $stack;
+  $stack = new ClientFontStack('Helvetica', array('Helvetica Neue', 'Helvetica', 'Arial', 'sans-serif'));
+  $stacks[$stack->getName()] = $stack;
+  $stack = new ClientFontStack('Lucida Sans', array('Lucida Sans', 'Lucida Grande', 'Lucida', 'sans-serif'));
+  $stacks[$stack->getName()] = $stack;
+  $stack = new ClientFontStack('Tahoma', array('Tahoma', 'Verdana', 'Geneva', 'sans-serif'));
+  $stacks[$stack->getName()] = $stack;
+  $stack = new ClientFontStack('Trebuchet', array('Trebuchet MS', 'Lucida Sans Unicode', 'Lucida Grande', 'Lucida sans', 'sans-serif'));
+  $stacks[$stack->getName()] = $stack;
+  $stack = new ClientFontStack('Verdana', array('Verdana', 'Geneva', 'sans-serif'));
+  $stacks[$stack->getName()] = $stack;
+  $stack = new ClientFontStack('Times', array('Times New Roman', 'Times', 'serif'));
+  $stacks[$stack->getName()] = $stack;
+  $stack = new ClientFontStack('Georgia', array('Georgia', 'New Century Schoolbook', 'Nimbus Roman No9 L', 'serif'));
+  $stacks[$stack->getName()] = $stack;
+  $stack = new ClientFontStack('Palatino', array('Palatino', 'Times New Roman', 'serif'));
+  $stacks[$stack->getName()] = $stack;
+  $stack = new ClientFontStack('Bradley Hand', array('Bradley Hand ITC', 'Apple Chancery', 'URW Chancery L', 'cursive'));
+  $stacks[$stack->getName()] = $stack;
+  $stack = new ClientFontStack('Courier', array('Courier New', 'Courier', 'monospace'));
+  $stacks[$stack->getName()] = $stack;
+  $stack = new ClientFontStack('Monaco', array('Monaco', 'Bitstream Vera Sans Mono', 'Lucida Console', 'Terminal', 'monospace'));
+  $stacks[$stack->getName()] = $stack;
+
+  return $stacks;
+}
+
+/* helper function to generat the nested tables used on the 'spacing' tab */
+function themebuilder_styleedit_sub($sar){
+  $suffix = ($sar[0] === 'border' ? '-width' : '');
+  $html = '<table id="tb-style-'.$sar[0] . '"><tr><td class="corner"><span class="label">'.$sar[0].'</span></td><td class="side"><input id="tb-style-'.$sar[0] . '-top' . $suffix . '" value="0"/></td><td class="corner"></td></tr>';
+  $html .= '<tr><td class="side"><input id="tb-style-'.$sar[0] . '-left' . $suffix . '" value="0"/></span></td>';
+  if (count($sar)>1){
+    $html .= '<td>' . themebuilder_styleedit_sub(array_slice($sar,1)) . '</td>';
+  }
+  else {
+    $html .= "<td class='box-model-center'>Content</td>";
+  }
+  $html .= '<td class="side"><input id="tb-style-'.$sar[0].'-right' . $suffix . '" value="0"/></td></tr>';
+  $html .= '<tr><td class="corner"></td><td class="side"><input id="tb-style-'.$sar[0].'-bottom' . $suffix . '" value="0"/></td><td class="corner"></td></tr></table>';
+  return $html;
+}
+
+function themebuilder_styleedit_tab_spacing(){
+  $html = themebuilder_styleedit_sub(array('margin', 'border', 'padding'));
+
+  return $html.<<<HERE
+  <div id="themebuilder-style-options">
+    <div class="border-panel">
+
+      <span class="label">Border:</span>
+      <div class="fieldset">
+        <span class="label">Color:</span>
+        <div class="colorSelector" id="style-border-color"></div>
+      </div>
+      <div class="fieldset">
+        <span class="label">Style:</span>
+        <select id="style-border-style">
+          <option value="none">none</option>
+          <option value="solid">solid</option>
+          <option value="dotted">dotted</option>
+          <option value="dashed">dashed</option>
+          <option value="groove">groove</option>
+          <option value="double">double</option>
+          <option value="ridge">ridge</option>
+        </select>
+      </div>
+    </div>
+    <!-- Disable the width and height controls.  To re-enable, remove this comment and remove the 'hidden' class on the border-panel below.
+    <div class="panel-separator"></div>
+    -->
+    <div class="border-panel hidden">
+      <span class="label">Content size:</span>
+      <div class="fieldset">
+        <span class="label">Width:</span>
+        <input id="style-element-width" class="inputslider-large" title="Content width"/>
+        <select id="style-element-width-u"><option value="px">px</option><option value="em">em</option></select>
+      </div>
+      <div class="fieldset">
+        <span class="label">Height:</span>
+        <input id="style-element-height" class="inputslider-large" title="Content height"/>
+        <select id="style-element-height-u"><option value="px">px</option><option value="em">em</option></select>
+      </div>
+    </div>
+  </div>
+HERE;
+}
+
+function themebuilder_styleedit_tab_background(){
+  $path = drupal_get_path('module', 'themebuilder_styleedit');
+  $html = <<<HERE
+<div class="background-image-selection-panel background-image-panel">
+	<div class="fieldset">
+		<span class="label">Background:</span>
+
+		<div class="colorSelector" id="style-background-color"></div>
+
+
+<!--	<div class="fieldset"> -->
+		<div class="background-image"><img /></div>
+<div class="background-image-control">
+		<div class="ui-state-default ui-corner-all-really uploader button" id="uploader">Browse...</div>
+		<a href="#" class="ui-state-default ui-corner-all-really ui-state-disabled" id="background-remove">Remove</a>
+	</div>
+</div></div><!-- background-image-selection-panel -->
+<div class="background-repeat-panel background-image-panel">
+  <div class="fieldset">
+    <span class="label">Repeat:</span>
+    <div id="background-repeat-repeat" class="background-repeat" title="Repeat both"></div>
+    <div id="background-repeat-repeat-x" class="background-repeat" title="Repeat horizontal"></div>
+    <div id="background-repeat-repeat-y" class="background-repeat" title="Repeat vertical"></div>
+    <div id="background-repeat-no-repeat" class="background-repeat" title="No repeat"></div>
+  </div>
+</div>
+<div class="background-attachment-panel background-image-panel">
+  <div class="fieldset">
+    <span class="label">Scroll:</span>
+    <div id="background-attachment-scroll" class="background-attachment" title="Scroll with page"></div>
+    <div id="background-attachment-fixed" class="background-attachment" title="No scrolling"></div>
+  </div>
+</div>
+HERE;
+  return $html;
+}
+
+/**
+ * Stores selected style. Called via AJAX with form data.
+ */
+function themebuilder_styleedit_save() {
+  $ret = array();
+  $ret['error']='';
+
+  if (isset($_POST['selector']) && isset($_POST['attr']) && isset($_POST['value'])){
+    themebuilder_compiler_save_property('style',$_POST['selector'], $_POST['attr'], $_POST['value']);
+    $ret['error'] = '';
+  } else {
+    $ret['error'] = 'Wrong Arguments';
+  }
+
+  themebuilder_compiler_json_output($ret);
+}
+
+/**
+ * Implementation of hook_themebuilder_init_data().
+ *
+ * @return
+ *   An associative array containing data that should be made available
+ *   to the JavaScript client when the themebuilder is first loaded.
+ */
+function themebuilder_styleedit_themebuilder_init_data() {
+  themebuilder_log_trace_enter(__FUNCTION__);
+  global $theme_info;
+  $result = array();
+  $result['palette_info'] = themebuilder_styleedit_get_palette_info();
+  if (isset($_SESSION['show_element_selector']) && $_SESSION['show_element_selector'] === TRUE) {
+    $result['show_element_selector'] = TRUE;
+  }
+  $selectorMap = array();
+  if (!empty($theme_info->info['selectorMap'])) {
+    $selectorMap = $theme_info->info['selectorMap'];
+  }
+  $result['selectorMap'] = $selectorMap;
+  $result['fontFaces'] = themebuilder_styleedit_get_font_data();
+  themebuilder_log_trace_exit(__FUNCTION__);
+  return $result;
+};
+
+/**
+ * Saves the visibility state of the element selector.
+ */
+function themebuilder_styleedit_set_selector_visibility() {
+  $ret = array();
+  $ret['error'] = '';
+  if (isset($_POST['visibility'])) {
+    $visible = json_decode($_POST['visibility']);
+    $visible = ($visible === true);
+    $_SESSION['show_element_selector'] = $visible;
+    $ret['error'] = '';
+  }
+  else {
+    $ret['error'] = 'Missing "visible" argument in call to themebuilder_styleedit_set_selector_visibility';
+  }
+  themebuilder_compiler_json_output($ret);
+}
+
+/**
+ * Implementation of hook_jsunit_initialize().
+ */
+function themebuilder_styleedit_jsunit_initialize(&$jsunit, $test_name) {
+  include_once('jsunit_tests.inc');
+  switch ($test_name) {
+    case 'selector':
+      themebuilder_styleedit_jsunit_selector($jsunit);
+      break;
+    case 'pathelement':
+      themebuilder_styleedit_jsunit_pathelement($jsunit);
+      break;
+    case 'filter':
+      themebuilder_styleedit_jsunit_filter($jsunit);
+      break;
+  }
+}
+
+/**
+ * Implementation of hook_jsunit_suite();
+ */
+function themebuilder_styleedit_jsunit_suite() {
+  return array('selector', 'pathelement', 'filter');
+}

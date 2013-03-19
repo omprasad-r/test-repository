@@ -1,0 +1,198 @@
+<?php
+/**
+ * @file
+ *   Theme builder advanced organizer prototype.
+ */
+
+/**
+ * Implementation of hook_menu().
+ */
+function themebuilder_advanced_menu() {
+  $items = array();
+  // Used to save the placement of advanced.
+  $items['themebuilder-advanced-save'] = array(
+    'title' => t('Advanced page submission'),
+    'page callback' => 'themebuilder_bar_ajax_request',
+    'page arguments' => array('themebuilder_advanced_save'),
+    'type' => MENU_CALLBACK,
+  );
+  // Used to invoke the selection UI.
+  $items['themebuilder-advanced-page'] = array(
+    'title' => t('Advanced page'),
+    'page callback' => 'themebuilder_bar_ajax_request',
+    'page arguments' => array('themebuilder_advanced_page'),
+    'type' => MENU_CALLBACK,
+  );
+  $items['themebuilder-advanced-get-custom-css'] = array(
+    'title' => t('Retrieves all custom css rules'),
+    'page callback' => 'themebuilder_bar_ajax_request',
+    'page arguments' => array('themebuilder_advanced_get_custom_css_json'),
+    'type' => MENU_CALLBACK,
+  );
+
+  foreach ($items as $path => &$item) {
+    $item['access callback'] = 'themebuilder_compiler_access';
+    $item['access arguments'] = array($path);
+  }
+  return $items;
+}
+
+/**
+ * Implements hook_themebuilder_bar_tab_permissions().
+ */
+function themebuilder_advanced_themebuilder_bar_tab_permissions() {
+  return array(
+    'access themebuilder advanced tab' => array(
+      'title' => t('Access the advanced tab'),
+      'description' => t('Edit advanced CSS properties of a theme.'),
+    ),
+  );
+}
+
+/**
+ * Implementation of hook_themebuilder_bar_items().
+ */
+function themebuilder_advanced_themebuilder_bar_items($base_weight) {
+  if (user_access('access themebuilder advanced tab')) {
+    drupal_add_js(array(
+        'themebuilderAdvancedSaveAfterPauseTime' => 1200, // Time to wait after last keystroke to save.
+        'themebuilderAdvancedSaveAnywayTime' => 5000, // Time to wait after last save to save.
+        'themebuilderGetCustomCss' => 'themebuilder-advanced-get-custom-css',
+      ), 'setting');
+    return array(array('name' => 'advanced','title' => t('Advanced'), 'link' => 'themebuilder-advanced-page', 'weight' => -5));
+  }
+}
+
+/**
+ * Implemements hook_themebuilder_bar_editor().
+ */
+function themebuilder_advanced_themebuilder_bar_editor() {
+  $path = drupal_get_path('module', 'themebuilder_advanced');
+  return array(array(
+    'css' => array(
+      array(
+        'data' => $path .'/themebuilder_advanced.css',
+      ),
+     ),
+    'js'  => array(
+      $path . '/js/AdvancedTab.js',
+      $path . '/js/CodeEditor.js',
+      $path . '/js/EditPane.js',
+      $path . '/js/CustomStyles.js',
+      $path . '/js/History.js',
+      /*
+       * TODO: AN-22510 - Enable and theme the scrollbar.  This work was
+       * halted because it is nontrivial to replace the scrollbar associated
+       * with a textarea.  The best solution I found is to set the height of
+       * the textarea element such that there will be no scrollbar, and use
+       * jscrollpane on a wrapping div.  This almost works, but throws a
+       * constant ration of JavaScript errors coming from jquery.  For now
+       * keeping this disabled.
+       *
+      $path . '/jscrollpane/script/jquery.jscrollpane.js',
+      $path . '/jscrollpane/script/jquery.mousewheel.js',
+      $path . '/jscrollpane/script/mwheelIntent.js',
+      */
+    ),
+  ));
+}
+
+function themebuilder_advanced_page(){
+  $tabs = array(
+    'history' => t('Styles CSS'),
+    'css' => t('Custom CSS'),
+  );
+  drupal_alter('themebuilder_advanced_tabs', $tabs);
+
+  $html = '<div class="tabs tb-tabs-vert">
+<ul class="tabnav">';
+  foreach ($tabs as $name => $title) {
+    $html .= '<li><a href="#themebuilder-advanced-' . $name . '">'. $title . '</a></li>';
+  }
+  $html .= '</ul></div>';
+
+  $advanced_pre = <<<EOD
+<div class="themebuilder-advanced-outer palette-cheatsheet cheatsheet hidden">
+    <div class="themebuilder-advanced-inner palette-cheatsheet-inner cheatsheet-inner">
+   <span>@title</span>
+   <div class="scrollpane">
+  	<table class="palette-colors"></table>
+      <table class="custom-colors"></table>
+   </div>
+  </div>
+</div>
+EOD;
+  drupal_alter('themebuilder_advanced_pre', $advanced_pre);
+  $html .= $advanced_pre;
+
+  $html .= '<div class="contents">';
+
+  $contents = <<<EOD
+  <div id="themebuilder-advanced-history">
+    <div class="themebuilder-advanced-outer"><div id="css-history" class="themebuilder-advanced-inner"><table class="header"><tr><th><span>@styled_elements</span><span id="history-title-selector"></span></th><th class="operations"><div id="history-show-all" class="history-operation history-show disabled" title="@show_all">@show_all</div><div id="history-hide-all" class="history-operation history-hide" title="@hide_all">@hide_all</div></th></tr></table><div class="scrollable scrollpane"><table class="body"></table></div></div></div>
+    <div id="history-control-panel">
+      <div class="history-control-row">
+        !delete_all_button
+      </div>
+    </div>
+  </div>
+  <div id="themebuilder-advanced-css">
+    <div class="themebuilder-advanced-outer">
+        <textarea id="css_edit" class="themebuilder-advanced-inner codepress css linenumbers-off" cols="60" rows="10" spellcheck="false" />
+    </div>
+    <div class="advanced-update-button-wrapper">
+      !update_button
+    </div>
+  </div>
+EOD;
+  drupal_alter('themebuilder_advanced_contents', $contents);
+  $html .= $contents .'</div>';
+
+  $html = format_string($html, array(
+    '@styles_title' => t('Styles CSS'),
+    '@custom_title' => t('Custom CSS'),
+    '@title' => t('Color codes'),
+    '@styled_elements' => t('Changes made in the Styles tab '),
+    '@show_all' => t('Show all'),
+    '@hide_all' => t('Hide all'),
+    '@delete_all_hidden' => t('Delete all hidden'),
+    '!delete_all_button' => theme('themebuilder_button', array('id' => 'history-delete-all-hidden', 'text' => 'Delete all hidden', 'class' => 'disabled')),
+    '!update_button' => theme('themebuilder_button', array('id' => 'advanced-update-button', 'text' => 'Update', 'class' => 'disabled')),
+  ));
+  print $html;
+  die();
+}
+
+function themebuilder_advanced_get_custom_css_json() {
+  $theme = themebuilder_compiler_get_current_theme();
+  $properties = $theme->getCustomCSSProperties();
+  themebuilder_compiler_json_output($properties);
+}
+
+/**
+ * Implementation of hook_jsunit_initialize().
+ */
+function themebuilder_advanced_jsunit_initialize(&$jsunit, $test_name) {
+  include_once('jsunit_tests.inc');
+  switch ($test_name) {
+    case 'code_editor':
+      themebuilder_advanced_jsunit_code_editor($jsunit);
+      break;
+    case 'edit_pane':
+      themebuilder_advanced_jsunit_edit_pane($jsunit);
+      break;
+    case 'specificity':
+      themebuilder_advanced_jsunit_specificity($jsunit);
+      break;
+    case 'selectors':
+      themebuilder_advanced_jsunit_selectors($jsunit);
+      break;
+  }
+}
+
+/**
+ * Implementation of hook_jsunit_suite();
+ */
+function themebuilder_advanced_jsunit_suite() {
+  return array('code_editor', 'edit_pane', 'specificity', 'selectors');
+}

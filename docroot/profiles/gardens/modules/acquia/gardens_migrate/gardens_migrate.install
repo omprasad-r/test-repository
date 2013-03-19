@@ -1,0 +1,17 @@
+<?php
+
+/**
+ * @file
+ * Set up variables for migrating in Gardens.
+ */
+
+function gardens_migrate_install() {
+  variable_set('wordpress_migrate_blog_class', 'GardensWordPressBlog');
+  variable_set('wordpress_migrate_private_path',
+    variable_get('file_public_path', 'sites/default/files') . '/private/wordpress');
+}
+
+function gardens_migrate_uninstall() {
+  variable_del('wordpress_migrate_blog_class');
+  variable_del('wordpress_migrate_private_path');
+}

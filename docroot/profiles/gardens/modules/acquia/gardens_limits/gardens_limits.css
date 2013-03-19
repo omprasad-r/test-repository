@@ -1,0 +1,7 @@
+a.media-launcher {
+  display: none;
+}
+#media-tab-upload a.fake-ok,
+#media-tab-media_internet a.fake-ok {
+  display: none;
+}

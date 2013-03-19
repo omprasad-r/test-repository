@@ -1,0 +1,56 @@
+<?php
+
+/**
+ * Entry point for unit test execution.  This function's responsibility
+ * is to fill out the JsUnit instance with the particulars of the test
+ * that is to be executed (identified by the test_name parameter).
+ *
+ * @param jsunit
+ *   An instance of the JsUnit class that can be configured to
+ *   include any javascript or css files necessary for the test
+ *   being executed.
+ * @param $test_name
+ *   The name of the test within this module to execute.  Any strategy
+ *   for mapping the test name to the code that populates the $jsunit
+ *   instance is fine.  This example uses a different function, but
+ *   you could put each of the tests inline, if desired.
+ */
+function jsunit_example_jsunit_initialize(&$jsunit, $test_name) {
+  if ('setup' === $test_name) {
+    jsunit_example_setup($jsunit);
+  }
+}
+
+/**
+ * This is a simple example of a function that fills out the JsUnit instance
+ * for a particular unit test.  This configuration includes adding any
+ * necessary javascript files, css files, and specifying the javascript
+ * test code.
+ *
+ * @param $jsunit
+ *   The JsUnit instance that must be populated for a particular unit test
+ *   as a result of this call.
+ */
+function jsunit_example_setup(&$jsunit) {
+  $path = drupal_get_path('module', 'jsunit_example');
+  // Set the test title.
+  $jsunit->setTitle("jsUnit setup example unit test");
+
+  // Include any JavaScript files that are required for this test to run.
+  // $jsunit->addJavaScriptFile('myfile.js', $path);
+
+  // Include the actual test code.
+  $jsunit->addJavaScriptTestFile("$path/jsunit_example.js");
+}
+
+/**
+ * Bundles all of the individual tests into a test suite.  This function is
+ * called when all jsunit tests within the system or all jsunit tests within
+ * this module are being executed.
+ *
+ * @return
+ *   An array of test names that this module exposes.
+ */
+function jsunit_example_jsunit_suite() {
+  return array('setup');
+}

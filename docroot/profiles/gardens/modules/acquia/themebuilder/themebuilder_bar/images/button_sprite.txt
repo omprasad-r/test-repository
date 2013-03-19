@@ -1,0 +1,23 @@
+This button sprite has all of the graphics for the display of themebuilder buttons in various states.
+
+The idea is that you would have 2 spans jammed together, the left span
+would include the left part of the button and be the width of some
+left padding (to provide space for the rounded edge) and the width of
+the text contained in the button.  The right span would consist of
+enough padding to show the right round, with no left padding.
+
+State  	       	       Y-offset
+---------------------------------
+normal			-2px
+hover			-31px
+pressed			-60px
+primary-normal		-89px (primary normal is a blue button)
+primary-hover		-118px
+primary-pressed		-147px
+disabled		-176px
+
+For the right endcap, the Y offset is the same as above, and the
+X-offset is -291px.
+
+This should be used throughout the themebuilder for all buttons, but
+is currently only used in the advanced tab.

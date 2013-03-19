@@ -1,0 +1,45 @@
+/**
+ * @file
+ * Gardens Media CSS file.
+ */
+
+#edit-media-select {
+  clear: both;
+  overflow: hidden;
+}
+
+/* Add an extra space between the radio buttons */
+input.video-radio-button {
+  margin-left: 10px;
+}
+
+/* Theme the radio button throbber next to the buttons not below it */
+div.ajax-progress-throbber {
+  position: relative;
+  margin-top: -20px;
+  width: 125px;
+  right: -240px;
+}
+
+/* Theme the embed url button throbber next to it */
+#gardens-media-node-selector div.ajax-progress-throbber {
+  right: 0;
+  margin-top: 0;
+}
+
+/* Hide the embed button and summary field by default */
+.gardens-media-embed-code-button {
+  display: none;
+}
+.text-summary-wrapper {
+  display: none;
+}
+ 
+#photo-ajax-link {
+  margin-right: 20px;
+}
+
+/** Hide the filename in the media thumbnails **/
+.media-item .media-thumbnail .media-filename {
+  display: none;
+}

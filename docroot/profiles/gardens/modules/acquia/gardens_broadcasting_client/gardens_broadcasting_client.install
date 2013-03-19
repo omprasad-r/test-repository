@@ -1,0 +1,81 @@
+<?php
+
+/**
+ * @file
+ * Task broadcasting client related install files.
+ */
+
+/**
+ * Implements hook_install().
+ */
+function gardens_broadcasting_client_install() {
+  // Create tasks directory and ensure it is writeable.
+  $filepath = variable_get('gardens_broadcasting_client_tasks_filepath_override', '');
+  if ($filepath) {
+    $directory = dirname($filepath);
+  }
+  else {
+    $hosting_info = variable_get('acquia_hosting_site_info', array());
+    $directory = '/mnt/files/' . $hosting_info['name'] . '/tasks';
+  }
+  file_prepare_directory($directory, FILE_CREATE_DIRECTORY | FILE_MODIFY_PERMISSIONS);
+}
+
+/**
+ * Implements hook_uninstall().
+ */
+function gardens_broadcasting_client_uninstall() {
+  $variables = array(
+    'gardens_broadcasting_client_prepopulate_range',
+    'gardens_broadcasting_client_file_task_count',
+    'gardens_broadcasting_client_tasks_filepath_override',
+    'gardens_broadcasting_client_next_cron_run',
+    'gardens_broadcasting_client_last_task',
+    'gardens_broadcasting_client_task_cleanup_age',
+  );
+  foreach ($variables as $variable) {
+    variable_del($variable);
+  }
+}
+
+/**
+ * Implements hook_schema().
+ */
+function gardens_broadcasting_client_schema() {
+  $schema = array();
+
+  $schema['gardens_broadcasting_client_tasks'] = array(
+    'description' => 'Tasks designated for the given site.',
+    'fields' => array(
+      'tid' => array(
+        'type' => 'int',
+        'unsigned' => TRUE,
+        'not null' => TRUE,
+        'description' => 'Task id.',
+      ),
+      'created' => array(
+        'type' => 'int',
+        'unsigned' => TRUE,
+        'not null' => TRUE,
+        'description' => 'The UNIX timestamp when the task has been created.',
+      ),
+      'task_provider' => array(
+        'type' => 'varchar',
+        'length' => 255,
+        'not null' => TRUE,
+        'description' => 'The module which queued the task.',
+      ),
+      'task' => array(
+        'type' => 'text',
+        'not null' => TRUE,
+        'description' => 'The description of task.',
+      ),
+    ),
+    'primary key' => array('tid'),
+    'indexes' => array(
+      'cleanup_idx' => array('created'),
+    ),
+  );
+
+  return $schema;
+}

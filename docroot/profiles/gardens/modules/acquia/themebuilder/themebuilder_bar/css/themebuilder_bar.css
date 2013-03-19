@@ -1,0 +1,635 @@
+/* @group Main Bar Style */
+
+#themebuilder-wrapper {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  z-index: 402;
+  width: 100%;
+  height: 280px;
+}
+
+#themebuilder-wrapper.tall {
+  height: 295px;
+}
+
+#themebuilder-wrapper #themebuilder-main {
+  position: fixed;
+  left: 0;
+  bottom: 0;
+  z-index: 10;
+  width: 100%;
+  height: 280px;
+  margin: 0;
+  background: #000;
+  color: #FFF;
+}
+
+#themebuilder-wrapper.tall #themebuilder-main {
+  height: 295px;
+}
+
+/* @group Main Tabs */
+
+#themebuilder-wrapper .ui-tabs-nav a {
+  cursor: pointer;
+}
+
+#themebuilder-wrapper .ui-tabs-nav .ui-state-active a {
+  cursor: default;
+}
+
+#themebuilder-wrapper #themebuilder-main > ul.tabnav {
+  margin: 0;
+  padding: 3px 0 0 10px;
+  width: 50%;
+}
+
+#themebuilder-wrapper #themebuilder-main ul.tabnav li a {
+  float: left;
+  padding: 10px 5px 12px 5px;
+  font-size: 12px;
+  text-decoration: none;
+  color: #eee;
+}
+
+#themebuilder-wrapper #themebuilder-main ul.tabnav li div {
+  display: block;
+  float: left;
+  height: 100%;
+  min-width: 5px;
+  min-height: 5px;
+  width: 5px;
+}
+
+#themebuilder-wrapper #themebuilder-main ul.tabnav li.ui-state-active div.right-cap {
+  background: url("../images/tab-rt.png") no-repeat;
+}
+
+#themebuilder-wrapper #themebuilder-main ul.tabnav li.ui-state-active div.left-cap {
+  background: url("../images/tab-lt.png") no-repeat;
+}
+
+#themebuilder-wrapper #themebuilder-main .tabs ul.tabnav li a {
+  float: left;
+  padding: 10px 10px 12px 10px;
+  font-size: 12px;
+  text-decoration: none;
+  color: #eee;
+}
+
+#themebuilder-wrapper #themebuilder-main ul.tabnav li.ui-state-active a {
+  background: #3E3E3E;
+  color: #FFF;
+
+  /*
+  -moz-border-radius-topleft: 5px;
+  -moz-border-radius-topright: 5px;
+  -webkit-border-top-left-radius: 5px;
+  -webkit-border-top-right-radius: 5px;
+  */
+}
+
+/* @end */
+
+/* @group Actions */
+
+#themebuilder-wrapper .themebuilder-button,
+#themebuilder-wrapper .themebuilder-button span {
+  background-attachment: scroll;
+  background-image: url("../images/button_sprite.png");
+  background-repeat: no-repeat;
+  color: black;
+  display: inline-block;
+}
+
+#themebuilder-wrapper .themebuilder-button {
+  background-position: left top;
+  font-weight: bold;
+  font-family: Segoe UI, Arial, sans-serif;
+  font-size: 1em;
+  height: 27px;
+  padding: 0 0 0 11px;
+}
+
+#themebuilder-wrapper .themebuilder-button span {
+  background-position: right -27px;
+  padding: 6px 14px 6px 3px;
+}
+
+#themebuilder-wrapper .themebuilder-button:hover,
+#themebuilder-wrapper .themebuilder-button:hover span {
+  cursor: pointer;
+}
+
+#themebuilder-wrapper .themebuilder-button:hover {
+  background-position: left -56px;
+}
+
+#themebuilder-wrapper .themebuilder-button:hover span {
+  background-position: right -83px;
+}
+
+#themebuilder-wrapper .themebuilder-button:active {
+  background-position: left -112px;
+}
+
+#themebuilder-wrapper .themebuilder-button:active span {
+  background-position: right -139px;
+}
+
+#themebuilder-wrapper .themebuilder-button.primary {
+  background-position: left -168px;
+}
+
+#themebuilder-wrapper .themebuilder-button.primary span {
+  background-position: right -195px;
+}
+
+#themebuilder-wrapper .themebuilder-button.primary:hover {
+  background-position: left -224px;
+}
+
+#themebuilder-wrapper .themebuilder-button.primary:hover span {
+  background-position: right -251px;
+}
+
+#themebuilder-wrapper .themebuilder-button.primary:active {
+  background-position: left -280px;
+}
+
+#themebuilder-wrapper .themebuilder-button.primary:active span {
+  background-position: right -307px;
+}
+
+#themebuilder-wrapper .themebuilder-button.disabled,
+#themebuilder-wrapper .themebuilder-button.disabled span {
+  color: #7f7f7f;
+}
+
+#themebuilder-wrapper .themebuilder-button.disabled {
+  background-position: left -336px;
+}
+
+#themebuilder-wrapper .themebuilder-button.disabled span {
+  background-position: right -363px;
+}
+
+#themebuilder-wrapper #themebuilder-save .themebuilder-button {
+  margin-top: 2px;
+  margin-left: 8px;
+}
+
+#themebuilder-wrapper #themebuilder-save .themebuilder-button span {
+  font-size: 12px;
+}
+
+#themebuilder-wrapper #themebuilder-save .themebuilder-undo-button,
+#themebuilder-wrapper #themebuilder-save .themebuilder-redo-button,
+#themebuilder-wrapper #themebuilder-save .export {
+  cursor: pointer;
+}
+
+#themebuilder-wrapper #themebuilder-save .undo-disabled {
+  color: #444;
+  text-decoration: none;
+  cursor: default;
+}
+
+#themebuilder-wrapper .nav-divider {
+  color: #444;
+}
+
+#themebuilder-wrapper #themebuilder-save {
+  float: right;
+  height: 34px;
+  overflow: hidden;
+  padding: 6px 20px 0 0;
+}
+
+#themebuilder-wrapper #themebuilder-save a {
+  font-size: 12px;
+  float: left;
+  margin-top: 8px;
+}
+
+#themebuilder-save .export {
+  padding: 0 10px 0 7px;
+}
+
+#themebuilder-save .themebuilder-redo-button {
+  padding: 0 5px 0 5px;
+  border-right: 2px solid #444444;
+}
+
+#themebuilder-mini-button {
+  cursor: pointer;
+  float: left;
+  height: 40px;
+  margin: 0 6px;
+  padding: 0;
+  width: 23px;
+  background: url("../images/minimize.png") no-repeat left -8px;
+}
+
+#themebuilder-exit-button {
+  display: inline;
+  float: left;
+  width: 20px;
+  height: 20px;
+  padding: 6px 6px 0 6px;
+  background: url("../images/close.png") no-repeat #666;
+  border: none;
+  cursor: pointer;
+  margin: 6px 0 0 0;
+}
+
+#themebuilder-exit-button.enabled {
+  border: 1px solid #000;
+  background-color: #D4D4D4;
+  color: #000;
+}
+
+#themebuilder-exit-button.enabled {
+  padding: 5px 25px;
+}
+
+#themebuilder-wrapper #themebuilder-control-veil {
+  position: absolute;
+  top: 3px;
+  right: 0px;
+  left: 0px;
+  height: 34px;
+  display: none;
+}
+
+#themebuilder-wrapper #themebuilder-control-veil.on {
+  display: block;
+}
+
+/* @end */
+
+/* @group Theme Name */
+
+#themebuilder-wrapper #themebuilder-theme-name .theme-modified {
+  vertical-align: super;
+}
+
+#themebuilder-wrapper #themebuilder-theme-name .theme-name {
+  max-width: 115px;
+  display: inline-block;
+  overflow: hidden;
+  position: absolute;
+  left: 29px;
+  top: 10px;
+}
+
+#themebuilder-wrapper #themebuilder-theme-name .theme-visibility {
+  position: absolute;
+  left: 146px;
+  top: 10px;
+}
+
+#themebuilder-wrapper #themebuilder-theme-name {
+  position: relative;
+  top: -30px;
+  width: 340px;
+  margin: auto;
+  height: 12px;
+  padding: 8px 5px 10px 20px;
+  color: #fff;
+  background-color: black;
+  background-color: rgba(0,0,0,0.8);
+  -moz-border-radius: 10px 10px 0 0;
+  -o-border-radius: 10px 10px 0 0;
+  -webkit-border-radius: 10px 10px 0 0;
+  border-radius: 10px 10px 0 0;
+}
+
+#themebuilder-theme-update {
+  position: absolute;
+  right: 0;
+  top: -30px;
+  height: 12px;
+  margin: 0;
+  padding: 8px 14px 10px 14px;
+  color: #fff;
+  background-color: black;
+  background-color: rgba(0,0,0,0.8);
+  -moz-border-radius: 10px;
+  -moz-border-radius-bottomright: 0px;
+  -moz-border-radius-bottomleft: 0px;
+  -webkit-border-radius: 10px;
+  -webkit-border-bottom-right-radius: 0px;
+  -webkit-border-bottom-left-radius: 0px;
+  border-radius: 10px 10px 0 0;
+}
+#themebuilder-theme-update .tb-alert-icon {
+  margin: 0 6px -3px 0;
+}
+#themebuilder-theme-update.tb-disabled {
+  display: none;
+}
+#themebuilder-theme-update .tb-label {
+  margin-right: 1ex;
+}
+#themebuilder-theme-update .tb-link {
+  cursor: pointer;
+  color: #0080c5;
+}
+
+/* @end */
+
+/* @group Status */
+
+#themebuilder-wrapper #themebuilder-status {
+  display: none;
+  background: #000;
+  position: relative;
+  top: -108px;
+  width: 478px;
+  height: 19px;
+  margin: auto;
+  padding: 8px 5px 8px 5px;
+
+  text-align: center;
+  white-space: nowrap;
+
+  color: #fff;
+
+  font-family: "Lucida Grande", Lucida, Verdana, sans-serif;
+  font-size: 12px;
+
+  -moz-border-radius: 10px;
+  -webkit-border-radius: 10px;
+}
+
+#themebuilder-wrapper #themebuilder-status .themebuilder-status-icon {
+  width: 15px;
+  height: 15px;
+  display: inline-block;
+}
+
+#themebuilder-wrapper #themebuilder-status .themebuilder-status-icon.info {
+  margin: 0 0 -4px;
+  background: url("../images/tick_icon.png") no-repeat;
+}
+
+#themebuilder-wrapper #themebuilder-status .themebuilder-status-icon.warning {
+  margin: 0 0 -4px;
+  background: url("../images/alert_icon.png") no-repeat;
+}
+
+#themebuilder-wrapper #themebuilder-status .themebuilder-status-message {
+  margin-top: -10px !important;
+  margin-left: 8px;
+  font-size: 13px !important;
+  font-weight: bold;
+}
+
+/* @end */
+
+/* @group Main Content Section */
+
+#themebuilder-main > div.tabdiv {
+  width: 100%;
+  height: 260px;
+  overflow: hidden;
+  margin: 0 20px 0 0;
+  background-color: #3E3E3E;
+}
+
+/* @end */
+
+/* @group Minimized */
+
+#themebuilder-wrapper.minimized {
+  height: 40px;
+  overflow: hidden;
+}
+
+#themebuilder-wrapper.minimized #themebuilder-main {
+  height: 38px;
+}
+
+#themebuilder-wrapper.minimized #themebuilder-main > div.tabdiv {
+  display: none;
+}
+
+#themebuilder-wrapper.minimized #themebuilder-main #themebuilder-mini-button {
+  background-image: url("../images/maximize.png");
+}
+
+#themebuilder-wrapper #themebuilder-veil {
+  display: none;
+  position: absolute;
+  top: 0px;
+  right: 0px;
+  bottom: 0px;
+  left: 0px;
+  z-index: 100;
+}
+
+#themebuilder-wrapper #themebuilder-veil.show {
+  display: block;
+}
+
+/* @end */
+
+/* @end */
+
+/* @group Dialog Style */
+
+.ui-dialog.themebuilder-dialog a {
+  cursor: pointer;
+  color: #0080c5;
+  text-decoration: none;
+}
+
+.ui-dialog.themebuilder-dialog {
+  background: #232323;
+  border: 2px solid #121212;
+  color: #FFF;
+  font-size: 13px;
+  font-weight: normal;
+  position: fixed;
+}
+
+.ui-dialog.themebuilder-dialog button {
+  margin: 5px;
+}
+
+.ui-dialog.themebuilder-dialog div.disabled {
+  color: #aaa;
+}
+
+.ui-dialog.themebuilder-dialog div.disabled input {
+  background-color: #aaa;
+}
+
+div.ui-widget-overlay {
+  background-color: black;
+  background-image: none;
+  opacity: .7;
+  filter: alpha(opacity=.7);
+  z-index: 403;
+}
+
+#overlay-wrapper {
+  z-index: 403;
+}
+.ui-dialog.themebuilder-dialog input.ui-state-default {
+  background: #aaa none;
+}
+
+.ui-dialog.themebuilder-dialog div.ui-widget-header .ui-icon-closethick {
+  display: none;
+}
+
+.ui-dialog.themebuilder-dialog .ui-dialog-titlebar {
+  padding: inherit;
+  border: none;
+}
+
+.ui-dialog.themebuilder-dialog .ui-widget-content,
+.ui-dialog.themebuilder-dialog .ui-widget-header {
+  background: none;
+  border: none;
+  color: #FFF;
+  padding: 0;
+}
+
+.ui-dialog.themebuilder-dialog .ui-widget-header {
+  display: none;
+}
+
+.ui-dialog.themebuilder-dialog .ui-dialog-buttonpane {
+  padding-right: 2px;
+}
+
+.ui-dialog.themebuilder-dialog .ui-dialog-buttonpane button,
+.ui-dialog.themebuilder-dialog .ui-dialog-buttonpane button span {
+  background: transparent url("../images/tb-button.png") left top scroll no-repeat;
+  color: black;
+}
+
+.ui-dialog.themebuilder-dialog .ui-dialog-buttonpane button {
+  border: none;
+  color: #000;
+  height: 27px;
+  padding-left: 11px;
+}
+
+.ui-dialog.themebuilder-dialog .ui-dialog-buttonpane button span {
+  background-position: right -27px;
+  display: inline-block;
+  font-weight: bold;
+  line-height: 1;
+  padding: 7px 14px 12px 3px;
+}
+
+.ui-dialog.themebuilder-dialog .ui-dialog-content {
+  min-height: 30px !important;
+}
+
+.ui-dialog.themebuilder-dialog form {
+  margin: 0;
+}
+
+.ui-dialog.themebuilder-dialog form .form-item {
+  margin: 0;
+}
+
+.ui-dialog.themebuilder-dialog form label {
+  display: inline-block;
+  font-size: 14px;
+  font-weight: normal;
+  width: 120px;
+}
+
+.ui-dialog.themebuilder-dialog #char-count,
+.ui-dialog.themebuilder-dialog #char-count-save {
+  color: #999;
+  display: inline-block;
+  margin-left: 5px;
+  min-width: 3ex;
+}
+
+.themebuilder-dialog #export-dialog,
+.ui-dialog.themebuilder-dialog .message {
+  padding: 10px 5px 0;
+}
+
+.ui-dialog.themebuilder-dialog .placeholder {
+  font-weight: bold;
+}
+
+.themebuilder-dialog.ui-dialog .ui-state-error-text.block {
+  margin-bottom: 12px;
+}
+
+.ui-dialog.themebuilder-dialog .alert-icon {
+  margin: 0 6px -3px 0;
+}
+
+/* @end */
+
+/* @group Overlay tweaks */
+
+/* Nix the border applied to regular themebuilder dialogs. */
+body div.overlay {
+  border: none;
+}
+
+/* Make the overlay veil extend over the themebuilder. */
+body.themebuilder .ui-widget-overlay {
+  padding-bottom: 300px;
+}
+
+span.nav-divider {
+  display: none;
+  float: left;
+  width: 1px;
+}
+
+/* @end */
+
+/* @group Modal overlay */
+
+#themebuilder-wrapper #themebuilder-themes-featured-modal {
+  background: black;
+  height: 15px;
+  left: 0;
+  padding: 12px 0 12px 12px;
+  position: absolute;
+  right: 70px;
+  top: 1px;
+  width: auto;
+  z-index: 100;
+}
+
+#themebuilder-wrapper #themebuilder-themes-featured-modal .actions {
+  position: absolute;
+  right: 6px;
+  top: 7px;
+}
+
+/* @end */
+
+div.flash-content {
+  background: url("../images/flash-content.png") no-repeat center center #FFF;
+  border: 2px solid #000;
+  margin: -2px !important;
+  position: relative;
+}
+
+div.flash-content > div.flash-label {
+  color: #000;
+  font-size: 16px;
+  font-weight: bold;
+  margin-top: -0.5em !important;
+  position: absolute;
+  text-align: center;
+  top: 50%;
+  width: 100%;
+}

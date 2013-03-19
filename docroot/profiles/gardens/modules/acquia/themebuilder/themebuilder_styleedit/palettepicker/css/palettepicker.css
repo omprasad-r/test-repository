@@ -1,0 +1,441 @@
+/* @override http://gardens-css.dev:8888/modules/acquia/themebuilder/themebuilder_styleedit/palettepicker/css/palettepicker.css?Z */
+
+/* @group General */
+
+#themebuilder-wrapper > div.PalettePickerMain {
+  background-color: #000;
+  bottom: 0;
+  color: #aaa;
+  display: none;
+  padding: 5px;
+  position: absolute;
+  width: 275px;  /*build as 255 */
+  z-index: 1001;
+  border-radius: 5px;
+  -moz-border-radius: 5px;
+  -webkit-border-radius: 5px;
+}
+
+#themebuilder-wrapper div.PalettePickerMain.expanded {
+  margin-top: -238px;
+}
+
+#themebuilder-wrapper div.PalettePickerMain table {
+  width: 100%;
+  margin-right: 0px !important;
+}
+
+#themebuilder-wrapper div.PalettePickerMain table td {
+  vertical-align: top;
+}
+
+#themebuilder-wrapper div.PalettePickerMain button {
+  padding: 0;
+  border: none;
+  line-height: 25px;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+#themebuilder-wrapper div.PalettePickerMain .footer .okbutton {
+  width: 82px;
+  height: 25px;
+  background: url(../images/colorpicker-ok-btn-bkg.png) no-repeat #000;
+  font-size: 13px;
+  text-align: center;
+}
+
+#themebuilder-wrapper div.PalettePickerMain .footer .cancelbutton {
+  margin-left: 5px;
+  cursor: pointer;
+}
+
+/* @end */
+
+/* @group Palettes */
+
+/**
+ * The next two items control where new rows begin on the full palette display.
+ * (TODO: They currently need to change whenever we want to change the mixing
+ * colors or percentages used for tints...)
+ */
+ 
+#themebuilder-wrapper div.PalettePickerMain .item-a-33-white, 
+#themebuilder-wrapper div.PalettePickerMain .item-a-67-white {
+  border-left: 1px solid #000;
+}
+
+#themebuilder-wrapper div.PalettePickerMain .palette-item.item-a-33-white, 
+#themebuilder-wrapper div.PalettePickerMain .palette-item.item-a-67-white {
+  clear: both;
+}
+
+#themebuilder-wrapper div.PalettePickerMain .footer .custom-palette .palette-item {
+  background-color: #fff;
+}
+
+#themebuilder-wrapper div.PalettePickerMain .footer .palette {
+  height: 80px;
+  margin-bottom: 5px;
+  padding: 7px 5px 5px;  
+  background: url(../images/swatchAndPalette-area-backbround.png) no-repeat;
+}
+
+#themebuilder-wrapper div.PalettePickerMain .current-palette,
+#themebuilder-wrapper div.PalettePickerMain .custom-palette {
+  width: 120px !important;
+  height: 45px;
+  overflow: hidden;
+  background-color: transparent;
+}
+
+/* Set the width of palettes so they wrap and work with each other nicely */
+#themebuilder-wrapper div.PalettePickerMain .cur-palette {
+  width: 130px;
+  padding-left: 5px !important;
+}
+
+#themebuilder-wrapper div.PalettePickerMain .cust-palette {
+  width: 111px;
+}
+
+#themebuilder-wrapper div.PalettePickerMain .mycolors-table  {
+  padding: 10px 8px !important;
+} 
+
+#themebuilder-wrapper div.PalettePickerMain .mycolors-table td {
+  width: 140px;
+  font-size: 9px;
+}
+
+#themebuilder-wrapper div.PalettePickerMain .footer .palette .plus-button {
+  background: url(../images/colorpicker_plus_button.png) no-repeat top left;
+  height: 15px;
+  position: absolute;
+  right: 10px;
+  top: 69px;
+  width: 15px;
+}
+
+#themebuilder-wrapper div.PalettePickerMain.expanded .footer .palette .plus-button {
+  background-image: url(../images/colorpicker_minus_button.png);
+  top: 307px;
+}
+
+#themebuilder-wrapper div.PalettePickerMain .palette-item {
+  border: 1px solid #000;
+  cursor: pointer;
+  float: left;
+  height: 13px;
+  margin-left: -1px;
+  margin-top: -1px;
+  padding-right: 13px;
+  width: 0;
+}
+
+#themebuilder-wrapper div.PalettePickerMain .palette-column {
+  float: left;
+}
+
+#themebuilder-wrapper div.PalettePickerMain .palette-group {
+  clear: left;
+  cursor: pointer;
+  float: left;
+  margin-top: 6px;
+}
+
+#themebuilder-wrapper div.PalettePickerMain .palette-group:first-child {
+  margin-top: 0;
+}
+
+#themebuilder-wrapper div.PalettePickerMain .palette-group .palette-list {
+  float: left;
+  margin-top: 2px;
+}
+
+#themebuilder-wrapper div.PalettePickerMain .palette-group .palette-name {
+  cursor: pointer;
+  float: left;
+  margin-left: 5px;
+}
+
+#themebuilder-wrapper div.PalettePickerMain .palette-item.selected {
+  background-image: url(../images/swatch-border.gif);
+}
+
+#themebuilder-wrapper div.PalettePickerMain .palette-item.item-transparent {
+  background-image: url(../images/swatch-transparent.gif);
+}
+
+#themebuilder-wrapper div.PalettePickerMain .item-a {
+  border-left: 1px solid #000;
+}
+
+/* @end */
+
+/* @group Header */
+
+#themebuilder-wrapper div.PalettePickerMain .header,
+#themebuilder-wrapper div.PalettePickerMain .footer {
+  clear: left;
+  float: left;
+  width: 275px;
+}
+
+#themebuilder-wrapper div.PalettePickerMain .header {
+  display: none;
+}
+
+#themebuilder-wrapper div.PalettePickerMain.expanded .header {
+  display: block;
+}
+
+#themebuilder-wrapper div.PalettePickerMain .header .ui-tabs-panel {
+  float: left;
+}
+
+/* set the overall height for the expanded mode */
+#themebuilder-wrapper div.PalettePickerMain .swatches, 
+#themebuilder-wrapper div.PalettePickerMain .picker {
+  width: 204px;
+  height: 218px;
+}
+
+#themebuilder-wrapper div.PalettePickerMain .swatches > div {
+  width: auto;
+  height: 211px;
+  overflow: auto;
+  overflow-x: hidden;
+  margin-right: 3px;
+  padding-left: 7px;
+  padding-top: 10px;
+}
+
+#themebuilder-wrapper div.PalettePickerMain .header .swatches, 
+#themebuilder-wrapper div.PalettePickerMain .header .picker {
+  margin-bottom: 10px;
+  padding: 5px 3px 5px 5px;
+}
+
+#themebuilder-wrapper div.PalettePickerMain .header .swatches table, 
+#themebuilder-wrapper div.PalettePickerMain .header .picker table {
+  color: #888;
+}
+
+/* @end */
+
+/* @group Colorpicker */
+
+#themebuilder-wrapper .PalettePickerMain .picker .colorpicker {
+  top:-5px;
+  left:-5px;
+  width: 213px;
+  height: 228px; /* Was 241px- not sure why. */
+  background: url(../../colorpicker/images/colorpicker_background-jn.png) no-repeat #000;
+}
+
+#themebuilder-wrapper .PalettePickerMain .picker .colorpicker_new_color {
+  top: 190px;
+  left: 12px;
+  border: 1px solid #ccc;
+  -moz-border-radius: 5px;
+}
+
+#themebuilder-wrapper .PalettePickerMain .picker .colorpicker_current_color {
+  display: none;
+  left: 84px;
+  top: 203px;
+}
+
+#themebuilder-wrapper .PalettePickerMain .picker .colorpicker_field {
+  top: 165px;
+  width: 45px;
+}
+
+#themebuilder-wrapper .PalettePickerMain .picker .colorpicker_field input {
+  right: 10px;
+  width: 22px;
+}
+
+#themebuilder-wrapper .PalettePickerMain .picker .colorpicker_rgb_r {
+  left: 9px;
+  background-image: url(../images/colorpicker_rgb_r_tb.png);
+}
+
+#themebuilder-wrapper .PalettePickerMain .picker .colorpicker_rgb_g {
+  left: 51px;
+  background-image: url(../images/colorpicker_rgb_g_tb.png);
+}
+
+#themebuilder-wrapper .PalettePickerMain .picker .colorpicker_rgb_b {
+  left: 93px;
+  background-image: url(../images/colorpicker_rgb_b_tb.png);
+}
+
+#themebuilder-wrapper .PalettePickerMain .picker .colorpicker_hex {
+  background-image: url(../images/colorpicker_hex_tb.png);
+  width: 64px;
+  top: 165px;
+  left: 139px;
+}
+
+#themebuilder-wrapper .PalettePickerMain .picker .colorpicker button.add {
+  position: absolute;
+  bottom: 5px;
+  right: 5px;
+  width: 58px;
+  height: 31px;
+  padding: 0;
+  background: url(../images/colorpicker_add-btn-bkt.png) no-repeat;
+  font-size: 13px;
+  line-height: 31px;
+  text-align: center;
+  color: #000;
+}
+
+#themebuilder-wrapper .PalettePickerMain .colorpicker_color {
+  top:12px;
+}
+
+/* @end */
+
+/* @group Swatches */
+
+#themebuilder-wrapper div.PalettePickerMain .header .swatches {
+  background: url(../../colorpicker/images/palettepicker_background-jn.png) no-repeat;
+}
+
+#themebuilder-wrapper div.PalettePickerMain .header .swatches table td {
+  padding: 0 5px;
+  /* width:140px; */
+}
+
+#themebuilder-wrapper div.PalettePickerMain .header .swatches table td div.palette-list {
+  padding: 3px 5px 2px 2px;
+  width: 72px;
+  float: left;
+}
+
+#themebuilder-wrapper div.PalettePickerMain .header .swatches table td div.palette-name {
+  padding: 2px;
+  float: left;
+}
+
+#themebuilder-wrapper div.PalettePickerMain .header .swatches table {
+  width: 100%;
+}
+
+#themebuilder-wrapper div.PalettePickerMain .header .swatches table td {
+  font-size: 12px;
+  vertical-align: middle;
+}
+
+/* @end */
+
+/* @group Tabs */
+
+#themebuilder-wrapper .ui-tabs-hide {
+  display: none;
+}
+
+#themebuilder-wrapper div.PalettePickerMain .tabs {
+  padding: 0;
+  position: relative;
+  width: 63px;
+  background: none !important;
+}
+
+#themebuilder-wrapper div.PalettePickerMain .header .tabs ul {
+  background: none;
+  color: #888;
+  float: right;
+  font-size: 12px;
+  font-weight: bold;
+  margin: 0;
+  padding: 0;
+}
+
+#themebuilder-wrapper div.PalettePickerMain .header .tabs ul li {
+  float: none;
+  z-index: 19;
+  margin: 0 !important;
+  padding: 0 !important;
+  border-radius: 5px;
+  border-radius-bottomleft: 0;
+  border-radius-topleft: 0;
+  -moz-border-radius: 5px;
+  -moz-border-radius-bottomleft: 0;
+  -moz-border-radius-topleft: 0;
+  -webkit-border-radius: 5px;
+  -webkit-border-bottom-leftradius: 0;
+  -webkit-border-top-left-radius: 0;
+  cursor: pointer;
+}
+
+#themebuilder-wrapper div.PalettePickerMain .header .tabs ul li a {
+  margin: 0;
+  padding: 10px 8px 9px 0;
+  width: 55px;
+}
+
+#themebuilder-wrapper div.PalettePickerMain .header .tabs li.ui-state-default {
+  background: none!important;
+  border: none!important;
+}
+
+#themebuilder-wrapper div.PalettePickerMain .header .tabs li.ui-state-active a {
+  background: url(../../colorpicker/images/colorpicker_tab.png) no-repeat -5px center !important;
+}
+
+#themebuilder-wrapper div.PalettePickerMain .tabs,
+#themebuilder-wrapper div.PalettePickerMain .tabs ul,
+#themebuilder-wrapper div.PalettePickerMain .tabs ul li,
+#themebuilder-wrapper div.PalettePickerMain .tabs ul li a {
+  background: none !important;
+  float: right;
+  height: auto;
+  margin: 0;
+  min-width: 0px;
+  width: auto;
+}
+
+#themebuilder-wrapper div.PalettePickerMain .header .tabs ul li a {
+  color: #fff;
+}
+
+#themebuilder-wrapper div.PalettePickerMain .header .tabs a div {
+  cursor: pointer;
+  float: right;
+  height: 0px;
+  padding: 18px;
+  width: 0px;
+}
+
+#themebuilder-wrapper .PalettePickerMain .header .tabs .swatchestab {
+  background: url(../images/palette-icon.png) no-repeat center center;
+}
+
+#themebuilder-wrapper .PalettePickerMain .header .tabs .colorstab {
+  background: url(../images/mixer-icon.png) no-repeat center center;
+}
+
+.modal {
+  height: 1000%;
+  left: 0;
+  position: absolute;
+  top: 0;
+  width: 100%;
+  z-index: 10;
+}
+
+#themebuilder-wrapper div.modal {
+  background: url(../images/modal-bg.png) repeat transparent;
+  height: 100%;
+  left: 0;
+  position: absolute;
+  top: 0;
+  width: 100%;
+  z-index: 10;
+}
+
+/* @end */

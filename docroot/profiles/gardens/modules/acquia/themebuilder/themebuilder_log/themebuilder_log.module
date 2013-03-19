@@ -1,0 +1,322 @@
+<?php
+
+define('THEME_BUILDER_LOG_LEVEL_OFF', 0);
+define('THEME_BUILDER_LOG_LEVEL_ERROR', 1);
+define('THEME_BUILDER_LOG_LEVEL_WARNING', 2);
+define('THEME_BUILDER_LOG_LEVEL_INFO', 3);
+define('THEME_BUILDER_LOG_LEVEL_TRACE', 7);
+define('THEME_BUILDER_LOG_LEVEL_TIMING', 9);
+define('THEME_BUILDER_LOG_LEVEL_ALL', 10);
+
+/**
+ * Implementation of hook_init();
+ *
+ * At the beginning of each request, start a timer to indicate the request
+ * time and add a message to indicate what is going on.
+ */
+function themebuilder_log_init() {
+  register_shutdown_function('themebuilder_log_finalize');
+  drupal_add_js(
+    array(
+      'themebuilderLogPath' => 'themebuilder-log-message',
+    ),
+    array('type' => 'setting')
+  );
+  $request_name = themebuilder_log_get_request_name();
+  themebuilder_log_request_enter($request_name);
+}
+
+/**
+ * Stop the timer that was started in hook_init().  Indicate how much time
+ * elapsed for this request.
+ */
+function themebuilder_log_finalize() {
+  $request_name = themebuilder_log_get_request_name();
+  themebuilder_log_request_exit($request_name);
+  themebuilder_log_output_entries();
+}
+
+/**
+ * Implementation of hook_menu().
+ */
+function themebuilder_log_menu() {
+  $items = array();
+  $items['themebuilder-log-message'] = array(
+    'title' => t('Logs a message on the server.'),
+    'page callback' => 'ThemeBuilderLog::logAjax',
+    'access arguments' => array('administer site configuration'),
+    'type' => MENU_CALLBACK,
+  );
+  foreach ($items as $path => &$item) {
+    $item['access callback'] = 'themebuilder_compiler_access';
+    $item['access arguments'] = array($path);
+  }
+  return $items;
+}
+
+/**
+ * Implementation of hook_themebuilder_bar_header();
+ * This function adds the Log.js client code.
+ */
+function themebuilder_log_themebuilder_bar_header() {
+  $path = drupal_get_path('module', 'themebuilder_log');
+  return array(array(
+    'js'  => array($path . "/js/Log.js"),
+    'group' => JS_LIBRARY
+  ));
+}
+
+/**
+ * Implementation of hook_themebuilder_init_data();
+ */
+function themebuilder_log_themebuilder_init_data() {
+  $result = array();
+  $result['logLevel'] = themebuilder_get_log_level();
+  return $result;
+}
+
+/**
+ * Returns a string identifying the current request for use in performance
+ * logging.
+ *
+ * @return
+ *   A string identifier for this request.
+ */
+function themebuilder_log_get_request_name() {
+  $result = 'unknown';
+  if (!empty($_SERVER) && !empty($_SERVER['REQUEST_URI'])) {
+    $result =  $_SERVER['REQUEST_URI'];
+  }
+  return $result;
+}
+
+/**
+ * Very simple logging mechanism that can be enabled and disabled for
+ * individual sites by setting the value of 'themebuilder_log_level' to {OFF,
+ * ERROR, WARNING, INFO, TRACE, TIMING, or ALL} in the variable table.
+ *
+ * @param int $level
+ *   The logging level associated with the message.
+ * @param String $str
+ *   The text to log.
+ */
+function themebuilder_log($level, $str) {
+  timer_start(__FUNCTION__);
+  $log_data = &drupal_static(__FUNCTION__);
+  if (!is_array($log_data)) {
+    $log_data = array();
+  }
+  if (themebuilder_log_enabled($level)) {
+    $log_data[] = $str;
+  }
+  timer_stop(__FUNCTION__);
+}
+
+/**
+ * Outputs all of the performance logging for this request all at once.  This
+ * is necessary because we are writing performance data on every request, and
+ * because the browser sends multiple requests at the same time the
+ * performance data for multiple requests is interleaved.  By writing all of
+ * the data at once at the end of the request, this problem is mitigated.
+ */
+function themebuilder_log_output_entries() {
+  $server = themebuilder_log_get_server_name();
+  $name = 'themebuilder_log';
+  timer_start($name);
+  if (themebuilder_log_enabled(THEME_BUILDER_LOG_LEVEL_TRACE)) {
+    $log_data = &drupal_static($name);
+    if (is_array($log_data)) {
+      foreach ($log_data as $log_entry) {
+        error_log($log_entry, 0);
+      }
+    }
+    $logging_time = timer_stop($name);
+    error_log("($server) Total time taken to log messages: " . ($logging_time['time'] / 1000.0) . ' seconds');
+    global $timers;
+    unset($timers['themebuilder_log']);
+  }
+}
+
+/**
+ * Logs that the specified request was entered, for the purposes of
+ * performance logging.
+ *
+ * @param $request_name
+ *   The name of the request.
+ */
+function themebuilder_log_request_enter($request_name) {
+  if (themebuilder_log_enabled(THEME_BUILDER_LOG_LEVEL_TRACE)) {
+    global $timers;
+    if (isset($timers['themebuilder_log'])) {
+      unset($timers['themebuilder_log']['time']);
+    }
+    $server = themebuilder_log_get_server_name();
+    themebuilder_log(THEME_BUILDER_LOG_LEVEL_TRACE,
+      "Trace: ($server) request $request_name entered.");
+    timer_start($request_name);
+  }
+}
+
+/**
+ * Logs that the specified request was exited, for the purposes of
+ * performance logging.
+ *
+ * @param $request_name
+ *   The name of the request.
+ */
+function themebuilder_log_request_exit($request_name) {
+  if (themebuilder_log_enabled(THEME_BUILDER_LOG_LEVEL_TRACE)) {
+    $time = timer_stop($request_name);
+    themebuilder_log_function_time($request_name, $time);
+    $server = themebuilder_log_get_server_name();
+    themebuilder_log(THEME_BUILDER_LOG_LEVEL_TRACE,
+      "Trace: ($server) request $request_name exited.");
+    timer_stop('themebuilder_log');
+  }
+}
+
+/**
+ * Logs the entry of the specified function.
+ *
+ * @param String $function_name
+ *   The name of the function that was entered.
+ */
+function themebuilder_log_trace_enter($function_name) {
+  if (themebuilder_log_enabled(THEME_BUILDER_LOG_LEVEL_TRACE)) {
+    $server = themebuilder_log_get_server_name();
+    themebuilder_log(THEME_BUILDER_LOG_LEVEL_TRACE,
+      "Trace: ($server) function $function_name entered.");
+    timer_start($function_name);
+  }
+}
+
+/**
+ * Logs the exit of the specified function.
+ *
+ * @param String $function_name
+ *   The name of the function that was exited.
+ */
+function themebuilder_log_trace_exit($function_name) {
+  if (themebuilder_log_enabled(THEME_BUILDER_LOG_LEVEL_TRACE)) {
+    $time = timer_stop($function_name);
+    themebuilder_log_function_time($function_name, $time);
+    $server = themebuilder_log_get_server_name();
+    themebuilder_log(THEME_BUILDER_LOG_LEVEL_TRACE,
+      "Trace: ($server) function $function_name exited.");
+  }
+}
+
+/**
+ * Enters a log message that indicates the specified function took the
+ * specified amount of time to execute.
+ *
+ * @param String $function_name
+ *   The name of the function.
+ * @param mixed $time
+ *   The time taken to execute the specified function.  This value should be
+ *   retrieved from timer_stop
+ */
+function themebuilder_log_function_time($function_name, $time) {
+  if (themebuilder_log_enabled(THEME_BUILDER_LOG_LEVEL_TIMING)) {
+    $server = themebuilder_log_get_server_name();
+    themebuilder_log(THEME_BUILDER_LOG_LEVEL_TIMING,
+      "Timing: ($server) function $function_name took " . ($time['time'] / 1000.0) . ' seconds');
+  }
+}
+
+/**
+ * Logs the time taken by the specified line number.
+ *
+ * @param String $function_name
+ *   The name of the function.
+ * @param int $line_number
+ *   The line number in the code.
+ * @param mixed $time
+ *   The time taken.
+ */
+function themebuilder_log_code_time($function_name, $line_number, $time) {
+  if (themebuilder_log_enabled(THEME_BUILDER_LOG_LEVEL_TIMING)) {
+    $server = themebuilder_log_get_server_name();
+    themebuilder_log(THEME_BUILDER_LOG_LEVEL_TIMING,
+      "Timing: ($server) $function_name:" . ($line_number - 1) . ' took ' . ($time['time'] / 1000.0) . ' seconds');
+  }
+}
+
+/**
+ * Determines whether logging is enabled for the specified level.
+ *
+ * @param int $level
+ *   The level associated with a message.
+ *
+ * @return
+ *   true if the message should be logged; false otherwise.
+ */
+function themebuilder_log_enabled($level) {
+  $log_level = themebuilder_get_log_level();
+  return $log_level >= $level;
+}
+
+
+/**
+ * Gets the current log level, which is stored in the variable table.
+ *
+ * @return
+ *   An integer representing the current logging level.
+ */
+function themebuilder_get_log_level() {
+  $log_level = &drupal_static(__FUNCTION__);
+  if (!isset($log_level)) {
+    $log_level_string = variable_get('themebuilder_log_level', 'ERROR');
+    switch ($log_level_string) {
+      case 'OFF':
+        $log_level = THEME_BUILDER_LOG_LEVEL_OFF;
+        break;
+      case 'WARNING':
+        $log_level = THEME_BUILDER_LOG_LEVEL_WARNING;
+        break;
+      case 'INFO':
+        $log_level = THEME_BUILDER_LOG_LEVEL_INFO;
+        break;
+      case 'TRACE':
+        $log_level = THEME_BUILDER_LOG_LEVEL_TRACE;
+        break;
+      case 'TIMING':
+        $log_level = THEME_BUILDER_LOG_LEVEL_TIMING;
+        break;
+      case 'ALL':
+        $log_level = THEME_BUILDER_LOG_LEVEL_ALL;
+        break;
+      default:
+        $log_level = THEME_BUILDER_LOG_LEVEL_ERROR;
+        break;
+    }
+  }
+  return $log_level;
+}
+
+/**
+ * Returns the server name.
+ *
+ * @return
+ *   A string containing the name of the server, or 'unknown' if the server
+ *   cannot be determined.
+ */
+function themebuilder_log_get_server_name() {
+  $server = 'unknown';
+  if (!empty($_SERVER) && !empty($_SERVER['SERVER_NAME'])) {
+    $server = $_SERVER['SERVER_NAME'];
+  }
+  return $server;
+}
+
+/**
+ * Returns an instance of the ThemeBuilderLog class.
+ */
+function ThemeBuilderLog() {
+  if (!class_exists('ThemeBuilderLog')) {
+    $path = drupal_get_path('module', 'themebuilder_log');
+    $path = DRUPAL_ROOT . "/$path";
+    require_once "$path/log.inc";
+  }
+  return ThemeBuilderLog::getInstance();
+}

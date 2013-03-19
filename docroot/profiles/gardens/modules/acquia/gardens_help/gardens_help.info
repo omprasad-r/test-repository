@@ -1,0 +1,7 @@
+name = Drupal Gardens Help
+description = Intergrates with the Acquia Gardens Help.
+core = 7.x
+dependencies[] = toolbar
+package = Drupal Gardens
+files[] = gardens_help.module
+hidden = TRUE

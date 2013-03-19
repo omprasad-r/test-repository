@@ -1,0 +1,19 @@
+<?php
+// $Id$
+
+/**
+ * @file
+ * Install, update and uninstall functions for the themebuilder_screenshot module.
+ */
+
+/**
+ * Implements hook_uninstall().
+ */
+function themebuilder_screenshot_uninstall() {
+  variable_del('themebuilder_screenshot_service_url');
+  variable_del('themebuilder_screenshot_access_key');
+  variable_del('themebuilder_screenshot_private_key');
+  variable_del('themebuilder_screenshot_maximum_remote_queue_time');
+  variable_del('themebuilder_screenshot_maximum_screenshot_request_failures');
+  variable_del('themebuilder_screenshot_maximum_screenshot_failure_duration');
+}

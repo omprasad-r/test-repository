@@ -1,0 +1,1416 @@
+<?php
+
+/**
+ * @file
+ *   Janrain Engage client admin page.
+ */
+
+/**
+ * Engage data update options.
+ */
+
+// Default values for social publishing
+define('RPX_ACTION_STRING_NODES', 'Published [node:title] on [site:name]');
+define('RPX_TITLE_STRING_NODES', '[node:title] | [site:name]');
+define('RPX_USER_CONTENT_STRING_NODES', '[node:body]');
+define('RPX_ACTION_STRING_COMMENTS', 'Commented on [site:name]');
+define('RPX_TITLE_STRING_COMMENTS', '[comment:subject]');
+define('RPX_USER_CONTENT_STRING_COMMENTS', '[comment:body]');
+
+/**
+ * Implements hook_menu().
+ */
+function janrain_client_menu() {
+  $items['janrain/token_handler'] = array(
+    'title' => 'RPX Token Handler URL',
+    'page callback' => 'janrain_client_token_handler',
+    'page arguments' => array(FALSE),
+    'access callback' => '_janrain_client_publish_authenticate_access',
+    'type' => MENU_CALLBACK,
+    'file' => 'janrain_client.pages.inc',
+  );
+
+  $items['admin/config/people/janrain/token_handler'] = array(
+    'title' => 'RPX Token Handler URL',
+    'page callback' => 'janrain_client_token_handler',
+    'page arguments' => array(TRUE),
+    'access arguments' => array('administer janrain engage'),
+    'type' => MENU_CALLBACK,
+    'file' => 'janrain_client.pages.inc',
+  );
+
+  $items['user/%user/janrain-networks'] = array(
+    'title' => 'Social publishing',
+    'page callback' => 'drupal_get_form',
+    'page arguments' => array('janrain_client_user_networks', 1),
+    'access callback' => '_janrain_client_own_networks_edit',
+    'access arguments' => array(1),
+    'type' => MENU_LOCAL_TASK,
+    'file' => 'janrain_client.pages.inc',
+  );
+  $items['user/%user/janrain-networks/disable'] = array(
+    'title' => 'Disable social network',
+    'page callback' => 'janrain_client_disable_user_network',
+    'page arguments' => array(1, 4),
+    'access callback' => 'janrain_client_disable_user_network_access',
+    'access arguments' => array(1),
+    'type' => MENU_CALLBACK,
+    'file' => 'janrain_client.pages.inc',
+  );
+
+  $items['admin/config/people/janrain'] = array(
+    'title' => 'Social Publish',
+    'description' => 'Configure the settings for Social Publish',
+    'page callback' => 'drupal_get_form',
+    'page arguments' => array('janrain_client_admin_settings'),
+    'access arguments' => array('administer janrain engage'),
+    'weight' => -4,
+    'file' => 'janrain_client.admin.inc',
+  );
+  $items['admin/config/people/janrain/settings'] = array(
+    'title' => 'Settings',
+    'page callback' => 'drupal_get_form',
+    'page arguments' => array('janrain_client_admin_settings'),
+    'access arguments' => array('administer janrain engage'),
+    'type' => MENU_DEFAULT_LOCAL_TASK,
+    'weight' => -10,
+    'file' => 'janrain_client.admin.inc',
+  );
+
+  $items['admin/config/people/janrain/disable/%'] = array(
+    'title' => 'Disable default social network',
+    'page callback' => 'janrain_client_disable_default_network',
+    'page arguments' => array(5),
+    'access callback' => 'janrain_client_disable_default_network_access',
+    'type' => MENU_CALLBACK,
+    'file' => 'janrain_client.admin.inc',
+  );
+
+  return $items;
+}
+
+/**
+ * Menu access callback.
+ */
+function _janrain_client_publish_authenticate_access() {
+  return user_is_logged_in() && user_access('publish to own social networks');
+}
+
+/**
+ * Menu item access callback.
+ */
+function _janrain_client_own_networks_edit($account) {
+  return user_is_logged_in() && user_access('publish to own social networks') && user_edit_access($account);
+}
+
+/**
+ * Menu item access callback.
+ */
+function janrain_client_disable_user_network_access($account) {
+  return isset($_GET['token']) && ($_GET['token'] == drupal_get_token('janrain_client_disable_user_network')) && _janrain_client_own_networks_edit($account);
+}
+
+/**
+ * Menu access callback.
+ */
+function janrain_client_disable_default_network_access() {
+  return isset($_GET['token']) && ($_GET['token'] == drupal_get_token('janrain_client_disable_default_network')) && user_access('administer janrain engage');
+}
+
+/**
+ * Implements hook_permission().
+ */
+function janrain_client_permission() {
+  $permissions = array(
+    'administer janrain engage' =>  array(
+      'title' => t('Administer Social Login & Publish settings'),
+    ),
+    'publish to sites social networks' => array(
+      'title' => t('Publish to this site\'s authorized social networks'),
+    ),
+    'publish to own social networks' => array(
+      'title' => t('Publish to own authorized social networks'),
+    ),
+  );
+  return $permissions;
+}
+
+/**
+ * Implements hook_theme().
+ */
+function janrain_client_theme() {
+  $result = array(
+    'rpx_icon' => array(
+      'variables' => array('provider' => NULL, 'size' => 'small', 'style' => NULL),
+    ),
+  );
+
+  $result += array(
+    'janrain_client_admin_settings' => array(
+      'render element' => 'form',
+      'file' => 'janrain_client.admin.inc',
+    ),
+  );
+
+  $result += array(
+    'janrain_client_user_networks' => array(
+      'render element' => 'form',
+      'file' => 'janrain_client.pages.inc',
+    ),
+  );
+
+  return $result;
+}
+
+/**
+ * Returns markup for a specific provider icon.
+ *
+ * An image sprite with all Engage provider icons is included in the images
+ * directory.
+ */
+function theme_rpx_icon($variables) {
+  $provider = $variables['provider'];
+  $style = array(
+    'rpx-icon-' . $variables['size'],
+    'rpx-' . $provider . '-' . $variables['size'],
+  );
+  if ($variables['style']) {
+    $style[] = $variables['style'];
+  }
+
+  return '<div' . drupal_attributes(array('class' => $style, 'id' => 'rpx-' . $provider)) . '></div>';
+}
+
+/**
+ * Implements hook_help().
+ */
+function janrain_client_help($path, $arg) {
+  switch ($path) {
+    case 'admin/help#janrain_client':
+      $output = '';
+      $output .= '<h3>' . t('About') . '</h3>';
+      $output .= '<p>' . t('This service allows your visitors to login to your site with their existing accounts on Facebook, Google, Twitter, Yahoo!, LinkedIn, Windows Live, MySpace, AOL or other networks and then share their comments, purchases, reviews or other activities from your site with friends on multiple social networks. For more information, see the Janrain Engage <a href="@engage-page">product page</a>.', array('@engage-page' => 'http://www.janrain.com/products/engage/')) . '</p>';
+      $output .= '<h3>' . t('Uses') . '</h3>';
+      $output .= '<dl>';
+      $output .= '<dt>' . t('Logging in with Janrain Engage') . '</dt>';
+      $output .= '<dd>' . t("To log in using Janrain Engage, a user must already have an account with any of the 3rd party identity providers supported by Engage. Users can then create site accounts using their 3rd party ID, assign one or more 3rd party IDs to an existing account, and log in using a 3rd party ID. This lowers the barrier to registration, which helps increase the user base, and offers convenience and security to the users. Some of the identity providers return verified email addresses for the users, making the registration process even easier. When logging in, users are presented with the option of choosing one of the identity providers; Engage then communicates with the provider, asking it to verify the identity of the user. If the user is logged into their identity provider, Engage communicates back to your site, verifying the user. If they are not logged in, the provider will ask their user for their login and password. At no point does the site being logged into record the user's 3rd party account password.") . '</dd>';
+      $output .= '<dt>' . t('Sharing activities on social networks with Janrain Engage') . '</dt>';
+      $output .= '<dd>' . t('To share a comment using Janrain Engage, a user must choose the desired social networks from the list presented in the Social Publishing popup, signing into the networks if necessary.') . '</dd>';
+      $output .= '</dl>';
+      return $output;
+    case 'admin/config/people/janrain':
+      return '<p>' . t('Social Publish lets users publish status updates to their social networks when they comment or create content. Start by authorizing each social network through Janrain Engage by clicking "Add / remove social networks". <a href="@engage-help">Learn more.</a>', array('@engage-help' => '/admin/help/janrain_client/')) . '</p>';
+  case 'user/%/janrain-networks':
+    return $help = '<p>' . t('Share your site contributions to your social networks. To get started, enable a social network and select the types of content you want to share.') . '</p>';
+  }
+}
+
+/**
+ * Helper function: deletes all data created by this module for a user.
+ *
+ * @param integer $uid
+ *   uid of the user that is being deleted.
+ */
+function _janrain_client_delete_user_data($uid) {
+  db_delete('rpx_user_publish_node_type')
+    ->condition('uid', $uid)
+    ->execute();
+
+  db_delete('rpx_user_publish_authmap')
+    ->condition('uid', $uid)
+    ->execute();
+}
+
+/**
+ * Implements hook_user_delete().
+ */
+function janrain_client_user_delete($account) {
+  _janrain_client_delete_user_data($account->uid);
+}
+
+/**
+ * Implements hook_user_cancel().
+ */
+function janrain_client_user_cancel($edit, $account, $method) {
+  switch ($method) {
+    case 'user_cancel_reassign':
+      _janrain_client_delete_user_data($account->uid);
+      break;
+  }
+}
+
+/**
+ * Implements hook_form_alter.
+ *
+ * Adds social sharing to nodes.
+ *
+ */
+function janrain_client_form_alter(&$form, &$form_state, $form_id) {
+  // Add social sharing options to nodes.
+  if (isset($form['#node']) &&
+    $form['#node']->type . '_node_form' == $form_id &&
+    in_array($form['#node']->type, variable_get('rpx_publish_node_types', array()))) {
+    janrain_client_alter_form_for_publishing($form, $form['#node']->type);
+    return;
+  }
+}
+
+function janrain_client_suppress_errors($to_remove) {
+  $errors = array_values(array_diff($_SESSION['messages']['error'], $to_remove));
+  if (empty($errors)) {
+    // Clear out the error message queue entirely.
+    drupal_get_messages('error', TRUE);
+  }
+  else {
+    $_SESSION['messages']['error'] = $errors;
+  }
+}
+
+/**
+ * Returns a localized list of error message snippets that should be suppressed.
+ *
+ * When we're in the Janrain Engage workflow, fields that fail validation
+ * because they were left blank should not trigger error messages. In order to
+ * suppress the irrelevant error messages, we need to compare the text of the
+ * error messages on the page with a list of snippets such as "field is
+ * required."
+ *
+ * This function includes a list of error messages that indicate a required
+ * field was left blank. As more such messages are discovered in core and
+ * contributed modules in Gardens, they should be added here.
+ *
+ * @return
+ *   An array of error message snippets (such as "field is required") to search
+ *   for in the drupal_set_message array.
+ */
+function _janrain_client_get_error_message_snippets() {
+  // Assemble a list of error messages that indicate a required field was left
+  // empty (i.e. "Username field is required.").
+  $messages[] = array(
+    '!name' => t('!name field is required.')
+  );
+  $messages[] = array(
+    '%title' => t('A valid date is required for %title.')
+  );
+  foreach ($messages as $message) {
+    foreach ($message as $key => $value) {
+      // In order to get the relevant part of the error message (i.e. "A valid
+      // date is required for ") we break it up into parts:
+      // - "A valid date is required for "
+      // - "."
+      $parts = explode($key, $value);
+      // Find the longest part of the message, on the assumption that the
+      // longest part of the message will contain the relevant text.
+      $lengths = array_map('strlen', $parts);
+      $longest = array_search(max($lengths), $lengths);
+      $strings[] = $parts[$longest];
+    }
+  }
+  return $strings;
+}
+
+/**
+ * Given an Engage field ID, return the Engage data it maps to.
+ *
+ * @see _janrain_client_import_user_data()
+ */
+function _janrain_client_data_map($data, $fid) {
+  $parsed_path = db_query('SELECT parsed_path FROM {rpx_profile_field} WHERE fid = :fid', array(':fid' => $fid))->fetchField();
+
+  $result = '';
+  if ($parsed_path = unserialize($parsed_path)) {
+    $result = _janrain_client_extract_data($data, $parsed_path);
+  }
+
+  return $result;
+}
+
+/**
+ * Get data from multi-dimensional array by keys specified in $path array.
+ *
+ * @param array $data
+ * @param array $path
+ * @return
+ *   Mixed value or NULL if it doesn't exist.
+ */
+function _janrain_client_extract_data($data, $path) {
+  $key = array_shift($path);
+  if ($key !== NULL) {
+    if (is_int($key) && $key < 0) {
+      // Negative index means we should count from the end of array.
+      // For example, -1 means last item.
+      // Key is already negative, so we use plus here.
+      $key = count($data) + $key;
+    }
+    if (isset($data[$key])) {
+      $value = $data[$key];
+      if (empty($path)) {
+        // No more keys, we've finished.
+        return $value;
+      }
+      elseif (is_array($value)) {
+        return _janrain_client_extract_data($value, $path);
+      }
+    }
+  }
+  return '';
+}
+
+/**
+ * Helper function: return machine name given a provider title returned by
+ * Engage.
+ *
+ * @param string $title
+ *   An Engage provider title.
+ *
+ * @return
+ *   The provider's machine name if it is known; "other" otherwise.
+ */
+function janrain_client_get_provider_machine_name($title) {
+  $entire_list = TRUE;
+  $providers = janrain_client_get_providers($entire_list);
+  $providers = array_flip($providers);
+
+  return isset($providers[$title]) ? $providers[$title] : 'other';
+}
+
+/**
+ * Return the Janrain RP realm as used from the app javascript.
+ *
+ * Janrain code stores a single value for "rpx_realm", but expects differing values in
+ * some places - for example, when calling the API to retrieve the providers list,
+ * a full domain is required (eg. myapp.rpxnow.com), but when using the realm to
+ * generate a url for javascript files, the app name *without* .rpxnow.com is expected,
+ * but only if there is not custom domain configured for the app.  If there is a
+ * custom domain, the full domain is always expected.
+ */
+function janrain_client_js_realm() {
+  $realm = variable_get('rpx_realm');
+  if (substr($realm, -11) == '.rpxnow.com') {
+    $realm = substr($realm, 0, -11);
+  }
+  return $realm;
+}
+
+/**
+ * Gets a list of Engage providers.
+ *
+ * @param boolean $entire_list
+ *   If set, all available providers will be returned, including those that are
+ *   not configured.
+ *
+ * @return
+ *   An array of provider titles keyed by provider machine name.
+ *
+ * @throws Exception
+ */
+function janrain_client_get_providers($entire_list = FALSE) {
+  $providers = &drupal_static(__FUNCTION__ . ':providers');
+
+  if (!isset($providers)) {
+    $providers = array(
+      'aol' => 'AOL',
+      'blogger' => 'Blogger',
+      'facebook' => 'Facebook',
+      'flickr' => 'Flickr',
+      'foursquare' => 'Foursquare',
+      'google' => 'Google',
+      'hyves' => 'Hyves',
+      'linkedin' => 'LinkedIn',
+      'live_id' => 'Windows Live',
+      'livejournal' => 'LiveJournal',
+      'myopenid' => 'MyOpenID',
+      'myspace' => 'MySpace',
+      'netlog' => 'Netlog',
+      'openid' => 'OpenID',
+      'orkut' => 'orkut',
+      'paypal' => 'PayPal',
+      'salesforce' => 'Salesforce',
+      'twitter' => 'Twitter',
+      'verisign' => 'VeriSign PIP',
+      'wordpress' => 'Wordpress.com',
+      'yahoo' => 'Yahoo!',
+      'vzn' => 'VZ-Netzwerke',
+    );
+  }
+
+  if ($entire_list) {
+    return $providers;
+  }
+
+  $result = &drupal_static(__FUNCTION__ . ':result');
+
+  if (!isset($result)) {
+    // This use of realm for RPX::providers needs to be the full domain. (ie not
+    // janrain_client_js_realm()).
+    if (!$realm = variable_get('rpx_realm', '')) {
+      $msg = 'Can\'t get configured Janrain Engage providers; no Engage realm is configured.';
+      watchdog('janrain_client', $msg, array(), WATCHDOG_ERROR);
+      throw new Exception($msg);
+    }
+    $class = variable_get('janrain_client_class', 'RPX');
+    // PHP 5.2 doesn't support direct use of variables for calling
+    // static class methods.
+    $result = call_user_func(array($class, 'providers'), $realm);
+    if (!$result) {
+      $msg = 'Call to the api/providers Janrain Engage API returned no data.';
+      watchdog('janrain_client', $msg, array(), WATCHDOG_ERROR);
+      throw new Exception($msg);
+    }
+
+    if($result['stat'] != 'ok') {
+      watchdog('janrain_client', 'Failed to get configured Janrain Engage providers: @class::providers returned error: %err', array('@class' => $class, '%err' => $result['err']['msg']), WATCHDOG_WARNING);
+      return array();
+    }
+    if (empty($result['shareWidget'])) {
+      $result['shareWidget']['share'] = array();
+    }
+    $configured = array_unique(array_merge($result['signin'], $result['social'], $result['shareWidget']['share']));
+    //$configured = $result['signin'];
+
+    $result = array();
+    foreach ($configured as $key) {
+      $result[$key] = $providers[$key];
+    }
+  }
+
+  return $result;
+}
+
+/**
+ * Make sure user mapping returned by Engage is right.
+ *
+ * @param integer $uid
+ *   User ID we are updating the mapping for.
+ *
+ * @throws Exception
+ */
+function _janrain_client_update_engage_mapping($uid) {
+  if (!variable_get('rpx_mapping_api', FALSE)) {
+    return;
+  }
+
+  // We use the mapping API only for local accounts (since for the SSO flow
+  // linked accounts are managed by Gardener and we have no way of knowing when
+  // users unlink their accounts).
+  if (!variable_get('acquia_gardens_local_user_accounts', FALSE)) {
+    return;
+  }
+
+  $primary_key = isset($_SESSION['rpx']['profile']['primaryKey']) ? $_SESSION['rpx']['profile']['primaryKey'] : -1;
+  if ($primary_key == $uid) {
+    return;
+  }
+  $class = variable_get('janrain_client_class', 'RPX');
+  $rpx_id = $_SESSION['rpx']['profile']['identifier'];
+  $api_key = variable_get('rpx_api_key', '');
+  // PHP 5.2 doesn't support direct use of variables for calling
+  // static class methods.
+  $result = call_user_func(array($class, 'map'), $api_key, $rpx_id, $uid);
+  if (!$result) {
+    $msg = 'Call to the api/map Janrain Engage API @class::map() returned no data.';
+    watchdog('janrain_client', $msg, array('@class' => $class), WATCHDOG_ERROR);
+    throw new Exception($msg);
+  }
+
+  if ($result['stat'] != 'ok') {
+    watchdog('janrain_client', 'Call to Engage map failed for user ID %uid and Engage ID %rpx_id; map() returned error: %err', array('%uid' => $uid, '%rpx_id' => $rpx_id, '%err' => $result['err']['msg']), WATCHDOG_WARNING);
+  }
+}
+
+/**
+ * Helper function: return sign-in provider info given an Engage ID.
+ *
+ * @param string $id
+ *   An Engage ID.
+ *
+ * @return
+ *   An associative array with provider info (name and title).
+ *
+ * @todo
+ *   This code assumes that the provider top-level domain names are all of
+ *   the provider.tld type.
+ */
+function _janrain_client_get_identity_provider($id) {
+  $entire_list = TRUE;
+  $providers = janrain_client_get_providers($entire_list);
+
+  // Extract the FQDN from the id
+  $provider = parse_url($id, PHP_URL_HOST);
+  // Extract the provider name from the FQDN (assumes it is provider.tld).
+  $parts = explode('.', $provider);
+  array_pop($parts);
+  $provider = array_pop($parts);
+
+  if (isset($providers[$provider])) {
+    $result = array(
+      'name' => $provider,
+      'title' => $providers[$provider],
+    );
+  }
+  else {
+    $result = array(
+      'name' => 'other',
+      'title' => 'Other',
+    );
+  }
+
+  return $result;
+}
+
+/**
+ * Add Engage sign-in JS for the DG social sharing UI.
+ *
+ * @param boolean $default
+ *   TRUE if we are signing in a user (usually admin) to add a default social
+ *   network; FALSE if we are adding a network to a user's "My social
+ *   networks" list.
+ */
+function janrain_client_signin_to_publish_js($site_default = FALSE) {
+  $token_url = _janrain_client_token_url($site_default);
+  $realm = janrain_client_js_realm();
+
+  janrain_client_custom_signin_ui_js($realm, $token_url);
+}
+
+/**
+ * Add custom Engage sign-in JS.
+ */
+function janrain_client_custom_signin_ui_js($realm, $token_url) {
+  $js = "
+(function() {
+    if (typeof window.janrain !== 'object') window.janrain = {};
+    window.janrain.settings = window.janrain.settings || {};
+
+    /* _______________ can edit below this line _______________ */
+
+    janrain.settings.tokenUrl = '${token_url}';
+    janrain.settings.custom = true;
+
+    /* _______________ can edit above this line _______________ */
+
+    function isReady() { janrain.ready = true; };
+    if (document.addEventListener) {
+      document.addEventListener('DOMContentLoaded', isReady, false);
+    } else {
+      window.attachEvent('onload', isReady);
+    }
+
+    var e = document.createElement('script');
+    e.type = 'text/javascript';
+    e.id = 'janrainAuthWidget';
+
+    if (document.location.protocol === 'https:') {
+      //e.src = 'https://engage-dev.janrain.com:8080/js/lib/${realm}/engage.js';
+      e.src = 'https://rpxnow.com/js/lib/${realm}/engage.js';
+    } else {
+      //e.src = 'http://engage-dev.janrain.com:8080/js/lib/${realm}/engage.js';
+      e.src = 'http://widget-cdn.rpxnow.com/js/lib/${realm}/engage.js';
+    }
+
+    var s = document.getElementsByTagName('script')[0];
+    s.parentNode.insertBefore(e, s);
+})();
+
+function janrainWidgetOnload() {
+  jQuery(document).ready(function() {
+    var buttons = document.getElementsByName(\"rpx_custom_ui\");
+    for (var i = 0; i < buttons.length; i++) {
+      janrain.engage.signin.setProviderFlow(buttons[i], buttons[i].id);
+    }
+  });
+}";
+
+  drupal_add_js($js, array(
+    'type' => 'inline',
+    'scope' => 'header',
+  ));
+}
+
+/**
+ * Returns the URL that will receive the Engage sign-in callback ("RPX token
+ * handler URL")
+ */
+function _janrain_client_token_url($site_default) {
+  // Set destination so user will return to current page after authentication.
+  $dest = drupal_get_destination();
+  $dest = urldecode($dest['destination']);
+
+  if ($site_default) {
+    $path = 'admin/config/people/janrain/token_handler';
+  }
+  else {
+    $path = 'janrain/token_handler';
+  }
+
+  return url($path, array('query' => array('destination' => $dest), 'absolute' => TRUE));
+}
+
+/**
+ * Implements hook_admin_paths().
+ */
+function janrain_client_admin_paths() {
+  $paths = array(
+    'user/*/janrain-networks' => TRUE,
+    'user/*/janrain-networks/disable/*' => TRUE,
+  );
+  return $paths;
+}
+
+/**
+ * Returns TRUE if provider supports social publishing.
+ *
+ * @param string $name
+ *   Provider machine name
+ * @return
+ *   TRUE or FALSE.
+ */
+function janrain_client_is_publishing_provider($name) {
+  $providers = &drupal_static(__FUNCTION__);
+
+  if (!isset($providers)) {
+    $providers = janrain_client_publishing_providers();
+  }
+
+  return in_array($name, $providers);
+}
+
+/**
+ * Returns an array of all providers that support social publishing.
+ */
+function janrain_client_publishing_providers() {
+  return array(
+    'facebook',
+    'twitter',
+    'yahoo',
+    'linkedin',
+    'myspace',
+  );
+}
+
+/**
+ * If we are in overlay, we want the user redirected back to it after the
+ * account is linked. We have to rely on HTTP_REFERER and do it manually
+ * since the sign-in widget bypasses the overlay code when POSTing to
+ * token_url, causing a complete page reload.
+ *
+ * @param string $url
+ *   Target URL that should be displayed in overlay.
+ */
+function janrain_client_save_overlay_uri($url) {
+  unset($_SESSION['rpx_overlay_uri']);
+  if (function_exists('overlay_get_mode') && overlay_get_mode() == 'child' && isset($_SERVER['HTTP_REFERER'])) {
+    // Construct referer URI to be passed to token_url.
+    $referer = $_SERVER['HTTP_REFERER'];
+    if (variable_get('clean_url', FALSE)) {
+      // Clean URLs are enabled.
+      global $base_url;
+      $referer = substr($referer, strlen($base_url)+1);
+    }
+    else {
+      $referer = substr(parse_url($referer, PHP_URL_QUERY), 2);
+    }
+    $dest = urlencode($url);
+    if (!variable_get('clean_url', FALSE)) {
+      $dest = urlencode('?q=') . $dest;
+    }
+    $_SESSION['rpx_overlay_uri'] = $referer . '#overlay=' . $dest;
+  }
+}
+
+/**
+ * Implements hook_form_FORM_ID_alter().
+ * Add social sharing to comments.
+ */
+function janrain_client_form_comment_form_alter(&$form, &$form_state, $form_id) {
+  global $user;
+  if (!in_array('comments', variable_get('rpx_publish_node_types', array()))) {
+    return;
+  }
+  janrain_client_alter_form_for_publishing($form, 'comments');
+}
+
+/**
+ * Helper for hook_form_alter() and hook_form_FORM_ID_alter() above.
+ *
+ * @param array $form
+ *   Form to alter.
+ * @param boolean $type
+ *   Content type (e.g. 'comments', 'article', etc.).
+ */
+function janrain_client_alter_form_for_publishing(&$form, $type) {
+  global $user;
+
+  if (!$providers_authorized = janrain_client_authorized_publishing_providers()) {
+    return;
+  }
+
+  $is_admin = user_access('administer janrain engage');
+  $is_node = ($type != 'comments');
+
+  // This will signal that the form's been altered and we need to add social
+  // publishing JS to the page.
+  $add_js = FALSE;
+
+  // Our social publishing UI will be added under this form element.
+  if ($is_node) {
+    $form['janrain_client_options'] = array(
+      '#type' => 'fieldset',
+      '#access' => FALSE,
+      '#title' => t('Social publishing options'),
+      '#collapsible' => TRUE,
+      '#collapsed' => TRUE,
+      '#group' => 'additional_settings',
+      '#weight' => 100,
+    );
+    $container = &$form['janrain_client_options'];
+  }
+  else {
+    $container = &$form;
+  }
+
+  if (user_access('publish to sites social networks')) {
+    $providers_enabled = array_intersect_key($providers_authorized, variable_get('rpx_default_networks', array()));
+    if ($providers_enabled) {
+      // For nodes, a custom message can be provided, while admins can
+      // disable social publishing and customize which networks to post to
+      // for both nodes and comments.
+      $can_customize_message = $is_node;
+      $can_edit = $is_node || $is_admin;
+      $can_disable = $is_admin;
+      $title = t("Publish to site's social networks: ");
+      janrain_client_add_publish_checkbox($title, 'site', $container, $providers_enabled, $can_edit, $can_disable, $can_customize_message);
+      $add_js = TRUE;
+      $container['#access'] = TRUE;
+    }
+  }
+
+  if (user_access('publish to own social networks')) {
+    //
+    // Make sure social publishing for this content type has been enabled by the
+    // user
+    //
+    $type_enabled = db_query('SELECT 1 FROM {rpx_user_publish_node_type} WHERE uid = :uid and type = :type', array(':uid' => $user->uid, ':type' => $type))
+      ->fetchField();
+
+    if ($type_enabled) {
+      //
+      // Make sure a provider has been enabled for social publishing by the user.
+      //
+      $query = db_select('rpx_user_publish_authmap')
+        ->fields('rpx_user_publish_authmap', array('provider'))
+        ->condition('uid', $user->uid)
+        ->condition('provider', array_keys($providers_authorized),  'IN')
+        ->execute();
+      $providers_enabled = array();
+      while ($authmap = $query->fetchObject()) {
+        $providers_enabled[$authmap->provider] = $providers_authorized[$authmap->provider];
+      }
+
+      if ($providers_enabled) {
+        $can_customize_message = $is_node;
+        $can_edit = $can_disable = TRUE;
+        $title = t("Publish to <em>@name's</em> social networks: ", array('@name' => $user->name));
+        janrain_client_add_publish_checkbox($title, 'user', $container, $providers_enabled, $can_edit, $can_disable, $can_customize_message);
+        $add_js = TRUE;
+        $container['#access'] = TRUE;
+      }
+    }
+  }
+
+  if ($add_js) {
+    $form['#attached']['js'][] = drupal_get_path('module', 'janrain_client') . '/janrain_client.publish.js';
+    $form['#attached']['js'][] = array(
+      'type' => 'setting',
+      'data' => array('rpx_providers' => $providers_authorized),
+    );
+    $form['#attached']['css'][] = drupal_get_path('module', 'janrain_client') . '/janrain_client.css';
+  }
+}
+
+/**
+ * Add "Publish to..." checkbox and options.
+ *
+ * @param string $title
+ *   Immutable part of the checkbox label.
+ * @param string $namespace
+ *   A safe identifier to add to the options' UI elements ('site' or 'user').
+ * @param array &$container
+ *   Form element to add the options to.
+ * @param array $providers
+ *   Providers that can be selected/deselected.
+ * @param boolean $can_edit
+ *   TRUE if 'Edit' link should be displayed.
+ * @param boolean $can_disable
+ *   TRUE if the checkbox can be disabled/providers deselected.
+ * @param boolean $can_customize_message
+ *   If TRUE, a 'custom message' textbox will be added.
+ */
+function janrain_client_add_publish_checkbox($title, $namespace, &$container, $providers, $is_editable, $can_disable, $can_customize_message) {
+  $title .= '<span id="rpx-' . $namespace . '-publish-provider-list"><em>';
+  // Insert a list of providers for those cases when the provider checkboxes
+  // are not added (and the JS layer cannot use them to initialize the
+  // list).
+  $title .= implode(', ', $providers) . '</em></span>&nbsp;&nbsp;';
+
+  if ($is_editable) {
+    $title .= '<span id="rpx-' . $namespace . '-publish-edit">' . l(t('Edit'), '#') . '</span>';
+  }
+
+  $group = 'rpx_' . $namespace . '_publish';
+  $container[$group] = array(
+    '#type' => 'checkbox',
+    '#title' => $title,
+    '#default_value' => 1,
+    '#disabled' => !$can_disable,
+  );
+
+  $group = 'rpx_' . $namespace . '_publish_settings';
+  if ($is_editable) {
+    $container[$group] = array(
+      '#type' => 'container',
+      '#parents' => array('options'),
+      '#attributes' => array('id' => 'rpx-' . $namespace . '-publish-settings'),
+    );
+    if ($can_disable) {
+      $checkboxes_options = array();
+      $checkboxes_default = array();
+      foreach ($providers as $name => $title) {
+        $checkboxes_options[$name] = $title;
+        // All providers are enabled by default.
+        $checkboxes_default[] = $name;
+      }
+      $container[$group]['rpx_' . $namespace . '_publish_provider_checkboxes'] = array(
+        '#type' => 'checkboxes',
+        '#title' => t("Enabled !namespace's social networks", array('!namespace' => $namespace)),
+        '#title_display' => 'invisible',
+        '#default_value' => $checkboxes_default,
+        '#options' => $checkboxes_options,
+      );
+    }
+    if ($can_customize_message) {
+      $container[$group]['rpx_' . $namespace . '_publish_custom_message'] = array(
+        '#type' => 'textarea',
+        '#title' => t('Custom Message'),
+        '#rows' => 3,
+      );
+    }
+  }
+}
+
+/**
+ * Implements hook_entity_insert().
+ *
+ * Intercepts newly published nodes and posts to social networks.  We don't use
+ * hook_node_insert() as the path module also uses that hook to alias the node
+ * URL, and we need the alias.
+ */
+function janrain_client_entity_insert($entity, $type) {
+  if ($type == 'node') {
+    janrain_client_publish('node', $entity);
+  }
+}
+
+/**
+ * Implements hook_node_presave().
+ *
+ * Using _presave rather than update so that we still have guaranteed access to
+ * the old node before *this* save. (using hook_node-update relies on the static
+ * cache which could be cleared by other hook implementations in certain cases).
+ */
+function janrain_client_node_presave($node) {
+  if ($node->is_new) {
+    return;
+  }
+
+  $old_status = db_query('SELECT status FROM {node} WHERE nid = :nid', array(':nid' => $node->nid))->fetchField(0);
+
+  // Only social-publish if we're going from unpublished to published, not general
+  // edits.
+  if (empty($old_status) && !empty($node->status)) {
+    // The node is being published by an admin and the user can't choose whether
+    // to publish, so we specify defaults.
+    if ($GLOBALS['user']->uid != $node->uid) {
+      janrain_client_node_defaults($node);
+    }
+    janrain_client_publish('node', $node);
+  }
+}
+
+/**
+ * Implements hook_comment_insert().
+ *
+ * Intercepts newly published comments and posts to social networks.
+ */
+function janrain_client_comment_insert($comment) {
+  janrain_client_publish('comment', $comment);
+}
+
+/**
+ * Implements hook_comment_update().
+ */
+function janrain_client_comment_update($comment) {
+  janrain_client_publish('comment',$comment);
+}
+
+/**
+ * Implements hook_mast_field_info_fields_alter().
+ */
+function janrain_client_mast_field_info_fields_alter(&$fields) {
+  $fields['rpx_site_publish'] = array(
+    'type' => 'social_publish_toggle',
+    'cardinality' => '1',
+    'mast_field_type' => mastFactory::FIELD_TYPE_EXTRA,
+    'weight' => 998,
+  );
+  $fields['rpx_user_publish'] = array(
+    'type' => 'social_publish_toggle',
+    'cardinality' => '1',
+    'mast_field_type' => mastFactory::FIELD_TYPE_EXTRA,
+    'weight' => 999,
+  );
+}
+
+/**
+ * Implements hook_mast_field_info_instances_alter().
+ */
+function janrain_client_mast_field_info_instances_alter(&$instances, $entity_type, $bundle_name) {
+  global $user;
+
+  if (!$providers_authorized = janrain_client_authorized_publishing_providers()) {
+    return;
+  }
+  // Check that social publishing is enabled for this content type by site admin.
+  if (($entity_type != 'node') || empty($bundle_name) || !in_array($bundle_name, variable_get('rpx_publish_node_types', array()))) {
+    return;
+  }
+
+  if (user_access('publish to sites social networks')) {
+    $providers_enabled = array_intersect_key($providers_authorized, variable_get('rpx_default_networks', array()));
+    if ($providers_enabled && user_access('administer janrain engage')) {
+      // Admins can disable site-wide social publishing.
+      $instances['rpx_site_publish'] = array(
+        'label' => t('Site-level networks'),
+        'icons' => array_keys($providers_enabled),
+        'required' => 1,
+        'field_name' => 'rpx_site_publish',
+        'weight' => "998",
+      );
+    }
+  }
+  if (user_access('publish to own social networks')) {
+    // Make sure social publishing for this content type has been enabled by the
+    // user
+    $type_enabled = db_query('SELECT 1 FROM {rpx_user_publish_node_type} WHERE uid = :uid and type = :type', array(':uid' => $user->uid, ':type' => $bundle_name))
+      ->fetchField();
+
+    if ($type_enabled) {
+      $providers_enabled = db_select('rpx_user_publish_authmap')
+        ->fields('rpx_user_publish_authmap', array('provider'))
+        ->condition('uid', $user->uid)
+        ->condition('provider', array_keys($providers_authorized),  'IN')
+        ->execute()
+        ->fetchAllKeyed();
+
+      if ($providers_enabled) {
+        $instances['rpx_user_publish'] = array(
+          'label' => t('Your networks'),
+          'icons' => array_keys($providers_enabled),
+          'required' => 1,
+          'field_name' => 'rpx_user_publish',
+          'weight' => "999",
+        );
+      }
+    }
+  }
+}
+
+/**
+ * Helper for hook_node_insert(), hook_node_update(), hook_comment_insert() and
+ * hook_comment_update().
+ *
+ * @param string $entity_type
+ * @param array &$entity
+ *   Entity to publish (either node or comment).
+ */
+function janrain_client_publish($entity_type, &$entity) {
+  global $user;
+
+  // Don't push notifications for unpublished content.
+  if (empty($entity->status)) {
+    return;
+  }
+
+  // Only continue if the entity has a uid as we're always posting on behalf of
+  // the entity creator, and uid 0 can't have a twitter account.
+  if (empty($entity->uid)) {
+    return;
+  }
+  $account = user_load($entity->uid);
+
+  $is_node = $entity_type == 'node';
+  $type = $is_node ? $entity->type : 'comments';
+  $is_admin = user_access('administer janrain engage');
+
+  // Check that social publishing is enabled for this content type by site admin.
+  if (!in_array($type, variable_get('rpx_publish_node_types', array()))) {
+    return;
+  }
+
+  if (!$providers_authorized = janrain_client_authorized_publishing_providers()) {
+    return;
+  }
+
+  // Build the common part of the activity object. We will customize it, if
+  // neccesary, below.
+  $activity_common = janrain_client_build_activity_object($entity_type, $entity);
+  $published = array();
+  if (user_access('publish to sites social networks', $account)) {
+    $providers = array_intersect_key(variable_get('rpx_default_networks', array()), $providers_authorized);
+    if ($providers) {
+      $can_customize_message = $is_node;
+      $can_disable = $is_admin;
+      $should_publish = $can_disable && $entity->rpx_site_publish || !$can_disable;
+
+      if($should_publish) {
+        $activity = $activity_common;
+        if ($can_customize_message && !empty($entity->rpx_site_publish_custom_message)) {
+          // User-provided custom messages are not processed for tokens.
+          $activity['user_generated_content'] = $entity->rpx_site_publish_custom_message;
+        }
+
+        $activity = drupal_json_encode($activity);
+
+        // Limit the list of providers to those selected by the user.
+        if ($can_disable && isset($entity->rpx_site_publish_provider_checkboxes)) {
+          $providers = array_intersect_key($providers, array_flip($entity->rpx_site_publish_provider_checkboxes));
+        }
+
+        // Publish.
+        foreach ($providers as $k => $user_data) {
+          janrain_client_call_activity_api($user_data['id'], $activity);
+          // Keep track of which providers this content has been published to.
+          $published[] = $user_data['id'];
+        }
+      }
+    }
+  }
+
+  if (user_access('publish to own social networks', $account)) {
+    //
+    // Make sure social publishing for this content type has been enabled by the
+    // user.
+    //
+    $query = db_select('rpx_user_publish_node_type')
+      ->fields('rpx_user_publish_node_type', array('type'))
+      ->condition('uid', $account->uid)
+      ->condition('type', $type)
+      ->execute();
+
+    if ($query->rowCount()) {
+      //
+      // Make sure a provider has been enabled for social publishing by the user.
+      //
+      $query = db_select('rpx_user_publish_authmap')
+        ->fields('rpx_user_publish_authmap', array('provider', 'rpxid'))
+        ->condition('uid', $account->uid)
+        ->condition('provider', array_keys($providers_authorized),  'IN')
+        ->execute();
+      $providers = array();
+      while ($authmap = $query->fetchObject()) {
+        $providers[$authmap->provider] = $authmap->rpxid;
+      }
+
+      if ($providers) {
+        $can_customize_message = $is_node;
+        $can_disable = TRUE;
+        $should_publish = $can_disable && $entity->rpx_user_publish || !$can_disable;
+
+        if($should_publish) {
+          $activity = $activity_common;
+          if ($can_customize_message && !empty($entity->rpx_user_publish_custom_message)) {
+            // User-provided custom messages are not processed for tokens.
+            $activity['user_generated_content'] = $entity->rpx_user_publish_custom_message;
+          }
+
+          $activity = drupal_json_encode($activity);
+
+          // Limit the list of providers to those selected by the user.
+          if ($can_disable && isset($entity->rpx_user_publish_provider_checkboxes)) {
+            $providers = array_intersect_key($providers, array_flip($entity->rpx_user_publish_provider_checkboxes));
+          }
+
+          // Publish.
+          foreach ($providers as $k => $rpxid) {
+            // If the user's Twitter account (for example) is the same as the
+            // sitewide Twitter account, this piece of content will already have
+            // been published to the account. Don't double-post it.
+            if (!in_array($rpxid, $published)) {
+              janrain_client_call_activity_api($rpxid, $activity);
+            }
+          }
+        }
+      }
+    }
+  }
+}
+
+/**
+ * Add checkbox values/flags required by janrain.
+ *
+ * In order for janrain to publish to social media services, the user needs to
+ * select checkboxes corresponding to the services he/she wants to publish to on
+ * the node form. During mailhandler processing or publication by an administrator
+ * there is no form, so we need to add values corresponding to the default values
+ * of these checkboxes so that the social publish post will go through.
+ *
+ * @param $node
+ *   Node object to modify by reference.
+ */
+function janrain_client_node_defaults($node) {
+  if (!$providers_authorized = janrain_client_authorized_publishing_providers()) {
+    return;
+  }
+
+  // Get a list of providers that the creator of this node has selected for publication.
+  $query = db_select('rpx_user_publish_authmap')
+    ->fields('rpx_user_publish_authmap', array('provider'))
+    ->condition('uid', $node->uid)
+    ->condition('provider', array_keys($providers_authorized),  'IN')
+    ->execute();
+  $providers_enabled = array();
+  while ($authmap = $query->fetchObject()) {
+    // Double-check that the provider is also authorized for users to select to
+    // publish to.
+    if (!empty($providers_authorized[$authmap->provider])) {
+      // Set the value of the checkbox to what its default value would have been,
+      // if a form were being used (not the case for mailhandler).
+      // It's very important to use $authmap->provider as the value and not
+      // $providers_authorized[$authmap->provider] as the value needs to be this
+      // select option's key and is case sensitive.
+      // @see janrain_client_add_publish_checkbox()
+      $node->rpx_user_publish_provider_checkboxes[$authmap->provider] = $authmap->provider;
+    }
+  }
+
+  // @see janrain_client_add_publish_checkbox().
+  // The default value for rpx_user_publish is normally hardcoded to "1" in a form
+  // context.  If there are no providers, we can set to 0 to skip some
+  // processing.
+  $node->rpx_user_publish = !empty($node->rpx_user_publish_provider_checkboxes);
+}
+
+/**
+ * Helper function: build activity object from an entity (node, comment).
+ *
+ * @param string $entity_type
+ * @param array &$entity
+ *   Entity to publish (either node or comment).
+ */
+function janrain_client_build_activity_object($entity_type, &$entity) {
+  global $user;
+
+  $is_node = $entity_type == 'node';
+
+  if ($is_node) {
+    $url = url(drupal_get_path_alias('node/' . $entity->nid), array('absolute' => TRUE));
+    $action = variable_get('rpx_default_action_nodes', RPX_ACTION_STRING_NODES);
+    $action = janrain_client_token_replace($action, array('node' => $entity, 'user' => $user));
+    $title = variable_get('rpx_default_title_nodes', RPX_TITLE_STRING_NODES);
+    $title = janrain_client_token_replace($title, array('node' => $entity, 'user' => $user));
+    $content = variable_get('rpx_default_user_content_nodes', RPX_USER_CONTENT_STRING_NODES);
+    $content = janrain_client_token_replace($content, array('node' => $entity, 'user' => $user));
+  }
+
+  // It's a comment.
+  else {
+    //$url = url('node/'. $entity->nid, array('fragment' => 'comment-' . $entity->cid, 'absolute' => TRUE));
+    $url = url(drupal_get_path_alias('node/' . $entity->nid), array('fragment' => 'comment-' . $entity->cid, 'absolute' => TRUE));
+    $action = variable_get('rpx_default_action_comments', RPX_ACTION_STRING_COMMENTS);
+    $node = node_load($entity->nid);
+    $action = janrain_client_token_replace($action, array('node' => $node, 'user' => $user, 'comment' => $entity));
+    $title = variable_get('rpx_default_title_comments', RPX_TITLE_STRING_COMMENTS);
+    $title = janrain_client_token_replace($title, array('node' => $node, 'user' => $user, 'comment' => $entity));
+    $content = variable_get('rpx_default_user_content_comments', RPX_USER_CONTENT_STRING_COMMENTS);
+    $content = janrain_client_token_replace($content, array('node' => $node, 'user' => $user, 'comment' => $entity));
+  }
+
+  // Construct the activity object.
+  $activity = array(
+    'url' => $url,
+    'action' => $action,
+    'title' => $title,
+    'user_generated_content' => $content,
+  );
+
+  return $activity;
+}
+
+function janrain_client_queue_activity($rpxid, $activity) {
+  $queue = DrupalQueue::get('janrain_client_activity');
+  $queue->createQueue();
+  $job = array();
+  $job['rpxid'] = $rpxid;
+  $job['activity'] = $activity;
+  $queue->createItem($job);
+}
+
+/**
+ * Helper function (RPX::activity() wrapper).
+ */
+function janrain_client_call_activity_api($rpx_id, $activity) {
+  $api_key = variable_get('rpx_api_key', NULL);
+  $provider = _janrain_client_get_identity_provider($rpx_id);
+
+  $error_dsm = t('Failed to publish to %prov.', array('%prov' => $provider['title']));
+
+  if (!$api_key) {
+    $msg = 'Can\'t call the Engage activity API; no API key is configured.';
+    watchdog('janrain_client', $msg, array(), WATCHDOG_WARNING);
+    drupal_set_message($error_dsm, 'warning');
+    return;
+  }
+  $class = variable_get('janrain_client_class', 'RPX');
+  // PHP 5.2 doesn't support direct use of variables for calling
+  // static class methods.
+  $result = call_user_func(array($class, 'activity'), $api_key, $rpx_id, $activity);
+  if (!$result) {
+    $msg = 'Call to the activity Janrain Engage API @class::activity() returned no data.';
+    watchdog('janrain_client', $msg, array('@class' => $class), WATCHDOG_ERROR);
+    drupal_set_message($error_dsm, 'warning');
+    return;
+  }
+
+  if($result['stat'] != 'ok') {
+    watchdog('janrain_client', 'Failed to publish to a social network using ID %id: Janrain Engage activity API returned error: %err', array('%id'=>$rpx_id, '%err' => $result['err']['msg']), WATCHDOG_WARNING);
+    drupal_set_message($error_dsm, 'warning');
+  }
+}
+
+/**
+ * Helper function.
+ */
+function janrain_client_token_replace($text, $data) {
+  // We disable sanitize for token_replace() to prevent it from encoding
+  // apostrophes and such.
+  $result = token_replace($text, $data, array('clear' => TRUE, 'sanitize' => FALSE));
+  return htmlspecialchars_decode(strip_tags($result), ENT_QUOTES);
+}
+
+/**
+ * Helper function.
+ * Populate user entity fields in a form with Engage user data.
+ */
+function janrain_client_populate_user_fields(&$form) {
+  // Use Engage data to pre-fill User entity fields.
+  $field_map = variable_get('rpx_profile_fields_map', array());
+  if (empty($field_map)) {
+    return;
+  }
+  $map = array();
+  foreach ($field_map as $mid => $field_mapping) {
+    // Make sure it's a valid mapping.
+    if (!isset($field_mapping['fid'])) {
+      continue;
+    }
+
+    if($field_mapping['set'] == 'user') {
+      $map[$field_mapping['field']] = $field_mapping['fid'];
+    }
+  }
+  if(!empty($map)) {
+    foreach (field_info_instances('user') as $bundle => $fields) {
+      foreach ($fields as $field => $field_data) {
+        if (isset($map[$field]) && $mapped_value = _janrain_client_data_map($_SESSION['rpx'], $map[$field])) {
+          // @TODO jessebeach, is ['value']['#default_value'] swapped here? Should
+          // it be ['#default_value']['value']?
+          $form[$field][LANGUAGE_NONE][0]['value']['#default_value'] = $mapped_value;
+        }
+      }
+    }
+  }
+}
+
+/**
+ * Helper function to ensure that the Engage app has been created.
+ *
+ * Will attempt to retrieve Engage app details from the gardener, if they don't
+ * already exist on the site.
+ *
+ * @return
+ *   TRUE if the Engage app is set up, or FALSE if there was a setup error.
+ */
+function janrain_client_ensure_setup() {
+  // Use rpx_realm as a proxy for the rest of the Engage app variables.
+  $realm = variable_get('rpx_realm', FALSE);
+  if ($realm) {
+    return TRUE;
+  }
+
+  // Request Janrain Engage app details from Gardener.
+  $rp_info = janrain_client_get_rp();
+  if (!$rp_info) {
+    watchdog('janrain_client', 'Could not get Engage app info from gardener', array(), WATCHDOG_ERROR);
+    return FALSE;
+  }
+
+  // Store the Engage app details.
+  variable_set('rpx_api_key', $rp_info['apiKey']);
+  variable_set('rpx_app_id', $rp_info['appId']);
+  variable_set('rpx_realm', $rp_info['realm']);
+  variable_set('rpx_admin_url', $rp_info['adminUrl']);
+  variable_set('rpx_invite_url', isset($rp_info['inviteUrl']) ? $rp_info['inviteUrl'] : NULL);
+
+  // An invite URL means the admin hasn't visited rpxnow.com yet.
+  if (isset($rp_info['inviteUrl'])) {
+    drupal_set_message(t('A Janrain account has been created for you to authorize Social Login & Publish connections with Facebook, Twitter and more. <a href="@url">Visit Janrain</a>', array('@url' => $rp_info['inviteUrl'])), 'status');
+  }
+
+  return TRUE;
+}
+
+/**
+ * Retrieve Engage app information from the Gardener.
+ */
+function janrain_client_get_rp() {
+  global $databases;
+
+  // The DB name is actually the site's nid on gardener.
+  $dbname = $databases['default']['default']['database'];
+
+  return gardens_client_call_gardener('janrain.get.rp', $dbname);
+}
+
+/**
+ * Helper function: return a list of providers that users can select to post to.
+ * This is the intersection of all authorized providers and all publishing
+ * providers.
+ */
+function janrain_client_authorized_publishing_providers() {
+  $result = &drupal_static(__FUNCTION__);
+
+  if (!isset($result)) {
+    $providers_authorized = variable_get('rpx_providers', array());
+    $providers_publishing = array_flip(janrain_client_publishing_providers());
+    $result = array_intersect_key($providers_authorized, $providers_publishing);
+  }
+
+  return $result;
+}
+
+/**
+ * Helper function: return this when there is a token result.
+ */
+function janrain_client_token_result($ajax, $status = 'error', $message = '') {
+  if ($message) {
+    drupal_set_message(t($message), 'error');
+  }
+  unset($_SESSION['rpx']);
+  if ($ajax) {
+    return drupal_json_output(array('status' => 'error'));
+  }
+  else {
+    drupal_goto();
+  }
+}
+

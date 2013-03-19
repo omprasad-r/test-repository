@@ -1,0 +1,132 @@
+name = Gardens
+description = Create a fantastic little bitty site.
+core = 7.x
+distribution_name = Drupal Gardens
+
+files[] = gardens.install
+files[] = gardens.profile
+
+; Default core modules.
+dependencies[] = block
+dependencies[] = comment
+dependencies[] = contextual
+dependencies[] = dashboard
+dependencies[] = dblog
+dependencies[] = field_ui
+dependencies[] = file
+dependencies[] = filter
+dependencies[] = help
+dependencies[] = image
+dependencies[] = list
+dependencies[] = menu
+dependencies[] = number
+dependencies[] = options
+dependencies[] = openid
+dependencies[] = overlay
+dependencies[] = path
+dependencies[] = poll
+dependencies[] = rdf
+dependencies[] = search
+dependencies[] = shortcut
+dependencies[] = syslog
+dependencies[] = taxonomy
+dependencies[] = text
+dependencies[] = toolbar
+
+; Contributed modules.
+dependencies[] = backports
+dependencies[] = comment_goodness
+dependencies[] = contextual_flyout_links
+dependencies[] = ctools
+dependencies[] = date
+dependencies[] = date_api
+dependencies[] = date_popup
+dependencies[] = date_repeat
+dependencies[] = date_repeat_field
+dependencies[] = dialog
+dependencies[] = dialog_user
+dependencies[] = edit_profile
+; Entitycache temporarily disabled until webform is fixed/fully updated.
+;dependencies[] = entitycache
+dependencies[] = field_permissions
+dependencies[] = file_entity
+dependencies[] = filter_tips_dialog
+dependencies[] = imagemagick
+dependencies[] = improved_text_trim
+dependencies[] = javascript_libraries
+dependencies[] = media
+;dependencies[] = media_browser_plus  // Commented out because enabled in gardens_install() instead.
+dependencies[] = media_internet
+dependencies[] = media_oembed
+dependencies[] = media_oembed_thumbnail_style
+dependencies[] = media_youtube
+dependencies[] = mollom
+dependencies[] = multiform
+dependencies[] = oembedcore
+dependencies[] = oembedembedly
+dependencies[] = pathauto
+dependencies[] = pathauto_live_preview
+dependencies[] = plupload
+dependencies[] = redirect
+dependencies[] = remote_stream_wrapper
+dependencies[] = rotating_banner
+dependencies[] = save_draft
+dependencies[] = seo_ui
+dependencies[] = simpleviews
+dependencies[] = simplified_menu_admin
+dependencies[] = simplified_modules
+dependencies[] = site_verify
+dependencies[] = timeago
+dependencies[] = token
+dependencies[] = token_filter
+dependencies[] = wysiwyg
+dependencies[] = xmlsitemap
+dependencies[] = xmlsitemap_node
+dependencies[] = xmlsitemap_menu
+dependencies[] = xmlsitemap_taxonomy
+dependencies[] = xmlsitemap_engines
+
+; Only needed on exported sites, but not harmful to live sites.
+dependencies[] = logintoboggan_email_login
+
+; Custom Gardens modules.
+dependencies[] = blog_template
+dependencies[] = campaign_template
+dependencies[] = gardens_broadcasting_client
+dependencies[] = gardens_broadcasting_client_notifications
+dependencies[] = gardens_client
+dependencies[] = gardens_cron
+dependencies[] = gardens_features
+dependencies[] = gardens_features_required
+dependencies[] = gardens_help
+dependencies[] = gardens_link_ui
+dependencies[] = gardens_limits
+dependencies[] = gardens_misc
+dependencies[] = gardens_statsd
+dependencies[] = product_template
+dependencies[] = scarecrow
+dependencies[] = site_export
+dependencies[] = site_template
+dependencies[] = site_theme_settings
+dependencies[] = siteinfo
+dependencies[] = sqbs
+dependencies[] = themebuilder_advanced
+dependencies[] = themebuilder_bar
+dependencies[] = themebuilder_blocks
+dependencies[] = themebuilder_brand
+dependencies[] = themebuilder_compiler
+dependencies[] = themebuilder_layout
+dependencies[] = themebuilder_log
+dependencies[] = themebuilder_marketplace
+dependencies[] = themebuilder_metatag
+dependencies[] = themebuilder_monotype
+dependencies[] = themebuilder_resources
+dependencies[] = themebuilder_screenshot
+dependencies[] = themebuilder_styleedit
+dependencies[] = themebuilder_themes
+dependencies[] = themebuilder_typekit
+
+; These go at the end because HTML Purifier's hook_requirements() depends on
+; our custom code in gardens_misc_requirements() in order to run correctly.
+dependencies[] = libraries
+dependencies[] = htmlpurifier

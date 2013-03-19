@@ -1,0 +1,175 @@
+<?php
+// $Id$
+
+/**
+ * Test the functionality for inviting users to Drupal Gardens.
+ */
+class GardensMiscInvitePeopleTestCase extends DrupalWebTestCase {
+  protected $profile = 'gardens';
+
+  public static function getInfo() {
+    return array(
+      'name' => 'Invite people functionality',
+      'description' => 'Test the interface for inviting people to Gardens.',
+      'group' => 'Gardens',
+    );
+  }
+
+  function setUp() {
+    parent::setUp();
+
+    // Set variables needed when testing with the 'gardens' install profile.
+    variable_set('gardens_client_site_verification_status', array('verified' => TRUE));
+    variable_set('gardens_client_send_stats', FALSE);
+    variable_set('gardens_client_phone_home', FALSE);
+    variable_set('gardens_debug_xmlrpc', TRUE);
+    variable_set('gardens_misc_ga_tracking_code', '');
+
+    // Allow us to test the mail system.
+    variable_set('mail_system', array('default-system' => 'TestingMailSystem'));
+  }
+
+  /**
+   * Performs a local login on a site that normally forces OpenID logins.
+   *
+   * This test case requires OpenID logins to be forced on because the invite
+   * user functionality only works in that case. So we use this helper method
+   * to allow the Simpletest browser to temporarily log local users in while
+   * the test is being run.
+   *
+   * @param $account
+   *   The user account to log in.
+   */
+  protected function gardensLocalLogin($account) {
+    // Temporarily allow local logins, log the user in, and then disallow them
+    // again. We need to rebuild the menu after toggling the setting so that
+    // the login-related Drupal menu items which are altered in Gardens always
+    // wind up in the correct state at the end.
+    variable_set('acquia_gardens_local_user_accounts', TRUE);
+    menu_rebuild();
+    $this->drupalLogin($account);
+    variable_set('acquia_gardens_local_user_accounts', FALSE);
+    menu_rebuild();
+  }
+
+  /**
+   * Test that submitting the invite people form works correctly and properly
+   * handles access and flood control.
+   */
+  function testInvitePeople() {
+    // Check access control.
+    $web_user = $this->drupalCreateUser(array());
+    $admin_user = $this->drupalCreateUser(array('administer users'));
+    $this->gardensLocalLogin($web_user);
+    $this->drupalGet('admin/people/invite');
+    $this->assertResponse(403, t('A regular user cannot visit the page for inviting people to a Gardens site.'));
+    $this->gardensLocalLogin($admin_user);
+    $this->drupalGet('admin/people/invite');
+    $this->assertResponse(200, t('An administrator can visit the page for inviting people to a Gardens site.'));
+
+    // Allow a maximum of three invitations to be sent in the tests below.
+    variable_set('gardens_misc_invite_people_threshold', 3);
+
+    // Start with a fresh set of collected e-mails.
+    variable_set('drupal_test_email_collector', array());
+
+    // Send invitations and make sure the e-mails came out correctly.
+    $addresses = array('test1@example.com', 'test2@example.com');
+    $edit = array(
+      'email_addresses' => implode(',', $addresses),
+      'invitation_message' => 'Test invitation for site [site:name] with login URL [site:register-url].',
+    );
+    $this->drupalPost('admin/people/invite', $edit, t('Send invitations'));
+    $this->assertUrl('admin/people');
+    $mails = variable_get('drupal_test_email_collector', array());
+    $this->assertEqual(count($mails), 2, t('Two e-mail invitations were sent.'));
+    foreach (array_reverse($addresses) as $address) {
+      $mail = array_pop($mails);
+      $this->assertEqual($mail['to'], $address, t('Invitation e-mail sent to @address (@expected expected).', array('@address' => $mail['to'], '@expected' => $address)));
+      $this->assertTrue(strpos($mail['body'], strtr('Test invitation for site @site', array('@site' => variable_get('site_name', 'Drupal')))) !== FALSE, t('Name of the site found in the invitation e-mail body.'));
+      $register_url_options = scarecrow_force_openid() ?
+        array('absolute' => TRUE, 'fragement' => 'overlay=gardener/register') :
+        array('absolute' => TRUE);
+      $register_url = url('<front>', $register_url_options);
+      $this->assertTrue(strpos($mail['body'], $register_url) !== FALSE, t('Register URL found in the invitation e-mail body.'));
+    }
+
+    // Temporarily raise the invitation limit, and try to submit a mix of valid
+    // and invalid emails; it should be rejected.
+    variable_set('gardens_misc_invite_people_threshold', 4);
+    $invalid = 'test2';
+    $edit['email_addresses'] = 'test1@example.com,' . $invalid;
+    $this->drupalPost('admin/people/invite', $edit, t('Send invitations'));
+    $this->assertUrl('admin/people/invite');
+    $mails = variable_get('drupal_test_email_collector', array());
+    $this->assertEqual(count($mails), 2, t('No new e-mail invitations were sent when one of them is invalid.'));
+    // Try again, but this time the invalid email should be longer than the
+    // maximum length; this should be rejected too (even though Drupal doesn't
+    // generally reject these on the API level).
+    $invalid = 'test@' . str_repeat('e', EMAIL_MAX_LENGTH) . '.example.com';
+    $edit['email_addresses'] = 'test1@example.com,' . $invalid;
+    $this->drupalPost('admin/people/invite', $edit, t('Send invitations'));
+    $this->assertUrl('admin/people/invite');
+    $mails = variable_get('drupal_test_email_collector', array());
+    $this->assertEqual(count($mails), 2, t('No new e-mail invitations were sent when one of them is invalid.'));
+    variable_set('gardens_misc_invite_people_threshold', 3);
+
+    // Try to send two more invitations. This should be rejected due to flood
+    // control.
+    $edit['email_addresses'] = implode(',', $addresses);
+    $this->drupalPost('admin/people/invite', $edit, t('Send invitations'));
+    $this->assertUrl('admin/people/invite');
+    $mails = variable_get('drupal_test_email_collector', array());
+    $this->assertEqual(count($mails), 2, t('No new e-mail invitations were sent out when the total number exceeds the flood control limit.'));
+
+    // Sending one more e-mail hits the flood control limit, so it is still
+    // allowed.
+    $edit['email_addresses'] = 'test3@example.com';
+    $this->drupalPost('admin/people/invite', $edit, t('Send invitations'));
+    $this->assertUrl('admin/people');
+    $mails = variable_get('drupal_test_email_collector', array());
+    $this->assertEqual(count($mails), 3, t('A third e-mail invitation was sent out (equaling the flood control limit).'));
+    $mail = array_pop($mails);
+    $this->assertEqual($mail['to'], 'test3@example.com', t('The third e-mail invitation was sent to the correct address.'));
+
+    // After that, sending even one more invitation is rejected.
+    $this->drupalPost('admin/people/invite', $edit, t('Send invitations'));
+    $this->assertUrl('admin/people/invite');
+    $mails = variable_get('drupal_test_email_collector', array());
+    $this->assertEqual(count($mails), 3, t('No new e-mail invitations were sent out when the flood control limit was reached.'));
+  }
+
+  /**
+   * Test that user invitations are deleted when they should be.
+   */
+  function testInviteDelete() {
+    // Define basic information for creating a new user.
+    $user_info = array(
+      'name' => 'test1',
+      'mail' => 'test1@example.com',
+      'pass' => user_password(),
+      'status' => 1,
+      'roles' => array(),
+    );
+
+    // Invite a user and make sure the invitation disappears after they
+    // register.
+    $mail = $user_info['mail'];
+    gardens_misc_user_invite_save($mail);
+    $this->assertTrue(gardens_misc_user_invite_exists($mail), t('Invitation exists.'));
+    user_save(drupal_anonymous_user(), $user_info);
+    $this->assertFalse(gardens_misc_user_invite_exists($mail), t('Invitation no longer exists after the user created an account.'));
+
+    // Delete a user who still has a pending invitation; make sure that the
+    // invitation disappears so they can't register again without a new invite.
+    $user_info['name'] = 'test2';
+    $user_info['mail'] = $mail = 'test2@example.com';
+    user_save(drupal_anonymous_user(), $user_info);
+    $this->assertFalse(gardens_misc_user_invite_exists($mail), t('Invitation does not exist.'));
+    gardens_misc_user_invite_save($mail);
+    $this->assertTrue(gardens_misc_user_invite_exists($mail), t('Invitation exists after it is created.'));
+    $account = user_load_by_mail($mail);
+    user_delete($account->uid);
+    $this->assertFalse(gardens_misc_user_invite_exists($mail), t('Invitation does not exist after the user account has been deleted.'));
+  }
+}

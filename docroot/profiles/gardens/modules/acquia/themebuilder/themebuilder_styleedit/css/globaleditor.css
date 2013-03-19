@@ -1,0 +1,33 @@
+/* @group Global Tab */
+
+#themebuilder-style table {
+  border-collapse: separate;
+}
+
+#themebuilder-style-global table {
+  text-align: left;
+}
+#themebuilder-style-global table select{
+  margin-left: 20px;
+}
+
+#themebuilder-style-global table input {
+  width: 40px;
+}
+
+#themebuilder-style .ui-slider-horizontal {
+  height: .8em;
+  min-width: 209px;
+  margin: 0px 20px!important;
+  background-image: none!important;
+  background-color: white;
+  border: none!important;
+}
+
+#themebuilder-style .ui-slider-horizontal .ui-slider-handle {
+  top: -.3em;
+  margin-left: -.6em;
+  /*background: transparent url(images/ui-thumb-n.gif) no-repeat!important;*/
+  border:none!important;
+}
+

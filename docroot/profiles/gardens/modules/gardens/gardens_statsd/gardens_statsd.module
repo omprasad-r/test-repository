@@ -1,0 +1,228 @@
+<?php
+
+##GardensExcludeFromExportStart################################################
+
+define('GARDENS_STATSD_COUNTER', 'c');
+define('GARDENS_STATSD_GAUGE', 'g');
+define('GARDENS_STATSD_TIMER', 'ms');
+
+/**
+ * Implements hook_menu().
+ */
+function gardens_statsd_menu() {
+  $items = array();
+
+  $items['admin/config/development/gardens-statsd'] = array(
+    'type' => MENU_NORMAL_ITEM,
+    'title' => 'Gardens Statsd',
+    'description' => 'Configure the connection between Gardens and a stats server to help log data.',
+    'access arguments' => array('administer gardens statsd'),
+    'page callback' => 'drupal_get_form',
+    'page arguments' => array('gardens_statsd_admin'),
+  );
+
+  return $items;
+}
+
+/**
+ * Implements hook_permission().
+ */
+function gardens_statsd_permission() {
+  return array(
+    'administer gardens statsd' => array(
+      'title' => t('Administer Gardens Statsd'),
+      'description' => t('Configure statistics settings.'),
+    ),
+  );
+}
+
+/**
+ * Provides a system_settings_form() implementation.
+ */
+function gardens_statsd_admin($form, $form_state) {
+  $form = array();
+
+  $form['gardens_statsd_enabled'] = array(
+    '#type' => 'checkbox',
+    '#title' => t('Enable Gardens Statsd'),
+    '#description' => t('Enable Gardens Statsd logging. You may want to disable this in non-production environments.'),
+    '#default_value' => variable_get('gardens_statsd_enabled', FALSE),
+  );
+  $form['gardens_statsd_host'] = array(
+    '#type' => 'textfield',
+    '#title' => t('Host'),
+    '#size' => 25,
+    '#description' => t('The hostname, or IP address of the StatsD daemon. To minimize latency issues, use an IP whenever possible.'),
+    '#default_value' => variable_get('gardens_statsd_host', '127.0.0.1'),
+  );
+
+  $host_ip = variable_get('gardens_statsd_host_ip', NULL);
+  if (empty($form_state['input']) && !empty($host_ip)) {
+    drupal_set_message(t('Your hostname has been automatically converted to !ip.', array('!ip' => $host_ip)), 'warning');
+  }
+
+  $form['gardens_statsd_port'] = array(
+    '#type' => 'textfield',
+    '#title' => t('Port'),
+    '#size' => 5,
+    '#description' => t('The port of the StatsD daemon'),
+    '#default_value' => variable_get('gardens_statsd_port', '8125'),
+  );
+
+  $form['#submit'] = array(
+    'gardens_statsd_admin_submit',
+  );
+
+  return system_settings_form($form);
+}
+
+/**
+ * Submit handler for gardens_statsd_admin().
+ */
+function gardens_statsd_admin_submit($form, &$form_state) {
+  // We need to preemptively save this variable so that our submit handler
+  // can attempt to derive an IP address from the hostname.
+  variable_set('gardens_statsd_host', $form_state['values']['gardens_statsd_host']);
+  gardens_statsd_env_check();
+}
+
+/**
+ * Implements hook_cron().
+ */
+function gardens_statsd_cron() {
+  // Do an environment check once a day.
+  if (time() - variable_get('gardens_statsd_env_checked', 0) > (60 * 60 * 24)) {
+    gardens_statsd_env_check();
+  }
+}
+
+/**
+ * Helper function to detect our AH site and server to log environmental info.
+ */
+function gardens_statsd_env_check() {
+  $cwd = getcwd();
+  $tangle = preg_replace('@/mnt/www/html/([^\/_]*)[\/_].*@', '$1', $cwd);
+  $tangle = $tangle == $cwd ? 'tangle-dev' : $tangle;
+  $statsd_host = variable_get('gardens_statsd_host', 'localhost');
+
+  // If the host is not an IP, attempt to derive one.
+  if (!preg_match('/([0-9]+\.){3}/', $statsd_host)) {
+    variable_set('gardens_statsd_host_ip', gethostbyname($statsd_host));
+  }
+  else {
+    variable_set('gardens_statsd_host_ip', NULL);
+  }
+
+  $stage = trim(variable_get('gardens_client_name', 'gardens'), ' .');
+  variable_set('gardens_statsd_suffix', "$stage.$tangle");
+  variable_set('gardens_statsd_env_checked', time());
+
+  // Track concurrent sessions for enterprise customers.
+  $track = $stage == 'gardens' ? FALSE : TRUE;
+  variable_set('gardens_statsd_track_user', $track);
+}
+
+/**
+ * Implements hook_exit().
+ *
+ * Primarily, this function is used to optionally track user information
+ * via statsd.
+ */
+function gardens_statsd_exit() {
+  if (variable_get('gardens_statsd_track_user', NULL) && user_is_logged_in()) {
+    $active_sessions = db_query("SELECT count(sid) as num FROM {sessions} WHERE timestamp > UNIX_TIMESTAMP() - 180")->fetchField();
+    $standard_domain = explode('.', variable_get('gardens_misc_standard_domain', 'unknown.drupalgardens.com'));
+    $sitename = $standard_domain[0];
+    gardens_statsd_send('sessions.' . $sitename, $active_sessions, GARDENS_STATSD_GAUGE, 1);
+  }
+}
+
+/**
+ * Implements hook_user_insert().
+ */
+function gardens_statsd_user_insert($edit, $account, $category) {
+  // Track new users.
+  gardens_statsd_send('user.insert', 1, GARDENS_STATSD_COUNTER);
+}
+
+/**
+ * Implements hook_form_FORM_ID_alter().
+ */
+function gardens_statsd_form_user_register_form_alter(&$form, $form_state, $form_id) {
+  // Do not do these modifications during an Open ID registration or on the
+  // admin user creation form.
+  if (!gardens_client_user_registration_openid_response() && user_is_anonymous()) {
+    $form['#submit'][] = 'gardens_statsd_user_register_submit';
+  }
+}
+
+/**
+ * Submit handler to handle user registration tracking.
+ */
+function gardens_statsd_user_register_submit($form, $form_submit) {
+  // Track user registrations.
+  gardens_statsd_send('user.register', 1, GARDENS_STATSD_COUNTER);
+}
+
+/**
+ * API function to send stats to the statsd service.
+ *
+ * This function constructs a statsd compatable string and sends a single UDP
+ * packet to a statsd daemon. The optional sample rate will help to reduce
+ * high frequency requests from backing up the server. The "path" argument
+ * will automatically receive a prefix and suffix to help determine the
+ * environment of this site. e.g.
+ *
+ * gardens_statsd_send('my.stat.timer', 123, GARDENS_STATSD_TIMER, 1);
+ *  sends: [prefix].my.stat.timer.[suffix]:123|ms|@1
+ * gardens_statsd_send('my.stat.counter', 234, GARDENS_STATSD_COUNTER, 0.1);
+ *  sends: [prefix].my.stat.counter.[suffix]:234|c|@0.1
+ * gardens_statsd_send('my.stat.gauge', 345, GARDENS_STATSD_GAUGE, 1);
+ *  sends: [prefix].my.stat.gauge.[suffix]:345|g|@1
+ *
+ * @param String $path
+ *   A dot-delimeted statsd compatable path: e.g. my.stat.counter
+ *   @note this is automatically prefixed and suffixed with gardens markers.
+ * @param Integer $value
+ *   The value to send to statsd.
+ * @param String $type
+ *   The statsd compatible type, GARDENS_STATSD_COUNTER, GARDENS_STATSD_TIMER,
+ *   GARDENS_STATSD_GAUGE.
+ */
+##################################################GardensExcludeFromExportEnd##
+function gardens_statsd_send($path = '', $value, $type, $sample_rate = 1) {
+##GardensExcludeFromExportStart################################################
+  $enabled = variable_get('gardens_statsd_enabled', FALSE);
+
+  // Only log if it is globally enabled, there is a message, and
+  // the specified sample rate is within an acceptable frequency.
+  if ($enabled) {
+    if ($sample_rate < 1 && (mt_rand() / mt_getrandmax() > $sample_rate)) {
+      return;
+    }
+
+    // Gather environment settings.
+    $prefix = variable_get('gardens_statsd_prefix', 'gardens.prod');
+    $suffix = variable_get('gardens_statsd_suffix', 'dev.tangle-dev');
+    $host_ip = variable_get('gardens_statsd_host_ip', NULL);
+    $host = !empty($host_ip) ? $host_ip : variable_get('gardens_statsd_host', '127.0.0.1');
+    $port = variable_get('gardens_statsd_port', 8125);
+
+    // The target used to be by hostname, but was changed. In the interest of
+    // keeping historic data, for better or worse, the target appears twice
+    // in the namespace.
+    $dot = strrpos($path, '.');
+    $dot = $dot === FALSE ? 0 : $dot + 1;
+    $path_target = substr($path, $dot);
+    $message = "$prefix." . trim($path, ' .') . ".$suffix.$path_target:$value|$type|@$sample_rate";
+
+    // Open a non-blocking stream and send a single udp packet.
+    $fp = stream_socket_client("udp://$host:$port", $errno, $errstr);
+    if ($fp) {
+      stream_set_blocking($fp, 0);
+      fwrite($fp, $message);
+      fclose($fp);
+    }
+  }
+##################################################GardensExcludeFromExportEnd##
+}

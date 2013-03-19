@@ -1,0 +1,202 @@
+<?php
+// $Id:$
+
+/**
+ * @file
+ *   Theme builder layout selector prototype.
+ */
+
+/**
+ * Implementation of hook_menu().
+ */
+function themebuilder_themes_menu() {
+  $items = array();
+  // Used to invoke the selection UI.
+  $items['themes-list'] = array(
+    'title' => 'Themes list',
+    'page callback' => 'themebuilder_themes_list',
+    'type' => MENU_CALLBACK,
+  );
+  // Shows the theme listing page and forces the browser to redownload the
+  // theme images on it.
+  $items['themes-list-refresh-images'] = array(
+    'title' => 'Style wizard',
+    'page callback' => 'themebuilder_themes_list_refresh_images',
+    'type' => MENU_CALLBACK,
+  );
+  $items['themes-save'] = array(
+    'title' => 'AJAX Callback for applying changes',
+    'page callback' => 'themebuilder_bar_ajax_request',
+    'page arguments' => array('themebuilder_themes_save'),
+    'type' => MENU_CALLBACK,
+  );
+
+  foreach ($items as $path => &$item) {
+    $item['access callback'] = 'themebuilder_compiler_access';
+    $item['access arguments'] = array($path);
+  }
+
+  return $items;
+}
+
+/**
+ * Implements hook_themebuilder_bar_tab_permissions().
+ */
+function themebuilder_themes_themebuilder_bar_tab_permissions() {
+  return array(
+    'access themebuilder theme tab' => array(
+      'title' => t('Access the theme tab'),
+      'description' => t('Manage themes.'),
+    ),
+  );
+}
+
+/**
+ * If user has sufficient privileges, add theme picker tool to the page.
+ */
+function themebuilder_themes_themebuilder_bar_items() {
+  if (user_access('access themebuilder theme tab')) {
+
+    // The return array has no 'link' item, because the markup is generated on
+    // the client side.
+    // @see themebuilder_themes.js / ThemeBuilder.Bar.prototype._initializeTab()
+    return array(array('name' => 'themes', 'title' => t('Themes'), 'weight' => 0));
+  }
+}
+
+function themebuilder_themes_themebuilder_bar_editor() {
+  $path = drupal_get_path('module', 'themebuilder_themes');
+  return array(array(
+    'css' => array(
+      array(
+        'data' => $path .'/css/themebuilder_themes.css',
+      ),
+      array(
+        'data' => $path .'/css/ie/themebuilder_themes-lte-ie-8.css',
+        'options' => array(
+          'browsers' => array('IE' => 'lte IE 8', '!IE' => FALSE),
+        ),
+      ),
+    ),
+    'js' => array(
+      $path . '/jcarousel/lib/jquery.jcarousel.js',
+      $path . '/jcarousel/lib/jquery.jcarousel.fixes.js',
+      $path . '/themebuilder_themes.js',
+      $path . '/js/DuplicateInteraction.js',
+      $path . '/js/DeleteInteraction.js',
+    ),
+    ));
+}
+
+/**
+ * Implements hook_themebuilder_init_data().
+ *
+ * This function adds data to the application initialization data that is
+ * passed to the themebuilder during a page load.
+ *
+ * @return {Array}
+ *   An array of information that should be included in the initialization
+ *   data for the themebuilder.
+ */
+function themebuilder_themes_themebuilder_init_data() {
+  themebuilder_log_trace_enter(__FUNCTION__);
+  global $base_path,$theme,$theme_key;
+  drupal_theme_initialize();
+  $result = array();
+
+  $themes = themebuilder_compiler_get_theme_list();
+  $themes += themebuilder_marketplace_get_theme_list();
+  $selected = themebuilder_compiler_get_current_theme()->lastSavedName;
+  if (!$selected) {
+    $selected = $theme_key;
+  }
+  foreach (array('mythemes', 'featured') as $type) {
+    foreach ($themes[$type] as $system_name => $theme) {
+      $theme['system_name'] = $system_name;
+      $theme['type'] = $type;
+      $theme['is_base'] = ($type === 'featured');
+      $theme['dom_id'] = themebuilder_themes_get_tile_id($system_name);
+      $theme['screenshot_url'] = $base_path . drupal_get_path('theme', $system_name) . '/screenshot_lg.png';
+
+      //pass server time and what time the theme was saved, so client side timezones won't mess things up
+      $theme['time_current'] = time();
+      $theme['time_last_saved'] = filemtime(drupal_get_path('theme', $system_name) . '/advanced.css');
+      $result[] = $theme;
+    }
+  }
+  themebuilder_log_trace_exit(__FUNCTION__);
+  return array('themes' => $result, 'selectedTheme' => $selected);
+};
+
+function themebuilder_themes_save() {
+  if (!empty($_POST['theme']) && !empty($_POST['form_token']) && drupal_valid_token($_POST['form_token'], 'themes-save')) {
+    themebuilder_compiler_edit($_POST['theme']);
+    $output = array('error'=>'');
+  }
+  else {
+    $output = array('error'=>'invalid arguments');
+  }
+  themebuilder_compiler_json_output($output);
+}
+
+/**
+ * Implementation of hook_theme
+ */
+function themebuilder_themes_theme($existing, $type, $theme, $path) {
+  $registry['themebuilder_themes_list'] = array(
+    'variables' => array(
+      'theme_list' => array(),
+      'theme_urls' => array(),
+      'theme_id' => array(),
+      'selected' => NULL,
+      'refresh_images' => FALSE,
+    ),
+  );
+
+  $registry['themebuilder_themes_tabs'] = array(
+    'variables' => array('tabs' => array()),
+  );
+  return $registry;
+}
+
+function theme_themebuilder_themes_list($variables) {
+  global $base_path;
+  $output = '';
+  $theme_list = $variables['theme_list'];
+  // Special-case the Bare Bones theme so that it appears last.
+  if (isset($theme_list['barebones'])) {
+    $barebones = $theme_list['barebones'];
+    unset($theme_list['barebones']);
+    $theme_list['barebones'] = $barebones;
+  }
+  $selected = $variables['selected'];
+  foreach ($theme_list as $theme_name => $theme_info) {
+    $output .= '<li';
+    $output .= ' id="' . themebuilder_themes_get_tile_id($theme_name) . '"';
+    $output .='"><div onclick="ThemeBuilder.themeSelector.switchTheme(this,\''.$theme_name.'\')" class="theme-shot' . ($theme_name==$selected?' applied':'') . '">';
+    // The caller may have specified a specific URL to use for this theme's
+    // image.
+    $theme_url = isset($variables['theme_urls'][$theme_name]) ? $variables['theme_urls'][$theme_name] : $base_path . drupal_get_path('theme', $theme_name) . '/screenshot_lg.png';
+    // If requested, add a random query string to make sure the browser will
+    // redownload the image.
+    $query_string = !empty($variables['refresh_images']) ? '?' . mt_rand() : '';
+    // Output the image.
+    $output .= '<img src="' . $theme_url . $query_string . '" />';
+    $output .= '<div class="label" name="'.$theme_name.'">' . check_plain($theme_info['name']) . '</div>';
+    $output .= '<div class="flag"></div>';
+    $output .= '</div></li>';
+  }
+  return $output;
+}
+/**
+ * Returns the standardized DOM id of a theme tile.
+ *
+ * @param {String} theme_name
+ *   The name of the theme.
+ *
+ * @return {String}
+ *   The standardized DOM id of the theme tile.
+ */
+function themebuilder_themes_get_tile_id($theme_name) {
+  return "themetile_" . $theme_name;
+}

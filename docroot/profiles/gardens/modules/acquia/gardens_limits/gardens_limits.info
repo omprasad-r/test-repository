@@ -1,0 +1,7 @@
+name = Drupal Gardens Limits
+description = Limit features based on pricing tears.
+core = 7.x
+dependencies[] = scarecrow
+package = Drupal Gardens
+files[] = gardens_limits.module
+hidden = TRUE

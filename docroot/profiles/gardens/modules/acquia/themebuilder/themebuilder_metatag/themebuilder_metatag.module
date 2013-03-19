@@ -1,0 +1,191 @@
+<?php
+/**
+ * @file
+ * Provides metatag configuration via Themebuilder.
+ */
+
+/**
+ * Defines a default value for the viewport content setting.
+ */
+define('THEMEBUILDER_METATAG_VIEWPORT_DEFAULT_CONTENT', 'width=device-width, initial-scale=1.0');
+
+/**
+ * Implementation of hook_menu().
+ */
+function themebuilder_metatag_menu() {
+  $items = array();
+  $items['themebuilder-metatag-config-load'] = array(
+    'title' => t('Theme metatag configuration loading'),
+    'page callback' => 'themebuilder_bar_ajax_request',
+    'page arguments' => array('themebuilder_metatag_config_load'),
+    // @todo: is this the right permission to check for?
+    'access arguments' => array('access themebuilder advanced tab'),
+    'type' => MENU_CALLBACK,
+  );
+  // Used to save the settings.
+  $items['themebuilder-metatag-save'] = array(
+    'title' => 'Theme metatag configuration update',
+    'page callback' => 'themebuilder_bar_ajax_request',
+    'page arguments' => array('themebuilder_metatag_save'),
+    'type' => MENU_CALLBACK,
+  );
+  return $items;
+}
+
+/**
+ * Menu callback to retrieve metatag information.
+ */
+function themebuilder_metatag_config_load() {
+  $theme = themebuilder_compiler_get_current_theme();
+  $settings = $theme->getThemeSetting();
+  themebuilder_compiler_json_output($settings);
+}
+
+/**
+ * Implements hook_themebuilder_bar_editor().
+ */
+function themebuilder_metatag_themebuilder_bar_editor() {
+  $path = drupal_get_path('module', 'themebuilder_metatag');
+  return array(
+    array(
+      'css' => array(
+        array(
+          'data' => $path .'/themebuilder_metatag.css',
+        ),
+      ),
+      'js'  => array(
+        $path . '/js/themebuilder_metatag.js',
+      ),
+    ),
+  );
+}
+
+/**
+ * Implements hook_themebuilder_advanced_tabs_alter().
+ */
+function themebuilder_metatag_themebuilder_advanced_tabs_alter(&$tabs) {
+  $tabs['metatag'] = t('Viewport settings');
+}
+
+/**
+ * Implements hook_themebuilder_advanced_pre_alter().
+ */
+function themebuilder_metatag_themebuilder_advanced_pre_alter(&$advanced_pre) {}
+
+/**
+ * Implements hook_themebuilder_advanced_contents_alter().
+ */
+function themebuilder_metatag_themebuilder_advanced_contents_alter(&$contents) {
+  $subtab = <<<EOD
+  <div id="themebuilder-advanced-metatag">
+    <div class="content"></div>
+    <div class="update-button-wrapper">
+      !update_button
+    </div>
+  </div>
+EOD;
+  $subtab = format_string($subtab, array(
+    '!update_button' => theme('themebuilder_button', array('text' => 'Update', 'class' => 'update-button disabled')),
+  ));
+
+  $contents .= $subtab;
+}
+
+/**
+ * Saves metatags configurations to the theme.
+ */
+function themebuilder_metatag_save() {
+  $ret = array(
+    'error' => '',
+  );
+
+  // We don't want users passing in random property names and values through
+  // form manipulation. So we'll only allow properties from a whitelist.
+  $allowed_properties = _themebuilder_metatag_get_allowed_properties();
+
+  if (isset($_POST['property']) && in_array($_POST['property'], $allowed_properties) && isset($_POST['value'])) {
+    themebuilder_compiler_save_property('setting', '', $_POST['property'], $_POST['value']);
+  }
+  else {
+    $ret['error'] = 'Wrong Arguments';
+  }
+
+  themebuilder_compiler_json_output($ret);
+}
+
+/**
+ * Implements hook_html_head_alter().
+ *
+ * Adds the viewport metatag to the HTML head.
+ *
+ * This is hard-coded for viewport. Adding more metatags will require some
+ * abstraction. Perhaps the metatag configurations should be moved out of
+ * settings[] and into metatags[] in the theme info file.
+ *
+ * @see gardens_features_html_head_alter()
+ */
+function themebuilder_metatag_html_head_alter(&$head_elements) {
+  global $theme;
+
+  $non_gardens_themes = array(
+    'bartik',
+    'blossom',
+    'garland',
+    'seven',
+    'stark',
+  );
+
+  // If either $theme is empty, or this is not a Drupal Gardens theme, return
+  // out of this function. Calling getThemeSetting() on a non-Drupal Gardens
+  // theme will result in a 500 error.
+  if (empty($theme) || in_array($theme, $non_gardens_themes)) {
+    return;
+  }
+
+  // Get the settings from the theme.
+  global $theme_info;
+  $settings = array();
+  if (!empty($theme_info) && !empty($theme_info->info) && !empty($theme_info->info['settings'])) {
+    $settings = $theme_info->info['settings'];
+  }
+
+  $viewport_content = '';
+  if (isset($settings['viewport'])) {
+    // If the viewport setting is a string it means it is the old value, before
+    // it was converted to an array.
+    $viewport_content = is_string($settings['viewport']) ? $settings['viewport'] : $settings['viewport']['content'];
+  }
+
+  // Only add the viewport metatag if the content attribute is not empty.
+  if (!empty($viewport_content)) {
+    $head_elements['viewport'] = array(
+      '#type' => 'html_tag',
+      '#tag' => 'meta',
+      '#attributes' => array(
+        'name' => 'viewport',
+        'content' => $viewport_content,
+      ),
+    );
+  }
+}
+
+/**
+ * Implements hook_themebuilder_init_data().
+ */
+function themebuilder_metatag_themebuilder_init_data() {
+  return array(
+    // Pass the default values to Themebuilder.
+    'viewportDefaultEnabled' => variable_get('themebuilder_metatag_viewport_default_enabled', FALSE),
+    'viewportDefaultContent' => THEMEBUILDER_METATAG_VIEWPORT_DEFAULT_CONTENT,
+  );
+}
+
+/**
+ * Whitelists particular theme settings to be edited via Themebuilder.
+ */
+function _themebuilder_metatag_get_allowed_properties() {
+  return array(
+    'viewport',
+  );
+}
+

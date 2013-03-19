@@ -1,0 +1,8 @@
+name = XHProf MongoDB
+description = UI for xhprof runs.
+package = Development
+;dependencies[] = devel
+dependencies[] = mongodb
+core = 7.x
+
+files[] = MongodbXHProfRuns.inc

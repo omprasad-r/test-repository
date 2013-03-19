@@ -1,0 +1,20 @@
+name = Mobile App Services
+description = Provides service endpoints for content authoring from a mobile app.
+core = 7.x
+
+dependencies[] = entity
+dependencies[] = oauth_common
+dependencies[] = services (>=7.x-3.3)
+dependencies[] = rest_server
+dependencies[] = services_oauth
+
+files[] = mast.ui.inc
+files[] = mast.class.inc
+files[] = tests/mast.test
+
+; Information added by drupal.org packaging script on 2013-01-17
+version = "7.x-1.0-rc1"
+core = "7.x"
+project = "mast"
+datestamp = "1358437930"
+

@@ -1,0 +1,146 @@
+<?php
+/**
+ * 
+ */
+class GardensMediaUploadForm extends DrupalWebTestCase {
+  public static function getInfo() {
+    return array(
+      'name' => t('Gardens Media Upload Form'),
+      'description' => t('Tests that the upload form is working as expected.'),
+      'group' => 'Gardens Media'
+    );
+  }
+  
+  function setUp() {
+    parent::setUp('gardens_media');
+  }
+
+  function testUploadFormAccess() {
+    // anonymous users can't get to it
+    $this->drupalGet('upload');
+    // anonymous users go to the login page with a redirect string
+    $this->assertUrl("user", array("query" => array("destination" => "upload")));
+    
+    // logged in users without permission to upload can't access it
+    $user = $this->drupalCreateUser();
+    $this->drupalLogin($user);
+    $this->drupalGet('upload');
+    $this->assertResponse(403, t('Users without permission can\'t access the form.'));
+    $this->drupalLogout();
+    
+    // logged in users WITH permission to upload CAN access it
+    $user = $this->drupalCreateUser(array('add user submitted content', 'create photo content'));
+    $this->drupalLogin($user);
+    $this->drupalGet('upload');
+    $this->assertResponse(200, t('Users with permission can access the form.'));
+    $this->drupalLogout();
+  }
+  
+  function testUploadFormFeatures() {
+    $user = $this->drupalCreateUser(array('add user submitted content', 'create photo content', 'create video content'));
+    $this->drupalLogin($user);
+    $this->drupalGet('upload');
+
+    // test to make sure the photo radio button is selected
+    $this->assertLink('Upload a photo');
+    $this->assertLink('Embed a video');
+    
+    // make sure the file upload field is there..
+    $this->assertFieldById("gardens-media-widget");
+    // make sure the title box is there and not populated..
+    $this->assertFieldByName('title', '', t('The title field is there and empty.'));
+    // make sure the description box is there and not populated..
+    $this->assertFieldByName('body[und][0][value]', '', t('The body field is there and empty.'));
+    
+    // click the video link
+    if($this->clickLink('Embed a video') === FALSE) {
+      $this->fail(t('Can not click the video link'));
+    }
+    
+    // make sure the embedded field is on the page (video is selected)
+    $this->assertFieldByName("field_video_asset[und][0][embed_code]", "");
+    
+    // make sure the button for embedding is there..
+    $this->assertFieldByName("op", "Embed");
+    
+    // TODO: make sure the other things are hidden on the page.
+    // $this->assertRaw('id="gardens-media-field-bundle-wrapper" style="display: none; "');
+    
+    $this->drupalLogout();
+  }
+  
+  function testFormPhotoAndMediaPost() {
+    $user = $this->drupalCreateUser(array('add user submitted content', 'create photo content'));
+    $this->drupalLogin($user);
+    
+    // try to submit a photo without posting any data
+    $this->drupalPost('upload', array(), 'Save');
+    $this->assertText('No file was specified to upload.', t('File upload failed when no file was attached.'));
+    
+    // try to submit a non-photo
+    
+    // try to post a photo without title or description
+    // try to post a photo with a title and description
+
+    // try to submit a youtube video without posting any data
+    // try to submit a broken youtube video link
+    // try to post a youtube video without title or description
+    // try to post a youtube video with a title and description
+    
+    $this->drupalLogout();
+  }
+}
+
+class GardensMediaWebTestCase extends DrupalWebTestCase {
+  protected $admin_user;
+
+  public static function getInfo() {
+    return array(
+      'name' => t('Gardens Media Web Test Case'),
+      'description' => t('Test general functionality of media in gardens.'),
+      'group' => 'Gardens Media'
+    );
+  }
+
+  function setUp() {
+    parent::setUp('gardens_media');
+    $this->admin_user = $this->drupalCreateUser(array('access content', 'access administration pages', 'administer site configuration', 'administer users', 'administer permissions', 'administer content types', 'administer nodes', 'bypass node access', 'administer media', 'import media', 'view media', 'edit media'));
+    $this->drupalLogin($this->admin_user);
+  }
+
+  /**
+   * Test that we can delete media files that are in use, provided that
+   * there is an adequate warning message.
+   */
+  function testMediaFileDelete() {
+    // Create a referring node.
+    $data = array(
+      'type' => 'photo',
+      'title' => 'photo1',
+    );
+    $node = $this->drupalCreateNode($data);
+
+    // Create a test image and attach it to the node.
+    $file = current($this->drupalGetTestFiles('image'));
+    $info = getimagesize(drupal_realpath($file->uri));
+    $file->filemime = $info['mime'];
+    file_save($file);
+    $edit = array(
+      'field_photo_asset[und][0][fid]' => $file->fid,
+    );
+    $this->drupalPost('node/' . $node->nid . '/edit', $edit, t('Save'));
+
+    // Make sure that the file_usage is being tracked.
+    $usage = file_usage_list($file);
+    $this->assertTrue(!empty($usage['media']['node']), t('The new file reports usage via file_usage_list().'));
+
+    // Get the media delete page and test that there is a warning
+    // for the original file.
+    $html = $this->drupalGet('media/' . $file->fid . '/delete');
+    $match_warning = preg_match('/The file.*' . $file->filename . '.*is used.*node\/' . $node->nid . '/', $html);
+    $this->assertTrue($match_warning, t('The file delete form has a warning.'));
+
+    // Make sure that there is also a delete button.
+    $this->assertFieldById('edit-submit', 'Delete', 'The file delete form has a delete button.');
+  }
+}

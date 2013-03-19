@@ -1,0 +1,1393 @@
+#themebuilder-wrapper #themebuilder-style {
+  position: relative;
+}
+
+#themebuilder-wrapper #themebuilder-style div.fieldset {
+  float: left;
+  width: 100%;
+  clear: left;
+  margin: 0 0 20px;
+  height: 27px;
+}
+
+#themebuilder-wrapper #themebuilder-style div.top-bottom-borders {
+  background-image: url(images/sepratr-horiz-top-and-bot.png);
+  background-repeat: repeat-x;
+  display: inline-block;
+  height:100px;
+  overflow: hidden;
+  width: 100%;
+}
+
+#themebuilder-wrapper #themebuilder-style span.label {
+  display: block;
+  float: left;
+  margin-bottom: 14px;
+  margin-top: 4px;
+  width: 8em;
+}
+
+#themebuilder-wrapper #themebuilder-font-editor span.label {
+  margin-top: 11px;
+}
+
+#themebuilder-wrapper #style-background-color {
+  clear: left;
+}
+
+/* @group Element Selector */
+
+/* #themebuilder-wrapper #element-to-edit {
+  margin: 0 0 20px;
+} */
+
+#themebuilder-wrapper #path-selector {
+  position: relative;
+  padding: 5px 9px;
+  overflow: visible;
+  background-image: url(images/elemnt-pck-sepratr.png);
+  background-repeat: repeat-x;
+  background-position: bottom center;
+}
+
+/* @group Path Element */
+
+#themebuilder-wrapper .path-element {
+  background: url(images/element_selector_sprite.png) no-repeat -3px -69px transparent;
+  display: block;
+  float: left;
+  margin: 0 0 0 -11px;
+  padding-left: 14px;
+}
+
+#themebuilder-wrapper .path-element:hover {
+  background-position: -3px -201px;
+}
+
+#themebuilder-wrapper .path-element.first {
+  background-position: -3px -3px;
+  margin-left: 0;
+  padding-left: 7px;
+}
+
+#themebuilder-wrapper .path-element.first:hover {
+  background-position: -3px -135px;
+}
+
+#themebuilder-wrapper .path-element.disabled {
+  background-position: -3px -333px;
+}
+
+#themebuilder-wrapper .path-element.disabled:hover {
+  background-position: -3px -472px;
+}
+
+#themebuilder-wrapper .path-element.first.disabled {
+  background-position: -3px -267px;
+}
+
+#themebuilder-wrapper .path-element.first.disabled:hover {
+  background-position: -3px -399px;
+}
+
+#themebuilder-wrapper .path-element.disabled .path-element-label {
+  color: #686868;
+}
+
+#themebuilder-wrapper .path-element-inner {
+  background: url(images/element_selector_sprite.png) no-repeat right -36px transparent;
+  display: inline-block;
+  height: 27px;
+  padding: 6px 18px 0 5px;
+  vertical-align: top;
+}
+
+#themebuilder-wrapper .path-element:hover .path-element-inner {
+  background-position: right -168px;
+}
+
+#themebuilder-wrapper .path-element.disabled:hover .path-element-inner {
+  background-position: right -432px;
+}
+
+#themebuilder-wrapper .path-element.disabled .path-element-inner {
+  background-position: right -300px;
+}
+
+#themebuilder-wrapper .path-element.last .path-element-inner {
+  background-position: right -102px;
+}
+
+#themebuilder-wrapper .path-element.last:hover .path-element-inner {
+  background-position: right -234px;
+}
+
+#themebuilder-wrapper .path-element.last.disabled .path-element-inner {
+  background-position: right -366px;
+}
+
+#themebuilder-wrapper .path-element.last.disabled:hover .path-element-inner {
+  background-position: right -505px;
+}
+
+/* @end */
+
+/* @group Path Specificity */
+
+#themebuilder-wrapper .path-specificity {
+  display: none;
+  position: absolute;
+  z-index: 10001;
+}
+
+/* Fix for IE7 */
+body.ie7 #themebuilder-wrapper .path-specificity {
+  margin-top: -39px;
+}
+
+body.webkit #themebuilder-wrapper .path-specificity {
+  position: absolute;
+  top: inherit;
+}
+
+#themebuilder-wrapper .path-specificity .top-section {
+  width: 100%;
+  height: 8px;
+}
+
+#themebuilder-wrapper .path-specificity .middle-section {
+  width: 100%;
+}
+
+#themebuilder-wrapper .path-specificity .bottom-section {
+  width: 100%;
+  height: 8px;
+}
+
+#themebuilder-wrapper .path-specificity .panel-center {
+  padding: 5px 9px 5px 9px;
+  background: white;
+}
+
+#themebuilder-wrapper .path-specificity .tb-type-identification {
+  float: left;
+  min-width: 150px;
+}
+
+#themebuilder-wrapper .path-specificity .tb-type-pseudoclass {
+  border-left: 1px solid #A0A0A0;
+  float: left;
+  min-width: 150px;
+  margin-left: 10px;
+  padding-left: 10px;
+}
+
+#themebuilder-wrapper .path-specificity .option {
+  padding: 6px 0 0;
+  line-height: 1;
+  cursor: default;
+}
+
+#themebuilder-wrapper .path-specificity .option:not(.selected) {
+  cursor: pointer;
+}
+
+#themebuilder-wrapper .path-specificity .option:not(.last) {
+  padding: 6px 0;
+  border-bottom: 1px solid #a0a0a0;
+}
+
+#themebuilder-wrapper .path-specificity .panel-center > div div div {
+  color: black;
+  height: 20px;
+}
+
+#themebuilder-wrapper .path-specificity .panel-center div.selected {
+  font-weight: bold;
+  color: #0087e1;
+}
+
+#themebuilder-wrapper .path-specificity .panel-center div span {
+  display: inline-block;
+  width: 10px;
+  height: 7px;
+  margin-right: 3px;
+}
+
+#themebuilder-wrapper .path-specificity .panel-center div.selected span {
+  background-image: url(images/icon-check.png);
+  background-repeat: no-repeat;
+}
+
+#themebuilder-wrapper .path-specificity .top-left {
+  display: inline-block;
+  background-image: url(images/specificity/top-left.png);
+  background-repeat: no-repeat;
+  height: 8px;
+  width: 22px;
+  position:absolute;
+  top: 0;
+  left: -8px;
+}
+
+#themebuilder-wrapper .path-specificity .top-right {
+  display: inline-block;
+  background: url(images/specificity/top-right.png);
+  height: 8px;
+  width: 8px;
+  position: absolute;
+  top: 0;
+  right: -8px;
+}
+
+#themebuilder-wrapper .path-specificity .bottom-left {
+  display: inline-block;
+  background: url(images/specificity/bottom-left.png);
+  height: 7px;
+  width: 8px;
+  position: absolute;
+  bottom: 1px;
+  left: -8px;
+}
+
+#themebuilder-wrapper .path-specificity .bottom-right {
+  display: inline-block;
+  background: url(images/specificity/bottom-right.png);
+  height: 7px;
+  width: 8px;
+  position: absolute;
+  bottom: 1px;
+  right: -8px;
+}
+
+#themebuilder-wrapper .path-specificity .top {
+  display: inline-block;
+  background: url(images/specificity/top.png);
+  background-repeat: repeat-x;
+  height: 8px;
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+}
+
+#themebuilder-wrapper .path-specificity .bottom {
+  display: inline-block;
+  background: url(images/specificity/bottom.png);
+  background-repeat: repeat-x;
+  height: 8px;
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+}
+
+#themebuilder-wrapper .path-specificity .left {
+  display: inline-block;
+  background: url(images/specificity/left.png);
+  background-repeat: repeat-y;
+  width: 8px;
+  float: left;
+  position: absolute;
+  left: -8px;
+  top: 8px;
+  bottom: 8px;
+}
+
+#themebuilder-wrapper .path-specificity .right {
+  display: inline-block;
+  background: url(images/specificity/right.png);
+  background-repeat: repeat-y;
+  width: 8px;
+  float: right;
+  position: absolute;
+  right: -8px;
+  top: 8px;
+  bottom: 8px;
+}
+
+#themebuilder-wrapper .path-specificity.show {
+  display: inline-block;
+}
+
+/*
+ * This is a transparent div that is used to capture clicks
+ * that fall outside of the #path-specificity panel.  That panel
+ * should disappear if the user clicks anywhere off the panel,
+ * and this div provides a sensible place to put that event
+ * listener.
+ */
+#themebuilder-wrapper .path-specificity-cancel {
+  display: none;
+  position: fixed;
+  top: 0px;
+  left: 0px;
+  z-index: 10000; /* Make sure this is just under the specificity panel. */
+}
+
+#themebuilder-wrapper .path-specificity-cancel.show {
+  display: block;
+}
+
+/*
+ * This veil is used to disable the controls in the style editor
+ * tab when no element has been selected.  To cause the controls
+ * to be disabled, simply add the 'show' class to the element.
+ */
+#themebuilder-wrapper .disable-controls-veil {
+  display: none;
+  position: absolute;
+  height: 238px;
+  left: 188px;
+  right: 0px;
+  top: 0;
+  z-index: 100;
+}
+
+/*
+ * Causes the veil that is used to disable style editor controls
+ * to be displayed, therefore blocking all of the controls.
+ */
+#themebuilder-wrapper .disable-controls-veil.show {
+  display: block;
+}
+
+#themebuilder-wrapper .override-controls-veil {
+  position: relative;
+  z-index: 200;
+}
+
+#themebuilder-wrapper .path-element-pulldown-button {
+  display: inline-block;
+  float: left;
+  width: 1px;
+  height: 1px;
+  margin: -2px 4px 0 0;
+  padding: 10px;
+  background-image: url(images/dropdown-active.png);
+  cursor: pointer !important;
+}
+
+#themebuilder-wrapper .path-element-pulldown-button.open,
+#themebuilder-wrapper .path-element.disabled .path-element-pulldown-button.open {
+  background-image: url(images/dropdown-active-open.png);
+  position: relative;
+  background-position: -2px -2px;
+  z-index: 10500;
+}
+
+#themebuilder-wrapper .path-element.disabled .path-element-pulldown-button {
+  background-image: url(images/dropdown-disabled.png);
+}
+
+#themebuilder-wrapper .path-element-label {
+  cursor: pointer;
+  display: block;
+  float: left;
+  height: 21px;
+  vertical-align: top;
+  white-space: nowrap;
+}
+
+#themebuilder-wrapper .path-element-label:hover {
+  text-decoration: underline;
+}
+
+/* @end */
+
+/* @group Selection label */
+
+#themebuilder-wrapper .path-selection-options {
+  cursor: pointer;
+  display: block;
+  padding: 0 3px;
+  font-weight: bold;
+  bottom: 4px;
+  position: absolute;
+  right: 10px;
+}
+
+#themebuilder-wrapper .power-theming-label,
+#themebuilder-wrapper .natural-language-label {
+  display: inline;
+  margin-right: 16px;
+  cursor: pointer;
+}
+
+#themebuilder-wrapper .power-theming-value,
+#themebuilder-wrapper .natural-language-value {
+  cursor: pointer;
+  color: #0080c5;
+}
+
+#themebuilder-wrapper .power-theming-value:hover,
+#themebuilder-wrapper .natural-language-value:hover {
+  color: #44BBFF;
+}
+
+#themebuilder-wrapper .path-selector-label {
+  clear: left;
+  display: block;
+  padding: 0 3px;
+  bottom: 4px;
+  position: relative;
+  top: 0px;
+}
+
+#themebuilder-wrapper .path-selector-label-text {
+  font-weight: bold;
+}
+
+#themebuilder-wrapper .path-selector-value {
+  margin-left: 10px;
+  font-weight: normal;
+}
+
+#themebuilder-wrapper .path-selector-value-space {
+  margin-right: 6px;
+}
+
+#themebuilder-wrapper .path-selector-refinement {
+  margin-left: 20px;
+  color: #0080c5;
+  cursor: pointer;
+}
+
+/* @end */
+
+/* @end */
+
+/* @group UI Selector */
+
+#element-to-edit .theelement {
+  padding-left: 20px;
+  font-size: 0.8em;
+}
+
+.highlight-node {
+  position:absolute;
+  z-index: 500;
+  background-color:red;
+  opacity:.5;
+}
+
+#element-to-edit {
+  margin-bottom: 20px;
+  display:block;
+  text-align:left;
+}
+
+/* @end */
+
+/* @group Font Tab */
+
+/* Layout style fields */
+
+#themebuilder-wrapper #themebuilder-style-font .font-management-link {
+  color: #0080c5;
+  cursor: pointer;
+  line-height: 23px;
+  margin-left: 20px;
+}
+
+#themebuilder-wrapper #themebuilder-style-font div.colorSelector {
+  float: left;
+}
+
+#themebuilder-wrapper #themebuilder-style-font #style-font-color,
+#themebuilder-wrapper #themebuilder-style-font #style-font-size,
+#themebuilder-wrapper #themebuilder-style-font #style-font-size-u,
+#themebuilder-wrapper #themebuilder-style-font .fg-buttonset,
+#themebuilder-wrapper #themebuilder-style-font #style-line-height,
+#themebuilder-wrapper #themebuilder-style-font #style-letter-spacing {
+  display: inline;
+  margin: 8px;
+}
+
+#themebuilder-wrapper #themebuilder-style-font .fg-buttonset {
+  height: 32px;
+  float: left;
+}
+
+#themebuilder-wrapper #style-font-size-image,
+#themebuilder-wrapper #style-line-height-image,
+#themebuilder-wrapper #style-letter-spacing-image {
+  background-image: url(../themebuilder_bar/images/themebuilder_controls.png);
+  background-position: -60px -631px;
+  background-repeat: no-repeat;
+  display: inline;
+  padding: 10px 12px;
+  width: 0;
+  height: 0;
+  float: left;
+  margin-top: 8px;
+}
+
+#themebuilder-wrapper #style-line-height-image {
+  background-position: 0px -631px;
+}
+
+#themebuilder-wrapper #style-letter-spacing-image {
+  background-position: -33px -631px;
+  margin-left: 10px;
+}
+
+#themebuilder-wrapper .inputslider-large {
+  width: 38px;
+  height: auto;
+  padding: 4px 2px 11px;
+  border: none;
+  background: url(../themebuilder_bar/images/themebuilder_controls.png) no-repeat !important;
+  background-position: 0 -546px !important;
+  font-family: "Lucida Grande", Lucida, Verdana, sans-serif;
+  font-size: 13px !important;
+  text-align: center;
+  color: black;
+  cursor: pointer;
+  vertical-align: top;
+  float: left;
+}
+
+#themebuilder-wrapper #themebuilder-style-font .inputslider-large {
+  margin: 7px 0 0 0;
+}
+
+body.ie7 #themebuilder-wrapper #themebuilder-style-font #style-font-size {
+  display: inline;
+}
+
+#themebuilder-wrapper #themebuilder-style-font #style-font-size:hover {
+  background-position: -272px -546px; 
+}
+
+#themebuilder-wrapper #themebuilder-style-font .bold,
+#themebuilder-wrapper #themebuilder-style-font .bold.ui-state-active,
+#themebuilder-wrapper #themebuilder-style-font .italic,
+#themebuilder-wrapper #themebuilder-style-font .italic.ui-state-active,
+#themebuilder-wrapper #themebuilder-style-font .uppercase,
+#themebuilder-wrapper #themebuilder-style-font .uppercase.ui-state-active,
+#themebuilder-wrapper #themebuilder-style-font .underline,
+#themebuilder-wrapper #themebuilder-style-font .underline.ui-state-active {
+  width: 32px;
+  height: 32px;
+  margin: 0 0 0 0;
+  background-image: url(../themebuilder_bar/images/themebuilder_controls.png);
+  background-repeat: no-repeat;
+  background-position: 0 -210px;
+  background-color: transparent;
+  border: none !important;
+  outline: none !important;
+  text-indent: -999em;
+  vertical-align: top;
+}
+
+/* IE7 fix */
+
+body.ie7 #themebuilder-wrapper #themebuilder-style-font .bold,
+body.ie7 #themebuilder-wrapper #themebuilder-style-font .bold.ui-state-active,
+body.ie7 #themebuilder-wrapper #themebuilder-style-font .italic,
+body.ie7 #themebuilder-wrapper #themebuilder-style-font .italic.ui-state-active,
+body.ie7 #themebuilder-wrapper #themebuilder-style-font .uppercase,
+body.ie7 #themebuilder-wrapper #themebuilder-style-font .uppercase.ui-state-active {
+  text-indent: 0em;
+}
+
+#themebuilder-wrapper #themebuilder-style-font span.letter {
+  display: none;
+}
+
+#themebuilder-wrapper #themebuilder-style-font button::-moz-focus-inner {
+  padding: 0;
+  border: 0;
+}
+
+#themebuilder-wrapper #themebuilder-style-font .bold:hover {
+  background-position: -272px -210px;
+}
+
+#themebuilder-wrapper #themebuilder-style-font .bold.ui-state-active {
+  background-position: -88px -210px;
+}
+
+#themebuilder-wrapper #themebuilder-style-font .bold.ui-state-active:hover {
+  background-position: -181px -210px;
+}
+
+#themebuilder-wrapper #themebuilder-style-font .italic {
+  background-position: 0 -168px;
+}
+
+#themebuilder-wrapper #themebuilder-style-font .italic:hover {
+  background-position: -272px -168px;
+}
+
+#themebuilder-wrapper #themebuilder-style-font .italic.ui-state-active {
+  background-position: -88px -168px;
+}
+
+#themebuilder-wrapper #themebuilder-style-font .italic.ui-state-active:hover {
+  background-position: -181px -168px;
+}
+
+#themebuilder-wrapper #themebuilder-style-font .underline {
+  background-position: 0 -662px;
+}
+
+#themebuilder-wrapper #themebuilder-style-font .underline:hover {
+  background-position: -272px -662px;
+}
+
+#themebuilder-wrapper #themebuilder-style-font .underline.ui-state-active {
+  background-position: -87px -662px;
+}
+
+#themebuilder-wrapper #themebuilder-style-font .underline.ui-state-active:hover {
+  background-position: -181px -662px;
+}
+
+#themebuilder-wrapper #themebuilder-style-font .uppercase {
+  background-position: 0 -252px;
+  width: 67px;
+}
+
+#themebuilder-wrapper #themebuilder-style-font .uppercase:hover {
+  background-position: -272px -252px;
+}
+
+#themebuilder-wrapper #themebuilder-style-font .uppercase.ui-state-active {
+  background-position: -88px -252px;
+  width: 67px;
+}
+
+#themebuilder-wrapper #themebuilder-style-font .uppercase.ui-state-active:hover {
+  background-position: -181px -252px;
+}
+
+#themebuilder-wrapper #themebuilder-style-font #style-font-size-u {
+  margin-right: 10px;
+  float: left;
+}
+
+#themebuilder-wrapper .colorpicker {
+  z-index: 11;
+}
+
+#themebuilder-wrapper #themebuilder-style-font option {
+  padding: 4px 0 0 2px;
+}
+
+body.webkit #themebuilder-wrapper #themebuilder-style-font select {
+  height: 26px;
+  padding-top: 0px;
+}
+
+/* @end */
+
+/* @group Spacing Tab */
+
+#themebuilder-wrapper #themebuilder-style td span.label {
+  /* Reset nested labels for spacing table */
+  display: inline;
+  float: none;
+  font-size: 9px;
+  letter-spacing: -.1em;
+  margin-left: 3px;
+  position: absolute;
+  width: auto;
+}
+
+#themebuilder-wrapper #tb-style-margin {
+  float: left;
+  margin: 0 20px 0 0;
+  border: 2px solid #000;
+}
+
+#themebuilder-wrapper #themebuilder-style-options {
+  float: left;
+}
+
+#themebuilder-wrapper .border-panel {
+  float: left;
+  margin: 0 10px;
+  display: inline;
+}
+
+/*
+ * Temporarily disable the width/height controls.  We didn't remove
+ * the code because the intent is to implement the new user interface.
+ */
+#themebuilder-wrapper .border-panel.hidden {
+  display: none;
+}
+
+#themebuilder-wrapper .border-panel .panel-separator {
+
+}
+
+#themebuilder-wrapper #themebuilder-style-spacing .panel-separator {
+  float: left;
+  height: 89px;
+  margin: 7px 10px;
+  padding: 0 1px;
+}
+
+#themebuilder-wrapper #themebuilder-style-options .border-panel .fieldset {
+  width: inherit;
+  margin: 0 0 10px 8px;
+}
+
+#themebuilder-wrapper #themebuilder-style-options #style-border-color {
+  float: left;
+}
+
+#themebuilder-wrapper #themebuilder-style-options .fieldset span.label {
+  width: 4em;
+}
+
+#themebuilder-wrapper #themebuilder-style-spacing table td {
+  vertical-align: middle;
+}
+
+#themebuilder-wrapper #themebuilder-style-spacing table td.corner {
+  vertical-align: top;
+}
+
+#themebuilder-wrapper #themebuilder-style-spacing td {
+  padding: 0;
+}
+
+#themebuilder-wrapper #themebuilder-style-spacing td.box-model-center {
+  border: 2px solid #000;
+  color: #000;
+  font-size: 14px;
+  margin: 1px;
+  padding: 1px 3px;
+}
+
+#themebuilder-wrapper #themebuilder-style-spacing td input {
+  width: 28px;
+  height: 100%;
+  margin: 0;
+  padding: 0;
+  font-size: 12px;
+  text-align: center;
+  color: #fff;
+  background: none;
+  border: none;
+}
+
+#themebuilder-wrapper #themebuilder-style-spacing table.hovering td input {
+  color: #000;
+}
+
+#themebuilder-wrapper #tb-style-margin, 
+#themebuilder-wrapper #tb-style-margin table {
+  border: 2px solid #000;
+  cursor: pointer;
+}
+
+#themebuilder-wrapper #themebuilder-style-spacing table.hovering {
+  background-color: #91B9D3;
+  color: #000;
+}
+
+#themebuilder-wrapper #themebuilder-style-spacing-slider {
+  width: 100px;
+}
+
+#themebuilder-wrapper #themebuilder-style-spacing-slider.ui-slider-horizontal {
+  height: .8em;
+  min-width: 209px;
+  margin: 0 !important;
+  background-image: none !important;
+  background-color: #fff;
+  border: none !important;
+}
+
+#themebuilder-wrapper #themebuilder-style-spacing-slider.ui-slider-horizontal .ui-slider-handle {
+  top: -.3em;
+  margin-left: -.6em;
+  border: none !important;
+}
+
+#themebuilder-wrapper #themebuilder-style-spacing table td.corner:hover,
+#themebuilder-wrapper #themebuilder-style-spacing table td.side:hover,
+#themebuilder-wrapper #themebuilder-style-spacing table td.side:hover input {
+  background-color: #91B9D3;
+  color: #000;
+  cursor: pointer;
+}
+
+#themebuilder-wrapper #tb-style-border-left:hover,
+#themebuilder-wrapper #tb-style-border-top:hover,
+#themebuilder-wrapper #tb-style-border-right:hover,
+#themebuilder-wrapper #tb-style-border-bottom:hover,
+
+#themebuilder-wrapper #tb-style-padding-left:hover,
+#themebuilder-wrapper #tb-style-padding-top:hover,
+#themebuilder-wrapper #tb-style-padding-right:hover,
+#themebuilder-wrapper #tb-style-padding-bottom:hover {
+  background-color: #fff;
+  color: #000;
+  cursor: pointer;
+}
+
+#themebuilder-wrapper #tb-style-border {
+  background-color: #777;
+}
+
+#themebuilder-wrapper #tb-style-padding {
+  width: 115px;
+  background-color: #333;
+}
+
+/* @group Spacing Widget */
+
+/* styles for the firebug spacing widget */
+
+#themebuilder-wrapper #tb-style-margin table td {
+}
+
+#themebuilder-wrapper #tb-style-margin .side {
+  text-align: center;  
+}
+
+#themebuilder-wrapper #themebuilder-style-spacing td input{
+  height: 20px;
+  padding: 3px 0 0 0;
+  font-size: 10px;
+  color: #000;
+  background: url(../themebuilder_bar/images/tb-size-bkg.png) no-repeat;
+}
+
+#themebuilder-wrapper #themebuilder-style-spacing td.border-style-wrapper {
+  vertical-align: top;
+}
+
+#themebuilder-wrapper #tb-style-margin {
+  height: 27px;
+}
+
+#themebuilder-wrapper .spacing-element-table {
+  padding-left: 50px;
+  width: 250px;
+}
+
+/* @end */
+
+/* @end */
+
+
+/* @group Background Tab */
+
+#themebuilder-wrapper #themebuilder-style #themebuilder-style-background div.fieldset {
+  margin: 0 0 10px;
+}
+
+#themebuilder-wrapper #themebuilder-style #themebuilder-style-background span.label {
+  width: 12em;
+}
+
+/* Layout spacing controls */
+#themebuilder-wrapper #themebuilder-style-background div.background-image,
+#themebuilder-wrapper #themebuilder-style-background div#style-background-color,
+#themebuilder-wrapper #themebuilder-style-background #uploader {
+  float: left;
+  margin-right: 8px;
+}
+
+#themebuilder-wrapper #themebuilder-style-background div.background-image {
+  width: 75px;
+  height: 75px;
+  border: 1px solid #ccc;
+  background-image: url(no-image.png);
+}
+
+#themebuilder-wrapper #themebuilder-style-background div.background-image img {
+  width: 75px;
+  height: 75px;
+}
+
+#themebuilder-wrapper #themebuilder-style-background div.background-image-control {
+  float: left;
+  height: 75px;
+  position: relative;
+  margin-left: 4px;
+}
+
+#themebuilder-wrapper .background-image-panel {
+  float: left;
+  height: 155px;
+}
+
+#themebuilder-wrapper .background-image-selection-panel {
+  width: 230px;
+}
+
+#themebuilder-wrapper .background-repeat-panel {
+  width: 130px;
+}
+
+#themebuilder-wrapper .background-attachment-panel {
+  width: 130px;
+}
+
+#themebuilder-wrapper .text-format-panel {
+  display: inline-block;
+  float: left;
+  height: 100%;
+}
+
+#themebuilder-wrapper .text-format-panel .panel-separator {
+  float: none;
+  display: inline-block;
+  width: 0;
+  margin: 7px 5px 7px 5px;
+  padding: 0 1px;
+  height: 27px;
+}
+
+#themebuilder-wrapper .text-align-panel {
+  display: inline;
+  float: left;
+}
+
+#themebuilder-wrapper .text-align {
+  background-image: url(../themebuilder_bar/images/themebuilder_controls.png);
+  background-repeat: no-repeat;
+  cursor: pointer;
+  float: left;
+  margin-top: 7px;
+  margin-right: 4px;
+  padding: 16px;
+}
+
+#themebuilder-wrapper #text-align-left {
+  background-position: 0 0px;
+}
+
+#themebuilder-wrapper #text-align-left:hover {
+  background-position: -272px 0px;
+}
+
+#themebuilder-wrapper #text-align-left.enabled {
+  background-position: -88px 0px;
+}
+
+#themebuilder-wrapper #text-align-left.enabled:hover {
+  background-position: -181px 0px;
+}
+
+#themebuilder-wrapper #text-align-center {
+  background-position: 0 -42px;
+}
+
+#themebuilder-wrapper #text-align-center:hover {
+  background-position: -272px -42px;
+}
+
+#themebuilder-wrapper #text-align-center.enabled {
+  background-position: -88px -42px;
+}
+
+#themebuilder-wrapper #text-align-center.enabled:hover {
+  background-position: -181px -42px;
+}
+
+#themebuilder-wrapper #text-align-right {
+  background-position: 0 -84px;
+}
+
+#themebuilder-wrapper #text-align-right:hover {
+  background-position: -272px -84px;
+}
+
+#themebuilder-wrapper #text-align-right.enabled {
+  background-position: -88px -84px;
+}
+
+#themebuilder-wrapper #text-align-right.enabled:hover {
+  background-position: -181px -84px;
+}
+
+#themebuilder-wrapper #text-align-justify {
+  background-position: 0 -126px;
+}
+
+#themebuilder-wrapper #text-align-justify:hover {
+  background-position: -272px -126px;
+}
+
+#themebuilder-wrapper #text-align-justify.enabled {
+  background-position: -88px -126px;
+}
+
+#themebuilder-wrapper #text-align-justify.enabled:hover {
+  background-position: -181px -126px;
+}
+
+#themebuilder-wrapper .background-repeat {
+  float: left;
+  width: 42px;
+  height: 32px;
+  margin-right: 4px;
+  background-image: url(../themebuilder_bar/images/themebuilder_controls.png);
+  background-repeat: no-repeat;
+  cursor: pointer;
+}
+
+#themebuilder-wrapper #background-repeat-repeat {
+  background-position: 0 -294px;
+}
+
+#themebuilder-wrapper #background-repeat-repeat:hover {
+  background-position: -272px -294px;
+}
+
+#themebuilder-wrapper #background-repeat-repeat.enabled {
+  background-position: -88px -294px;
+}
+
+#themebuilder-wrapper #background-repeat-repeat.enabled:hover {
+  background-position: -181px -294px;
+}
+
+#themebuilder-wrapper #background-repeat-repeat-x {
+  background-position: 0 -336px;
+}
+
+#themebuilder-wrapper #background-repeat-repeat-x:hover {
+  background-position: -272px -336px;
+}
+
+#themebuilder-wrapper #background-repeat-repeat-x.enabled {
+  background-position: -88px -336px;
+}
+
+#themebuilder-wrapper #background-repeat-repeat-x.enabled:hover {
+  background-position: -181px -336px;
+}
+
+#themebuilder-wrapper #background-repeat-repeat-y {
+  background-position: 0 -378px;
+}
+
+#themebuilder-wrapper #background-repeat-repeat-y:hover {
+  background-position: -272px -378px;
+}
+
+#themebuilder-wrapper #background-repeat-repeat-y.enabled {
+  background-position: -88px -378px;
+}
+
+#themebuilder-wrapper #background-repeat-repeat-y.enabled:hover {
+  background-position: -181px -378px;
+}
+
+#themebuilder-wrapper #background-repeat-no-repeat {
+  background-position: 0 -420px;
+}
+
+#themebuilder-wrapper #background-repeat-no-repeat:hover {
+  background-position: -272px -420px;
+}
+
+#themebuilder-wrapper #background-repeat-no-repeat.enabled {
+  background-position: -88px -420px;
+}
+
+#themebuilder-wrapper #background-repeat-no-repeat.enabled:hover {
+  background-position: -181px -420px;
+}
+
+#themebuilder-wrapper .background-attachment {
+  float: left;
+  width: 37px;
+  height: 32px;
+  margin-right: 4px;
+  background-image: url(../themebuilder_bar/images/themebuilder_controls.png);
+  background-repeat: no-repeat;
+  cursor: pointer;
+}
+
+#themebuilder-wrapper #background-attachment-scroll {
+  background-position: 0 -462px;
+}
+
+#themebuilder-wrapper #background-attachment-scroll:hover {
+  background-position: -272px -462px;
+}
+
+#themebuilder-wrapper #background-attachment-scroll.enabled {
+  background-position: -88px -462px;
+}
+
+#themebuilder-wrapper #background-attachment-scroll.enabled:hover {
+  background-position: -181px -462px;
+}
+
+#themebuilder-wrapper #background-attachment-fixed {
+  background-position: 0 -504px;
+}
+
+#themebuilder-wrapper #background-attachment-fixed:hover {
+  background-position: -272px -504px;
+}
+
+#themebuilder-wrapper #background-attachment-fixed.enabled {
+  background-position: -88px -504px;
+}
+
+#themebuilder-wrapper #background-attachment-fixed.enabled:hover {
+  background-position: -181px -504px;
+}
+
+/* #themebuilder-wrapper #themebuilder-style-background table {
+  text-align:left;
+}
+
+#themebuilder-wrapper #themebuilder-style-background td {
+  padding: 5px 0 0 0 !important;
+  height: 24px;
+} */
+
+#themebuilder-wrapper #themebuilder-style-background #upload {
+  float: left;
+  display: block;
+}
+
+#themebuilder-wrapper #style-background-color.disabled {
+  background-color: transparent;
+  background-image: url(transparent.png);
+}
+
+#themebuilder-wrapper .uploader {
+  position: relative;
+  width: 82px;
+  min-width: 82px;
+  height: 25px;
+  margin: 0 20px 0 0;
+  background: url(../themebuilder_bar/images/tb-button-upload.png) no-repeat;
+  color: #000;
+  text-indent: -999px;
+  cursor: pointer;
+}
+
+#themebuilder-wrapper #themebuilder-style-background #background-remove {
+  background: none;
+  clear: both;
+  display: block;
+  margin: 0px 0px 0px 4px;
+  position: relative;
+  top: 38px;
+}
+
+#themebuilder-wrapper .uploader input {
+  position: absolute;
+  right:0;
+  top:0;
+  opacity:0;
+  filter:alpha(opacity=0); /* for IE */
+}
+
+/* @end */
+
+/* What are we using this for? This is far too generic. */
+#themebuilder-wrapper .red {
+  color: #FF0000 !important;
+}
+
+#themebuilder-wrapper .style_edit:hover {
+  border-color: red;
+  border-width: 1px;
+}
+
+/*
+ * Theme the click targets which are used for elements that would
+ * otherwise not be selectable due to a negative z-index or because
+ * they are completely occluded by other elements.
+ */
+.tb-click-target {
+  width: 70px;
+  height: 70px;
+  background-image: url(images/clicktarget.png);
+}
+
+body {
+  overflow-x: hidden;
+}
+
+.style-clickable-hover > *,
+.selection,
+.selection > * {
+  position: relative;
+  z-index: 2;
+}
+
+.style-clickable-hover > #the-hover,
+.selection > .selection-highlight {
+  border: 1px solid #1c1c1c;
+  bottom: -4px;
+  display: block;
+  font-size: 0;
+  left: -4px;
+  position: absolute;
+  right: -4px;
+  top: -4px;
+  z-index: 0;
+  opacity: 0.8;
+}
+
+.highlight-inner {
+  border: 1px solid #00a9fd;
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+}
+
+.style-clickable-hover > #the-hover,
+.style-clickable-hover > #the-hover .highlight-inner {
+  display: block;
+  border-style: dashed;
+}
+
+.selection > .selection-highlight {
+  opacity: 0.5;
+}
+
+.tb-nav,
+.tb-hover,
+.tb-highlight {
+  height: 0;
+  overflow: visible;
+  position: absolute;
+  width: 0;
+  z-index: 400;
+}
+
+.tb-nav.top,
+.tb-hover.top,
+.tb-highlight.top {
+  border-bottom: 1px solid #00a9fd;
+  border-top: 1px solid #000000;
+  margin-left: -3px;
+  margin-top: -4px;
+  padding: 0 3px;
+}
+
+.tb-nav.right,
+.tb-hover.right,
+.tb-highlight.right {
+  border-left: 1px solid #00a9fd;
+  border-right: 1px solid #000000;
+  margin-left: 2px;
+  margin-top: -4px;
+  padding: 4px 0;
+}
+
+.tb-nav.bottom,
+.tb-hover.bottom,
+.tb-highlight.bottom {
+  border-bottom: 1px solid #000000;
+  border-top: 1px solid #00a9fd;
+  margin-left: -3px;
+  margin-top: 2px;
+  padding: 0 3px;
+}
+
+.tb-nav.left,
+.tb-hover.left,
+.tb-highlight.left {
+  border-left: 1px solid #000000;
+  border-right: 1px solid #00a9fd;
+  margin-left: -4px;
+  margin-top: -4px;
+  padding: 4px 0;
+}
+
+.top .arrow {
+  background-position: 50% -2px;
+  top: -6px;
+  height: 10px;
+}
+
+.right .arrow {
+  background-position: -38px 50%;
+  left: -3px;
+  width: 10px;
+}
+
+.bottom .arrow {
+  background-position: 50% -35px;
+  top: -6px;
+  height: 10px;
+}
+
+.left .arrow {
+  background-position: -2px 50%;
+  left: -7px;
+  width: 10px;
+}
+
+.arrow {
+  background: url(images/selector-sprite.png) no-repeat;
+  bottom: 0;
+  display: none;
+  height: 100%;
+  left: 0;
+  position: absolute;
+  right: 0;
+  top: 0;
+}
+
+.tb-inset.top .arrow {
+  
+}
+
+.tb-inset.right .arrow {
+  left: -12px;
+}
+
+.tb-inset.left .arrow {
+  left: 2px;
+}
+
+.tb-nav-enabled .arrow {
+  display: block;
+}
+
+.ie7 .tb-nav.left .arrow,
+.ie7 .tb-nav.right .arrow {
+  padding: 4px 5px;
+}
+
+.ie7 .tb-nav.bottom {
+  margin-top: 4px;
+}
+
+.rotating-banner .layout-wrapper {
+  z-index: 3;
+}
+
+.top-left > .rb-textbox-wrapper {
+  left: 0 !important;
+  top: 0 !important;
+}
+
+body.overlay-open #toolbar {
+  z-index: 501;
+}
+
+.tb-hover.left,
+.tb-hover.right,
+.tb-hover.top,
+.tb-hover.bottom {
+  border-style: dashed;
+}
+
+#the-hover,
+.selected > #the-hover {
+  display: none;
+}

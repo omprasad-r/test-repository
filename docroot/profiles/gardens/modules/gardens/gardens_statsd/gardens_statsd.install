@@ -1,0 +1,45 @@
+<?php
+
+##GardensExcludeFromExportStart################################################
+/**
+ * Implements hook_enable().
+ */
+function gardens_statsd_enable() {
+  // Set the variable which declares our environment.
+  gardens_statsd_env_check();
+  // Enable by default
+  variable_set('gardens_statsd_enabled', 1);
+  variable_set('gardens_statsd_prefix', 'gardens.prod');
+  variable_set('gardens_statsd_host', 'stats-1.acquia.com');
+  variable_set('gardens_statsd_port', '8125');
+}
+
+/**
+ * Implements hook_uninstall().
+ */
+function gardens_statsd_uninstall() {
+  variable_del('gardens_statsd_env_checked');
+  variable_del('gardens_statsd_enabled');
+  variable_del('gardens_statsd_prefix');
+  variable_del('gardens_statsd_suffix');
+  variable_del('gardens_statsd_host');
+  variable_del('gardens_statsd_host_ip');
+  variable_del('gardens_statsd_port');
+  variable_del('gardens_statsd_stage');
+}
+
+/**
+ * Make sure that all sites use the new statsd enable settings.
+ */
+function gardens_statsd_update_7000() {
+  // Make sure that all sites use the new enable settings.
+  gardens_statsd_enable();
+}
+
+/**
+ * Update settings.
+ */
+function gardens_statsd_update_7001() {
+  gardens_statsd_enable();
+}
+##################################################GardensExcludeFromExportEnd##

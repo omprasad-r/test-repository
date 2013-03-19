@@ -1,0 +1,106 @@
+<?php
+
+/**
+ * @file
+ * Exposes variables sent from the gardener in JS and in tokens.
+ */
+
+/**
+ * Signifies that the value is to be exposed on the site as a token.
+ */
+define('GARDENS_SITE_VARIABLES_TOKEN', 'token');
+
+/**
+ * Signifies that the value is to be exposed on the site as a JS value.
+ */
+define('GARDENS_SITE_VARIABLES_JS', 'js');
+
+/**
+ * Returns local copy of variables.
+ */
+function gardens_site_variables_get() {
+
+  /*
+  // The structure of the list of variables is as follows:
+  return array(
+    'artist_hair' => array('type' => GARDENS_SITE_VARIABLES_JS, 'value' => 'black', 'name' => 'Artist hair'),
+    'artist_age' => array('type' => GARDENS_SITE_VARIABLES_JS, 'value' => '23', 'name' => 'Artist age'),
+    'tracking_number' => array('type' => GARDENS_SITE_VARIABLES_JS, 'value' => '114546568234324354654634', 'name' => 'Tracking number'),
+    'artist_name' => array('type' => GARDENS_SITE_VARIABLES_TOKEN, 'value' => 'John Done', 'name' => 'Artist name'),
+    'artist_email' => array('type' => GARDENS_SITE_VARIABLES_TOKEN, 'value' => 'john@doe.example.com', 'name' => 'Artist email'),
+  );
+  */
+
+  return gardens_client_data_get('gardener_site_variables');
+}
+
+/**
+ * Implements hook_init().
+ */
+function gardens_site_variables_init() {
+  // Filter for JS exposed values and put them on the page.
+  $variables = gardens_site_variables_get();
+  $values = array();
+  foreach ($variables as $machine_name => $variable) {
+    if ($variable['type'] == GARDENS_SITE_VARIABLES_JS) {
+      $values[$machine_name] = $variable['value'];
+    }
+  }
+  if (!empty($values)) {
+    drupal_add_js(array('site_variables' => $values), 'setting');
+  }
+}
+
+/**
+ * Implements hook_token_info().
+ */
+function gardens_site_variables_token_info() {
+  // Add a site variables token group.
+  $type = array(
+    'name' => t('Site variables'),
+    'description' => t('Globally configured site variables.'),
+  );
+
+  // Filter for token values and expose them as tokens.
+  $variables = gardens_site_variables_get();
+  $tokens = array();
+  foreach ($variables as $machine_name => $variable) {
+    if ($variable['type'] == GARDENS_SITE_VARIABLES_TOKEN) {
+      $tokens[$machine_name] = array(
+        'name' => $variable['name'],
+        // Token module requires name and description to be set, but we don't have
+        // much of a useful text to display for description, so just generate it
+        // from the name.
+        'description' => t('@variable value.', array('@variable' => $variable['name']))
+      );
+    }
+  }
+
+  if (!empty($tokens)) {
+    // Token module does not like token types without actual tokens, so unless
+    // we have actual tokens, skip returning the token type too.
+    return array(
+      'types' => array('site_variables' => $type),
+      'tokens' => array('site_variables' => $tokens),
+    );
+  }
+}
+
+/**
+ * Implements hook_tokens().
+ */
+function gardens_site_variables_tokens($type, $tokens, array $data = array(), array $options = array()) {
+  $replacements = array();
+
+  if ($type == 'site_variables') {
+    $variables = gardens_site_variables_get();
+    foreach ($tokens as $name => $original) {
+      if (isset($variables[$name]) && $variables[$name]['type'] == GARDENS_SITE_VARIABLES_TOKEN) {
+        // Provide replacement if we had value for this key from the server.
+        $replacements[$original] = $variables[$name]['value'];
+      }
+    }
+  }
+
+  return $replacements;
+}

@@ -1,0 +1,9 @@
+name = Themebuilder Monotype
+description = Integration for Themebuilder, the Monotype API.
+package = Themebuilder
+core = 7.x
+
+files[] = themebuilder_monotype.module
+files[] = MonotypeFontStack.inc
+
+hidden = TRUE

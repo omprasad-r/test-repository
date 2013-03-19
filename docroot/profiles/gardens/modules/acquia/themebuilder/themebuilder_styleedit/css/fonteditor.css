@@ -1,0 +1,128 @@
+
+/* @group Font Tab */
+
+#themebuilder-style-font table {
+  text-align: left;
+}
+
+#themebuilder-style-font select{
+	padding: 2px 4px 0px 2px;
+}
+
+#themebuilder-style-font #style-font-family{
+	height: 27px;
+	padding: 2px 54px 0px 3px;
+}
+
+#themebuilder-style-font tr {
+  height: 20px;
+  vertical-align: middle;
+}
+
+option.current {
+  background-color: yellow;
+}
+
+#style-font-size {
+  width: 33px;
+  padding: 5px 1px 7px 6px;
+  border: none;
+  color: black !important;
+  background: url(../images/fontformat-size-sprite.png) no-repeat !important;
+  cursor:pointer;
+  font-family: "Lucida Grande", Lucida, Verdana, sans-serif;
+  font-size: 13px !important;
+  height: 18px;
+}
+#style-font-size-slider {
+}
+#style-font-color, #style-font-color div {
+  display: inline;
+}
+#style-font-color input {
+  width: 70px;
+}
+.colorpicker {
+  z-index: 11;
+}
+button.fg-button.ui-state-active {
+  border-color:black;
+  background-color:black;
+  background-image:none;
+}
+.font-buttons button {
+  margin:0;
+  border:1px solid black;
+  color:white;
+}
+button {
+  cursor:pointer;
+}
+.font-buttons .ui-corner-right {
+
+}
+.font-buttons .ui-corner-left {
+
+}
+
+.fg-button{
+  cursor:pointer;
+  margin:0 4px 0 0;
+  outline-color:-moz-use-text-color;
+  outline-style:none;
+  outline-width:0;
+  padding:0.4em 1em;
+  position:relative;
+  text-align:center;
+  text-decoration:none !important;
+}
+.fg-button .ui-icon {
+  left:50%;
+  margin-left:-8px;
+  margin-top:-8px;
+  position:absolute;
+  top:50%;
+}
+a.fg-button {
+  float:left;
+}
+button.fg-button {
+  overflow:visible;
+  width:auto;
+}
+.fg-button-icon-left {
+  padding-left:2.1em;
+}
+.fg-button-icon-right {
+  padding-right:2.1em;
+}
+.fg-button-icon-left .ui-icon {
+  left:0.2em;
+  margin-left:0;
+  right:auto;
+}
+.fg-button-icon-right .ui-icon {
+  left:auto;
+  margin-left:0;
+  right:0.2em;
+}
+.fg-button-icon-solo {
+  display:block;
+  text-indent:-9999px;
+  width:8px;
+}
+.fg-buttonset {
+	/* can't see why this is needed.
+  float:right;
+  padding-left:5px;
+  padding-top:3px;
+ */
+}
+.fg-buttonset .fg-button {
+	/* can't see why this is needed.
+  float:left;
+   */
+}
+.fg-buttonset-single .fg-button, .fg-buttonset-multi .fg-button {
+  margin-right:-4px;
+}

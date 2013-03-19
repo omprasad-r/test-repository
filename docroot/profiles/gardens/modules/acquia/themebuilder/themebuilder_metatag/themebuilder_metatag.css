@@ -1,0 +1,21 @@
+/**
+ * @file
+ * Styles for the Themebuilder metatag configuration module.
+ */
+
+#themebuilder-advanced-metatag .content {
+  height: 179px;
+}
+
+#themebuilder-advanced-metatag .form-item {
+  margin: 1em 0 1.5em;
+}
+
+#themebuilder-advanced-metatag input[type="checkbox"] {
+  margin-right: .5em;
+}
+
+#themebuilder-advanced-metatag input[disabled] {
+  background: #9f9f9f;
+}
+

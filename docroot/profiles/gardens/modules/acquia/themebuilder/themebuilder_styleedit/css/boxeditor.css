@@ -1,0 +1,164 @@
+
+/* @group Spacing Tab */
+
+#themebuilder-style-spacing td {
+  padding: 0px;
+}
+
+#themebuilder-style-spacing td {
+  padding: 0px;
+}
+
+#themebuilder-style-spacing td input {
+  /*width: 100%;*/
+  background-color: transparent;
+  border: none;
+  color: white;
+  font-size: 0.9em;
+  height: 100%;
+  margin: 0;
+  padding: 0;
+  text-align: center;
+  width: 30px;
+}
+
+#themebuilder-style-spacing table.hovering td input {
+  color: black;
+}
+
+#tb-style-margin, #tb-style-margin table {
+  border: 2px solid black;
+  cursor: pointer;
+}
+
+#themebuilder-style-spacing table.hovering {
+  background-color: #91B9D3;
+  color: black;
+}
+
+#themebuilder-style-spacing-slider {
+  width: 100px;
+}
+
+div.slider-container {
+  -moz-border-radius: 10px;
+  background-color: black;
+  cursor: pointer;
+  display: none;
+  padding: 2px;
+  position: absolute;
+  z-index: 101;
+}
+
+.slider-container .slider.ui-slider-horizontal {
+  height: 4px;
+  -moz-border-radius: 2px;
+  min-width: 209px;
+  margin: 0px!important;
+  background-image: none!important;
+  background-color: white;
+  border: none!important;
+  cursor:pointer;
+}
+
+.slider-container .slider.ui-slider-horizontal .ui-slider-handle {
+  top: -8px;
+  margin-left: -4px;
+  height: 22px;
+  width: 18px;
+  border:none!important;
+}
+
+#themebuilder-style-spacing-slider.ui-slider-horizontal {
+  height: .8em;
+  min-width: 209px;
+  margin: 0px!important;
+  background-image: none!important;
+  background-color: white;
+  border: none!important;
+}
+
+#themebuilder-style-spacing-slider.ui-slider-horizontal .ui-slider-handle {
+  top: -.3em;
+  margin-left: -.6em;
+  border:none!important;
+}
+
+#tb-style-margin {
+  /*margin: 20px;*/
+}
+
+#themebuilder-style-spacing table td.corner:hover,#themebuilder-style-spacing table td.side:hover{/*#tb-style-margin-left:hover,#tb-style-margin-top:hover,#tb-style-margin-right:hover,#tb-style-margin-bottom:hover {*/
+  background-color: #91B9D3 !important;
+  color: black;
+  cursor: pointer;
+}
+#themebuilder-style-spacing table td.side:hover input{
+  background-color: #91B9D3 !important;
+  color: black;
+  cursor: pointer;
+}
+
+#tb-style-border-left:hover,#tb-style-border-top:hover,#tb-style-border-right:hover,#tb-style-border-bottom:hover {
+  background-color: white;
+  color: black;
+  cursor: pointer;
+}
+
+#tb-style-padding-left:hover,#tb-style-padding-top:hover,#tb-style-padding-right:hover,#tb-style-padding-bottom:hover {
+  background-color: white;
+  color: black;
+  cursor: pointer;
+}
+
+#tb-style-border {
+  background-color: #777777 !important;
+}
+
+#tb-style-padding {
+  background-color: #333333 !important;
+  width: 115px;
+}
+
+#themebuilder-style-spacing table span.label {
+  font-size: .6em;
+}
+
+#themebuilder-style-spacing .border-style-wrapper td, #themebuilder-style-spacing .border-style-wrapper table {
+  border:none;
+}
+
+/* styles for the firebug spacing widget */
+#themebuilder-main #tb-style-margin table{
+	margin-bottom: 0px;	
+}
+
+#themebuilder-main #tb-style-margin table td{
+	text-align: center;
+}
+
+#themebuilder-main #tb-style-margin .side{
+	text-align: center;	
+}
+
+#themebuilder-style-spacing td input{
+	background: url(../../themebuilder_bar/images/tb-size-bkg.png) no-repeat;
+	height: 20px;
+	padding: 3px  0px 0px 0px;
+	color: black;
+	font-size:11px;
+}
+
+#themebuilder-style-spacing td.border-style-wrapper{
+	vertical-align: top;
+}
+
+#tb-style-margin {
+	height: 27px;
+}
+
+.spacing-element-table{
+	padding-left: 50px;
+	width: 250px;
+}
+

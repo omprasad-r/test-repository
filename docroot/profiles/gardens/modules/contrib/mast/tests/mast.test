@@ -1,0 +1,1515 @@
+<?php
+
+/**
+ * @file
+ * Tests for the MASt module.
+ */
+
+class MAStTest extends DrupalWebTestCase {
+
+  function setUp() {
+    $args = func_get_args();
+
+    $modules = array();
+    if (isset($args[0]) && is_array($args[0])) {
+      $modules = $args[0];
+    }
+
+    // Add the required module dependencies.
+    array_unshift($modules, 'mast');
+    parent::setUp($modules);
+
+    $this->endUser = $this->drupalCreateUser(array('create article content', 'create page content', 'oauth authorize any consumers'));
+    $this->endUser2 = $this->drupalCreateUser(array('create article content', 'oauth authorize any consumers'));
+    $this->siteUser = $this->drupalCreateUser(array('create article content'));
+    $this->adminUser = $this->drupalCreateUser(array('administer nodes', 'create article content', 'oauth authorize any consumers', 'access administration pages', 'administer site configuration', 'access content', 'administer content types', 'administer taxonomy'));
+
+    // Create an administrative user who owns a consumer API key and secret.
+    $this->consumerOwner = $this->drupalCreateUser(array());
+    $options = array(
+      'callback_url' => 'oob', // In real life, this would be the mobile app.
+      'uid' => $this->consumerOwner->uid,
+      'provider_consumer' => TRUE,
+      'in_database' => TRUE,
+      'context' => 'mast',
+    );
+    $this->consumer = new DrupalOAuthConsumer(user_password(32), user_password(32), $options);
+    $this->consumer->write();
+
+    $this->signatureMethod = new OAuthSignatureMethod_HMAC('SHA1');
+    $this->adminUser->accessToken = $this->getAccessToken($this->adminUser);
+    $this->endUser->accessToken = $this->getAccessToken($this->endUser);
+    $this->endUser2->accessToken = $this->getAccessToken($this->endUser2);
+    $this->accessToken = $this->endUser->accessToken;
+  }
+
+  /**
+   * Helper function; returns an oAuth access token.
+   *
+   * @param $user
+   *   The user for which to create the token.
+   *
+   * @return DrupalOAuthToken
+   *   A valid oAuth access token.
+   */
+  function getAccessToken($user) {
+    // Log in as the end user who will authorize the mobile app.
+    $this->drupalLogin($user);
+
+    // Get a request token (first step in oAuth).
+    $request = OAuthRequest::from_consumer_and_token($this->consumer, NULL, 'GET', $this->getAbsoluteUrl('/oauth/request_token'));
+    $request->sign_request($this->signatureMethod, $this->consumer, NULL);
+    $requestURL = $request->to_url();
+
+    $result = $this->drupalGet($requestURL);
+    $this->assertResponse('200');
+    parse_str($result, $request_token_parameters);
+
+    // Authorize the application (second step in oAuth).
+    $request_token = new DrupalOAuthToken($request_token_parameters['oauth_token'], $request_token_parameters['oauth_token_secret'], $this->consumer);
+    $request = OAuthRequest::from_consumer_and_token($this->consumer, $request_token, 'GET', $this->getAbsoluteUrl('/oauth/authorize'));
+    $request->sign_request($this->signatureMethod, $this->consumer, $request_token);
+    $requestURL = $request->to_url();
+    // We need to follow the redirect after authorizing, so we use curlExec()
+    // here, which lets us specify our own options (including FOLLOWLOCATION).
+    $out = $this->curlExec(array(
+      CURLOPT_HTTPGET => TRUE,
+      CURLOPT_URL => $requestURL,
+      CURLOPT_NOBODY => FALSE,
+      CURLOPT_HTTPHEADER => array(),
+      // Because we specified automatic_authorization in the default oAuth
+      // context (see mast_default_oauth_common_context()), all we need to do is
+      // follow the redirect specified in the consumer. If we hadn't specified
+      // automatic_authorization, we would need to find the "Grant access"
+      // button on /oauth/authorize and use it to submit the form.
+      CURLOPT_FOLLOWLOCATION => TRUE,
+    ));
+    // Ensure that any changes to variables in the other thread are picked up.
+    $this->refreshVariables();
+    $this->verbose('<pre>' . $out . '</pre>');
+
+    // Now that the end user has authorized us, we can get an access token
+    // (third step in oAuth).
+    $request = OAuthRequest::from_consumer_and_token($this->consumer, $request_token, 'GET', $this->getAbsoluteUrl('/oauth/access_token'));
+    $request->sign_request($this->signatureMethod, $this->consumer, $request_token);
+    $requestURL = $request->to_url();
+    $result = $this->drupalGet($requestURL);
+    $this->assertResponse('200');
+    parse_str($result, $access_token_parameters);
+
+    $access_token = new DrupalOAuthToken($access_token_parameters['oauth_token'], $access_token_parameters['oauth_token_secret'], $this->consumer);
+
+    // Log out, to avoid any confusion about whether we're accessing things
+    // via the session instead of via oAuth.
+    $this->drupalLogout();
+
+    return $access_token;
+  }
+
+  /**
+   * Helper function for making a GET request using an access token.
+   *
+   * @param $path
+   *   The path to be requested, relative to the Drupal root.
+   */
+  function oAuthGet($path) {
+    $request = OAuthRequest::from_consumer_and_token($this->consumer, $this->accessToken, 'GET', $this->getAbsoluteUrl($path), NULL);
+    $request->sign_request($this->signatureMethod, $this->consumer, $this->accessToken);
+    $requestURL = $request->to_url();
+
+    $out = $this->curlExec(array(
+      CURLOPT_HTTPGET => TRUE,
+      CURLOPT_URL => $requestURL,
+      CURLOPT_NOBODY => FALSE,
+      CURLOPT_HTTPHEADER => array(),
+    ));
+    // Ensure that any changes to variables in the other thread are picked up.
+    $this->refreshVariables();
+    $this->verbose('<pre>' . $out . '</pre>');
+    return $out;
+  }
+
+  /**
+   * Helper function for making a POST request using an access token.
+   *
+   * @param $path
+   *   The path to be requested, relative to the Drupal root.
+   * @param $data
+   *   An array of POST data, appropriate for http_build_query().
+   * @param $options
+   *   Optional. An associative array of cURL options.
+   *
+   * @return
+   *   The result of the cURL request.
+   */
+  function oAuthPost($path, $data, $options = array()) {
+    $request = OAuthRequest::from_consumer_and_token($this->consumer, $this->accessToken, 'POST', $this->getAbsoluteUrl($path), $data);
+    $request->sign_request($this->signatureMethod, $this->consumer, $this->accessToken);
+
+    $defaults = array(
+      CURLOPT_URL => $request->to_url(),
+      CURLOPT_POST => TRUE,
+      CURLOPT_POSTFIELDS => http_build_query($request->get_parameters(), '', '&'),
+    );
+    $options = $defaults + $options;
+    $out = $this->curlExec($options);
+    // Ensure that any changes to variables in the other thread are picked up.
+    $this->refreshVariables();
+    $this->verbose('<pre>' . $out . '</pre>');
+    return $out;
+  }
+
+  /**
+   * Helper function for making a POST request with file data using an access token.
+   *
+   * @param $path
+   *   The path to be requested, relative to the Drupal root.
+   * @param $data
+   *   An array of POST data, appropriate for http_build_query().
+   * @param $options
+   *   Optional. An associative array of cURL options.
+   *
+   * @return
+   *   The result of the cURL request.
+   */
+  function oAuthPostFile($path, $data, $options = array()) {
+    $request = OAuthRequest::from_consumer_and_token($this->consumer, $this->accessToken, 'POST', $this->getAbsoluteUrl($path), $data);
+    $request->sign_request($this->signatureMethod, $this->consumer, $this->accessToken);
+    $url = $request->to_url();
+    $defaults = array(
+      CURLOPT_URL => $url,
+      CURLOPT_POST => TRUE,
+      CURLOPT_POSTFIELDS => $data,
+    );
+    $options = $defaults + $options;
+    $out = $this->curlExec($options);
+    // Ensure that any changes to variables in the other thread are picked up.
+    $this->refreshVariables();
+    $this->verbose('<pre>' . $out . '</pre>');
+    return $out;
+  }
+
+  /**
+   * Helper function for making a PUT request using an access token.
+   *
+   * @param $path
+   *   The path to be requested, relative to the Drupal root.
+   * @param $data
+   *   The data to be put.
+   *
+   * @return
+   *   The result of the cURL request.
+   */
+  function oAuthPut($path, $data) {
+    $request = OAuthRequest::from_consumer_and_token($this->consumer, $this->accessToken, 'PUT', $this->getAbsoluteUrl($path), $data);
+    $request->sign_request($this->signatureMethod, $this->consumer, $this->accessToken);
+    $options = array(
+      CURLOPT_CUSTOMREQUEST => 'PUT',
+      CURLOPT_URL => $request->to_url(),
+      CURLOPT_POST => FALSE,
+      CURLOPT_POSTFIELDS => http_build_query($request->get_parameters(), '', '&'),
+    );
+    $out = $this->curlExec($options);
+    // Ensure that any changes to variables in the other thread are picked up.
+    $this->refreshVariables();
+    $this->verbose('<pre>' . $out . '</pre>');
+    return $out;
+  }
+
+  /**
+   * Helper function for making a DELETE request using an access token.
+   *
+   * @param $path
+   *   The path to be requested, relative to the Drupal root.
+   *
+   * @return
+   *   The result of the cURL request.
+   */
+  function oAuthDelete($path) {
+    $request = OAuthRequest::from_consumer_and_token($this->consumer, $this->accessToken, 'DELETE', $this->getAbsoluteUrl($path), NULL);
+    $request->sign_request($this->signatureMethod, $this->consumer, $this->accessToken);
+    $requestURL = $request->to_url();
+
+    $out = $this->curlExec(array(
+      CURLOPT_CUSTOMREQUEST => 'DELETE',
+      CURLOPT_URL => $requestURL,
+      CURLOPT_NOBODY => FALSE,
+      CURLOPT_HTTPHEADER => array(),
+    ));
+    // Ensure that any changes to variables in the other thread are picked up.
+    $this->refreshVariables();
+    $this->verbose('<pre>' . $out . '</pre>');
+    return $out;
+  }
+}
+
+class MAStListingTest extends MAStTest {
+  public static function getInfo() {
+    return array(
+      'name' => t('MASt Listing Tests'),
+      'description' => t('Tests oAuth login and access to MASt listing services.'),
+      'group' => t('MASt'),
+    );
+  }
+
+  /**
+   * Tests the mast/login page override.
+   */
+  function testMastLogin() {
+    // Get a request token (first step in oAuth).
+    $request = OAuthRequest::from_consumer_and_token($this->consumer, NULL, 'GET', $this->getAbsoluteUrl('/oauth/request_token'));
+    $request->sign_request($this->signatureMethod, $this->consumer, NULL);
+    $requestURL = $request->to_url();
+
+    $result = $this->drupalGet($requestURL);
+    $this->assertResponse('200');
+    parse_str($result, $request_token_parameters);
+
+    // Authorize the application (second step in oAuth).
+    $request_token = new DrupalOAuthToken($request_token_parameters['oauth_token'], $request_token_parameters['oauth_token_secret'], $this->consumer);
+    $request = OAuthRequest::from_consumer_and_token($this->consumer, $request_token, 'GET', $this->getAbsoluteUrl('/oauth/authorize'));
+    $request->sign_request($this->signatureMethod, $this->consumer, $request_token);
+    $requestURL = $request->to_url();
+    $curl_options = array(
+      CURLOPT_HTTPGET => TRUE,
+      CURLOPT_URL => $requestURL,
+      CURLOPT_NOBODY => FALSE,
+      CURLOPT_HTTPHEADER => array(),
+      CURLOPT_FOLLOWLOCATION => TRUE,
+    );
+    $out = $this->curlExec($curl_options);
+    $this->refreshVariables();
+
+    $this->assertText(t('Enter your Drupal username'), 'OAuth authorize request lands on a login page.');
+    $this->assertNoText(t('Powered by Drupal'), 'OAuth authorize request lands on the special MASt login page.');
+
+    $this->drupalLogin($this->adminUser);
+    // Go to the MASt settings page and disable the mast/login override.
+    $this->drupalPost('admin/config/content/mast', array("mast_use_mast_login" => FALSE), t('Save configuration'));
+    $this->drupalLogout();
+    $this->refreshVariables();
+
+    $this->curlExec($curl_options);
+    $this->refreshVariables();
+
+    $this->assertText(t('Enter your Drupal username'), 'OAuth authorize request lands on a login page.');
+    $this->assertText(t('Powered by Drupal'), 'OAuth authorize request lands on the regular user login page.');
+
+  }
+
+  /**
+   * Tests that index resources exist and can be accessed.
+   */
+  function testResourceIndexAccess() {
+    foreach (array('fields', 'meta', 'content-by-user') as $path) {
+      // Try to retrieve the page without an oAuth access token.
+      $this->drupalGet('/mast-api/' . $path . '.json');
+      $this->assertResponse('401');
+      // Retrieve the page with an authorized access token.
+      $this->oAuthGet('/mast-api/' . $path . '.json');
+      $this->assertResponse('200');
+    }
+    // MASt-enable the article content type.
+    $value = array(
+      'node' => array(
+        'article' => array(
+          'enabled' => TRUE,
+          'eligible' => TRUE,
+          'icon' => 'page',
+          'short_name' => 'article'
+        ),
+      ),
+    );
+    variable_set('mast_bundle_settings', $value);
+    // Retrieve the page with an authorized access token.
+    foreach (array('autocomplete', 'options') as $path) {
+      $this->drupalGet('/mast-api/' . $path . '.json');
+      $this->assertResponse('401');
+      // Missing parameters
+      $this->oAuthGet('/mast-api/' . $path . '.json');
+      $this->assertResponse('401');
+      // Invalid bundle parameter (match is ignored for options)
+      $this->oAuthGet('/mast-api/' . $path . '.json?bundle=blog&field_name=field_tags&match=');
+      $this->assertResponse('400');
+      // Invalid count parameter (match is ignored for options)
+      $this->oAuthGet('/mast-api/' . $path . '.json?bundle=article&field_name=field_tags&match=&count=b');
+      $this->assertResponse('400');
+      // All needed parameters (match is ignored for options)
+      $this->oAuthGet('/mast-api/' . $path . '.json?bundle=article&field_name=field_tags&match=');
+      $this->assertResponse('200');
+    }
+  }
+
+  function _nestedCompare($a1, $a2) {
+    if (count($a1) != count($a2)) {
+      $extra1 = array_diff_key($a1, $a2);
+      $extra2 = array_diff_key($a2, $a1);
+      $extra = '';
+      if ($extra1) {
+        $extra .= ' Extra keys in $a1: ' . implode(', ', array_keys($extra1));
+      }
+      if ($extra2) {
+        $extra .= ' Extra keys in $a2: ' . implode(', ', array_keys($extra2));
+      }
+      debug('count($a1) != count($a2) :' . $extra);
+      return FALSE;
+    }
+    foreach ($a1 as $k => $v) {
+      if (!isset($a2[$k])) {
+        debug("\$a2[$k] is not set");
+        return FALSE;
+      }
+      if (is_array($a1[$k]) && is_array($a2[$k])) {
+        if (!$this->_nestedCompare($a1[$k], $a2[$k])) {
+          debug("_nestedCompare(\$a1[$k], \$a2[$k]) is false");
+          return FALSE;
+        }
+      }
+      elseif ($a1[$k] !== $a2[$k]) {
+        debug("\$a1[$k] !== \$a2[$k] : " . var_export($a1[$k], TRUE) . " " . var_export($a2[$k], TRUE));
+        return FALSE;
+      }
+    }
+    return TRUE;
+  }
+
+  /**
+   * Tests that the field listing returns the correct information.
+   */
+  function testFieldsIndex() {
+    // Create 15 tags with defined starting letters.
+    $vocabulary = taxonomy_vocabulary_machine_name_load('tags');
+    $format = db_query_range('SELECT format FROM {filter_format}', 0, 1)->fetchField();
+    $tids = array();
+    foreach (range('a', 'e') as $letter1) {
+      foreach (range('x', 'z') as $letter2) {
+        $term = new stdClass();
+        $term->name = $letter1 . $letter2 . $this->randomName();
+        $term->description = $this->randomName();
+        // Use the first available text format.
+        $term->format = $format;
+        $term->vid = $vocabulary->vid;
+        taxonomy_term_save($term);
+        $tids[] = $term->tid;
+      }
+    }
+    // MASt-enable the article and page content types.
+    $value = array(
+      'node' => array(
+        'article' => array(
+          'enabled' => TRUE,
+          'eligible' => TRUE,
+          'icon' => '',
+          'short_name' => 'article'
+        ),
+        'page' => array(
+          'enabled' => TRUE,
+          'eligible' => TRUE,
+          'icon' => '',
+          'short_name' => 'page'
+        ),
+      ),
+    );
+    variable_set('mast_bundle_settings', $value);
+
+    $response = $this->oAuthGet('/mast-api/fields.json');
+    $parsed_response = json_decode($response, TRUE);
+    $this->assertEqual(array_keys($parsed_response['node']), array('article', 'page'), 'Response returned field structures for the two enabled node types');
+    // Force override the mast_max_allowed_node_types setting to 1 and confirm
+    // we only get one content type returned.
+    variable_set('mast_max_allowed_node_types', 1);
+    $response = $this->oAuthGet('/mast-api/fields.json');
+    $parsed_response = json_decode($response, TRUE);
+    $this->assertEqual(count($parsed_response['node']), 1, 'Response returned field structure for only one node type');
+    // Set the maximum to 0 for no limit.
+    variable_set('mast_max_allowed_node_types', 0);
+    $response = $this->oAuthGet('/mast-api/fields.json');
+    $parsed_response = json_decode($response, TRUE);
+    $this->assertEqual(array_keys($parsed_response['node']), array('article', 'page'), 'Response returned field structures for the two enabled node types');
+
+    // Switch to an account that only has permission to create articles, not pages
+    $this->accessToken = $this->endUser2->accessToken;
+    $response = $this->oAuthGet('/mast-api/fields.json');
+    $parsed_response = json_decode($response, TRUE);
+    $this->assertEqual(array_keys($parsed_response['node']), array('article'), 'Response returned field structure for only the article node type');
+
+    // Switch back to the main endUser account
+    $this->accessToken = $this->endUser->accessToken;
+
+    // MASt-enable just the article content type.
+    $value = array(
+      'node' => array(
+        'article' => array(
+          'enabled' => TRUE,
+          'eligible' => TRUE,
+          'icon' => 'page',
+          'short_name' => 'article'
+        ),
+      ),
+    );
+    variable_set('mast_bundle_settings', $value);
+    $expected_response = array(
+      'node' => array(
+        'article' => array(
+          'short_name' => 'article',
+          'icon' => 'page',
+          'fields' => array(
+            'title' => array(
+              'type' => 'text',
+              'label' => 'Title',
+              'cardinality' => '1',
+              'required' => TRUE,
+              'weight' => '-99',
+            ),
+            'body' => array (
+              'type' => 'text_with_summary',
+              'label' => 'Body',
+              'cardinality' => '1',
+              'required' => FALSE,
+              'weight' => '0',
+            ),
+            'field_tags' => array (
+              'type' => 'taxonomy_term_reference',
+              'label' => 'Tags',
+              'cardinality' => '-1',
+              'required' => FALSE,
+              'options' => array(
+                'create' => TRUE,
+                'match' => 'mast-api/autocomplete',
+                'scroll' => 'mast-api/options',
+              ),
+              'weight' => '-4',
+            ),
+            'field_image' => array (
+              'type' => 'image',
+              'label' => 'Image',
+              'cardinality' => '1',
+              'required' => FALSE,
+              'options' => array(
+                'max_upload_size' => (int) file_upload_max_size(),
+                'file_extensions' => array("png","gif","jpg","jpeg"),
+               ),
+             'weight' => '-1',
+            ),
+          ),
+        )
+      )
+    );
+    $response = $this->oAuthGet('/mast-api/fields.json');
+    $parsed_response = json_decode($response, TRUE);
+    $compare = $this->_nestedCompare($expected_response, $parsed_response);
+    $this->assertTrue($compare, 'The fields index service returns the field structure of the article content type.');
+    // Switch to a user who can change the author field.
+    $this->accessToken = $this->adminUser->accessToken;
+    $response = $this->oAuthGet('/mast-api/fields.json');
+    $parsed_response = json_decode($response, TRUE);
+    $expected_response['node']['article']['fields']['author'] = array(
+      'type' => 'user_reference',
+      'label' => 'Author',
+      'cardinality' => '1',
+      'required' => TRUE,
+      'options' => array(
+        'match' => 'mast-api/autocomplete',
+        'scroll' => 'mast-api/options',
+      ),
+      'default' => array(
+        'key' => "{$this->adminUser->uid}",
+        'value' => $this->adminUser->name,
+      ),
+      'weight' => '1000',
+    );
+    $compare = $this->_nestedCompare($expected_response, $parsed_response);
+    $this->assertTrue($compare, 'The fields index service returns the field structure of the article content type.');
+    // Change the widget to a select widget.
+    $edit = array();
+    $edit['widget_type'] = 'options_select';
+    $this->drupalPost("admin/structure/types/manage/article/fields/field_tags/widget-type", $edit, t('Continue'));
+    // Change the image field cardinality
+    $edit = array();
+    $edit['field[cardinality]'] = '2';
+    $this->drupalPost("admin/structure/types/manage/article/fields/field_image", $edit, t('Save settings'));
+    $response = $this->oAuthGet('/mast-api/fields.json');
+    $parsed_response = json_decode($response, TRUE);
+    // The expected response should not indicate that the user
+    // can create Tags.
+    unset($expected_response['node']['article']['fields']['field_tags']['options']['create']);
+    // The cardinality of image has changed to 2.
+    $expected_response['node']['article']['fields']['field_image']['cardinality'] = '2';
+    $compare = $this->_nestedCompare($expected_response, $parsed_response);
+    $this->assertTrue($compare, 'The fields index service returns the field structure of the article content type.');
+    // Test options
+    $response = $this->oAuthGet('/mast-api/options.json?bundle=article&field_name=field_tags&count=5');
+    $parsed_response = json_decode($response, TRUE);
+    $this->assertEqual(count($parsed_response['values']), 5, '5 tags returned in the response');
+    $this->assertTrue(empty($parsed_response['last']), 'More tags to fetch');
+    $response = $this->oAuthGet('/mast-api/options.json?bundle=article&field_name=field_tags&count=20');
+    $parsed_response = json_decode($response, TRUE);
+    $this->assertEqual(count($parsed_response['values']), count($tids), 'All tags returned in the response');
+    $this->assertTrue(!empty($parsed_response['last']), 'No more tags to fetch');
+    foreach (range('a', 'e') as $letter1) {
+      $response = $this->oAuthGet('/mast-api/autocomplete.json?bundle=article&field_name=field_tags&match=' . $letter1);
+      $parsed_response = json_decode($response, TRUE);
+      $this->assertEqual(count($parsed_response), 3, format_string('3 tags match the 1st letter @letter', array('@letter' => $letter1)));
+    }
+    $response = $this->oAuthGet('/mast-api/autocomplete.json?bundle=article&field_name=field_tags&match=f');
+    $parsed_response = json_decode($response, TRUE);
+    $this->assertEqual(count($parsed_response), 0, format_string('0 tags match the 1st letter @letter', array('@letter' => 'f')));
+    $response = $this->oAuthGet('/mast-api/autocomplete.json?bundle=article&field_name=field_tags&match=az');
+    $parsed_response = json_decode($response, TRUE);
+    $this->assertEqual(count($parsed_response), 1, format_string('1 tags match the 1st letters @letter', array('@letter' => 'az')));
+
+    // If date module exists in the codebase, enable it so we can test the date
+    // field integration. Note that this can't be done in parent::setUp(),
+    // because that method asserts that all the specified modules were
+    // successfully enabled.
+    module_enable(array('date'));
+
+    if (!module_exists('date')) {
+      return;
+    }
+    // Clear the field info cache so that the date fields become available.
+    field_info_cache_clear();
+    // Add datetime field to the article node type.
+    $field = array(
+      'type' => 'datetime',
+      'field_name' => 'article_datetime',
+      'cardinality' => 1,
+      'settings' => array(
+        'tz_handling' => 'utc',
+      ),
+    );
+    field_create_field($field);
+    $instance = array(
+      'field_name' => 'article_datetime',
+      'entity_type' => 'node',
+      'label' => 'Date field, type datetime',
+      'bundle' => 'article',
+      'required' => FALSE
+    );
+    field_create_instance($instance);
+    $expected_response['node']['article']['fields']['article_datetime'] = array(
+      'type' => 'datetime',
+      'label' => 'Date field, type datetime',
+      'cardinality' => '1',
+      'required' => FALSE,
+      'options' =>  array(
+        'date' => TRUE,
+        'time' => TRUE,
+      ),
+      'weight' => '1',
+    );
+    $response = $this->oAuthGet('/mast-api/fields.json');
+    $parsed_response = json_decode($response, TRUE);
+    $compare = $this->_nestedCompare($expected_response, $parsed_response);
+    $this->assertTrue($compare, 'The fields index service returns the field structure of the article content with date');
+    // Alter the field so it doesn't not ask for time.
+    $field = field_info_field('article_datetime');
+    $field['settings']['granularity']['hour'] = 0;
+    $field['settings']['granularity']['minute'] = 0;
+    $field['settings']['granularity']['second'] = 0;
+    field_update_field($field);
+    $expected_response['node']['article']['fields']['article_datetime']['options']['time'] = FALSE;
+    $response = $this->oAuthGet('/mast-api/fields.json');
+    $parsed_response = json_decode($response, TRUE);
+    $compare = $this->_nestedCompare($expected_response, $parsed_response);
+    $this->assertTrue($compare, 'The fields index service returns the field structure of the article content with date');
+  }
+
+  /**
+   * Tests that the content-by-user listing returns the correct data.
+   */
+  function testContentByUser() {
+    // MASt-enable the article content type.
+    $value = array(
+      'node' => array(
+        'article' => array(
+          'enabled' => TRUE,
+          'eligible' => TRUE,
+          'icon' => '',
+          'short_name' => 'article'
+        ),
+      ),
+    );
+    variable_set('mast_bundle_settings', $value);
+    $node1 = $this->drupalCreateNode(array('type' => 'article', 'uid' => $this->siteUser->uid));
+    $node2 = $this->drupalCreateNode(array('type' => 'article', 'uid' => $this->endUser->uid));
+    $node3 = $this->drupalCreateNode(array('type' => 'article', 'uid' => $this->endUser->uid));
+    $node4 = $this->drupalCreateNode(array('type' => 'page', 'uid' => $this->endUser->uid));
+    $node5 = $this->drupalCreateNode(array('type' => 'article', 'uid' => $this->endUser->uid));
+    // Make an authenticated request to the resource listing MASt-enabled content
+    // by the logged in user.
+    $response = $this->oAuthGet('/mast-api/content-by-user.json');
+    $parsed_response = json_decode($response, TRUE);
+    $response_nids = array_keys($parsed_response['values']);
+    // Test that only nids 2, 3 and 5 show up in the response, as these are the
+    // only nodes of a MASt-enabled type created by the oauth user.
+    $this->assertEqual($response_nids, array($node2->nid, $node3->nid, $node5->nid), 'The service returned all content of MASt-enabled types authored by the authenticated user, and only that content.');
+    // Make an authenticated request to the resource listing MASt-enabled content
+    // by the logged in user, using start and count parameters.
+    $response = $this->oAuthGet('/mast-api/content-by-user.json?start=2&count=2');
+    $parsed_response = json_decode($response, TRUE);
+    $response_nids = array_keys($parsed_response['values']);
+    $this->assertEqual($response_nids, array($node5->nid), 'Paging works correctly.');
+    $this->assertTrue($parsed_response['last'], 'Last paging works correctly.');
+  }
+
+  /**
+   * Tests that the user listing returns the correct data.
+   */
+  function testUserListing() {
+    // MASt-enable the article content type.
+    $value = array(
+      'node' => array(
+        'article' => array(
+          'enabled' => TRUE,
+          'eligible' => TRUE,
+          'icon' => '',
+          'short_name' => 'article'
+        ),
+      ),
+    );
+    variable_set('mast_bundle_settings', $value);
+    // Create some users which will be assigned different roles.
+    $user1 = $this->drupalCreateUser(array('create article content'));
+    $user2 = $this->drupalCreateUser(array('administer nodes'));
+    $user3 = $this->drupalCreateUser(array('create page content'));
+    $response = $this->oAuthGet('/mast-api/options.json?field_name=author&bundle=article');
+    $parsed_response = json_decode($response, TRUE);
+    // Build up an array of all the user ids that we expect to be in the response.
+    $expected_ids = array(1);
+    foreach (array($this->siteUser, $this->endUser, $this->consumerOwner, $user1, $user2, $user3) as $account) {
+      $expected_ids[] = (int) $account->uid;
+    }
+    $returned_ids = array_keys($parsed_response['values']);
+    $this->assertEqual(sort($expected_ids), sort($returned_ids), 'All users found in the user listing when not restricted by role.');
+
+    // Grant user 2 the role that user one has as well so we can test that users
+    // with more than one allowed role do not show up in duplicate.
+    $user1_roles = array_diff($user1->roles, array(DRUPAL_AUTHENTICATED_RID => 'authenticated user'));
+    $user2 = user_save($user2, array('roles' => $user2->roles + $user1_roles));
+    // Now configure MASt to restrict the user listing to particular roles.
+    variable_set('mast_settings_roles', array_diff($user2->roles, array(DRUPAL_AUTHENTICATED_RID => 'authenticated user')));
+    $response = $this->oAuthGet('/mast-api/options.json?field_name=author&bundle=article');
+    $parsed_response = json_decode($response, TRUE);
+    $expected_ids = array();
+    foreach (array($user1, $user2) as $account) {
+      $expected_ids[] = (int) $account->uid;
+    }
+    $returned_ids = array_keys($parsed_response['values']);
+    $this->assertEqual(sort($expected_ids), sort($returned_ids), 'Only users with the allowed roles show up in the user listing.');
+  }
+
+}
+
+class MAStPostTest extends MAStTest {
+  public static function getInfo() {
+    return array(
+      'name' => t('MASt Post Tests'),
+      'description' => t('Tests posting content.'),
+      'group' => t('MASt'),
+    );
+  }
+
+  public function setUp() {
+    parent::setUp();
+    // Get a test file.
+    $this->testfiles = $this->drupalGetTestFiles('image');
+  }
+
+  /**
+   * Tests support for posting content with date fields.
+   */
+  function testContentByUserPostWithDate() {
+    // If date module exists in the codebase, enable it so we can test the date
+    // field integration. Note that this can't be done in parent::setUp(),
+    // because that method asserts that all the specified modules were
+    // successfully enabled.
+    module_enable(array('date'));
+
+    if (!module_exists('date')) {
+      return;
+    }
+
+    // Clear the field info cache so that the date fields become available.
+    field_info_cache_clear();
+    // Add date fields to the article node type.
+    $field_types = array('datetime', 'date', 'datestamp');
+    foreach ($field_types as $type) {
+      $field = array(
+        'type' => $type,
+        'field_name' => $type,
+        'cardinality' => 1,
+        'settings' => array(
+          'tz_handling' => 'utc',
+        ),
+      );
+      field_create_field($field);
+      $instance = array(
+        'field_name' => $type,
+        'entity_type' => 'node',
+        'label' => 'Date field, type ' . $type,
+        'bundle' => 'article',
+        'required' => FALSE
+      );
+      field_create_instance($instance);
+    }
+
+    // Create a node.
+    $node = array(
+      'type' => 'article',
+      'title' => 'my article title',
+      'body' => 'some long string of text',
+    );
+    foreach ($field_types as $type) {
+      $node[$type] = array(
+        'values' => array(123456789),
+      );
+    }
+    $data = json_encode($node);
+    $url = '/mast-api/content-by-user.json';
+    $response = $this->oAuthPost($url, array('node' => $data));
+    $parsed_response = json_decode($response, TRUE);
+    $nid = (int) $parsed_response['nid'];
+    $saved_node = node_load($nid);
+
+    // Make sure the three date fields have the correct values.
+    $this->assertEqual($saved_node->datetime['und'][0]['value'], '1973-11-29 21:33:09');
+    $this->assertEqual($saved_node->date['und'][0]['value'], '1973-11-29T21:33:09');
+    $this->assertEqual($saved_node->datestamp['und'][0]['value'], '123456789');
+  }
+
+  function testContentByUserPost() {
+    $url = '/mast-api/content-by-user.json';
+    // Create some tags.
+    $vocabulary = taxonomy_vocabulary_machine_name_load('tags');
+    $format = db_query_range('SELECT format FROM {filter_format}', 0, 1)->fetchField();
+    $tids = array();
+    for ($i = 0; $i < 3; $i++) {
+      $term = new stdClass();
+      $term->name = $this->randomName();
+      $term->description = $this->randomName();
+      // Use the first available text format.
+      $term->format = $format;
+      $term->vid = $vocabulary->vid;
+      taxonomy_term_save($term);
+      $tids[$i] = $term->tid;
+    }
+
+    $new_terms = array(
+      $this->randomName(),
+      $this->randomName(),
+    );
+    $node = array(
+      'type' => 'article',
+      'title' => 'my article title',
+      'body' => 'some long string of text',
+      'field_tags' => array(
+        'values' => $tids,
+        'create' => array(
+          $new_terms[0],
+          $new_terms[1],
+        )
+      ),
+    );
+    $data = json_encode($node);
+
+    $response = $this->oAuthPost($url, array('node' => $data));
+    $this->assertResponse('200');
+    $parsed_response = json_decode($response, TRUE);
+    $this->assertTrue(!empty($parsed_response), format_string("The response was parsed to JSON: @response", array('@response' => $response)));
+    $nid = (int) $parsed_response['nid'];
+    $saved_node = node_load($nid);
+    $this->assertTrue(!empty($saved_node->nid), 'The node was saved.');
+    $this->assertEqual($this->endUser->uid, $saved_node->uid, 'The node was saved with the right author');
+    $this->assertEqual($saved_node->title, $node['title'], 'Node title was saved correctly.');
+
+    $new_tid1 = db_query('SELECT tid FROM {taxonomy_term_data} WHERE name = :name AND vid = :vid', array(':name' => $new_terms[0], ':vid' => $vocabulary->vid))->fetchField();
+    $this->assertTrue($new_tid1, 'First new term was saved');
+    $new_tid2 = db_query('SELECT tid FROM {taxonomy_term_data} WHERE name = :name AND vid = :vid', array(':name' => $new_terms[1], ':vid' => $vocabulary->vid))->fetchField();
+    $this->assertTrue($new_tid2, 'Second new term was saved');
+
+    $expected_field_tags_value = array(
+      LANGUAGE_NONE => array(
+        0 => array(
+          'tid' => $tids[0]
+        ),
+        1 => array(
+          'tid' => $tids[1]
+        ),
+        2 => array(
+          'tid' => $tids[2]
+        ),
+        3 => array(
+          'tid' => $new_tid1
+        ),
+        4 => array(
+          'tid' => $new_tid2
+        )
+      )
+    );
+    $this->assertEqual($expected_field_tags_value, $saved_node->field_tags, 'The field_tags field contains all of the terms we sent');
+
+    // Post as the admin user and ensure that setting the author explicitly
+    // works as expected.
+    $this->accessToken = $this->adminUser->accessToken;
+
+    // Create a role that is set as the only role allowed to be a content author.
+    $user1 = $this->drupalCreateUser(array('create article content'));
+    $user1_roles = array_diff($user1->roles, array(DRUPAL_AUTHENTICATED_RID => 'authenticated user'));
+    variable_set('mast_settings_roles', $user1_roles);
+
+    // The admin user does not have the allowed role for being set as an author
+    // but should still be able to post as self.
+    $node['author'] = $this->adminUser->uid;
+
+    $data = json_encode($node);
+    $response = $this->oAuthPost($url, array('node' => $data));
+    $this->assertResponse('200');
+
+    // Try setting to another user that does not have the allowed role.
+    $node['author'] = $this->siteUser->uid;
+
+    $data = json_encode($node);
+    $response = $this->oAuthPost($url, array('node' => $data));
+    $this->assertResponse('422');
+
+    // User 1 has the allowed role, so we should be able to set this user as the
+    // author.
+    $node['author'] = $user1->uid;
+    $data = json_encode($node);
+    $response = $this->oAuthPost($url, array('node' => $data));
+    $this->assertResponse('200');
+
+    $parsed_response = json_decode($response, TRUE);
+    $this->assertTrue(!empty($parsed_response), format_string("The response was parsed to JSON: @response", array('@response' => $response)));
+    $nid = (int) $parsed_response['nid'];
+    $saved_node = node_load($nid);
+    $this->assertTrue(!empty($saved_node->nid), 'The node was saved.');
+    $this->assertEqual($user1->uid, $saved_node->uid, 'The node was saved with the right author');
+  }
+
+  function testContentByUserPostValidation() {
+    // Add some extra fields to the article type, some of which are required.
+    $this->addExtraArticleFields();
+    $node = array(
+      'type' => 'article',
+      'title' => 'my article title',
+      'body' => 'some long string of text',
+      // We pass an array to the single-value number list field and test that
+      // MASt just takes the first value.
+      'number_list_field' => array(
+        'values' => array(
+          key($this->numberListValues),
+        )
+      )
+    );
+
+    $url = '/mast-api/content-by-user.json';
+
+    // Try saving the node with missing required fields.
+    $response = $this->oAuthPost($url, array('node' => json_encode($node)));
+    $this->assertResponse('422');
+
+    // Now add the required fields that were missing but with invalid values.
+    $node['text_list_field'] = $this->randomName();
+    $node['number_decimal_field'] = $this->randomName();
+
+    $response = $this->oAuthPost($url, array('node' => json_encode($node)));
+    $this->assertResponse('422');
+
+    // Fix the list field.
+    $node['text_list_field'] = key($this->textListValues);
+
+    $response = $this->oAuthPost($url, array('node' => json_encode($node)));
+    $this->assertResponse('422');
+
+    // Now fix the decimal field and break the list field.
+    $node['number_decimal_field'] = 6.75;
+    $node['text_list_field'] = $this->randomName();
+
+    $response = $this->oAuthPost($url, array('node' => json_encode($node)));
+    $this->assertResponse('422');
+
+    // Now fix the list field again.
+    $node['text_list_field'] = key($this->textListValues);
+
+    $response = $this->oAuthPost($url, array('node' => json_encode($node)));
+    $this->assertResponse('200');
+
+    // Post a non-boolean value for the boolean field
+    $node['test_boolean_field'] = 'some non-boolean value';
+
+    $response = $this->oAuthPost($url, array('node' => json_encode($node)));
+    $this->assertResponse('422');
+
+    // Post an acceptable TRUE value for the boolean field
+    $node['test_boolean_field'] = '1';
+
+    $response = $this->oAuthPost($url, array('node' => json_encode($node)));
+    $this->assertResponse('200');
+
+    // Post an acceptable FALSE value for the boolean field
+    $node['test_boolean_field'] = 'False';
+
+    $response = $this->oAuthPost($url, array('node' => json_encode($node)));
+    $this->assertResponse('200');
+
+    $parsed_response = json_decode($response, TRUE);
+    $this->assertTrue(!empty($parsed_response), format_string("The response was parsed to JSON: @response", array('@response' => $response)));
+    $nid = (int) $parsed_response['nid'];
+    $saved_node = node_load($nid);
+    $this->assertTrue(!empty($saved_node->nid), 'The node was saved.');
+    $this->assertEqual($saved_node->title, $node['title'], 'Node title was saved correctly.');
+    $this->assertEqual($saved_node->number_list_field[LANGUAGE_NONE][0]['value'], key($this->numberListValues), 'Passed an array for a single value field and the value was extracted correctly');
+    $this->assertEqual($saved_node->test_boolean_field[LANGUAGE_NONE][0]['value'], '0', 'Passed the string \'False\' as a boolean value and it correctly got set as 0');
+  }
+
+  function testContentByUserPostWithFile() {
+    // First, create a node with an image as the admin user.
+    $this->drupalLogin($this->adminUser);
+    $edit = array(
+      'title' => $this->randomName(),
+    );
+    $edit['files[field_image_' . LANGUAGE_NONE . '_0]'] = drupal_realpath($this->testfiles[0]->uri);
+    $this->drupalPost('node/add/article', $edit, t('Save'));
+    // Retrieve ID of the newly created node from the current URL.
+    $matches = array();
+    preg_match('/node\/([0-9]+)/', $this->getUrl(), $matches);
+    $nid = $matches[1];
+
+    // Get the fid of the file we just posted.
+    $node = node_load($nid);
+    $fid = $node->field_image[LANGUAGE_NONE][0]['fid'];
+    $file = file_load($fid);
+    $this->assertEqual($this->adminUser->uid, $file->uid, 'File created has the adminUser\'s uid');
+    $this->drupalLogout();
+
+    // Try to post a node with the fid of a file created by adminUser.
+    $node = array(
+      'type' => 'article',
+      'title' => 'my article title',
+      'body' => 'some long string of text',
+      'field_image' => $fid
+    );
+    $data = json_encode($node);
+    $url = '/mast-api/content-by-user.json';
+
+    $response = $this->oAuthPost($url, array('node' => $data));
+    $this->assertResponse('422');
+
+    // Try posting with a non-existant fid.
+    $node['field_image'] = 1234;
+    $data = json_encode($node);
+    $url = '/mast-api/content-by-user.json';
+
+    $response = $this->oAuthPost($url, array('node' => $data));
+    $this->assertResponse('422');
+
+    // Now post our own file and attach that to the node.
+    // Create file argument with data.
+    $post = array(
+      'entity_type' => 'node',
+      'field_name' => 'field_image',
+      'bundle' => 'article'
+    );
+
+    // Otherwise Services will reject arguments.
+    $headers[] = "Content-type: multipart/form-data";
+    // Prepare arguments.
+    $post['files[field_image]'] = '@' . drupal_realpath($this->testfiles[1]->uri);
+
+    $options = array(
+      CURLOPT_HTTPHEADER => $headers,
+    );
+    $url = '/mast-api/field-instance-file.json';
+
+    // Create file with a call to the field-instance-file resource.
+    $file_response = $this->oauthPostFile($url, $post, $options);
+    $this->assertResponse('200');
+    $file = json_decode($file_response, TRUE);
+    $fid = (int) $file['fid'];
+
+    // Load file and assert that it exists.
+    $file_load = file_load($fid);
+    $this->assertTrue(is_file($file_load->uri), 'New file saved to disk.');
+
+    $node['field_image'] = $fid;
+    $data = json_encode($node);
+    $url = '/mast-api/content-by-user.json';
+
+    $response = $this->oAuthPost($url, array('node' => $data));
+    $this->assertResponse('200');
+    $parsed_response = json_decode($response, TRUE);
+    $this->assertTrue(!empty($parsed_response), format_string("The response was parsed to JSON: @response", array('@response' => $response)));
+    $nid = (int) $parsed_response['nid'];
+    $saved_node = node_load($nid);
+    $this->assertTrue(!empty($saved_node->nid), 'The node was saved.');
+    $this->assertEqual($fid, $saved_node->field_image[LANGUAGE_NONE][0]['fid'], 'The field_iamge field contains the image we added');
+    $this->assertEqual($this->endUser->uid, $saved_node->uid, 'The node was saved with the right author');
+  }
+
+  protected function addExtraArticleFields() {
+    // Add some fields to the article content type.
+    $this->textListValues = drupal_map_assoc(array($this->randomName(), $this->randomName(), $this->randomName()));
+    $this->numberListValues = drupal_map_assoc(array(123,456,789));
+    $fields = array(
+      'text_list_field' => array(
+        'type' => 'list_text',
+        'required' => TRUE,
+        'cardinality' => -1,
+        'field_settings' => array(
+          'allowed_values' => $this->textListValues,
+        ),
+      ),
+      'number_list_field' => array(
+        'type' => 'list_integer',
+        'required' => FALSE,
+        'cardinality' => 1,
+        'field_settings' => array(
+          'allowed_values' => $this->numberListValues,
+        ),
+      ),
+      'number_decimal_field' => array(
+        'type' => 'number_decimal',
+        'required' => TRUE,
+        'cardinality' => 1,
+      ),
+      'test_boolean_field' => array(
+        'type' => 'list_boolean',
+        'required' => FALSE,
+        'cardinality' => 1,
+      ),
+    );
+    foreach ($fields as $name => $info) {
+      $field = array(
+        'type' => $info['type'],
+        'field_name' => $name,
+        'cardinality' => $info['cardinality'],
+        'settings' => isset($info['field_settings']) ? $info['field_settings'] : array(),
+      );
+      field_create_field($field);
+      // Add it to the article content type.
+      $instance = array(
+        'field_name' => $name,
+        'entity_type' => 'node',
+        'label' => $this->randomName(),
+        'bundle' => 'article',
+        'required' => $info['required']
+      );
+      field_create_instance($instance);
+    }
+  }
+}
+
+
+class MAStPostTestExtended extends MAStTest {
+  public static function getInfo() {
+    return array(
+      'name' => t('MASt Post Tests Extended'),
+      'description' => t('Tests posting content with fake toggle fields.'),
+      'group' => t('MASt'),
+    );
+  }
+
+  public function setUp() {
+    parent::setUp(array('mast_test'));
+  }
+
+  function testContentByUserPost() {
+
+    $node = array(
+      'type' => 'article',
+      'title' => 'my article title',
+      'body' => 'some long string of text',
+    );
+    $url = '/mast-api/content-by-user.json';
+
+    $data = json_encode($node);
+    $response = $this->oAuthPost($url, array('node' => $data));
+    $this->assertResponse('422');
+
+    $node['mast_test_feature1'] = 0;
+    $node['mast_test_social1'] = 0;
+
+    $data = json_encode($node);
+    $response = $this->oAuthPost($url, array('node' => $data));
+    $this->assertResponse('200');
+
+    $parsed_response = json_decode($response, TRUE);
+    $this->assertTrue(!empty($parsed_response), format_string("The response was parsed to JSON: @response", array('@response' => $response)));
+    $nid = (int) $parsed_response['nid'];
+    $saved_node = node_load($nid);
+    $this->assertTrue(!empty($saved_node->nid), 'The node was saved.');
+    $this->assertEqual($saved_node->title, $node['title'], 'Node title was saved correctly.');
+  }
+}
+
+
+class MAStFieldPermissionsTest extends MAStTest {
+  public static function getInfo() {
+    return array(
+      'name' => t('MASt Field Access Tests'),
+      'description' => t('Tests that access restrictions for fields are respected by MASt.'),
+      'group' => t('MASt'),
+    );
+  }
+
+  public function setUp() {
+    parent::setUp(array('mast_field_access_test'));
+  }
+
+  function testIndexFieldPerms() {
+
+    // MASt-enable just the article content type.
+    $value = array(
+      'node' => array(
+        'article' => array(
+          'enabled' => TRUE,
+          'eligible' => TRUE,
+          'icon' => 'page',
+          'short_name' => 'article'
+        ),
+      ),
+    );
+    variable_set('mast_bundle_settings', $value);
+    $response = $this->oAuthGet('/mast-api/fields.json');
+    $parsed_response = json_decode($response, TRUE);
+    $this->assertTrue(isset($parsed_response['node']['article']['fields']['title']), 'The fields index service includes the title field for the article content type.');
+    $this->assertFalse(isset($parsed_response['node']['article']['fields']['field_image']), 'The fields index service does not include the field_image field for the article content type.');
+  }
+
+}
+
+class MAStAdminTest extends DrupalWebTestCase {
+  public static function getInfo() {
+    return array(
+      'name' => t('MASt Admin tests'),
+      'description' => t('Tests the admin UI for the MASt module.'),
+      'group' => t('MASt'),
+    );
+  }
+
+  function setUp() {
+    $modules = array('field_test', 'mast', 'blog', 'mast_test');
+    parent::setUp($modules);
+    $admin_user = $this->drupalCreateUser(array('access administration pages', 'administer site configuration', 'access content', 'administer content types', 'administer taxonomy', 'administer users'));
+    $this->drupalLogin($admin_user);
+  }
+
+  /**
+   * Tests enabling Mobile App Services on the content type edit page.
+   */
+  function testMastContentTypeEdit() {
+    // Test that the "Mobile App Services" fieldset appears on the article edit
+    // page
+    $this->drupalGet('admin/structure/types/manage/article');
+    $this->assertText('Mobile app', 'The Mobile App Servies fieldset appears on the article content type edit page');
+
+    // Confirm that the article content type is not MASt enabled.
+    $enabled = mast_enabled('node', 'article');
+    $this->assertFalse($enabled, 'The article content type is not MASt enabled.');
+
+    // Test that we can MASt enable the article content type.
+    $edit = array(
+      'mast[enabled]' => 1,
+      'mast[short_name]' => 'article',
+      'mast[icon]' => 'page',
+    );
+    $this->drupalPost('admin/structure/types/manage/article', $edit, t('Save content type'));
+    $enabled = mast_enabled('node', 'article');
+    $this->assertTrue($enabled, 'The article content type was successfully MASt enabled.');
+
+    // Test that the blog content type is not eligible to be MASt-enabled because
+    // the mast_test module implements hook_mast_unsupported_node_types to
+    // exclude it.
+    $this->drupalGet('admin/structure/types/manage/blog');
+    $this->assertText(t('This content type has been explicitly specified by one of your enabled modules as not being eligible to be MASt-enabled.'), 'A message is displayed indicating that the content type has been explicitly been excluded');
+  }
+
+  /**
+   * Tests the effect on MASt eligibility of adding unsupported field types to
+   * content types.
+   */
+  function testAddUnsupportedField() {
+    $eligible = mast_eligible('node', 'page');
+    $this->assertTrue($eligible, 'The Page content type is eligible to be MASt-enabled');
+    $edit = array(
+      'fields[_add_new_field][label]' => $this->randomName(),
+      'fields[_add_new_field][field_name]' => 'test_field',
+      'fields[_add_new_field][type]' => 'test_field',
+      'fields[_add_new_field][widget_type]' => 'test_field_widget',
+    );
+    $label = $edit['fields[_add_new_field][label]'];
+    $field_name = $edit['fields[_add_new_field][field_name]'];
+
+    // Go through the steps of adding a new field and setting it as 'required'
+    // in the instance settings step.
+    $this->drupalPost("admin/structure/types/manage/page/fields", $edit, t('Save'));
+    $this->drupalPost(NULL, array(), t('Save field settings'));
+    $this->drupalPost(NULL, array('instance[required]' => TRUE), t('Save settings'));
+
+    // Clear the field_info cache.
+    _field_info_collate_fields(TRUE);
+
+    drupal_static_reset('mast_bundle_get_unique_required_field_types');
+    drupal_static_reset('mast_get_bundle_eligibility');
+
+    // The bundle should no longer be eligible.
+    $eligible = mast_eligible('node', 'page');
+    $this->assertFalse($eligible, 'The Page content type is no longer eligible to be MASt-enabled');
+
+    // Now edit the field and set it to not required.
+    $this->drupalPost('admin/structure/types/manage/page/fields/field_test_field', array('instance[required]' => FALSE), t('Save settings'));
+
+    // Clear the field_info cache.
+    _field_info_collate_fields(TRUE);
+
+    drupal_static_reset('mast_bundle_get_unique_required_field_types');
+    drupal_static_reset('mast_get_bundle_eligibility');
+
+    $this->drupalGet('admin/structure/types/manage/page/fields/field_test_field');
+    // The bundle should now be eligible.
+    $eligible = mast_eligible('node', 'page');
+    $this->assertTrue($eligible, 'The Page content type is again eligible to be MASt-enabled');
+  }
+
+  /**
+   * Tests attempting to add an unsupported field type to a MASt-enabled content
+   * type via the UI.
+   */
+  function testEnableAndAddUnsupportedField() {
+    $edit = array(
+      'mast[enabled]' => 1,
+      'mast[short_name]' => 'page',
+      'mast[icon]' => 'page',
+    );
+    $this->drupalPost('admin/structure/types/manage/page', $edit, t('Save content type'));
+    $enabled = mast_enabled('node', 'page');
+    $this->assertTrue($enabled, 'The page content type was successfully MASt enabled.');
+
+    $edit = array(
+      'fields[_add_new_field][label]' => $this->randomName(),
+      'fields[_add_new_field][field_name]' => 'test_field',
+      'fields[_add_new_field][type]' => 'test_field',
+      'fields[_add_new_field][widget_type]' => 'test_field_widget',
+    );
+    $label = $edit['fields[_add_new_field][label]'];
+    $field_name = $edit['fields[_add_new_field][field_name]'];
+
+    // Go through the steps of adding a new field and setting it as 'required'
+    // in the instance settings step.
+    $this->drupalPost("admin/structure/types/manage/page/fields", $edit, t('Save'));
+    $this->drupalPost(NULL, array(), t('Save field settings'));
+    $this->drupalPost(NULL, array('instance[required]' => 1), t('Save settings'));
+
+    $this->assertRaw(t('The page node bundle has been set to not mobile enabled because a required field of an incompatible field type has been added to it'), 'Message is displayed saying the content type is no longer enabled.');
+  }
+
+  /**
+   * Tests that programmatically creating and deleting field instances on content
+   * types has the correct effect on their eligibility to be MASt-enabled.
+   */
+  function testProgrammaticFieldChanges() {
+    // MASt-enable the article content type
+    $edit = array(
+      'mast[enabled]' => 1,
+      'mast[short_name]' => 'article',
+      'mast[icon]' => 'page',
+    );
+    $this->drupalPost('admin/structure/types/manage/article', $edit, t('Save content type'));
+    $enabled = mast_enabled('node', 'article');
+    $this->assertTrue($enabled, 'The article content type was successfully MASt enabled.');
+
+    // Create a field of an unsupported field type
+    $field = array(
+      'type' => 'test_field',
+      'field_name' => 'field_test_field',
+      'cardinality' => 1,
+    );
+    field_create_field($field);
+    // Programmatically add an instance of field_shape_field to the article
+    // content type.
+    $instance = array(
+      'field_name' => 'field_test_field',
+      'entity_type' => 'node',
+      'label' => 'Article test field',
+      'bundle' => 'article',
+      'required' => TRUE
+    );
+    field_create_instance($instance);
+    // Confirm that the article content type is now no longer MASt enabled.
+    $enabled = mast_enabled('node', 'article');
+    $this->assertFalse($enabled, 'The article content type is no longer MASt enabled after programmatically adding a required field of an unsupported field type.');
+    drupal_static_reset('mast_get_bundle_eligibility');
+    $eligible = mast_eligible('node', 'article');
+    $this->assertFalse($eligible, 'The article content type is no longer eligible to be MASt-enabled');
+    // Test that the MASt fieldset on the content type edit page now contains an
+    // explanation about the content type being ineligible to be MASt enabled.
+    $this->drupalGet('admin/structure/types/manage/article');
+    $this->assertText(t('This content type is not eligible to be mobile enabled because it contains required fields of the following incompatible field types: test_field'), 'The MASt fieldset displays a message that the content type is ineligible to be MASt enabled due to the test field');
+
+    // Remove the test_field instance from the article content type.
+    $this->drupalPost('admin/structure/types/manage/article/fields/field_test_field/delete', array(), t('Delete'));
+
+    // Clear the field_info cache.
+    _field_info_collate_fields(TRUE);
+
+    drupal_static_reset('mast_bundle_get_unique_required_field_types');
+    drupal_static_reset('mast_get_bundle_eligibility');
+
+    // The bundle should now be eligible.
+    $eligible = mast_eligible('node', 'article');
+    $this->assertTrue($eligible, 'The article content type is now eligible to be MASt-enabled');
+    // Test that the MASt enable checkbox appears on the article edit page.
+    $this->drupalGet('admin/structure/types/manage/article');
+    $this->assertText(t('Allow submission through a mobile app'), 'The MASt enable checkbox appears on the article content type edit page');
+  }
+
+  /**
+   * Tests the MASt settings form.
+   */
+  function testMastSettings() {
+    // Create some user roles.
+    $rid1 = $this->drupalCreateRole(array('create article content'), 'content producer');
+    $rid2 = $this->drupalCreateRole(array('administer nodes'), 'content administrator');
+    $rid3 = $this->drupalCreateRole(array('create page content'), 'site builder');
+    $edit = array(
+      "mast_use_mast_login" => TRUE,
+      "mast_settings_roles[$rid1]" => 1,
+      "mast_settings_roles[$rid2]" => 1,
+    );
+    $this->drupalPost('admin/config/content/mast', $edit, t('Save configuration'));
+    // Verify that checking the MASt login path checkbox sets the OAuth login
+    // path variable.
+    $this->assertEqual('mast/login', variable_get('oauth_common_login_path'), 'OAuth login path variable was set to MASt login');
+    // Verify the role settings were set correctly.
+    $mast_allowed_roles = array_filter(variable_get('mast_settings_roles', array()));
+    $this->assertEqual(array($rid1, $rid2), array_keys($mast_allowed_roles), 'The correct roles were set');
+
+    // Test disabling the login path override.
+    $this->drupalPost('admin/config/content/mast', array("mast_use_mast_login" => FALSE), t('Save configuration'));
+    $this->assertNull(variable_get('oauth_common_login_path'), 'OAuth login path variable was deleted');
+
+    // MASt-enable the article and page content types.
+    $value = array(
+      'node' => array(
+        'article' => array(
+          'enabled' => TRUE,
+          'eligible' => TRUE,
+          'icon' => '',
+          'short_name' => 'article'
+        ),
+        'page' => array(
+          'enabled' => TRUE,
+          'eligible' => TRUE,
+          'icon' => '',
+          'short_name' => 'page'
+        ),
+      ),
+    );
+    variable_set('mast_bundle_settings', $value);
+    $this->drupalPost('admin/config/content/mast', array('mast_max_allowed_node_types' => 1), t('Save configuration'));
+    $this->assertText('You cannot set the maximum allowed node types to a number less than the number of node types that are already enabled', 'Settings form correctly prevents setting the max enabled types lower than the number already enabled');
+  }
+
+  /**
+   * Test that it's not possible to cancel the MASt mobile app account via the
+   * UI.
+   */
+  function testMastUserDelete() {
+    // First ensure the user cancel form displays correctly for a regular
+    // account.
+    $test_user = $this->drupalCreateUser();
+    $this->drupalGet("user/{$test_user->uid}/cancel");
+    $this->assertNoText('You cannot cancel the MASt mobile user account');
+    $this->assertText('Delete the account and its content');
+    // Now test that the form is modified appropriately when visiting the user
+    // cancel page for the MASt app user account.
+    $mast_uid = variable_get('mast_app_uid');
+    $this->drupalGet("user/{$mast_uid}/cancel");
+    $this->assertText('You cannot cancel the MASt mobile user account');
+    $this->assertNoText('Delete the account and its content');
+  }
+}
+
+class MastAvailabilityTest extends DrupalWebTestCase {
+   public static function getInfo() {
+    return array(
+      'name' => t('MASt availability API tests'),
+      'description' => t('Tests the MASt availability check API.'),
+      'group' => t('MASt'),
+    );
+  }
+
+  function setUp() {
+    parent::setUp('mast');
+    $this->adminUser = $this->drupalCreateUser(array('administer nodes', 'administer content types'));
+    $this->drupalLogin($this->adminUser);
+  }
+
+  /**
+   * Tests that the availability callback works as expected.
+   */
+  function testMastAvailabilityApi() {
+    // Before any content types are enabled, the availability callback should
+    // return FALSE.
+    $response = $this->drupalGet('mast-api-available');
+    $data = json_decode($response);
+    $this->assertFalse($data->available);
+
+    // MASt-enable the article content type.
+    $edit = array(
+      'mast[enabled]' => 1,
+      'mast[short_name]' => 'article',
+      'mast[icon]' => 'page',
+    );
+    $this->drupalPost('admin/structure/types/manage/article', $edit, t('Save content type'));
+
+    // The availability callback should now show one enabled node bundle.
+    $response = $this->drupalGet('mast-api-available');
+    $data = json_decode($response);
+    $this->assertTrue($data->available);
+    $this->assertEqual($data->entity_enabled_bundles->node, 1);
+    // The fields listing should be shown as available at its default endpoint
+    // (mast-api/fields).
+    $this->assertEqual($data->resources->fields, 'mast-api/fields');
+
+    // Override the default endpoint.
+    $endpoint = services_endpoint_load('mast');
+    $endpoint->path = 'overridden-endpoint';
+    services_endpoint_save($endpoint);
+    // Recheck the availability endpoint to make sure we pick up the change.
+    $response = $this->drupalGet('mast-api-available');
+    $data = json_decode($response);
+    $this->assertEqual($data->resources->fields, 'overridden-endpoint/fields');
+  }
+}
+
+class MastMetaTest extends MAStTest {
+  public static function getInfo () {
+    return array(
+      'name' => t('MASt meta API tests'),
+      'description' => t('Tests the API that provides meta information.'),
+      'group' => t('MASt'),
+    );
+  }
+
+  function setUp() {
+    parent::setUp(array('mast'));
+  }
+
+  function testMetaResource() {
+    // Test whoami resource.
+    $result = $this->oAuthGet('mast-api/meta/whoami');
+    $data = json_decode($result);
+    $this->assertEqual($data->id, $this->endUser->uid, 'The meta/whoami endpoint returns the correct uid.');
+    $this->assertEqual($data->name, $this->endUser->name, 'The meta/whoami endpoint returns the correct username.');
+
+    // Test site information resource.
+    $result = $this->oAuthGet('mast-api/meta/site');
+    $data = json_decode($result);
+    $this->assertEqual($data->id, url('<front>', array('absolute' => TRUE)), 'The meta/site endpoint returns the correct site URL.');
+    $this->assertEqual($data->name, variable_get('site_name', 'Drupal'), 'The meta/site endpoint returns the correct site name.');
+    $this->assertEqual((array) $data->icon, mast_get_favicon(), 'The meta/site endpoint returns the correct icon information.');
+  }
+}

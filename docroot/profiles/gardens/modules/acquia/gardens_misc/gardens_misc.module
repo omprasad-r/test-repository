@@ -1,0 +1,3512 @@
+<?php
+
+/**
+ * @file: Module for holding various form_alters and variable overrides.
+ *
+ * This isn't an ideal solution, but we are going to need a lot of overrides of
+ * contrib modules (variables, form labels, etc).  Since we have to exclude all
+ * of our modules in various places, it becomes a pain the butt.  This module
+ * will hopefully serve as a holding pen for all of this.  To be somewhat
+ * extendable, I replicated the module_invoke and module_invoke_all structure.
+ */
+/**
+ * Media specific hacks.
+ */
+include_once(dirname(__FILE__) . '/plugins/gardens_misc.media.inc');
+
+/**
+ * Force some variable values.
+ */
+function gardens_misc_init() {
+  global $conf;
+  //@todo: set this to something like sharedtemporary because temp is not HA compat.
+  $conf['plupload_temporary_uri'] = 'public://pluploadtemp/';
+
+  // Force Node export code delivery to use files only.
+  $conf['node_export_code'] = 'file';
+
+  gardens_misc_setlocale();
+}
+
+/**
+ * Implements hook_menu().
+ */
+function gardens_misc_menu() {
+  $items['admin/people/invite'] = array(
+    'title' => 'Invite people',
+    'page callback' => 'gardens_misc_invite_people',
+    'access arguments' => array('administer users'),
+    'type' => MENU_LOCAL_ACTION,
+  );
+
+  $items['block_everything/fix'] = array(
+    'title' => 'Block everything fix',
+    'page callback' => 'gardens_misc_fix_block_everything',
+    'access arguments' => array('administer blocks'),
+    'type' => MENU_CALLBACK,
+  );
+
+  $items['admin/report-site-stats'] = array(
+    'title' => 'Run cron and report site statistics',
+    'page callback' => 'gardens_misc_report_site_statistics',
+    'access callback' => 'gardens_misc_report_site_statistics_access',
+    'access arguments' => array(2),
+    'type' => MENU_CALLBACK,
+    'file' => 'gardens_misc.pages.inc',
+  );
+
+  if (module_exists('node_export')) {
+    $items['admin/config/content/node_export/all'] = array(
+      'access arguments' => array('administer site configuration'),
+      'page callback' => 'drupal_get_form',
+      'page arguments' => array('gardens_misc_node_export_all'),
+      'title' => 'Export all',
+      'type' => MENU_LOCAL_ACTION,
+    );
+    $items['admin/config/content/node_export/all/%/%'] = array(
+      'access arguments' => array('administer site configuration'),
+      'page callback' => 'gardens_misc_node_export_all_gui',
+      'page arguments' => array(5, 6),
+      'title' => 'Node export',
+      'type' => MENU_CALLBACK,
+    );
+  }
+
+  return $items;
+}
+
+/**
+ * Implement hook_enable();
+ * @return unknown_type
+ */
+function gardens_misc_enable() {
+  gardens_misc_invoke_all('enable');
+}
+
+/**
+ * Implements hook_system_info_alter().
+ */
+function gardens_misc_system_info_alter(&$info, $file, $type) {
+  // In Gardens we want to tweak the names and descriptions of several modules.
+  // Most are done in the Gardens Features module, but we do this one here
+  // because it's a temporary change (the module will soon be hidden) and it's
+  // very different from the name of the module on drupal.org (so to prevent
+  // confusion we don't want this to carry over on site export).
+  if ($file->name == 'media_crop') {
+    $info['name'] = 'Media: image editing';
+    $info['description'] = 'Interactively crop, rotate, and scale embedded image media.';
+  }
+
+  // simplified_modules doesn't handle nested dependencies and complex combinations
+  // of submodules and dependencies well.  We can persuade it to bring up request_queue
+  // by making it a dependency of bunchball in our case.  bunchball.module doesn't
+  // really need it, but bunchball_queue.module does.
+  if ($file->name == 'bunchball') {
+    $info['dependencies'][] = 'request_queue';
+  }
+
+  // Make colorbox a dependency of extlink module so that simplified_modules can
+  // enable/disable it when extlink is, and also hide it from the modules page.
+  // @see gardens_misc_simplified_modules_hidden_dependencies()
+  if ($file->name == 'extlink_extra') {
+    $info['dependencies'][] = 'colorbox';
+  }
+
+  // Avoid fatal errors in wordpress_migrate by making views a dependency.
+  // See http://drupal.org/node/1778952.
+  // @see gardens_misc_form_system_modules_alter()
+  // @see gardens_misc_system_modules_validate()
+  if ($file->name == 'wordpress_migrate') {
+    $info['dependencies'][] = 'views';
+    // We have migrate_extras in the codebase, and wordpress_migrate works better
+    // with it, but it's not enough of a true dependency to put it in the .info.
+    $info['dependencies'][] = 'migrate_extras';
+    // Change the name to "WordPress Import". (This renaming can't go in the
+    // module itself since there is an existing WP Import module.)
+    $info['name'] = 'WordPress Import';
+  }
+}
+
+/**
+ * Implements hook_css_alter().
+ */
+function gardens_misc_css_alter(&$css) {
+  // If both colorbox library's stylesheet and colorbox module's stylesheet
+  // exist, remove colorbox module's stylesheet. If only colorbox module's
+  // stylesheet exists, replace it with the stylesheet from colorbox library.
+  if (isset($css['sites/all/modules/colorbox/styles/default/colorbox_default_style.css'])) {
+    unset($css['sites/all/modules/colorbox/styles/default/colorbox_default_style.css']);
+
+    if (!isset($css['sites/all/libraries/colorbox/example1/colorbox.css'])) {
+      $css['sites/all/libraries/colorbox/example1/colorbox.css'] = array(
+        'type' => 'file',
+        'group' => -100,
+        'weight' => 0.1,
+        'every_page' => FALSE,
+        'media' => 'screen',
+        'preprocess' => TRUE,
+        'data' => 'sites/all/libraries/colorbox/example1/colorbox.css',
+        'browsers' => array(
+          'ie' => TRUE,
+          '!ie' => TRUE,
+        ),
+      );
+    }
+  }
+}
+
+/**
+ * Rather stupid clone of module_invoke().
+ *
+ * Created because it is a pain to track so many tiny modules in the 3 places
+ * they are tracked now (export, scarecrow, profile).
+ */
+function gardens_misc_invoke() {
+  $args = func_get_args();
+  $plugin = $args[0];
+  $hook = $args[1];
+  $func = 'gardens_misc_' . $plugin . '_' . $hook;
+  unset($args[0], $args[1]);
+  if (function_exists($func)) {
+    return call_user_func_array($func, $args);
+  }
+}
+
+/**
+ * Rather stupid clone of module_invoke_all().
+ *
+ * @see gardens_misc_invoke;
+ * @return unknown_type
+ */
+function gardens_misc_invoke_all() {
+  $args = func_get_args();
+  $hook = $args[0];
+  unset($args[0]);
+  foreach (gardens_misc_load_plugins() as $plugin) {
+    gardens_misc_invoke($plugin, $hook, $args);
+  }
+}
+
+/**
+ * Returns an array of variables that have not changed from their saved defaults.
+ *
+ * For example, if an administrator has visited the settings page on which
+ * these variables are set and has saved the page without actually editing the
+ * variables themselves, this function will still treat the variables as
+ * unchanged, and therefore will return them.
+ *
+ * @param $original_variables
+ *   An associative array of variables, where the key is the variable name, and
+ *   the value is the original content of that variable. These variables should
+ *   all have been originally stored in the database with these values (e.g.,
+ *   at install time) in order for this function to work correctly.
+ *
+ * @return
+ *   An array of variable names, containing only those variables from the above
+ *   list that still have their original values stored in the database.
+ */
+function gardens_misc_get_unchanged_variables($original_variables) {
+  $unchanged_variables = array();
+
+  // Check each of these variables to see if they have been edited.
+  foreach ($original_variables as $variable => $original_content) {
+    $current_content = variable_get($variable, 0);
+
+    // Regularize line endings.
+    $original_content = str_replace("\r", "", $original_content);
+    $current_content = str_replace("\r", "", $current_content);
+
+    if (trim($current_content) == trim($original_content)) {
+      $unchanged_variables[] = $variable;
+    }
+  }
+
+  return $unchanged_variables;
+}
+
+function gardens_misc_load_plugins() {
+  static $plugins;
+  if (!$plugins) {
+    $plugins = array('media');
+  }
+  return $plugins;
+}
+
+function gardens_misc_page_alter(&$page) {
+  // Add the global tracking code.
+  $script1 = gardens_misc_get_tracking_code_include_ga();
+  $script2 = gardens_misc_get_tracking_code_track_pageview();
+  if ($script1 && $script2) {
+    drupal_add_js($script1, array('type' => 'inline', 'scope' => 'footer'));
+    drupal_add_js($script2, array('type' => 'inline', 'scope' => 'footer'));
+  }
+}
+
+/**
+ * Implements hook_module_implements_alter().
+ */
+function gardens_misc_module_implements_alter(&$implementations, $hook) {
+  // We're altering part of a form that the field_permissions module alters in,
+  // so our form alter has to come last. Unfortunately it does not appear
+  // possible to alter the order of specific form_FORM_ID_alter hooks. See
+  // http://drupal.org/node/765860#comment-5100288.
+  if ($hook === 'form_alter') {
+    $ours = $implementations['gardens_misc'];
+    unset($implementations['gardens_misc']);
+    $implementations['gardens_misc'] = $ours;
+  }
+}
+
+  // The Impact theme previously was hardcoded to display the site slogan only
+/**
+ * Implements hook_block_info_alter().
+ */
+function gardens_misc_block_info_alter(&$blocks, $theme, $code_blocks) {
+  // The Impact theme previously was hardcoded to display the site slogan only
+  // on the front page. So when the slogan first appears as a block provided by
+  // the Block Everything module, set its visibility to only appear on the
+  // front page also. This code handles sites that are running off the Impact
+  // theme itself (i.e., never used the themebuilder) and therefore don't go
+  // through the theme upgrade process.
+  if ($theme == 'impact') {
+    if (!empty($blocks['block_everything']['site_slogan'])) {
+      $blocks['block_everything']['site_slogan']['visibility'] = 1;
+      $blocks['block_everything']['site_slogan']['pages'] = '<front>';
+    }
+  }
+
+  // Turn on block cache for custom blocks.
+  if (isset($blocks['block'])) {
+    foreach ($blocks['block'] as $bid => &$block) {
+      $block['cache'] = DRUPAL_CACHE_GLOBAL;
+    }
+  }
+
+  // If TAC is enabled, ensure all blocks are set to at least cache by role so
+  // that the cached version doesn't cause an access bypass.
+  if (module_exists('taxonomy_access')) {
+    foreach ($blocks as $name => &$module) {
+      foreach ($module as &$block) {
+        if (isset($block['cache']) && $block['cache'] !== DRUPAL_CACHE_CUSTOM && $block['cache'] !== DRUPAL_NO_CACHE) {
+          if (($block['cache'] & DRUPAL_CACHE_PER_PAGE || $block['cache'] & DRUPAL_CACHE_GLOBAL) && !($block['cache'] & DRUPAL_CACHE_PER_USER)) {
+            $block['cache'] = $block['cache'] | DRUPAL_CACHE_PER_ROLE;
+          }
+        }
+      }
+    }
+  }
+}
+
+/**
+ * Implements hook_menu_site_status_alter().
+ */
+function gardens_misc_menu_site_status_alter(&$menu_site_status, $path) {
+  if ($menu_site_status == MENU_SITE_OFFLINE && user_is_anonymous()) {
+    if (strpos($path, 'admin/report-site-stats') !== FALSE) {
+      $menu_site_status = MENU_SITE_ONLINE;
+    }
+  }
+}
+
+/**
+ * Implements hook_block_everything_modified_block().
+ */
+function gardens_misc_block_everything_modified_block($original_block) {
+  // If the Block Everything module just modified the site slogan block as the
+  // theme was being enabled, and if this is an Impact-based theme, we need to
+  // set the appropriate defaults for this block (only visible on the front
+  // page). This preserves the current behavior for sites that are upgrading an
+  // Impact-based theme via the themebuilder.
+  if ($original_block['module'] == 'block_everything' && $original_block['delta'] == 'site_slogan') {
+    $theme = $original_block['theme'];
+    $info = db_query('SELECT info FROM {system} where name = :theme', array(':theme' => $theme))->fetchField();
+    if (!empty($info)) {
+      $info = unserialize($info);
+      if (!empty($info['base_theme']) && $info['base_theme'] == 'impact') {
+        db_update('block')
+          ->fields(array(
+            'visibility' => 1,
+            'pages' => '<front>',
+          ))
+          ->condition('theme', $theme)
+          ->condition('delta', 'site_slogan')
+          ->condition('module', 'block_everything')
+          ->execute();
+      }
+    }
+  }
+}
+
+/**
+ * Implements hook_block_view_alter() in order to remove the text asking for
+ * donations to the XML sitemap project.
+ */
+function gardens_misc_block_view_alter(&$data, $block) {
+  $path = menu_tab_root_path();
+  if (in_array($path, array('admin/config/search/xmlsitemap', 'admin/config/search/xmlsitemap/settings')) && $block->delta == 'help') {
+    $data['content'] = array(
+      '#theme' => 'html_tag',
+      '#tag' => 'p',
+      '#value' => t("View and configure your site's active XML sitemap."),
+    );
+  }
+}
+
+/**
+ * Set a cookie for any form submission by an anonymous user.
+ *
+ * Copied from Pressflow:
+ * http://bazaar.launchpad.net/~pressflow/pressflow/6/files/head:/modules/cookie_cache_bypass/
+ */
+function gardens_misc_form_alter(&$form, $form_state, $form_id) {
+  global $user;
+
+  if (empty($user->uid)) {
+    $form['#submit'][] = 'cookie_cache_bypass_submit';
+  }
+}
+
+/**
+ * Implements hook_form_FORM_ID_alter().
+ */
+function gardens_misc_form_metatag_config_edit_form_alter(&$form, &$form_state, $form_id) {
+  // Disable the popup dialog for metatag selection as it interferes with the
+  // admin theme.
+  $form['metatags']['token_group']['tokens']['#dialog'] = FALSE;
+}
+
+/**
+ * Refactor comment settings form.
+ *
+ * This is a UX update on the node comment settings form:
+ * - Split settings form into two sections: Comment entry and Comment display
+ * - Change default comment settings to radio buttons
+ */
+function gardens_misc_form_node_type_form_alter(&$form, $form_state) {
+  $form['comment']['comment_created_date_format']['#options'] = _gardens_misc_date_format_type_options();
+  $form['comment']['comment_changed_date_format']['#options'] = _gardens_misc_date_format_type_options();
+
+  $form['comment']['comment_entry'] = array(
+    '#type' => 'fieldset',
+    '#title' => t('Comment entry'),
+    '#collapsible' => TRUE,
+  );
+
+  $form['comment']['comment_display'] = array(
+    '#type' => 'fieldset',
+    '#title' => t('Comment display'),
+    '#collapsible' => TRUE,
+  );
+
+  $form_disable = array(
+    'comment_expose_fields',
+  );
+
+  foreach ($form_disable as $element_key) {
+    if (isset($form['comment'][$element_key])) {
+      $form['comment'][$element_key]['#access'] = FALSE;
+    }
+  }
+
+  $form_restructure = array(
+    'comment_entry' => array(
+      'comment_form_placement',
+      'comment_preview',
+      'comment_subject_field',
+      'comment_anonymous',
+    ),
+    'comment_display' => array(
+      'comment_default_per_page',
+      'comment_default_sorting',
+      'comment_default_mode',
+      'comment_section_label',
+      'comment_form_label',
+      'comment_form_location',
+      'comment_created_date_format',
+      'comment_changed_date_format',
+    ),
+  );
+
+  foreach ($form_restructure as $fieldset => $form_elment) {
+    foreach ($form_elment as $form_key) {
+      if (isset($form['comment'][$form_key])) {
+        $form['comment'][$fieldset][$form_key] = $form['comment'][$form_key];
+        unset($form['comment'][$form_key]);
+      }
+    }
+  }
+
+  // Change "Default comment setting for new content" to radio buttons, so the
+  // options are visible for the first glance.
+  $form['comment']['comment']['#type'] = 'radios';
+
+  // Include custom JS to fix comment settings form behavior to handle the
+  // form element type change above to radios, and Comment Goodness changes.
+  $module_path = drupal_get_path('module', 'gardens_misc');
+  $form['#attached']['js'][] = "{$module_path}/js/gardens_misc.comment.js";
+
+  // If MASt module is enabled, we need to alter the MASt part of the form to
+  // remove unsupported icons.
+  if (isset($form['mast']) && isset($form['mast']['icon'])) {
+    $unsupported_icons = array('video', 'audio', 'poll', 'webform');
+    if (in_array($form['mast']['icon']['#default_value'], $unsupported_icons)) {
+      $form['mast']['icon']['#default_value'] = 'album';
+    }
+    foreach ($unsupported_icons as $icon) {
+      unset($form['mast']['icon']['#options'][$icon]);
+    }
+  }
+}
+
+/**
+ * Implements hook_element_info_alter().
+ */
+function gardens_misc_element_info_alter(&$types) {
+  $types['text_format']['#pre_render'][] = 'gardens_misc_pre_render_text_format';
+}
+
+/*
+ * This function alters WYSIWYG text inputs to improve UX
+ */
+
+function gardens_misc_pre_render_text_format($element) {
+  // Create a global variable to pass whether or not we're creating a WYSIWYG
+  // instance for a comment form
+  global $wysiwyg_comment;
+  $wysiwyg_comment = FALSE;
+
+  // Check to make sure this is a comment form and is not on a forum post
+  if (isset($element['#entity_type']) && isset($element['#bundle']) && $element['#entity_type'] == 'comment' && $element['#bundle'] != 'comment_node_forum') {
+    $wysiwyg_comment = TRUE;
+  }
+
+  // Add the JS that handles behaviors, this needs to be added after the WYSIWYG
+  // code so that it can access the CKEDITOR object
+  drupal_add_js(drupal_get_path('module', 'gardens_misc') . '/js/gardens_misc.wysiwyg.js', array('scope' => 'footer', 'every_page' => TRUE, 'weight' => 2));
+
+  // Add CSS to customize the look of the WYSIWYG
+  $element['#attached']['css'][] = drupal_get_path('module', 'gardens_misc') . '/css/gardens_misc.wysiwyg.css';
+
+  // This creates the text strings to list the allowable HTML per input format
+  if (isset($element['format']['format']['#options'])) {
+    $js_settings = array('wysiwyg_formats' => array());
+    foreach($element['format']['format']['#options'] as $key => $option) {
+      $filters = filter_list_format($key);
+      // Check if all markup is forbidden
+      if (isset($filters['filter_html_escape']) && $filters['filter_html_escape']->status == 1) {
+        // All html is escaped, set the available tags to none
+        $js_settings['wysiwyg_formats'][$key] = t('None');
+      }
+      else {
+        if (isset($filters['filter_html']) && $filters['filter_html']->status == 1) {
+          $js_settings['wysiwyg_formats'][$key] = check_plain($filters['filter_html']->settings['allowed_html']);
+        } else {
+          // The html filter is either not present or not enabled, so the
+          // allowable tags defaults to "All".
+          $js_settings['wysiwyg_formats'][$key] = t('All');
+          // Check to see if the HTML purifier filter is enabled, which will
+          // reduce the available tags.
+          if (isset($filters['htmlpurifier_basic']) && $filters['htmlpurifier_basic']->status == 1) {
+            // HTML purifier reduces the allowable tags to avoid XSS but still
+            // allows most tags.
+            $js_settings['wysiwyg_formats'][$key] = t('Most HTML tags are allowed');
+          }
+        }
+      }
+    }
+    // Add the strings to the Drupal settings JS object
+    $element['#attached']['js'][] = array(
+      'type' => 'setting',
+      'data' => $js_settings,
+    );
+  }
+
+  return $element;
+}
+
+function cookie_cache_bypass_submit() {
+  $lifetime = variable_get('page_cache_maximum_age', 0);
+  setcookie('NO_CACHE', 'Y', REQUEST_TIME + ($lifetime + 300), '/');
+}
+
+/**
+ * Implement hook_user_logout().
+ *
+ * When users log out of a gardens site, set the cache bypass cookie so tey
+ */
+function gardens_misc_user_logout($account) {
+  cookie_cache_bypass_submit();
+}
+
+/**
+ * Implements hook_modules_installed().
+ */
+function gardens_misc_modules_installed($modules) {
+  // Do not show the Advanced Help warning in Gardens; we don't let people
+  // install modules, so it would be pointless.
+  if (in_array('views_ui', $modules)) {
+    variable_set('views_ui_show_advanced_help_warning', FALSE);
+  }
+
+  // Custom configuration for the Secure Pages module on Gardens servers.
+  if (in_array('securepages', $modules)) {
+    // Set the core variable which makes the site work correctly over SSL.
+    variable_set('https', TRUE);
+    // Enable the Secure Pages functionality itself.
+    variable_set('securepages_enable', TRUE);
+    // Since custom domains do not use https in Gardens and those are
+    // friendlier URLs, configure Secure Pages to redirect back to them
+    // whenever possible.
+    variable_set('securepages_switch', TRUE);
+    // Do not put any pages under SSL by default; this is left up to later
+    // configuration (or to modules like Webform SSL to handle automatically).
+    // Note that this is deliberately set to a blank space rather than an empty
+    // string (in order to work around http://drupal.org/node/566632 which is
+    // not yet fixed in the module).
+    // It is possible that an install hook configuring securepages will run before
+    // this hook, so make sure we don't clobber previous configuration.
+    if (!trim(variable_get('securepages_pages', ''))) {
+      variable_set('securepages_pages', ' ');
+    }
+    // Force the Secure Pages module to ignore certain pages so that users can
+    // log in (or log out) to either the SSL or non-SSL domain without getting
+    // switched.
+    if (!trim(variable_get('securepages_ignore', ''))) {
+      variable_set('securepages_ignore', "gardener/login\ngardener/register\nuser/login\nuser/register\nuser/logout");
+    }
+  }
+
+  if (in_array('taxonomy_access', $modules)) {
+    // taxonomy_access provides default grants for built-in roles. We need to
+    // provide default grants for the site maintainer role as well.
+    $maintainer_rid = variable_get('gardens_site_owner_role', 0);
+    if ($maintainer_rid) {
+      db_merge('taxonomy_access_default')
+        ->key(array(
+          'vid' => TAXONOMY_ACCESS_GLOBAL_DEFAULT,
+          'rid' => $maintainer_rid,
+        ))
+        ->fields(array(
+          'grant_view' => TAXONOMY_ACCESS_NODE_ALLOW,
+          'grant_update' => TAXONOMY_ACCESS_NODE_ALLOW,
+          'grant_delete' => TAXONOMY_ACCESS_NODE_ALLOW,
+          'grant_create' => TAXONOMY_ACCESS_TERM_ALLOW,
+          'grant_list' => TAXONOMY_ACCESS_TERM_ALLOW,
+        ))
+        ->execute();
+      // Some vocabularies may already be enabled. If they have default grants,
+      // we'll update those as well.
+      db_update('taxonomy_access_default')
+        ->fields(array(
+            'grant_view' => TAXONOMY_ACCESS_NODE_ALLOW,
+            'grant_update' => TAXONOMY_ACCESS_NODE_ALLOW,
+            'grant_delete' => TAXONOMY_ACCESS_NODE_ALLOW,
+            'grant_create' => TAXONOMY_ACCESS_TERM_ALLOW,
+            'grant_list' => TAXONOMY_ACCESS_TERM_ALLOW,
+        ))
+        ->condition('rid', $maintainer_rid)
+        ->execute();
+    }
+  }
+}
+
+/**
+ * Implements hook_modules_enabled().
+ */
+function gardens_misc_modules_enabled($modules) {
+  // Custom configuration for the Secure Pages module on Gardens servers.
+  if (in_array('securepages', $modules)) {
+    // The site's domain may have changed since the module was last turned on,
+    // so adjust SSL settings if necessary.
+    gardens_misc_adjust_secure_domain_settings_if_necessary();
+  }
+
+  if (in_array('wordpress_migrate', $modules)) {
+    // Set up variables that gardens needs for Wordpress migration.
+    gardens_misc_wordpress_migrate_config();
+  }
+
+  if (in_array('extlink_extra', $modules)) {
+    // Data structure might need fixing coming from extlink module since
+    // it's a simple text there, but in extlink_extra it's an array.
+    $alert_text = variable_get('extlink_alert_text');
+    if (isset($alert_text) && !is_array($alert_text)) {
+      variable_set('extlink_alert_text', array(
+        'value' => $alert_text,
+        'format' => 'safe_html',
+      ));
+    }
+    // For SMB the default external link reaction will be no warning. Enterprise
+    // customers have the gardens_client_name populated.
+    $alert_type = variable_get('extlink_alert_type');
+    if (!isset($alert_type) && !variable_get('gardens_client_name')) {
+      variable_set('extlink_alert_type', '');
+    }
+  }
+}
+
+/**
+ * Implements hook_modules_disabled().
+ */
+function gardens_misc_modules_disabled($modules) {
+  if (in_array('extlink_extra', $modules)) {
+    // Data structure needs fixing since extlink uses a simple text, but we had
+    // an array in extlink_extra.
+    $alert_text = variable_get('extlink_alert_text');
+    if (is_array($alert_text)) {
+      variable_set('extlink_alert_text', $alert_text['value']);
+    }
+  }
+}
+
+/**
+ * Set variables required by wordpress_migrate on gardens.
+ */
+function gardens_misc_wordpress_migrate_config() {
+  // Anything non-zero implies drush.
+  variable_set('wordpress_migrate_import_method', 1);
+  // Path to the drush executable (already in $PATH).
+  variable_set('wordpress_migrate_drush', '/usr/local/bin/drush');
+  // /mnt/tmp/tangleXXX
+  variable_set('wordpress_migrate_private_path', drupal_realpath('public://gardens_temp'));
+  // Always spawn a background drush command to import from Wordpress.
+  variable_set('wordpress_migrate_force_drush', TRUE);
+  variable_set('wordpress_migrate_notification', 1);
+  // Add wording for the notification email that gets sent on completed import.
+  variable_set('wordpress_migrate_notification_subject', 'WordPress blog import');
+  variable_set('wordpress_migrate_notification_body', 'Your WordPress blog has been successfully imported into your site.');
+  variable_set('wordpress_migrate_notification_failure_body', 'There was an error importing your WordPress blog into your site. Please see the import page for details.');
+}
+
+/**
+ * Implements hook_form_FORM_ID_alter().
+ */
+function gardens_misc_form_views_ui_admin_settings_display_alter(&$form, &$form_state) {
+  // Hide the setting for allowing the Advanced Help warning to be turned on in
+  // Gardens. In gardens_misc_modules_installed() we turn the setting itself
+  // off, and allowing people to turn it back on via the admin UI would be
+  // pointless.
+  $form['view_list']['views_ui_show_advanced_help_warning']['#access'] = FALSE;
+}
+
+/**
+ * Implements hook_form_FORM_ID_alter().
+ */
+function gardens_misc_form_views_ui_admin_settings_advanced_alter(&$form, $form_state) {
+  // Can't enable Devel in Gardens, so no point in letting the user know how
+  // cool it would be.
+  if (isset($form['debug']['views_devel_output']) && !module_exists('devel')) {
+    $form['debug']['views_devel_output']['#access'] = FALSE;
+  }
+}
+
+/**
+ * Implementation of hook_form_FORM_ID_alter().
+ *
+ * Set as disabled form elements we force to be on.
+ */
+function gardens_misc_form_system_performance_settings_alter(&$form, &$form_state) {
+  $form['caching']['page_cache_maximum_age']['#disabled'] = TRUE;
+  $form['caching']['cache']['#disabled'] = TRUE;
+  $form['#submit'] = array_merge(array('gardens_misc_system_performance_settings_submit'), $form['#submit']);
+}
+
+/**
+ * Implementation of hook_form_FORM_ID_alter().
+ *
+ * Add a display name corresponding to the site_mail address.
+ */
+function gardens_misc_form_system_site_information_settings_alter(&$form, &$form_state) {
+  $form['site_information']['site_mail_name'] = array(
+    '#type' => 'textfield',
+    '#title' => t('Sender name'),
+    '#default_value' => variable_get('site_mail_name', ''),
+    '#description' => t("The <em>From</em> display name in automated e-mails sent during registration and new password requests, and other notifications. If left empty, no name will be used in outgoing mail, just the e-mail address."),
+  );
+  $form['#validate'][] = 'gardens_misc_system_site_information_validate';
+  $form['#submit'][] = 'gardens_misc_system_smtp_settings_submit';
+}
+
+/**
+ * Implements hook_form_FORM_ID_alter().
+ */
+function gardens_misc_form_wordpress_migrate_import_form_alter(&$form, &$form_state) {
+  // Override page title.
+  drupal_set_title(t('WordPress import'));
+
+  // Simplify help text.
+  $form['overview']['#markup'] = '<p><b>' . t('Import content from a WordPress blog.') . '</b></p>';
+
+  // Don't pester people to enable Migrate Extras, because they can't.
+  $form['need_extras']['#access'] = FALSE;
+
+  // Change UI text from "blog" to "WordPress" for clarity.
+  $form['source']['credentials']['domain']['#title'] = t('WordPress URL');
+  $form['source']['credentials']['username']['#title'] = t('WordPress username');
+  $form['source']['credentials']['password']['#title'] = t('WordPress password');
+
+  // Don't support the Blubrry PowerPress WP plugin, for UI simplicity.
+  $form['wordpress_migrate_content_mapping']['wordpress_migrate_podcast_field']['#type'] = 'value';
+  $form['wordpress_migrate_content_mapping']['wordpress_migrate_podcast_field']['#default_value'] = '';
+
+  // Default WP pages to Basic page and WP posts to Blog entry or Article.
+  $content_types = $form['wordpress_migrate_content_mapping']['wordpress_migrate_podcast_field']['#options'];
+  if (isset($content_types['page'])) {
+    $form['wordpress_migrate_content_mapping']['wordpress_migrate_page_type']['#default_value'] = variable_get('wordpress_migrate_page_type', 'page');
+  }
+  if (isset($content_types['blog'])) {
+    $form['wordpress_migrate_content_mapping']['wordpress_migrate_post_type']['#default_value'] = variable_get('wordpress_migrate_post_type', 'blog');
+  }
+  elseif (isset($content_types['article'])) {
+    $form['wordpress_migrate_content_mapping']['wordpress_migrate_post_type']['#default_value'] = variable_get('wordpress_migrate_post_type', 'article');
+  }
+
+  // Don't let people create new local accounts during migration, unless local
+  // accounts are allowed on their site.
+  if (!variable_get('acquia_gardens_local_user_accounts', FALSE)) {
+    $form['wordpress_migrate_content_mapping']['wordpress_migrate_create_new_users']['#type'] = 'value';
+    $form['wordpress_migrate_content_mapping']['wordpress_migrate_create_new_users']['#default_value'] = 0;
+    unset($form['wordpress_migrate_content_mapping']['wordpress_migrate_default_author_uid']['#states']);
+  }
+
+  // When assigning unowned content, default to the site owner, not uid 1.
+  $account = user_load(variable_get('acquia_gardens_site_owner', 0));
+  $form['wordpress_migrate_content_mapping']['wordpress_migrate_default_author_uid']['#default_value'] = $account->name;
+
+  // Use a more Gardens-specific title for the content mapping.
+  $form['wordpress_migrate_content_mapping']['wordpress_migrate_default_author_uid']['#title'] = t('Assign unowned content to');
+
+  // Force reasonable values for path aliasing.
+  if (module_exists('pathauto')) {
+    $form['wordpress_migrate_path_aliases']['wordpress_migrate_pathauto_message']['#access'] = FALSE;
+    $form['wordpress_migrate_path_aliases']['wordpress_migrate_path_action']['#access'] = FALSE;
+    $form['wordpress_migrate_path_aliases']['wordpress_migrate_path_action']['#default_value'] = 2;
+  }
+  // If we have the redirect module enabled, there is no reason not to create
+  // redirects.
+  if (module_exists('redirect')) {
+    $form['wordpress_migrate_path_aliases']['wordpress_migrate_generate_redirects']['#access'] = FALSE;
+    $form['wordpress_migrate_path_aliases']['wordpress_migrate_generate_redirects']['#default_value'] = TRUE;
+  }
+  // If both modules exist, we have just removed access to the entire fieldset,
+  // so hide it.
+  if (module_exists('pathauto') && module_exists('redirect')) {
+    $form['wordpress_migrate_path_aliases']['#access'] = FALSE;
+  }
+}
+
+/**
+ * Implements hook_form_FORM_ID_alter();
+ */
+function gardens_misc_form_wordpress_migrate_review_form_alter(&$form, &$form_state) {
+  // Override page title.
+  drupal_set_title(t('WordPress import'));
+}
+
+/**
+ * Extra submit handler for site_imformation_settings form.
+ *
+ * Keeps SMTP.module settings in sync with site defaults, if enabled.  There are
+ * cases where these might differ, but for WMG, it just confuses the issue.
+ */
+function gardens_misc_system_smtp_settings_submit($form, &$form_state) {
+  if (module_exists('smtp')) {
+    variable_set('smtp_from', $form_state['values']['site_mail']);
+    if (!empty($form_state['values']['site_mail_name'])) {
+      variable_set('smtp_fromname', $form_state['values']['site_mail_name']);
+    }
+  }
+}
+
+/**
+ * Helper function - return a list of allowed special characters in a RFC 2822 atom.
+ */
+function _gardens_misc_rfc_2822_allowed_chars() {
+  return "!#$%&'*+-/=?^_`{|}~";
+}
+
+/**
+ * Validation callback. @see gardens_misc_form_system_site_information_settings_alter
+ *
+ * Make sure that the sender name only contains allowed characters.
+ */
+function gardens_misc_system_site_information_validate($form, &$form_state) {
+  // See RFC 2822
+  $allowed_chars = preg_quote(_gardens_misc_rfc_2822_allowed_chars());
+  if (preg_match("@[^a-zA-Z0-9$allowed_chars]@", $form_state['values']['site_mail_name'])) {
+    form_set_error('site_mail_name', t('The site mail sender name contains disallowed characters.  Only alphanumeric characters and [!#$%&\'*+-/=?^_`{|}~] are allowed'));
+  }
+}
+
+/**
+ * Submit handler for system_performance_settings().
+ */
+function gardens_misc_system_performance_settings_submit($form, &$form_state) {
+  // When appropriate, warn the user that CSS and JS aggregation don't stay off
+  // in Gardens.
+  $preprocess_css_turned_off = variable_get('preprocess_css') && empty($form_state['values']['preprocess_css']);
+  $preprocess_js_turned_off = variable_get('preprocess_js') && empty($form_state['values']['preprocess_js']);
+  if ($preprocess_css_turned_off || $preprocess_js_turned_off) {
+    drupal_set_message(t('CSS and JavaScript aggregation can only be turned off temporarily in Drupal Gardens (for testing site changes). For performance reasons, they will be turned back on automatically after a few hours.'), 'warning');
+  }
+}
+
+/**
+ * Implementation of hook_form_FORM_ID_alter().
+ *
+ * This function changes the description of the typekit module on the modules
+ * page to something more useful.
+ */
+function gardens_misc_form_system_modules_alter(&$form, &$form_state) {
+  // Change the description of the typekit module.
+  if (isset($form['modules'])) {
+    foreach ($form['modules'] as $group => $modules) {
+      if (is_array($modules)) {
+        foreach ($modules as $module => $info) {
+          if ($module == 'typekit') {
+            $form['modules'][$group][$module]['description']['#markup'] = t('Allows using Typekit fonts from http://typekit.com');
+            break;
+          }
+        }
+      }
+    }
+  }
+  // Make sure views gets enabled if wordpress_migrate is being enabled.
+  $form['#validate'][] = 'gardens_misc_system_modules_validate';
+}
+
+/**
+ * Check the views module checkbox if wordpress_migrate is being enabled.
+ */
+function gardens_misc_system_modules_validate($form, &$form_state) {
+  // We have made views a dependency of wordpress_migrate (see
+  // gardens_misc_system_info_alter()), but to get simplified_modules to kick
+  // in and enable all the views submodules (such as views_ui), we have to
+  // physically check the box on the modules form as well. (Simplified Modules
+  // only acts via a submit handler on the modules form.)
+  if ($form_state['values']['modules']['Other']['wordpress_migrate']['enable']) {
+    $form_state['values']['modules']['Other']['views']['enable'] = 1;
+  }
+}
+
+/**
+ * Implements hook_form_FORM_ID_alter().
+ */
+function gardens_misc_form_media_edit_alter(&$form, &$form_state) {
+  // Add a preview area, meant to float left in a sidebar.
+  $preview = $form['preview'];
+
+  $form['preview'] = array();
+  $form['preview']['#weight'] = -10;
+  $form['preview']['#theme_wrappers'][] = 'container';
+  $form['preview']['#attributes']['class'][] = 'sidebar';
+  $form['preview']['preview'] = $preview;
+  unset($form['preview']['preview']['#suffix']);
+
+  // Add the buttons.
+  $form['actions']['#theme_wrappers'][] = 'container';
+  $form['actions']['#attributes']['class'][] = 'buttons';
+  unset($form['actions']['#prefix']);
+}
+
+/**
+ * Implements hook_form_FORM_ID_alter().
+ */
+function gardens_misc_form_views_ui_edit_display_form_alter(&$form, &$form_state) {
+  // Remove SQL rewriting and slave server sections of the query settings form.
+  // The same form_id is used for several of the modals, so check to make sure
+  // we're actually on the query settings form first.
+  if (isset($form['options']['query'])) {
+    $form['options']['query']['options']['slave']['#access'] = FALSE;
+    // Leave the SQL rewrite option alone if the site uses TAC. If the site does
+    // not use TAC, there's no reason to ignore node access, so remove the
+    // option.
+    if (!module_exists('taxonomy_access')) {
+      $form['options']['query']['options']['disable_sql_rewrite']['#access'] = FALSE;
+    }
+  }
+}
+
+/**
+ * Implements hook_form_FORM_ID_alter().
+ */
+function gardens_misc_form_field_ui_field_settings_form_alter(&$form, &$form_state) {
+  if ($form['field']['type']['#value'] == 'fivestar') {
+    gardens_misc_remove_fivestar_voting_tag($form, $form_state);
+  }
+}
+
+/**
+ * Implements hook_form_FORM_ID_alter().
+ */
+function gardens_misc_form_user_register_form_alter(&$form, &$form_state, $form_id) {
+  // Do not do these modifications during an Open ID registration or on the
+  // admin user creation form (where the notify checkbox shows up).
+  if (!gardens_client_user_registration_openid_response() && user_is_anonymous()) {
+    // For sites that allow local logins, the gardener_whitelabel module should
+    // have sent a TOS notice of some kind (whether custom or default).
+    $tos_notice = gardens_client_data_get('gardener_whitelabel', 'tos_notice');
+    // If it didn't, default to a standard notice.
+    if (empty($tos_notice)) {
+      $tos_notice = t('By clicking this button, I agree to the !terms_of_service.',
+        array(
+          '!terms_of_service' => l(t('Terms of Service'), scarecrow_get_gardener_url() . '/tos', array('attributes' => array('target' => '_blank')))
+      ));
+    }
+    $form['tos-and-disclaimer'] = array(
+      // Global tokens are supported in the terms of service text.
+      '#markup' => '<div class="tos-and-disclaimer">'. filter_xss(token_replace($tos_notice)) .'</div>',
+      '#weight' => 800,
+    );
+
+    if (variable_get('gardens_misc_user_registration_flood_protection', FALSE)) {
+      $form['#validate'][] = 'gardens_misc_user_registration_flood_protection';
+    }
+  }
+}
+
+/**
+ * Implements hook_form_FORM_ID_alter().
+ */
+function gardens_misc_form_user_login_alter(&$form, &$form_state, $form_id) {
+  // Disable the Social Login until we decide to enable it.
+  if (!variable_get('gardens_misc_enable_social_login', FALSE) && current_path() == 'mast/login') {
+    foreach ($form['#pre_render'] as $key => $pre_render) {
+      if ($pre_render == '_janrain_login_rearrange_user_register_login_form') {
+        unset($form['#pre_render'][$key]);
+      }
+    }
+  }
+}
+
+/**
+ * Implements hook_form_FORM_ID_alter().
+ */
+function gardens_misc_form_field_ui_field_edit_form_alter(&$form, &$form_state) {
+  if ($form['#field']['type'] == 'fivestar') {
+    gardens_misc_remove_fivestar_voting_tag($form, $form_state);
+  }
+  // Alter the field permissions matrix. This is done in gardens_misc module
+  // so that the special behavior for site maintainers goes away on export.
+  if (!empty($form['field_permissions']['permissions'])) {
+    // Make sure that site maintainers always get all permissions.
+    $permissions_matrix = &$form['field_permissions']['permissions'];
+    $maintainer_rid = variable_get('gardens_site_owner_role', 0);
+    if ($maintainer_rid) {
+      // Determine which permission names are available, and put them into an
+      // array suitable for #default_value.
+      foreach (array_keys($permissions_matrix['permission']) as $permission) {
+        $default_value[] = $permission;
+      }
+      $permissions_matrix['checkboxes'][$maintainer_rid]['#default_value'] = $default_value;
+      $permissions_matrix['checkboxes'][$maintainer_rid]['#disabled'] = TRUE;
+    }
+  }
+}
+
+/**
+ * Implements hook_form_FORM_ID_alter().
+ */
+function gardens_misc_form_mast_settings_form_alter(&$form, &$form_state) {
+  // Hide the option that lets site builders choose how many content types
+  // can be MASt-enabled. Warner wants this setting to be forced to the default
+  // for all their sites. SMB follows Warner for the time being.
+  $general_settings = element_children($form['general']);
+  // Hide the whole fieldset, if nothing else is in it.
+  if (count($general_settings) <= 1) {
+    $form['general']['#access'] = FALSE;
+  }
+  // If there's something else in the 'general' fieldset, hide only the setting
+  // we're interested in.
+  else {
+    $form['general']['mast_max_allowed_node_types']['#access'] = FALSE;
+  }
+}
+
+/**
+ * Helper function to remove the "Voting tag" option from fivestar fields.
+ */
+function gardens_misc_remove_fivestar_voting_tag(&$form, &$form_state) {
+  $form['field']['settings']['#access'] = FALSE;
+  $form['field']['no_settings'] = array(
+    '#markup' => t('This field has no field settings.'),
+  );
+}
+
+/**
+ * Implements hook_views_ui_display_tab_alter().
+ */
+function gardens_misc_views_ui_display_tab_alter(&$build) {
+  // A Gardens service user can't implement theme functions or templates, so no
+  // need to present information intended for that.
+  if (isset($build['details']['columns']['third']['collapse']['other']['analyze-theme'])) {
+    $build['details']['columns']['third']['collapse']['other']['analyze-theme']['#access'] = FALSE;
+  }
+}
+
+/**
+ * Sends an e-mail to all site owners and administrators.
+ *
+ * @param $params
+ *   An array with keys 'subject' and 'body' containing the text of the email
+ *   message to send, and (optionally) 'from', containing the email address to
+ *   send it from.
+ */
+function gardens_misc_mail_site_admins($params) {
+  // Get a list of role IDs for site owners and administrators.
+  $rids = array();
+  if ($admin_role = variable_get('user_admin_role')) {
+    $rids[] = $admin_role;
+  }
+  if ($site_owner_role = variable_get('gardens_site_owner_role')) {
+    $rids[] = $site_owner_role;
+  }
+
+  // Send mail to all users with this role (except for user 1, since that is
+  // the Gardens admin user).
+  $uids = db_query("SELECT u.uid FROM {users} u INNER JOIN {users_roles} ur ON u.uid = ur.uid WHERE ur.rid IN (:rids) AND u.uid > 1", array(':rids' => $rids))->fetchCol();
+  if ($uids) {
+    $accounts = user_load_multiple($uids);
+    foreach ($accounts as $account) {
+      drupal_mail('gardens_misc', 'dynamic', $account->mail, user_preferred_language($account), $params, isset($params['from']) ? $params['from'] : NULL);
+    }
+  }
+}
+
+/**
+ * Implements hook_mail().
+ */
+function gardens_misc_mail($key, &$message, $params) {
+  switch ($key) {
+    // We use 'dynamic' as the mail key because this email message has its
+    // subject and body passed in dynamically as parameters at runtime, rather
+    // than containing hardcoded text like most hook_mail() implementations.
+    case 'dynamic':
+      $options = array('langcode' => $message['language']->language);
+      $message['subject'] = t($params['subject'], array(), $options);
+      $message['body'][] = t($params['body'], array(), $options);
+  }
+}
+
+/**
+ * Implements hook_mail_alter().
+ *
+ * If a sender name has been configured for the From: header for site mail, add
+ * it to the From: header here.
+ */
+function gardens_misc_mail_alter(&$message) {
+  // Only set the sitewide From name if it is configured and if the outgoing mail
+  // is from the sitewide configured sender.
+  if (($name = variable_get('site_mail_name', '')) && $message['headers']['From'] == variable_get('site_mail', ini_get('sendmail_from')) && strpos($message['headers']['From'], '<') === FALSE) {
+    // Note - $allowed_chars contains a slash, so slash cannot be the regex delimiter.
+    $allowed_chars = preg_quote(_gardens_misc_rfc_2822_allowed_chars());
+    $name = addcslashes(preg_replace("@[^a-zA-Z0-9$allowed_chars]@", '', $name), '"');
+    $message['headers']['From'] = "\"$name\" <{$message['headers']['From']}>";
+  }
+
+  // If we're using the contrib SMTP authentication module, we can get it to encode
+  // our mail as quoted-printable.  This is better for the primary use case of
+  // SMTP.module - sending mails via SendGrid to bypass their broken QP-encoder.
+  if (variable_get('smtp_on', 0)) {
+    $message['headers']['Content-Transfer-Encoding'] = 'quoted-printable';
+  }
+}
+
+function gardens_misc_get_tracking_code_include_ga() {
+  return <<<EOF
+  var gaJsHost = (("https:" == document.location.protocol) ? "https://ssl." : "http://www.");
+  document.write(unescape("%3Cscript src='" + gaJsHost + "google-analytics.com/ga.js' type='text/javascript'%3E%3C/script%3E"));
+EOF;
+}
+
+function gardens_misc_get_tracking_code_track_pageview() {
+  // Try to get GA code via phone home.
+  $tracking_code = gardens_client_data_get('gardener_site_variables', 'gardens_misc_ga_tracking_code');
+
+  // If cron runs at longer time intervals, fall back to the variable.
+  // This can be removed at a later time.
+  if (empty($tracking_code)) {
+    $tracking_code = variable_get('gardens_misc_ga_tracking_code', "UA-3772277-10");
+  }
+  $tracking_domain = variable_get('gardens_misc_ga_domain', 'none');
+  return <<<EOF
+  try {
+  var pageTracker = _gat._getTracker('$tracking_code');
+  pageTracker._setDomainName('$tracking_domain');
+  pageTracker._trackPageview();
+  } catch(err) {}
+EOF;
+}
+
+/**
+ * Determines whether the site is using a custom domain.
+ *
+ * @return {boolean}
+ *   true if the site is using a custom domain; false otherwise.
+ */
+function gardens_misc_using_custom_domain() {
+  $gardener_url = scarecrow_get_gardener_url();
+  if (empty($gardener_url)) {
+    return FALSE;
+  }
+  $matches = array();
+  preg_match('/^http[s]?\:\/\/[^\.]*\.(\S*)$/', $gardener_url, $matches);
+  if (count($matches) >= 2) {
+    $gardener_domain = $matches[1];
+    // Determine whether the current domain ends with the gardener domain.
+    $my_base_url = $GLOBALS['base_url'];
+    return _gardens_misc_string_ends_with($my_base_url, $gardener_domain);
+  }
+  return FALSE;
+}
+
+/**
+ * Determines whether $str1 ends with $str2.
+ *
+ * @param {String} $str1
+ *   The first string.
+ * @param {String} $str2
+ *   The second string.
+ * @return {boolean}
+ *   true if $str1 ends with $str2; false otherwise.
+ */
+function _gardens_misc_string_ends_with($str1, $str2) {
+  $str1_length = strlen($str1);
+  $str2_length = strlen($str2);
+  if ($str2_length > $str1_length) {
+    return FALSE;
+  }
+  return substr_compare($str1, $str2, -$str2_length) === 0;
+}
+
+/**
+ * Implements hook_menu_alter().
+ */
+function gardens_misc_menu_alter(&$items) {
+  // Remove the session themes from the blocks page.
+  foreach (themebuilder_compiler_list_session_themes() as $key => $theme) {
+    unset($items['admin/structure/block/list/' . $key]);
+    unset($items['admin/structure/block/list/' . $key . '/add']);
+    unset($items['admin/structure/block/demo/' . $key]);
+  }
+
+  // Rename seven or blossom on the blocks page.
+  if (isset($items['admin/structure/block/list/seven'])) {
+    $items['admin/structure/block/list/seven']['title'] = t('Administration theme');
+  }
+  if (isset($items['admin/structure/block/list/blossom'])) {
+    $items['admin/structure/block/list/blossom']['title'] = t('Administration theme');
+  }
+
+  // Currently even though there might be several Themebuilder themes in the
+  // site, out of those only one will be published at a given time. (see
+  // themebuilder_compiler_set_site_theme() - probably to solve a bug) On the
+  // other hand unpublished themes can not have their blocks configured by
+  // default. It is possible that we could stop the theme unpublishing without
+  // reintroducing a bug, but it is also possible that people are depending on
+  // the current approach so we'll adjust the access hook to allow block
+  // configuration for the disabled Themebuilder themes.
+  $themes = themebuilder_compiler_get_theme_list();
+  if (!empty($themes['mythemes'])) {
+    foreach ($themes['mythemes'] as $key => $theme) {
+      unset($items['admin/structure/block/list/' . $key]['access callback']);
+      unset($items['admin/structure/block/demo/' . $key]['access callback']);
+      $items['admin/structure/block/list/' . $key]['access arguments'] = array('administer blocks');
+      $items['admin/structure/block/demo/' . $key]['access arguments'] = array('administer blocks');
+    }
+  }
+
+  // Don't allow access to the HTML Purifier settings page; it is unnecessary
+  // in Gardens.
+  if (isset($items['admin/config/content/htmlpurifier'])) {
+    $items['admin/config/content/htmlpurifier']['access callback'] = FALSE;
+  }
+  if (isset($items['plupload-handle-uploads'])) {
+    // Limit access to plupload to users with this permission.
+    $items['plupload-handle-uploads']['access callback'] = "gardens_misc_plupload_access";
+  }
+  if (isset($items['plupload-test'])) {
+    // Nobody should use the test upload form.
+    $items['plupload-test']['access callback'] = FALSE;
+  }
+
+  // Replace the final OpenID authentication page with one that allows us to
+  // modify the response.
+  if (isset($items['openid/authenticate']['page callback'])) {
+    $items['openid/authenticate']['page callback'] = 'gardens_misc_openid_authentication_page';
+  }
+
+  // Don't allow access to the oEmbed configuration page; it is unnecessary
+  // in Gardens.
+  if (isset($items['admin/config/media/oembed'])) {
+    unset($items['admin/config/media/oembed']);
+  }
+  $paths = array('settings', 'test', 'preset', 'provider', 'provider/embedly');
+  foreach($paths as $path) {
+    if (isset($items['admin/config/media/oembed/' . $path])) {
+      // Unsetting these variables will cause php notices so instead the access
+      // callback is set the constant.
+      $items['admin/config/media/oembed/' . $path]['access callback'] = FALSE;
+    }
+  }
+
+  // Change menu path title and description for Node Export module.
+  if (isset($items['node/add/node_export'])) {
+    $items['node/add/node_export']['title'] = 'Node import';
+    $items['node/add/node_export']['description'] = 'Import content using <em>Node export</em> module.';
+  }
+
+  // Disallow access to the Services UI.
+  if (isset($items['admin/structure/services'])) {
+    $items['admin/structure/services']['access callback'] = FALSE;
+    $items['admin/structure/services/list']['access callback'] = FALSE;
+    foreach (array('memberapi', 'mast') as $service) {
+      if (isset($items["admin/structure/services/list/$service"])) {
+        $items["admin/structure/services/list/$service"]['access callback'] = FALSE;
+        foreach (array('edit', 'authentication', 'server', 'export', 'resources') as $path) {
+          $items["admin/structure/services/list/$service/$path"]['access callback'] = FALSE;
+        }
+      }
+    }
+  }
+
+  // Change the title of the WordPress migration tab (to go with the module
+  // name change in gardens_misc_system_info_alter()).
+  if (isset($items['admin/content/wordpress'])) {
+    $items['admin/content/wordpress']['title'] = 'WordPress import';
+  }
+
+  // Don't allow access to the Timeago module configuration page.
+  if (isset($items['admin/config/user-interface/timeago'])) {
+    unset($items['admin/config/user-interface/timeago']);
+  }
+
+  // Don't allow access to the getID3() module configuration page.
+  if (isset($items['admin/config/media/getid3'])) {
+    unset($items['admin/config/media/getid3']);
+  }
+}
+
+/**
+ * Wrapper access callback to insure plupload is only for authenticated users.
+ */
+function gardens_misc_plupload_access() {
+  global $user;
+  if ($user->uid == 0) {
+    return FALSE;
+  }
+  $args = func_get_args();
+  return call_user_func_array('plupload_upload_access', $args);
+}
+
+/**
+ * Menu callback; custom replacement for openid_authentication_page().
+ */
+function gardens_misc_openid_authentication_page() {
+  module_load_include('inc', 'openid');
+
+  // We have hard coded claimed_id in $_SESSION to http://specs.openid.net/auth/2.0/identifier_select
+  // so that gardener call tell us which OpenID to work with. So by this point
+  // open_id.claimed_id from the gardener will be something like
+  // http://drupalgardens.com/user/144381/identity.
+  //
+  // This causes openid_complete() to run openid_discover() due to:
+  // OpenID Authentication, section 11.2:
+  // If the returned Claimed Identifier is different from the one sent
+  // to the OpenID Provider, we need to do discovery on the returned
+  // identififer to make sure that the provider is authorized to
+  // respond on behalf of this.
+  //
+  // Only one provider is allowed - the gardener, so as long as the request
+  // comes from there, it is possible to bypass this check (which saves us 2
+  // HTTP requests and full page renders on the gardener).
+  if (!empty($_SESSION['openid'])) {
+    $response = _openid_response();
+    $gardener = scarecrow_get_gardener_url();
+    if (parse_url($gardener, PHP_URL_HOST) == parse_url($response['openid.claimed_id'], PHP_URL_HOST)) {
+      $_SESSION['openid']['claimed_id'] = $response['openid.claimed_id'];
+    }
+  }
+
+  $response = openid_complete();
+  if ($response['status'] == 'success') {
+    // If the site does not allow open registrations, temporarily allow them if
+    // the user who is trying to register was invited by a site owner.
+    gardens_misc_allow_open_user_registrations_if_user_was_invited($response);
+
+    // Make sure email verification is turned off for the remainder of this
+    // request. (We need it off for OpenID registrations, but the site may have
+    // it on in general if local user logins are allowed.)
+    $GLOBALS['conf']['user_email_verification'] = FALSE;
+
+    // DG-3774: merge OpenID accounts with local accounts if needed.
+    // Attempt to load the user based on the OpenID first.
+    $identity = $response['openid.claimed_id'];
+    $account_by_openid = user_external_load($identity);
+    if (!isset($account_by_openid->uid)) {
+      // If we did not find the user by OpenID, look the user up by email.
+      $sreg_values = openid_extract_namespace($response, OPENID_NS_SREG, 'sreg');
+      if (!empty($sreg_values['email'])) {
+        $account_by_email = user_load_by_mail($sreg_values['email']);
+        if ($account_by_email) {
+          // If this user was found by email but not by OpenID, make sure the
+          // account does not have another OpenID assigned (in case gardener
+          // email address changes that are not yet propagated). One account
+          // should only have at most one OpenID (gardener user) assigned in
+          // the Gardens system.
+          $user_already_has_openid = db_query("SELECT 1 FROM {authmap} WHERE module = 'openid' AND uid = :uid", array(':uid' => $account_by_email->uid))->fetchField();
+          if (!$user_already_has_openid) {
+            // If no OpenID is assigned to this user, then at this point we
+            // should add the current OpenID. This solves DG-3774.
+            user_set_authmaps($account_by_email, array('authname_openid' => $identity));
+          }
+        }
+      }
+    }
+
+    // Now perform the OpenID authentication.
+    return openid_authentication($response);
+  }
+  else {
+    drupal_set_message(t('Your login could not be completed successfully, due to an internal error. Try again later.'), 'error');
+
+    module_load_include('inc', 'openid');
+    $sreg_values = openid_extract_namespace($response, OPENID_NS_SREG, 'sreg');
+
+    // Elaborate on why session data is missing.
+    if (empty($_SESSION)) {
+      if (empty($_COOKIE[session_name()])) {
+        $message = 'Session cookie missing, no session data found.';
+      }
+      else {
+        $message = 'Session cookie found, session was empty.';
+      }
+    }
+
+    // We put this in syslog() directly since site owners don't need to see it.
+    syslog(LOG_WARNING, t('GardensWarning: AN-22459 - OpenID login failed GardensWarning: result: "@status"; user: @name (@mail); site: @url; openid: @openid; browser: @browser', array(
+      '@status' => $response['status'] . (isset($message) ? ' ' . $message : ''),
+      '@name' => $sreg_values['nickname'],
+      '@mail' => $sreg_values['email'],
+      '@url' => $GLOBALS['base_url'],
+      '@openid' => $response['openid.claimed_id'],
+      '@browser' => $_SERVER['HTTP_USER_AGENT'],
+    )));
+
+    drupal_goto();
+  }
+}
+
+/**
+ * Menu callback: Returns a page for inviting users to a Gardens site.
+ */
+function gardens_misc_invite_people() {
+  drupal_set_title(t('Invite people'));
+  return drupal_get_form('gardens_misc_invite_people_form');
+}
+
+/**
+ * Form for inviting users to a Gardens site.
+ */
+function gardens_misc_invite_people_form($form, &$form_state) {
+  $threshold = gardens_misc_invite_people_threshold();
+  $window = gardens_misc_invite_people_window();
+  if (empty($_POST)) {
+    if (!flood_is_allowed('gardens_misc_invite_people', $threshold, $window)) {
+      drupal_set_message(t('You are only allowed to send @number_per_day invitations per day and have already reached your limit. You will not be able to submit this form until later.', array('@number_per_day' => $threshold)), 'warning');
+    }
+  }
+
+  $form['email_addresses'] = array(
+    '#type' => 'textarea',
+    '#title' => t('Enter e-mail addresses for people you would like to invite'),
+    '#description' => t('Separate e-mail addresses with commas. Invitations are limited to @threshold a day.', array('@threshold' => $threshold)),
+  );
+  $form['invitation_message'] = array(
+    '#type' => 'textarea',
+    '#title' => t('Invitation message'),
+    '#description' => t('Available variables are: @tokens.', array('@tokens' => implode(', ', gardens_misc_invite_people_tokens()))),
+    '#default_value' => _user_mail_text('register_admin_created_body', NULL, array(), FALSE),
+    '#rows' => 9,
+    '#attached' => array(
+      'js' => array(drupal_get_path('module', 'gardens_misc') . '/gardens_misc.invite.js'),
+    ),
+  );
+
+  $form['actions'] = array('#type' => 'actions');
+  $form['actions']['submit'] = array(
+    '#type' => 'submit',
+    '#value' => t('Send invitations'),
+  );
+
+  return $form;
+}
+
+/**
+ * Validation handler for gardens_misc_invite_people_form().
+ */
+function gardens_misc_invite_people_form_validate($form, &$form_state) {
+  // There must be at least one e-mail address.
+  $address_list = trim($form_state['values']['email_addresses']);
+  if (empty($address_list)) {
+    form_set_error('email_addresses', t('You must enter at least one e-mail address.'));
+  }
+
+  // All e-mail addresses must be valid.
+  $addresses = explode(',', $address_list);
+  $invalid_addresses = array();
+  foreach ($addresses as &$raw_address) {
+    $raw_address = trim($raw_address);
+  }
+  $addresses = array_unique($addresses);
+  foreach ($addresses as $address) {
+    // We store these e-mail addresses in the database, so make sure they are
+    // also within the maximum length.
+    if (!valid_email_address($address) || drupal_strlen($address) > EMAIL_MAX_LENGTH) {
+      $invalid_addresses[] = $address;
+    }
+  }
+  $number_invalid = count($invalid_addresses);
+  if ($number_invalid) {
+    $message = format_plural($number_invalid, 'The e-mail address %addresses is invalid.', 'The following e-mail addresses are invalid: %addresses', array('%addresses' => implode(', ', $invalid_addresses)));
+    form_set_error('email_addresses', $message);
+  }
+
+  // The number of e-mail addresses must not put us over the flood control
+  // limit.
+  $number_of_addresses = count($addresses);
+  $threshold = gardens_misc_invite_people_threshold();
+  $limit = $threshold - $number_of_addresses + 1;
+  $window = gardens_misc_invite_people_window();
+  // Iterate to find out how many events we have left. (A direct database query
+  // would be more efficient, but also more fragile in terms of not using the
+  // flood API.)
+  while (!flood_is_allowed('gardens_misc_invite_people', $limit, $window) && $number_of_addresses > 0) {
+    $number_of_addresses--;
+    $limit++;
+    $flood_error = TRUE;
+  }
+  if (!empty($flood_error)) {
+    if ($number_of_addresses) {
+      form_set_error('email_addresses', format_plural($number_of_addresses, 'You are only allowed to invite 1 user at this time. (You can send a total of @number_per_day invitations per day.)', $number_of_addresses < $threshold ? 'You are only allowed to invite @count users at this time. (You can send a total of @number_per_day invitations per day.)' : 'You are only allowed to invite @count users per day.', array('@number_per_day' => $threshold)));
+    }
+    else {
+      form_set_error('email_addresses', t('You are only allowed to send @number_per_day invitations per day and have already reached your limit. Try again later.', array('@number_per_day' => $threshold)));
+    }
+  }
+}
+
+/**
+ * Submit handler for gardens_misc_invite_people_form().
+ */
+function gardens_misc_invite_people_form_submit($form, &$form_state) {
+  // Set the submitted invitation message to be used from now on.
+  variable_set('user_mail_register_admin_created_body', $form_state['values']['invitation_message']);
+
+  $address_list = trim($form_state['values']['email_addresses']);
+  $addresses = explode(',', $address_list);
+  $window = gardens_misc_invite_people_window();
+  $successes = array();
+  $failures = array();
+  foreach ($addresses as &$raw_address) {
+    $raw_address = trim($raw_address);
+  }
+  $original_addresses = $addresses;
+  $addresses = array_unique($addresses);
+  $has_duplicates = count($addresses) != count($original_addresses);
+  foreach ($addresses as $address) {
+    // Send mail to the address. Pass in an fake 'account' variable so we can
+    // use the [user:mail] token, but make sure it has most standard user
+    // object properties to avoid PHP notices.
+    $account = (object) array_merge((array) drupal_anonymous_user(), db_query("SELECT * FROM {users} WHERE uid = 0")->fetchAssoc());
+    $account->mail = $address;
+    $message = drupal_mail('user', 'register_admin_created', $address, language_default(), array('account' => $account));
+    if ($message['result']) {
+      $successes[] = $address;
+      // Register the event with the flood control API.
+      flood_register_event('gardens_misc_invite_people', $window);
+      // Store a record of this invitation.
+      gardens_misc_user_invite_save($address);
+    }
+    else {
+      $failures[] = $address;
+    }
+  }
+  if ($number_of_failures = count($failures)) {
+    drupal_set_message(format_plural($number_of_failures, 'Mail could not be sent to the following address: %addresses', 'Mail could not be sent to the following addresses: %addresses', array('%addresses' => implode(', ', $failures))), 'error');
+  }
+  if ($number_of_successes = count($successes)) {
+    if ($has_duplicates) {
+      drupal_set_message(format_plural($number_of_successes, '1 site registration invitation was sent (duplicate e-mails were removed). After an invitee registers, they will show up in the list below.', '@count site registration invitations were sent (duplicate e-mails were removed). After an invitee registers, they will show up in the list below.'));
+    }
+    else {
+      drupal_set_message(format_plural($number_of_successes, '1 site registration invitation was sent. After an invitee registers, they will show up in the list below.', '@count site registration invitations were sent. After an invitee registers, they will show up in the list below.'));
+    }
+  }
+  $form_state['redirect'] = 'admin/people';
+}
+
+/**
+ * Returns an array of tokens for the message inviting users to a Gardens site.
+ */
+function gardens_misc_invite_people_tokens() {
+  return array(
+    '[site:name]',
+    '[site:url]',
+    '[site:register-url]',
+    '[site:url-brief]',
+    '[user:mail]',
+  );
+}
+
+/**
+ * Returns the number of invites that can be sent out in a certain window.
+ *
+ * @see gardens_misc_invite_people_window()
+ */
+function gardens_misc_invite_people_threshold() {
+  return variable_get('gardens_misc_invite_people_threshold', 25);
+}
+
+/**
+ * Returns the window (in seconds) over which Gardens invites are limited.
+ *
+ * @see gardens_misc_invite_people_threshold()
+ */
+function gardens_misc_invite_people_window() {
+  // The window is equal to one day. (Note that if we ever change this, there
+  // is a lot of text in the form that would need to be changed also.)
+  return variable_get('gardens_misc_invite_people_window', 86400);
+}
+
+/**
+ * Saves an invited e-mail address to the database.
+ *
+ * @param $address
+ *   The e-mail address to save.
+ *
+ * @return
+ *   TRUE if an invitation was created; FALSE if did not need to be created
+ *   because the e-mail address was already invited.
+ */
+function gardens_misc_user_invite_save($address) {
+  $status = db_merge('gardens_misc_invited_users')
+    ->key(array('mail' => $address))
+    ->execute();
+
+  return $status == MergeQuery::STATUS_INSERT;
+}
+
+/**
+ * Deletes an invited e-mail address from the database.
+ *
+ * @param $address
+ *   The e-mail address to delete.
+ *
+ * @return
+ *   TRUE if the e-mail was deleted; FALSE if it did not need to be deleted
+ *   because there was no current invitation for it.
+ */
+function gardens_misc_user_invite_delete($address) {
+  return (bool) db_delete('gardens_misc_invited_users')
+    ->condition('mail', $address)
+    ->execute();
+}
+
+/**
+ * Determines if an e-mail address has been invited to join the site.
+ *
+ * @param $address
+ *   The e-mail address to check.
+ *
+ * @return
+ *   TRUE if the e-mail address has an invitation to join the site, FALSE
+ *   otherwise.
+ */
+function gardens_misc_user_invite_exists($address) {
+  return (bool) db_query_range('SELECT 1 FROM {gardens_misc_invited_users} WHERE mail = :mail', 0, 1, array(':mail' => $address))->fetchField();
+}
+
+/**
+ * Determines if an e-mail address has been invited to join the site, from an OpenID response array.
+ *
+ * @param $response
+ *   The OpenID response array, e.g. as returned by e.g. openid_complete().
+ *
+ * @return
+ *   TRUE if the e-mail address associated with the OpenID response has an
+ *   invitation to join the site, FALSE otherwise.
+ */
+function gardens_misc_openid_response_user_invite_exists($response) {
+  module_load_include('inc', 'openid');
+  $sreg_values = openid_extract_namespace($response, OPENID_NS_SREG, 'sreg');
+  return !empty($sreg_values['email']) && gardens_misc_user_invite_exists($sreg_values['email']);
+}
+
+/**
+ * Temporarily allows open registrations during the OpenID flow for invited users.
+ *
+ * If the site does not allow open registrations, calling this function will
+ * temporarily allow them for the remainder of the current page request if the
+ * user who is trying to register was invited by a site owner.
+ *
+ * @param $response
+ *   The OpenID response array, e.g. as returned by openid_complete().
+ */
+function gardens_misc_allow_open_user_registrations_if_user_was_invited($response) {
+  $user_register_setting = variable_get('user_register', USER_REGISTER_VISITORS_ADMINISTRATIVE_APPROVAL);
+  if ($user_register_setting != USER_REGISTER_VISITORS && gardens_misc_openid_response_user_invite_exists($response)) {
+    // The Gardens Limits module may have determined that the site has exceeded
+    // its allowed number of unblocked users; see gardens_limits_init(). If
+    // the flag for that is set, we don't want to undo what Gardens Limits did
+    // and let the user bypass the registration limits, so we make sure to
+    // leave them blocked even though they were invited.
+    $block_user = variable_get('gardens_limits_do_not_allow_user_registrations', FALSE);
+    $GLOBALS['conf']['user_register'] = $block_user ? USER_REGISTER_VISITORS_ADMINISTRATIVE_APPROVAL : USER_REGISTER_VISITORS;
+  }
+}
+
+/**
+ * Implements hook_user_insert().
+ */
+function gardens_misc_user_insert($edit, $account, $category) {
+  // When a user account is created, delete any invitations that exist for
+  // the associated e-mail address, since they are no longer needed.
+  gardens_misc_user_invite_delete($account->mail);
+}
+
+/**
+ * Implements hook_user_delete().
+ */
+function gardens_misc_user_delete($account) {
+  // When a user account is deleted, delete any outstanding invitations for
+  // the associated e-mail address. On sites that don't allow open user
+  // registrations, this prevents the user from registering again unless they
+  // are specifically invited again.
+  gardens_misc_user_invite_delete($account->mail);
+}
+
+/**
+ * Helper function to add an instance of our "Tags" field to a node type.
+ *
+ * @return
+ *   TRUE if the instance was successfully added, FALSE otherwise.
+ */
+function gardens_misc_add_tags_field_instance($node_type) {
+  // Exit if the node type doesn't exist.
+  if (!node_type_get_type($node_type)) {
+    return FALSE;
+  }
+
+  $info = field_info_field('field_tags');
+
+  // Exit if the field doesn't have any instances to copy.
+  if (empty($info['bundles']['node'])) {
+    return FALSE;
+  }
+
+  // Exit if the instance we want to add already exists.
+  if (in_array($node_type, $info['bundles']['node'])) {
+    return FALSE;
+  }
+
+  // Grab the first node bundle that already has this field (note that we
+  // expect the standard install profile to at least have already added
+  // this for articles), and create a new instance based off of that.
+  $existing_type = current($info['bundles']['node']);
+  $instance = field_info_instance('node', 'field_tags', $existing_type);
+  $instance['bundle'] = $node_type;
+  field_create_instance($instance);
+  return TRUE;
+}
+
+/**
+ * Implementation of hook_form_FORM_ID_alter().
+ *
+ * Disallows user from choosing user related forms for Mollom protection.
+ *
+ * We have to do this for sites whose users are required to log in via OpenID,
+ * because the user registers / requests their password from the Gardener.
+ */
+function gardens_misc_form_mollom_admin_configure_form_alter(&$form, &$form_state) {
+  if (scarecrow_force_openid()) {
+    $forbidden_forms = array('user_pass', 'user_register_form');
+    $form['mollom']['form_id']['#options'] = array_diff_key($form['mollom']['form_id']['#options'], array_fill_keys($forbidden_forms, 1));
+  }
+}
+
+/**
+ * Implements hook_form_FORM_ID_alter().
+ *
+ * Removes from the Views wizard base tables that aren't necessary for Gardens.
+ */
+function gardens_misc_form_views_ui_add_form_alter(&$form, &$form_state) {
+  $unset = array('system', 'locales_source', 'accesslog');
+  foreach ($unset as $key) {
+    unset($form['displays']['show']['wizard_key']['#options'][$key]);
+  }
+}
+
+/**
+ * Implements hook_filter_info_alter().
+ */
+function gardens_misc_filter_info_alter(&$info) {
+  // We only want one HTML Purifier filter to be available.
+  unset($info['htmlpurifier_advanced']);
+  if (isset($info['htmlpurifier_basic'])) {
+    $filter = &$info['htmlpurifier_basic'];
+    // Do not expose settings via the user interface.
+    unset($filter['settings callback']);
+    // Modify user-facing text.
+    $filter['tips callback'] = '_gardens_misc_html_purifier_filter_tips';
+    $filter['description'] = t('Comprehensive filter that removes malicious HTML code and ensures the output is standards compliant.');
+    // Do not automatically prevent the entire text format that contains this
+    // filter from being cached.
+    $filter['cache'] = TRUE;
+  }
+}
+
+/**
+ * Replacement filter tips callback for the HTML Purifier filter.
+ */
+function _gardens_misc_html_purifier_filter_tips($filter, $format, $long = FALSE) {
+  if (!empty($filter->settings['htmlpurifier_help'])) {
+    return t('Most HTML tags are allowed.');
+  }
+}
+
+function gardens_misc_form_comment_form_alter(&$form, &$form_state) {
+  if (isset($form['comment_output_below'])) {
+    $form['comment_output_below']['#weight'] = 400;
+  }
+}
+
+/**
+ * Implements hook_html_head_alter().
+ *
+ * Best-effort attempt to add a rel="canonical" tag pointing to the site
+ * owner's preferred domain, to improve SEO.
+ */
+function gardens_misc_html_head_alter(&$head_elements) {
+  $domain = gardens_misc_get_canonical_domain();
+  if (!empty($domain)) {
+    // If a rel="canonical" link already exists for this page, add the domain
+    // to it.
+    // Metatags module puts the metatag declaration in a custom way to
+    // $head_elements.
+    $canonical_set = array_key_exists('metatag_canonical', $head_elements);
+    foreach ($head_elements as $key => $element) {
+      if (isset($element['#attributes']['rel']) && $element['#attributes']['rel'] == 'canonical') {
+        $canonical_set = TRUE;
+        $head_elements[$key]['#attributes']['href'] = gardens_misc_get_absolute_url($domain, $head_elements[$key]['#attributes']['href']);
+      }
+    }
+    // If a rel="canonical" link doesn't already exist, add one.
+    if (!$canonical_set) {
+      $head_elements['gardens_misc_canonical_domain'] = gardens_misc_get_canonical_tag($domain);
+    }
+  }
+}
+
+/**
+ * Returns the site's canonical domain, or NULL if there is none.
+ */
+function gardens_misc_get_canonical_domain() {
+  // The site itself can store a variable (gardens_misc_canonical_domain)
+  // specifying its preferred domain. If that doesn't exist, we use the
+  // custom domain data from the gardener.
+  $domain = variable_get('gardens_misc_canonical_domain');
+  if (!$domain) {
+    $domain = gardens_client_data_get('gardens_manager', 'custom_domain');
+  }
+  return $domain;
+}
+
+/**
+ * Returns the site's standard domain, or NULL if we can't find one.
+ *
+ * The standard domain is the one that comes with the Gardens service (e.g.,
+ * mysite.drupalgardens.com).
+ */
+function gardens_misc_get_standard_domain() {
+  // All Gardens sites have a specific variable that was saved for this during
+  // e.g. the "configure" stage; see install_gardens.inc.
+  return variable_get('gardens_misc_standard_domain');
+}
+
+/**
+ * Helper function to return a renderable array for a rel="canonical" head tag.
+ *
+ * Ideally drupal_add_html_head_link() would return a value, so it could be
+ * used inside hook_html_head_alter(), but since it doesn't, we build the
+ * renderable array ourselves.
+ */
+function gardens_misc_get_canonical_tag($domain) {
+  $href = gardens_misc_get_absolute_url($domain);
+  $attributes = array(
+    'rel' => 'canonical',
+  );
+  $element = array(
+    '#attached' => array(
+      'drupal_add_http_header' => array(array(
+        'Link',
+        $href . drupal_http_header_attributes($attributes),
+        TRUE,
+      )),
+    ),
+    '#tag' => 'link',
+    '#type' => 'html_tag',
+  );
+  $attributes['href'] = $href;
+  $element['#attributes'] = $attributes;
+  return $element;
+}
+
+/**
+ * Helper function to get an absolute URL pointing to a given domain.
+ */
+function gardens_misc_get_absolute_url($domain, $path = NULL) {
+  if (empty($path)) {
+    $path = current_path();
+  }
+  $new_base_url = ($GLOBALS['is_https'] ? 'https' : 'http') . '://' . $domain;
+  if (strpos($path, 'http') === 0) {
+    // We have an absolute URL already. If it's a link to this site, replace
+    // the domain with our canonical domain.
+    $url = str_replace($GLOBALS['base_url'], $new_base_url, $path);
+    return $url;
+  }
+  else {
+    // The URL is relative to the site, so we can pass it through url().
+    // Strip the base path off first though.
+    $path = preg_replace('|^' . base_path() . '|', '', $path);
+    $url = url($path, array('absolute' => TRUE, 'base_url' => $new_base_url));
+    return $url;
+  }
+}
+
+function gardens_misc_guarantee_wysiwyg() {
+  // Get the list of formats
+  $formats = filter_formats();
+  foreach ($formats as $format) {
+    // Grab the filters for this format
+    $filters = filter_list_format($format->format);
+    // Check to see if this format filters out all HTML and thus needs no WYSIWYG
+    if (isset($filters['filter_html_escape']) && $filters['filter_html_escape']->status != 1) {
+      // Check to see if this format already has a WYSIWYG profile. We query
+      // the database directly, rather than using the wysiwyg_profile_load()
+      // API function, because this can be called from an update function on a
+      // site where wysiwyg.module is installed but disabled.
+      $profile_exists = (bool) db_query('SELECT 1 FROM {wysiwyg} WHERE format = :format', array(':format' => $format->format))->fetchField();
+      if (!$profile_exists) {
+        // This format allows HTML and doesn't have a WYSIWYG profile, so add one
+        gardens_misc_setup_wysiwyg($format->format, TRUE);
+      }
+    }
+  }
+}
+
+/**
+ * Adds a WYSIWYG profile to the format specified.
+ *
+ * @param $format_name
+ *   The format name to have the WYSIWYG added.
+ * @param $full
+ *   A boolean whether to try to add extra options.
+ */
+function gardens_misc_setup_wysiwyg($format_name, $full = FALSE) {
+  $wysiwyg_settings = gardens_misc_wysiwyg_defaults($full);
+  $settings = gardens_misc_wysiwyg_scrub($format_name, $wysiwyg_settings);
+
+  // Enable CKEditor by default.
+  $query = db_insert('wysiwyg')
+    ->fields(array(
+    'format' => $format_name,
+    'editor' => 'ckeditor',
+    'settings' => serialize($settings),
+    ))
+    ->execute();
+}
+
+/**
+ * Builds a default settings array for Gardens WYSIWYG profiles
+ */
+function gardens_misc_wysiwyg_defaults($full) {
+  $settings = array(
+    'default' => 1,
+    'user_choose' => 0,
+    'show_toggle' => 1,
+    'theme' => 'advanced',
+    'language' => 'en',
+    'wysiwyg_buttons' => array(
+      'default' => array(
+        'Bold' => 1,
+        'Italic' => 1,
+        'Underline' => 1,
+        'StrikeThrough' => 1,
+        'JustifyLeft' => $full ? 1 : 0,
+        'JustifyCenter' => $full ? 1 : 0,
+        'JustifyRight' => $full ? 1 : 0,
+        'JustifyFull' => 0,
+        'BulletedList' => 1,
+        'NumberedList' => 1,
+        'Outdent' => 1,
+        'Indent' => 1,
+        'Undo' => 1,
+        'Redo' => 1,
+        'Link' => 1,
+        'Unlink' => 1,
+        'Anchor' => 0,
+        'Image' => 0,
+        'TextColor' => 0,
+        'BGColor' => 0,
+        'Superscript' => $full ? 1 : 0,
+        'Subscript' => 0,
+        'Blockquote' => 1,
+        'Source' => 0,
+        'HorizontalRule' => 1,
+        'Cut' => 0,
+        'Copy' => 0,
+        'Paste' => 0,
+        'PasteText' => 0,
+        'PasteFromWord' => 1,
+        'ShowBlocks' => 0,
+        'RemoveFormat' => 0,
+        'SpecialChar' => 0,
+        'About' => 0,
+        'Format' => 1,
+        'Font' => 0,
+        'FontSize' => 0,
+        'Styles' => 0,
+        'Table' => 1,
+        'Find' => 0,
+        'Replace' => 0,
+        'SelectAll' => 0,
+        'CreateDiv' => 0,
+        'Flash' => 0,
+        'Smiley' => 0,
+        'FitWindow' => 0,
+        'SpellChecker' => 1,
+        'Scayt' => 0,
+      ),
+      'drupal' => array(
+        'break' => 0,
+        'gardens_client' => 1,
+        'media' => 1,
+      ),
+    ),
+    'toolbar_loc' => 'top',
+    'toolbar_align' => 'left',
+    'path_loc' => 'bottom',
+    'resizing' => 1,
+    'verify_html' => 1,
+    'preformatted' => 0,
+    'convert_fonts_to_spans' => 1,
+    'remove_linebreaks' => 1,
+    'apply_source_formatting' => 0,
+    'paste_auto_cleanup_on_paste' => 0,
+    'block_formats' => 'p,address,pre,h2,h3,h4,h5,h6,div',
+    'css_setting' => 'none',
+    'css_path' => '',
+    'css_classes' => '',
+    'buttons' => array(
+      'default' => array(),
+      'drupal' => array(
+        'media' => 1,
+        'gardens_client' => 1,
+      ),
+    ),
+  );
+
+  return $settings;
+}
+
+/**
+ * Disables WYSIWYG buttons for formats whose filters disallow the tags associated
+ */
+function gardens_misc_wysiwyg_scrub($format_id, $settings) {
+  // Grab the filter formats
+  $filters = filter_list_format($format_id);
+  // Check to see if this format filters out all HTML and thus needs no WYSIWYG
+  if ($filters['filter_html_escape']->status != 1) {
+    // Check to see if the there is a filter for specific tags on this format
+    if ($filters['filter_html']->status == 1) {
+      // Turn the text list of tags into an array we can work with
+      $allowed = explode('> <', trim($filters['filter_html']->settings['allowed_html'], '<> '));
+
+      // A list of the tags created by WYSIWYG buttons
+      $translation = array();
+      $translation['a'][] = 'Link';
+      $translation['a'][] = 'Unlink';
+      $translation['a'][] = 'Anchor';
+      $translation['img'][] = 'Image';
+      $translation['em'][] = 'Italic';
+      $translation['strong'][] = 'Bold';
+      $translation['u'][] = 'Underline';
+      $translation['ul'][] = 'BulletedList';
+      $translation['ol'][] = 'NumberedList';
+      $translation['sup'][] = 'Superscript';
+      $translation['sub'][] = 'Subscript';
+      $translation['blockquote'][] = 'Blockquote';
+      $translation['hr'][] = 'HorizontalRule';
+      $translation['table'][] = 'Table';
+      $translation['div'][] = 'CreateDiv';
+
+      // Iterate through the tag translations, disabling those that aren't in the
+      // list of allowed tags
+      foreach($translation as $tag => $values) {
+        if (!in_array($tag, $allowed)) {
+          foreach($values as $value) {
+            $settings['wysiwyg_buttons']['default'][$value] = 0;
+          }
+        }
+      }
+    }
+  }
+
+  // Iterate through and turn on the buttons
+  foreach($settings['wysiwyg_buttons']['default'] as $button => $boolean) {
+    if ($boolean == 1) {
+      $settings['buttons']['default'][$button] = $boolean;
+    }
+  }
+
+  return $settings;
+}
+
+function gardens_misc_form_field_ui_display_overview_form_alter(&$form) {
+  if ($form['#bundle'] != 'media_gallery') {
+    unset($form['modes']['view_modes_custom']['#options']['media_gallery_block']);
+  }
+}
+
+/**
+ * Updates the site's Mollom keys, when necessary.
+ *
+ * If the provided keys are different from the current stored Mollom keys, the
+ * new ones will be stored in the database and the Mollom status will be reset
+ * to force a server check.
+ *
+ * @param $public_key
+ *   The new Mollom public key.
+ * @param $private_key
+ *   The new Mollom private key.
+ *
+ * @return
+ *   TRUE if the Mollom keys were updated, FALSE otherwise.
+ */
+function gardens_misc_update_mollom_keys_if_necessary($public_key, $private_key) {
+  $old_public_key = variable_get('mollom_public_key', '');
+  $old_private_key = variable_get('mollom_private_key', '');
+  $updated = FALSE;
+  if ($public_key != $old_public_key) {
+    variable_set('mollom_public_key', $public_key);
+    $updated = TRUE;
+  }
+  if ($private_key != $old_private_key) {
+    variable_set('mollom_private_key', $private_key);
+    $updated = TRUE;
+  }
+  // Reset mollom status to force a key check.
+  if ($updated && module_exists('mollom')) {
+    _mollom_status(TRUE);
+  }
+  return $updated;
+}
+
+/**
+ * Install the keys for the themebuilder screenshot service.
+ */
+function gardens_misc_install_themebuilder_screenshot_keys() {
+  // Install both keys required by Acquia's account on ShrinkTheWeb. (For now,
+  // we are using the same keys on production as on gsteamer.)
+  variable_set('themebuilder_screenshot_access_key', 'aee24820de3e0c9');
+  variable_set('themebuilder_screenshot_private_key', '6fa41');
+}
+
+/**
+ * Enables a new theme and replaces the site's default theme with it.
+ *
+ * Note: This could have unintended side effects if run outside the
+ * installation or initial site configuration process, since it disables the
+ * previous default theme and removes all of its blocks.
+ *
+ * @param $theme
+ *   The new default theme.
+ */
+function gardens_misc_replace_default_theme($theme) {
+  $previous_theme = variable_get('theme_default', 'bartik');
+  if ($previous_theme != $theme) {
+    // Streamlined disable/enable to avoid multiple menu rebuilds.
+    db_update('system')
+      ->fields(array('status' => 1))
+      ->condition('type', 'theme')
+      ->condition('name', $theme)
+      ->execute();
+    list_themes(TRUE);
+    drupal_theme_rebuild();
+    module_invoke_all('themes_enabled', array($theme));
+    // Set the default theme last (so as to not mess up block initialization
+    // that occurs during the above module_invoke_all call).
+    variable_set('theme_default', $theme);
+    // Now disable the previous default theme.
+    theme_disable(array($previous_theme));
+    // Also get rid of all the previous theme's blocks, so things don't get
+    // messed up if we happen to try to reenable this theme later in the
+    // installation process - see block_theme_initialize().
+    db_delete('block')->condition('theme', $previous_theme)->execute();
+  }
+}
+
+/**
+ * Implements hook_preprocess_html().
+ */
+function gardens_misc_preprocess_html(&$variables) {
+  // Add the iframe-hijack prevention script.
+  $path = drupal_get_path('module', 'gardens_misc');
+
+  // We want to load this script first of all the scripts so it runs quickly
+  // and undoes a hijack as soon as possible.
+  $options = array(
+    'group' => JS_LIBRARY,
+    'weight' => -100,
+    'every_page' => TRUE,
+  );
+
+  if (variable_get('gardens_misc_iframe_buster', TRUE)) {
+    drupal_add_js($path . '/js/gardens_misc.iframe-undo.js', $options);
+  }
+
+  // Add CSS for the MASt login flow.
+  drupal_add_css(
+    $path . '/css/gardens_misc.mast.css',
+    array(
+      'type' => 'file',
+      'every_page' => TRUE,
+      'media' => 'only screen and (max-device-width: 480px)',
+    )
+  );
+}
+
+/**
+ * Implements hook_preprocess_page().
+ *
+ * Adds a persistent nag message to the screen alerting people that block_everything
+ * may have messed up their site by removing the site_name and site_slogan.
+ */
+function gardens_misc_preprocess_page(&$variables) {
+  if (user_access('administer blocks') && variable_get('gardens_misc_show_block_everything_fixit_message', 1)) {
+    $theme_key = variable_get('theme_default');
+
+    // Get a list of block deltas which are status = 0.
+    $broken_blocks = gardens_misc_fix_block_everything_get_broken_blocks($theme_key);
+    // Get the name of the base theme.
+    $themes = list_themes();
+    $theme_object = $themes[$theme_key];
+    $base_theme = $theme_object->info['base_theme'];
+    if (!$broken_blocks || $base_theme == $theme_key) {
+      // We're all good, they must have fixed it themselves.
+      gardens_misc_fix_block_everything_dismiss_warning();
+      return;
+    }
+
+    // Initialize the messages variable.
+    if (empty($variables['messages'])) {
+      $variables['messages'] = '';
+    }
+
+    // Action links which cause fixes to happen.
+    $token = array('token' => drupal_get_token('fix-block-everything'));
+    $links = array();
+    if (in_array('site_name', $broken_blocks)) {
+      $links[] = array('href' => 'block_everything/fix/site_name', 'query' => drupal_get_destination() + $token, 'title' => t('Restore the site name to its default'));
+    }
+    if (in_array('site_slogan', $broken_blocks)) {
+      $links[] = array('href' => 'block_everything/fix/site_slogan', 'query' => drupal_get_destination() + $token, 'title' => t('Restore the site slogan to its default'));
+    }
+    $action_links = theme('links', array('links' => $links, 'attributes' => array('class' => array('fix-links'))));
+
+    $message = <<<EOF
+<a href="@dismiss_url" class="close">Stop showing this message</a>
+<div><div><strong>A recent update to your site may have accidentally hidden the site name and site slogan.</strong></div>
+$action_links
+</div>
+EOF;
+
+    // Add the css from the email verification story to similarly style the block.
+    drupal_add_css(drupal_get_path('module', 'gardens_client') . '/verify_email.css', array('preprocess' => FALSE));
+    $message = t($message, array('@dismiss_url' => url('block_everything/fix/dismiss', array('query' => drupal_get_destination() + $token))));
+    $variables['messages'] = "<div class='messages warning'>$message</div>" . $variables['messages'];
+  }
+}
+
+/**
+ * Menu callback; Sets the status of the block provided to 1 and puts it in the header.
+ *
+ * @param string $delta
+ *  The delta of the block to enable
+ */
+function gardens_misc_fix_block_everything($delta) {
+  if (!isset($_GET['token']) || !drupal_valid_token($_GET['token'], 'fix-block-everything')) {
+    return drupal_access_denied();
+  }
+
+  if ($delta == 'dismiss') {
+    // Sorta a hack, just used to not create a bunch of callbacks for no reason.
+    gardens_misc_fix_block_everything_dismiss_warning();
+  }
+  else {
+    $theme_key = variable_get('theme_default');
+    if ($delta != 'site_name' && $delta != 'site_slogan') {
+      watchdog('gardens_misc', 'Invalid block delta passed to gardens_misc_fix_block_everything', array(), WATCHDOG_ERROR);
+      return;
+    }
+    // Load the block_everything settings for this theme or if it has none,
+    // load the settings from the base theme.
+    $settings = theme_get_setting('block_everything', $theme_key);
+    if (empty($settings)) {
+      $themes = list_themes();
+      $theme_object = $themes[$theme_key];
+      $base_theme = $themes[$theme_object->info['base_theme']];
+      $settings = theme_get_setting('block_everything', $base_theme->name);
+    }
+
+    $fields = array(
+      'status' => 1,
+      'region' => isset($settings[$delta]) ? $settings[$delta] : 'header',
+    );
+
+    db_update('block')
+      ->fields($fields)
+      ->condition('module', 'block_everything')
+      ->condition('delta', $delta)
+      ->condition('theme', $theme_key)
+      ->execute();
+
+    $block_deltas_to_settings = array(
+      'site_name' => 'toggle_name',
+      'site_slogan' => 'toggle_slogan',
+    );
+
+    // Enable the theme settings for each block so old themes will display properly.
+    $toggle_settings_key = $block_deltas_to_settings[$delta];
+    $settings = variable_get('theme_settings', array());
+    $settings[$toggle_settings_key] = 1;
+    variable_set('theme_settings', $settings);
+
+    // Check if that took care of all of them. If we have, disable the message.
+    if (count(gardens_misc_fix_block_everything_get_broken_blocks($theme_key)) == 0) {
+      gardens_misc_fix_block_everything_dismiss_warning();
+    }
+  }
+  // Redirect the user back to whence they came.
+  drupal_goto(drupal_get_destination());
+}
+
+/**
+ * Helper function to determine if the site_name and site_slogan blocks are turned off.
+ *
+ * @param string $theme_key
+ * @return array
+ *  An array of deltas which are turned off but probably should be on.
+ */
+function gardens_misc_fix_block_everything_get_broken_blocks($theme_key) {
+  $args = array(':theme' => $theme_key);
+  return db_query("SELECT delta FROM {block} WHERE status = 0 AND theme = :theme AND module = 'block_everything' AND delta IN('site_name', 'site_slogan')", $args)->fetchCol();
+}
+
+/**
+ * Helper function which simply disables the nag message.
+ *
+ * @see gardens_misc_preprocess_page()
+ */
+function gardens_misc_fix_block_everything_dismiss_warning() {
+  variable_set('gardens_misc_show_block_everything_fixit_message', 0);
+}
+
+/**
+ * Implementation of hook_cron();
+ *
+ * We want to make sure all sites are using CSS and javascript
+ * aggregation.  We have a common cache for all sites for shared
+ * resources (images, CSS, JavaScript), but this can break on update.
+ * During update we could have 2 different versions of each of these
+ * resources.  Slight changes to an image resource probably isn't too
+ * much of a problem during the course of an update, but changes to
+ * CSS and JavaScript files could cause the site to break.  If the
+ * site uses CSS and JavaScript aggregation, the site will continue to
+ * use the correct version of the files.
+ *
+ * Why not disable the aggregation setting?  Because it is helpful to
+ * diagnose problems to turn off aggregation.
+ */
+function gardens_misc_cron() {
+  // Allow developers to bypass this behavior; see e.g.
+  // gardens_installer_custom_submit().
+  if (!variable_get('acquia_gardens_keep_js_css_caching_off', FALSE) && scarecrow_is_enabled()) {
+    gardens_misc_verify_css_aggregation();
+    gardens_misc_verify_javascript_aggregation();
+  }
+}
+
+/**
+ * Checks whether the site has CSS aggregation enabled, and enables it if needed.
+ */
+function gardens_misc_verify_css_aggregation() {
+  $preprocess_css = intval(variable_get('preprocess_css', 0));
+  if (1 != $preprocess_css) {
+    syslog(LOG_INFO, 'gardens_misc: Activating CSS aggregation for site ' . $_SERVER['HTTP_HOST']);
+    variable_set('preprocess_css', 1);
+    drupal_clear_css_cache();
+  }
+}
+
+/**
+ * Checks whether the site has JavaScript aggregation enabled, and enables it if needed.
+ */
+function gardens_misc_verify_javascript_aggregation() {
+  $preprocess_js = intval(variable_get('preprocess_js', 0));
+  if (1 != $preprocess_js) {
+    syslog(LOG_INFO, 'gardens_misc: Activating JavaScript aggregation for site ' . $_SERVER['HTTP_HOST']);
+    variable_set('preprocess_js', 1);
+    drupal_clear_js_cache();
+  }
+}
+
+/**
+ * Implements hook_views_query_alter().
+ *
+ * Adds information to every views query to identify the site and view.
+ */
+function gardens_misc_views_query_alter(&$view, &$query) {
+  $query->options['query_comment'] .= " '" . $view->name . ':' . $view->current_display . "' gardens_view_name";
+  $query->options['query_comment'] .= " '" . conf_path() . "' gardens_site_directory";
+}
+
+/**
+ * Implements hook_library_alter().
+ */
+function gardens_misc_library_alter(&$libraries, $module) {
+  if ($module == 'plupload') {
+    // Disable the Plupload library's chunking of large files, because it leads
+    // to a bug when the file is written to Gluster (around half the time, the
+    // final uploaded image winds up corrupted). Chunking isn't needed in
+    // Gardens anyway, since it's designed for PHP configurations that limit
+    // the maximum post size per request, but in our hosting environment this
+    // limit is gigantic and other settings also prevent us from hitting it.
+    if (isset($libraries['plupload']['js'][0]['data']['plupload']['_default']['chunk_size'])) {
+      unset($libraries['plupload']['js'][0]['data']['plupload']['_default']['chunk_size']);
+    }
+    else {
+      // The above code is somewhat fragile (it unsets an element very deep in
+      // a complex array), so let's make sure we know about it if it breaks.
+      syslog(LOG_ERR, "GardensError: Couldn't remove the chunk_size setting from the plupload library in gardens_misc_library_alter().");
+    }
+  }
+}
+
+/**
+ * Implements hook_form_FORM_ID_alter().
+ *
+ * Removes the installation instructions for WYSIWYG editors
+ */
+function gardens_misc_form_wysiwyg_profile_overview_alter(&$form, &$form_state) {
+  $form['status']['#access'] = FALSE;
+}
+
+/**
+ * Implements hook_field_widget_info_alter().
+ */
+function gardens_misc_field_widget_info_alter(&$info) {
+  // The Media module allows the Media widget to be used on file and image
+  // fields, but the code for that is not very robust. For example, there isn't
+  // protection against selecting an incompatible file type or scheme. Until
+  // it's made sufficiently robust, restrict the widget to just media fields.
+  $info['media_generic']['field types'] = array('media');
+}
+
+/**
+ * Implements hook_field_info_alter()
+ *
+ * Unset the Unix and ISO Date module formatters for Gardens.
+ */
+function gardens_misc_field_info_alter(&$info) {
+  if (isset($info['date'])) {
+    unset($info['date']);
+  }
+  if (isset($info['datestamp'])) {
+    unset($info['datestamp']);
+  }
+}
+
+/**
+ * Implements hook_gardens_client_phone_home().
+ *
+ * Gets the master embed.ly api key from the Gardener.
+ */
+function gardens_misc_gardens_client_phone_home($previous_data, $data) {
+  // Acquire a lock, since multiple phone home requests may be running at once.
+  if (lock_acquire('gardens_misc_gardens_client_phone_home')) {
+    // Save the embed.ly API key in the appropriate place.
+    $key = $data['gardener_site']['embedly_api_key'];
+    variable_set('oembedembedly_api_key', $key);
+
+    if (!empty($data['gardener_site']['standard_domain']) && $data['gardener_site']['standard_domain'] != variable_get('gardens_misc_standard_domain', '')) {
+      variable_set('gardens_misc_standard_domain', $data['gardener_site']['standard_domain']);
+    }
+
+    // The site's domain may have changed, so adjust SSL settings if necessary.
+    gardens_misc_adjust_secure_domain_settings_if_necessary();
+
+    if (isset($data['gardens_manager']['gardens_show_twitter_alerts'])) {
+      variable_set('gardens_show_twitter_alerts', $data['gardens_manager']['gardens_show_twitter_alerts']);
+    }
+
+    // Release the lock.
+    lock_release('gardens_misc_gardens_client_phone_home');
+  }
+}
+
+/**
+ * Check a site's SSL domains, and adjust their settings if necessary.
+ */
+function gardens_misc_adjust_secure_domain_settings_if_necessary() {
+  // Currently this is only necessary for sites using the Secure Pages module.
+  if (module_exists('securepages')) {
+    $canonical_domain = gardens_misc_get_canonical_domain();
+    $standard_domain = gardens_misc_get_standard_domain();
+    // If a Gardens site has a canonical domain set, we expect it to be a
+    // custom domain and therefore different from their standard one. In this
+    // case, the standard domain needs to be used for SSL (since we don't
+    // currently support per-domain SSL certs on Gardens, only platform-wide
+    // ones like *.drupalgardens.com or *.fpmg-drupalgardens.com). Presumably,
+    // though, the canonical domain should still be used for all non-SSL
+    // navigation. There is one exception to this rule when the stage has an
+    // unlimited UC cert, then both the SSL and non-SSL paths should point at
+    // the canonical domain.
+    if (!empty($canonical_domain) && !empty($standard_domain)) {
+      // Make sure the securepages insecure URL is set to the canonical domain.
+      $new_insecure_domain = "http://$canonical_domain";
+      $old_insecure_domain = variable_get('securepages_basepath');
+      if ($new_insecure_domain != $old_insecure_domain) {
+        variable_set('securepages_basepath', $new_insecure_domain);
+      }
+      // Make sure the securepages secure URL is set to the standard domain or
+      // to the canonical domain in case the stage has the UC cert.
+      $new_secure_domain = gardens_client_data_get('gardens_signup', 'gardens_signup_uc_cert_present') ? "https://$canonical_domain" : "https://$standard_domain";
+      $old_secure_domain = variable_get('securepages_basepath_ssl');
+      if ($new_secure_domain != $old_secure_domain) {
+        variable_set('securepages_basepath_ssl', $new_secure_domain);
+      }
+    }
+    // Alternatively, if there is only one domain that the site is accessed at,
+    // the Secure Pages module will automatically use that one. So we don't
+    // need any variables saved anymore.
+    else {
+      $insecure_domain = variable_get('securepages_basepath');
+      if (isset($insecure_domain)) {
+        variable_del('securepages_basepath');
+      }
+      $secure_domain = variable_get('securepages_basepath_ssl');
+      if (isset($secure_domain)) {
+        variable_del('securepages_basepath_ssl');
+      }
+    }
+  }
+}
+
+/**
+ * Access callback for gardens_misc_report_site_statistics().
+ *
+ * @param string $md5
+ *   The last component of the URL that was used to access this page.
+ * @return boolean
+ *   TRUE if access is granted, FALSE otherwise.
+ */
+function gardens_misc_report_site_statistics_access($md5) {
+  if ($md5 == gardens_misc_get_site_statistics_token()) {
+    return TRUE;
+  }
+  return FALSE;
+}
+
+/**
+ * Return the URL token required to access the site statistics reporting page.
+ */
+function gardens_misc_get_site_statistics_token() {
+  // The token consists of a hash of the site's Gardener site node id,
+  // plus a salt.
+  $salt = '05';
+  $site_nid = gardens_misc_get_site_nid();
+  $expected_md5 = md5($site_nid . $salt);
+  return $expected_md5;
+}
+
+/**
+ * Returns the node ID from the database name.
+ */
+function gardens_misc_get_site_nid() {
+  global $databases;
+  $gsite = $databases['default']['default']['database'];
+  if (preg_match('/^g[0-9]+$/', $gsite)) {
+    return ltrim($gsite, 'g');
+  }
+  else {
+    // This is probably a development environment. Let local developers specify
+    // a nid corresponding to this site in settings.php.
+    return (variable_get('gardens_misc_site_nid', FALSE));
+  }
+}
+
+/**
+ * Ensures that the specified directory exists.  If the directory doesn't
+ * exist, this function will attempt to create it.  If the permissions of the
+ * parent are such that the directory cannot be created, this function will
+ * attempt to create the directory by temporarily altering the parent
+ * permissions.
+ *
+ * @param {String} $dir_uri
+ *   The directory to create.  Ex: public://gardens_temp/
+ * @return {boolean}
+ *   TRUE if the directory exists; FALSE if the directory doesn't
+ *   exist.
+ */
+function gardens_misc_create_tmp_dir($dir_uri) {
+  $dir = drupal_realpath($dir_uri);
+  if (!file_exists($dir)) {
+    $parent_dir = dirname($dir);
+
+    // Grab the current file mode of the parent.
+    $file_info = lstat($parent_dir);
+    $mode = $file_info['mode'];
+    $change_parent = ($mode & 0700) != 0700;
+
+    if ($change_parent) {
+      // Change the mode of the parent directory/link so the directory can be
+      // created.
+      @chmod($parent_dir, 0755);
+    }
+
+    // Create the new dir.
+    @mkdir($dir, 0755);
+
+    if ($change_parent) {
+      // Restore the parent directory permissions.
+      @chmod($parent_dir, $mode);
+    }
+  }
+  return (file_exists($dir));
+}
+
+/**
+ * Attempt to match up the PHP locale with that of the OS
+ * Set the PHP locale to match the OS.
+ * Since functions like escapeshellarg() require the locale to
+ * be set, we'll attempt to match the environment variables.
+ */
+function gardens_misc_setlocale() {
+  // Get common environment variables.
+  $lang = getenv('LANG');
+  $lc_ctype = getenv('LC_CTYPE');
+
+  // Set the locale based on best to worst case match.
+  if (!empty($lc_ctype)) {
+    $locale = $lc_ctype;
+  }
+  elseif (!empty($lang)) {
+    $locale = $lang;
+  }
+  else {
+    $locale = 'en_US.UTF-8';
+  }
+
+  setlocale(LC_CTYPE, trim($locale));
+}
+
+/**
+ * Implements hook_pathauto_pattern_alter().
+ */
+function gardens_misc_pathauto_pattern_alter(&$pattern, &$context) {
+  // For nodes, there are edge cases where no alias will be created.
+  // We'll test to see what alias will be created, if it matches the
+  // base pattern with no tokens, then fall back to using the nid
+  // instead of the title as the token.
+  if (isset($context['data']['node']->nid)) {
+    // Test what alias pathauto will generate.
+    $alias = token_replace($pattern, $context['data'], array(
+      'sanitize' => FALSE,
+      'clear' => TRUE,
+      'callback' => 'pathauto_clean_token_values',
+      'language' => (object) array('language' => $context['language']),
+      'pathauto' => TRUE,
+    ));
+
+    // This is the same check that pathauto does to ensure that tokens
+    // are not empty. If they are, replace the title token with nid.
+    $pattern_tokens_removed = preg_replace('/\[[^\s\]:]*:[^\s\]]*\]/', '', $pattern);
+    if ($alias === $pattern_tokens_removed) {
+      $pattern = preg_replace('/\[node\:title\]/', '[node:nid]', $pattern);
+    }
+  }
+}
+
+/**
+ * Implements hook_pathauto_alias_alter().
+ */
+function gardens_misc_pathauto_alias_alter(&$alias, &$context) {
+  // In some cases a path alias may not exist in the url_alias table,
+  // but could override a menu_router item. We want to ensure that
+  // all aliases are unique to that table as well.
+  $ordinal = 0;
+  $alias_base = $alias;
+  while (!gardens_misc_alias_is_unique($alias)) {
+    $alias = $alias_base . '-' . $ordinal;
+    $ordinal++;
+  }
+}
+
+/**
+ * Helper function to ensure the uniqueness of a url alias.
+ *
+ * @param String $alias
+ *  The hopefully unique url alias.
+ */
+function gardens_misc_alias_is_unique($alias) {
+  // Ensure that the alias does not explicitly override a menu_router item.
+  $query = db_select('menu_router')
+    ->condition('path', $alias);
+  $query->addExpression('1');
+  $query->range(0, 1);
+
+  if ($query->execute()->fetchField()) {
+    return FALSE;
+  }
+
+  return TRUE;
+}
+
+/**
+ * Implements hook_theme_registry_alter().
+ */
+function gardens_misc_theme_registry_alter(&$theme_registry) {
+  $theme_registry['metatag_opengraph']['function'] = 'gardens_misc_theme_metatag_opengraph';
+}
+
+/**
+ * Theme callback for OpenGraph meta tag override.
+ */
+function gardens_misc_theme_metatag_opengraph($variables) {
+  $element = &$variables['element'];
+  if (isset($element['#tag']) && $element['#tag'] == 'meta'
+      && isset($element['#id']) && $element['#id'] == 'metatag_og:description') {
+    $element['#value'] = preg_replace('/\[\[{.*?}\]\]/', '', $element['#value']);
+  }
+  element_set_attributes($element, array('#name' => 'property', '#value' => 'content'));
+  unset($element['#value']);
+  return theme_html_tag($variables);
+}
+
+/**
+ * Implements hook_simplified_modules_hidden_submodules().
+ */
+function gardens_misc_simplified_modules_hidden_submodules() {
+  return array(
+    'bunchball_entities',
+    'bunchball_fivestar',
+    'bunchball_poll',
+    'bunchball_user_interaction',
+    'bunchball_user_roles',
+    'bunchball_webform',
+    'bunchball_nitro',
+    'bunchball_groups',
+    'bunchball_queue',
+    'extlink_extra',
+    'field_collection_table',
+    'field_collection_views',
+  );
+}
+
+/**
+ * Implements hook_simplified_modules_hidden_dependencies().
+ */
+function gardens_misc_simplified_modules_hidden_dependencies() {
+  return array(
+    'request_queue',
+    'colorbox',
+    // MASt-related dependencies.
+    'original_author',
+    'services_oauth',
+    'rest_server',
+    'services',
+    'oauth_common',
+    'entity',
+    'migrate',
+    'migrate_ui',
+    'migrate_extras',
+  );
+}
+
+/**
+ * Implements hook_form_FORM_ID_alter().
+ */
+function gardens_misc_form_extlink_admin_settings_alter(&$form, &$form_state) {
+  $form['extlink_subdomains']['#access'] = FALSE;
+
+  $form['extlink_class']['#weight'] = -4;
+  $form['extlink_mailto_class']['#weight'] = -3;
+  $form['extlink_target']['#weight'] = -2;
+
+  if (module_exists('extlink_extra')) {
+    $form['extlink_cache_fix']['#access'] = FALSE;
+    $form['extlink_alert_type']['#weight'] = -1;
+  }
+}
+
+/**
+ * Hide the "Node export code delivery" settings from the Node export admin
+ * interface.
+ *
+ * @see gardens_misc_init()
+ */
+function gardens_misc_form_node_export_settings_alter(&$form, $form_state) {
+
+  $form['basic']['#title'] = t('Export settings');
+  $form['basic']['#collapsible'] = TRUE;
+
+  $form['publishing']['#title'] = t('Import settings');
+  $form['publishing']['#collapsible'] = TRUE;
+
+  $form['basic']['node_export_code']['#access'] = FALSE;
+
+  // Make DSV format settings fieldset visibility depend on if DSV format is
+  // checked for export.
+  if (isset($form['basic'][0]['dsv'])) {
+    $form['basic'][0]['dsv']['#states'] = array(
+      'visible' => array(
+        ':input[name="node_export_format[dsv]"]' => array('checked' => TRUE),
+      ),
+    );
+  }
+
+  $form['basic']['file'] = $form['file'];
+  $form['basic']['file']['#title'] = t('Advanced file field settings');
+  $form['basic']['file']['#collapsible'] = TRUE;
+  $form['basic']['file']['#collapsed'] = TRUE;
+  unset($form['file']);
+
+  $form['publishing']['node_export_existing'] = $form['basic']['node_export_existing'];
+  $form['publishing']['node_export_existing']['#weight'] = -1;
+  $form['publishing']['node_export_existing']['#options'] = array(
+    'revision' => t('Create a new revision of the existing node'),
+    'new' => t('Create a new node'),
+    'skip' => t('Skip the node'),
+  );
+  $form['publishing']['node_export_existing']['#default_value'] = variable_get('node_export_existing', 'revision');
+  unset($form['basic']['node_export_existing']);
+}
+
+/**
+ * Hide the copy-pasting option for the node import module.
+ *
+ * The description text is also changed to match the form behavior.
+ */
+function gardens_misc_form_node_export_import_form_alter(&$form, $form_state) {
+  $form['paste']['#access'] = FALSE;
+  $form['upload']['#collapsed'] = FALSE;
+
+  $variables = array(
+    '!module_name' => '<i>Node export</i>',
+    '!config_settings_link' => l(t('configuration settings'), 'admin/config/content/node_export'),
+  );
+  $form['#prefix'] = '<p>';
+  $form['#prefix'] .= t('You may import content by uploading the code exported by the !module_name module.', $variables) . ' ';
+  $form['#prefix'] .= t("Some values may be reset during this import based on this site's !module_name !config_settings_link.", $variables);
+  $form['#prefix'] .= '</p>';
+
+  unset($form['upload']['file']['#description']);
+
+  $form['actions']['reset']['#markup'] = l(t('Reset'), $_GET['q']);
+}
+
+/**
+ * Form to export all nodes in the given content types.
+ */
+function gardens_misc_node_export_all($form) {
+  $form['types'] = array(
+    '#title' => t('Content types'),
+    '#type' => 'checkboxes',
+    '#options' => node_type_get_names(),
+  );
+
+  $form['submit'] = array(
+    '#type' => 'submit',
+    '#value' => t('Export'),
+  );
+
+  return $form;
+}
+
+/**
+ * Submit callback for gardens_misc_node_export_all().
+ *
+ * @see gardens_misc_node_export_all()
+ */
+function gardens_misc_node_export_all_submit($form, &$form_state) {
+  $types = array_keys(array_filter($form_state['values']['types']));
+  $form_state['redirect'] = 'admin/config/content/node_export/all/' .
+    implode(',', $types) . '/' . drupal_get_token('node_export_all');
+}
+
+/**
+ * Wrapper page callback around node_export_gui().
+ *
+ * @see node_export_gui()
+ */
+function gardens_misc_node_export_all_gui($content_types_string, $token) {
+  global $user;
+  if ($user->uid && drupal_valid_token($token, 'node_export_all', TRUE)) {
+    $content_types = explode(',', $content_types_string);
+    $nids = db_query('SELECT nid FROM {node} WHERE type IN (:types) ORDER BY nid', array(
+      ':types' => $content_types,
+    ))->fetchCol();
+
+    if(!$nids) {
+      drupal_set_message(t('No nodes to export.'), 'error');
+      drupal_goto('admin/config/content/node_export/all');
+    }
+
+    module_load_include('inc', 'node_export', 'node_export.pages');
+    return node_export_gui($nids);
+  }
+  else {
+    drupal_access_denied();
+    return NULL;
+  }
+}
+
+function gardens_misc_node_export_format_handlers_alter(&$format_handlers) {
+  if (isset($format_handlers['dsv'])) {
+    unset($format_handlers['dsv']);
+  }
+  if (isset($format_handlers['drupal'])) {
+    unset($format_handlers['drupal']);
+  }
+  if (isset($format_handlers['serialize'])) {
+    unset($format_handlers['serialize']);
+  }
+}
+/**
+ * Implements hook_views_data_alter().
+ */
+function gardens_misc_views_data_alter(&$data) {
+  // Only relevant for local user accounts.
+  if (!variable_get('acquia_gardens_local_user_accounts', FALSE)) {
+    return;
+  }
+  // pass - for exporting users
+  $data['users']['pass'] = array(
+    'title' => t('Password hash'), // The item it appears as on the UI,
+    'help' => t('Password has for a given user. This field is normally not shown to users, so be cautious when using it.'), // The help that appears on the UI,
+    'field' => array(
+      'handler' => 'views_handler_field',
+      'click sortable' => TRUE,
+    ),
+    'sort' => array(
+      'handler' => 'views_handler_sort',
+    ),
+    'filter' => array(
+      'handler' => 'views_handler_filter_string',
+    ),
+    'argument' => array(
+      'handler' => 'views_handler_argument_string',
+    ),
+  );
+  $data['users']['picture_url'] = array (
+    'real field' => 'picture',
+    'title' => t('Picture URL'), // The item it appears as on the UI,
+    'help' => t('URL to a given user picture (for export or custom image.'), // The help that appears on the UI,
+    'field' => array(
+      'handler' => 'views_handler_field_user_picture_url',
+      'click sortable' => TRUE,
+    ),
+    'sort' => array(
+      'handler' => 'views_handler_sort',
+    ),
+    'filter' => array(
+      'handler' => 'views_handler_filter_string',
+    ),
+    'argument' => array(
+      'handler' => 'views_handler_argument_string',
+    ),
+  );
+}
+
+/**
+ * Implements hook_date_format().
+ **/
+function gardens_misc_date_formats() {
+  return array(
+    array(
+      'type' => 'gardens_iso_8601',
+      'format' => 'c',
+      'locales' => array(),
+    ),
+  );
+}
+
+/**
+ * Implements hook_date_format_types().
+ **/
+function gardens_misc_date_format_types() {
+  // Define the iso date format used for export.
+  return array(
+    'gardens_iso_8601' => t('ISO 8601'),
+  );
+}
+
+/**
+ * Implements hook_audit_trail_form_change_log_alter().
+ *
+ * Adds the sitename to the context and overrides log writing method.
+ */
+function gardens_misc_audit_trail_form_change_log_alter(&$diffs, $context) {
+  // Compose log entries from the diffs.
+  $separator = variable_get('audit_trail_separator', ',');
+  $log_entries = array();
+  foreach ($diffs as $path => $diff) {
+    $log_entries[] = $path . $separator . $diff['old'] . $separator . $diff['new'];
+  }
+  // By emptying $diffs we ensure that it does not get logged later on.
+  $diffs = array();
+  gardens_misc_audit_trail_log($log_entries, $context);
+}
+
+/**
+ * Implements hook_audit_trail_form_submit_log_alter().
+ *
+ * Adds the sitename to the context and overrides log writing method.
+ */
+function gardens_misc_audit_trail_form_submit_log_alter(&$diffs, $context) {
+  $log_entries = array(serialize($diffs));
+  // By emptying $diffs we ensure that it does not get logged later on.
+  $diffs = array();
+  gardens_misc_audit_trail_log($log_entries, $context);
+}
+
+/**
+ * Logs audit trail data to syslog.
+ */
+function gardens_misc_audit_trail_log($diffs, $context) {
+  // Initialize syslog if needed using syslog module's settings.
+  // Copied from syslog_watchdog().
+  $log_init = &drupal_static('syslog_watchdog', FALSE);
+  if (!$log_init) {
+    $log_init = TRUE;
+    $default_facility = defined('LOG_LOCAL0') ? LOG_LOCAL0 : LOG_USER;
+    openlog(variable_get('syslog_identity', 'drupal'), LOG_NDELAY, variable_get('syslog_facility', $default_facility));
+  }
+
+  foreach ($diffs as $diff) {
+    syslog(LOG_INFO, strtr('AuditTrail: !context,!log', array(
+      '!context' => gardens_misc_get_standard_domain() . ',' . implode(',', $context),
+      '!log' => str_replace(array("\n", "\r"), "", $diff),
+    )));
+  }
+}
+
+/**
+ * Implements hook_form_FORM_ID_alter().
+ *
+ * Currently audit_trail offers to send logs to either watchdog or a file. Since
+ * we are rather pushing the logs to syslog this form alter is trying to make
+ * the audit_trail config form less confusing by overwriting the said field.
+ */
+function gardens_misc_form_audit_trail_admin_configure_alter(&$form, $form_state) {
+  $form['audit_trail_log_destination']['#options'] += array('syslog' => t('Syslog'));
+  $form['audit_trail_log_destination']['#default_value'] = 'syslog';
+  $form['audit_trail_log_destination']['#disabled'] = TRUE;
+  $form['audit_trail_log_destination']['#description'] = t('At Acquia Gardens we are writing logs to syslog instead of a file or watchdog.');
+}
+
+/**
+ * Implements hook_query_alter().
+ */
+function gardens_misc_query_alter(QueryAlterableInterface $query) {
+  // Force aggregator_feed_items_load('sum') query to use STRAIGHT_JOIN. The
+  // query in question has the aggregator_item table as the base table and
+  // aggregator_feed is joined to it. It has two ORDER BY clauses but no WHERE
+  // clauses.
+  $tables = &$query->getTables();
+  $base_table_is_aggregator_item = isset($tables['i']) && $tables['i']['table'] == 'aggregator_item' && $tables['i']['join type'] == NULL;
+  $join_table_is_aggregator_feed = isset($tables['f']) && $tables['f']['table'] == 'aggregator_feed' && $tables['f']['join type'] == 'INNER';
+  if (count($tables) == 2 && $base_table_is_aggregator_item && $join_table_is_aggregator_feed) {
+    $order = &$query->getOrderBy();
+    // Even without WHERE clauses there will be one default item in it.
+    $where = &$query->conditions();
+    if (isset($order['i.timestamp']) && isset($order['i.iid']) && count($order) == 2 && count($where) == 1) {
+      $query->setSelectKeyword('STRAIGHT_JOIN');
+    }
+  }
+}
+
+/**
+ * Implements hook_form_FORM_ID_alter().
+ *
+ * Alters the system_date_time_settings form, so that example Timeago date
+ * formats show up nicely formatted in the selects.
+ */
+function gardens_misc_form_system_date_time_settings_alter(&$form, &$form_state, $form_id) {
+  module_load_include('module', 'timeago');
+
+  $formats = $form['formats']['format'];
+  foreach ($formats as $format => $format_info) {
+    $options = $format_info['#options'];
+    foreach ($options as $option_key => $option) {
+      switch ($option_key) {
+        case TIMEAGO_FORMAT_SHORT_US:
+        case TIMEAGO_FORMAT_SHORT:
+        case TIMEAGO_FORMAT_MEDIUM_US:
+        case TIMEAGO_FORMAT_MEDIUM:
+        case TIMEAGO_FORMAT_LONG_US:
+        case TIMEAGO_FORMAT_LONG:
+          // Strip markup from Timeago formats.
+          $fallback_format = preg_replace(array(
+            '/<span.*?>/',
+            '/<\/span>/'
+          ), '', $option);
+          // Replace the display for Timeago formats.
+          $form['formats']['format'][$format]['#options'][$option_key] = t('!timeago ago (fallback: !fallback)', array(
+            '!timeago' => _gardens_misc_format_interval_timeago(5, 1),
+            '!fallback' => $fallback_format
+          ));
+          break;
+      }
+    }
+  }
+}
+
+/**
+ * Implements hook_mast_unsupported_bundles().
+ */
+function gardens_misc_mast_unsupported_bundles() {
+  $unsupported_bundles = array('node' => array());
+  if (module_exists('webform')) {
+    // Declare webform node types ineligible to be MASt-enabled.
+    $unsupported_bundles['node'] = webform_variable_get('webform_node_types');
+  }
+  // Media Gallery module is currently unsupported by the Gardens app.
+  $unsupported_bundles['node'][] = 'media_gallery';
+  return $unsupported_bundles;
+}
+
+/**
+ * Options callback: get available date types with human readable labels.
+ *
+ * @return array
+ *   date type => date type title (example date)
+ */
+function _gardens_misc_date_format_type_options() {
+  module_load_include('module', 'timeago');
+  $options = array();
+  $format_types = system_get_date_types();
+
+  if (!empty($format_types)) {
+    foreach ($format_types as $type => $type_info) {
+      $type_format = variable_get('date_format_' . $type);
+      switch ($type_format) {
+        case TIMEAGO_FORMAT_SHORT_US:
+        case TIMEAGO_FORMAT_SHORT:
+        case TIMEAGO_FORMAT_MEDIUM_US:
+        case TIMEAGO_FORMAT_MEDIUM:
+        case TIMEAGO_FORMAT_LONG_US:
+        case TIMEAGO_FORMAT_LONG:
+          $fallback_format = preg_replace(array(
+            '/<span.*?>/',
+            '/<\/span>/'
+          ), '', format_date(REQUEST_TIME, $type));
+          $options[$type] = t('!title (!timeago ago) [fallback: !fallback]', array(
+            '!title' => $type_info['title'],
+            '!timeago' => _gardens_misc_format_interval_timeago(5, 1),
+            '!fallback' => $fallback_format
+          ));
+          break;
+
+        default:
+          $options[$type] = $type_info['title'] . ' (' . format_date(REQUEST_TIME, $type) . ')';
+          break;
+      }
+    }
+  }
+
+  return $options;
+}
+
+/**
+ * Modified version of format_interval(), time interval strings can be modified.
+ *
+ * @param $interval
+ *   The length of the interval in seconds.
+ * @param array $time_strings_override
+ *   An associative array containing:
+ *     - year_singular: A string to use for the singular form of year.
+ *     - year_plural: A string to use for the plural form of year.
+ *     - month_singular: A string to use for the singular form of month.
+ *     - month_plural: A string to use for the plural form of month.
+ *     - week_singular: A string to use for the singular form of week.
+ *     - week_plural: A string to use for the plural form of week.
+ *     - day_singular: A string to use for the singular form of day.
+ *     - day_plural: A string to use for the plural form of day.
+ *     - hour_singular: A string to use for the singular form of hour.
+ *     - hour_plural: A string to use for the plural form of hour.
+ *     - minute_singular: A string to use for the singular form of minute.
+ *     - minute_plural: A string to use for the plural form of minute.
+ *     - second_singular: A string to use for the singular form of second.
+ *     - second_plural: A string to use for the plural form of second.
+ *   Optional override of time interval strings.
+ * @param int $granularity
+ *   How many different units to display in the string.
+ * @param null $langcode
+ *   Optional language code to translate to a language other than
+ *   what is used to display the page.
+ *
+ * @return null|string
+ *   A translated string representation of the interval.
+ *
+ * @see format_interval()
+ */
+function _gardens_misc_format_interval($interval, $time_strings_override = array(), $granularity = 2, $langcode = NULL) {
+  $time_strings = array(
+    'year_singular' => '1 year',
+    'year_plural' => '@count years',
+    'month_singular' => '1 month',
+    'month_plural' => '@count months',
+    'week_singular' => '1 week',
+    'week_plural' => '@count weeks',
+    'day_singular' => '1 day',
+    'day_plural' => '@count days',
+    'hour_singular' => '1 hour',
+    'hour_plural' => '@count hours',
+    'minute_singular' => '1 min',
+    'minute_plural' => '@count min',
+    'second_singular' => '1 sec',
+    'second_plural' => '@count sec',
+    'zero' => '0 sec',
+  );
+
+  if (!empty($time_strings_override)) {
+    $time_strings = array_merge($time_strings, $time_strings_override);
+  }
+
+  $units = array(
+    "{$time_strings['year_singular']}|{$time_strings['year_plural']}" => 31536000,
+    "{$time_strings['month_singular']}|{$time_strings['month_plural']}" => 2592000,
+    "{$time_strings['week_singular']}|{$time_strings['week_plural']}" => 604800,
+    "{$time_strings['day_singular']}|{$time_strings['day_plural']}" => 86400,
+    "{$time_strings['hour_singular']}|{$time_strings['hour_plural']}" => 3600,
+    "{$time_strings['minute_singular']}|{$time_strings['minute_plural']}" => 60,
+    "{$time_strings['second_singular']}|{$time_strings['second_plural']}" => 1
+  );
+
+  $output = '';
+  foreach ($units as $key => $value) {
+    $key = explode('|', $key);
+    if ($interval >= $value) {
+      $output .= ($output ? ' ' : '') . format_plural(floor($interval / $value), $key[0], $key[1], array(), array('langcode' => $langcode));
+      $interval %= $value;
+      $granularity--;
+    }
+
+    if ($granularity == 0) {
+      break;
+    }
+  }
+
+  return $output ? $output : t($time_strings['zero'], array(), array('langcode' => $langcode));
+}
+
+/**
+ * Returns format interval time strings specific to Timeago.
+ *
+ * @return array
+ *   An associative array containing time interval strings.
+ *
+ * @see _gardens_misc_format_interval()
+ */
+function _gardens_misc_timeago_format_interval_strings() {
+  static $strings = array(
+    'year_singular' => 'about a year',
+    'year_plural' => '@count years',
+    'month_singular' => 'about a month',
+    'month_plural' => '@count months',
+    'week_singular' => 'about a week',
+    'week_plural' => '@count weeks',
+    'day_singular' => 'a day',
+    'day_plural' => '@count days',
+    'hour_singular' => 'about an hour',
+    'hour_plural' => 'about @count hours',
+    'minute_singular' => 'about a minute',
+    'minute_plural' => '@count minutes',
+    'second_singular' => 'a moment',
+    'second_plural' => 'a moment',
+    'zero' => 'a moment',
+  );
+  return $strings;
+}
+
+/**
+ * Wrapper around _gardens_misc_format_interval().
+ *
+ * @param $interval
+ *   The length of the interval in seconds.
+ * @param int $granularity
+ *   How many different units to display in the string.
+ * @return null|string
+ *   time interval string using Timeago specific format.
+ *
+ * @see _gardens_misc_timeago_format_interval_strings()
+ * @see _gardens_misc_format_interval()
+ */
+function _gardens_misc_format_interval_timeago($interval, $granularity = 2) {
+  $time_strings = _gardens_misc_timeago_format_interval_strings();
+  return _gardens_misc_format_interval($interval, $time_strings, $granularity);
+}
+
+/**
+ * Registers an event for a flood protected feature.
+ *
+ * When a user hits the flood limit then he gets restricted for a predefined
+ * amount of time which gets longer with every try.
+ *
+ * @param string $name
+ *   The name of the event.
+ * @param string $identifier
+ *   The identifier of the user triggering the event.
+ *
+ * @return mixed
+ *   Returns FALSE if the flood protection did not trigger and a timestamp if it
+ *   did pointing how long the protection lasts.
+ */
+function gardens_misc_persistent_flood_register_event($name, $identifier) {
+  $flood_data = array(
+    'count' => 0,
+    'start' => REQUEST_TIME,
+  );
+  $cache = cache_get($name . ':' . $identifier, 'cache');
+  if ($cache && REQUEST_TIME < $cache->expire) {
+    $flood_data = $cache->data;
+  }
+
+  $flood_event_expire_interval = variable_get('gardens_misc_persistent_flood_expire_' . $name, 3600);
+  $flood_limit = variable_get('gardens_misc_persistent_flood_limit_' . $name, 10);
+  $flood_data['count']++;
+  // If the flood is not triggered the event will stick around for x time. If
+  // we suspect flooding then the event will stick around longer and longer
+  // always incrementing with x. To limit it though the max TTL will be
+  // an extra week.
+  if ($flood_data['count'] <= $flood_limit) {
+    $flood_expiration = $flood_data['start'] + $flood_event_expire_interval;
+  }
+  else {
+    $one_week = 7 * 86400;
+    // When flood count just triggers (count - limit) === 1 which would mean
+    // that the cache expiration would not change from the non-flood-triggered
+    // expiration, so we add one to it to make it stick around longer.
+    $persistency = ($flood_data['count'] - $flood_limit + 1) * $flood_event_expire_interval;
+    $flood_expiration = $persistency > $one_week ? REQUEST_TIME + $one_week : $flood_data['start'] + $persistency;
+  }
+
+  cache_set($name . ':' . $identifier, $flood_data, 'cache', $flood_expiration);
+
+  return $flood_data['count'] <= $flood_limit ? FALSE : $flood_expiration;
+}
+
+/**
+ * Implements hook_form_FORM_ID_alter().
+ */
+function gardens_misc_form_user_pass_alter(&$form, $form_state) {
+  if (variable_get('gardens_misc_forgotten_password_flood_protection', FALSE)) {
+    $form['#validate'][] = 'gardens_misc_forgotten_password_flood_protection';
+  }
+}
+
+/**
+ * Adds flood protection for password reminder form.
+ */
+function gardens_misc_forgotten_password_flood_protection($form, $form_state) {
+  $identifier = ip_address() . ':' . $form['name']['#value'];
+  $flood_protection = gardens_misc_persistent_flood_register_event('forgotten_password', $identifier);
+  if ($flood_protection) {
+    form_set_error('', t('You have reached the maximum number of password retrieval requests at this time. Please wait @time before requesting a new password.', array(
+      '@time' => format_interval($flood_protection - REQUEST_TIME, 2),
+    )));
+  }
+}
+
+/**
+ * Implements hook_file_presave().
+ *
+ * To prevent the files directory from becoming overloaded with too many uploads,
+ * we will automatically move new files to new time-based subdirectories.
+ */
+function gardens_misc_file_presave($file) {
+  // We only care about newly uploaded files.
+  if (empty($file->fid)) {
+    $scheme = file_uri_scheme($file->uri);
+    $target = file_uri_target($file->uri);
+
+    // Modules that are already using subdirs should probably bypass this check.
+    if (strpos($target, DIRECTORY_SEPARATOR)) {
+      return;
+    }
+
+    // Save the file in a time-based subdirectory.
+    $new_target = "$scheme://" . gardens_misc_prefix_file_dir($target, $scheme);
+    if ($new_uri = file_unmanaged_move($file->uri, $new_target)) {
+      $file->uri = $file->destination = $new_uri;
+    }
+  }
+}
+
+/**
+ * Adds flood protection for user registration form.
+ */
+function gardens_misc_user_registration_flood_protection($form, $form_state) {
+  $identifier = ip_address();
+  $flood_protection = gardens_misc_persistent_flood_register_event('user_registration', $identifier);
+  if ($flood_protection) {
+    form_set_error('', t('You have reached the maximum number of users you can create at this time. Please wait @time before creating new users.', array(
+      '@time' => format_interval($flood_protection - REQUEST_TIME, 2),
+    )));
+  }
+}
+
+/**
+ * Adds a time-based subdirectory to the beginning of a stream wrapper target if
+ * it isn't already there.
+ *
+ * To customize the subdirectory scheme, set the drupal variable
+ * "gardens_file_subdir_datestring" to a PHP date() compatable string. You may
+ * use a / as a directory separator in this string if you wish to recursively
+ * create subdirectories, e.g. "Y/m" -> "files/2012/12/file.jpg."
+ *
+ * @param String $target
+ *  An optional stream wrapper target.
+ * @param String $scheme
+ *  An optional stream wrapper scheme. Defaults to 'public'.
+ * @param Integer $timestamp
+ *  An optional timestamp of the date used for directory naming. Defaults to now.
+ */
+function gardens_misc_prefix_file_dir($target = '', $scheme = 'public', $timestamp = NULL) {
+  $timestamp = $timestamp !== NULL ? $timestamp : REQUEST_TIME;
+  $subdir = preg_replace('@[^a-zA-Z0-9/]@', '_', date(variable_get('gardens_file_subdir_datestring', 'Ym'), $timestamp));
+  $target = file_stream_wrapper_uri_normalize($target);
+  if (!preg_match("@^$subdir@", $target)) {
+    $target = !empty($target) ? "$subdir/$target" : $subdir;
+    $directory = "$scheme://$subdir";
+    file_prepare_directory($directory, FILE_CREATE_DIRECTORY);
+  }
+  return $target;
+}
+
+/**
+ * Implements hook_form_FORM_ID_alter().
+ */
+function gardens_misc_form_media_internet_add_alter(&$form, &$form_state) {
+  if (module_exists('media_oembed') && variable_get('oembedembedly_api_key', FALSE)) {
+    array_unshift($form['#validate'], 'gardens_misc_media_internet_add_https_conversion');
+  }
+}
+
+/**
+ * Filters 4 byte unicode strings.
+ *
+ * @param string $string
+ *   Input string to filter.
+ * @param string $replacement
+ *   Replacement text to replace a single character.
+ *
+ * @return string
+ *   Filtered string.
+ */
+function gardens_misc_filter_utf8mb4($string, $replacement = ' ') {
+  $common_range = "[\x80-\xbf]";
+  $range0 = "[\xf0][\x90-\xbf]{$common_range}{2}";  //  U+10000 -  U+3FFFF
+  $range1 = "[\xf1-\xf3]{$common_range}{3}";        //  U+40000 -  U+FFFFF
+  $range2 = "[\xf4]{$common_range}{3}";             // U+100000 - U+10FFFF
+
+  $regex = "/($range0)|($range1)|($range2)/m";
+
+  return preg_replace($regex, $replacement, $string);
+}
+
+/**
+ * Implements hook_feeds_after_parse().
+ */
+function gardens_misc_feeds_after_parse(FeedsSource $source, FeedsParserResult $result) {
+  if ($result) {
+    _gardens_misc_filter_utf8mb4_item($result->items);
+  }
+}
+
+/**
+ * Embedly input url conversion handler.
+ *
+ * When a user is logged into a service, for example soundcloud, they might be
+ * on a https url. The only issue with this is that the api.embed.ly is
+ * providing the available services and the regexps to recognize valid input
+ * using the http protocol. We could try to rewrite the regexps to make all of
+ * them available through https as well, but that would be brute force and some
+ * of the services might not even support https. The approach here is to imitate
+ * the recognition code and when that fails and the embed code has https then
+ * re-try with http and if that succeeds then we can rewrite the input to make
+ * everyone happy.
+ *
+ * @see media_internet_add_validate()
+ */
+function gardens_misc_media_internet_add_https_conversion($form, &$form_state) {
+  $embed_code = $form_state['values']['embed_code'];
+
+  // Offer second chance to embed code that starts with https. In the future we
+  // might need to extend this to cases where the https is not at the beginning
+  // of the string but for the time being this should do the trick.
+  if (strpos($embed_code, 'https://') === 0) {
+    try {
+      $provider = media_internet_get_provider($embed_code);
+      $provider->validate();
+    }
+    catch (MediaInternetNoHandlerException $e) {
+      $embed_code = 'http://' . drupal_substr($embed_code, 8);
+      try {
+        $provider = media_internet_get_provider($embed_code);
+        $provider->validate();
+        form_set_value($form['embed_code'], $embed_code, $form_state);
+      }
+      catch (Exception $e) {
+      }
+    }
+  }
+}
+
+/**
+ * Recursively traverses a feeds result to filter it from 4 byte unicode chars.
+ *
+ * @param array|object $item
+ *   Item to traverse.
+ */
+function _gardens_misc_filter_utf8mb4_item(&$item) {
+  foreach ($item as &$property) {
+    if (is_string($property)) {
+      $property = gardens_misc_filter_utf8mb4($property);
+    }
+    elseif (is_array($property) || is_object($property)) {
+      _gardens_misc_filter_utf8mb4_item($property);
+    }
+  }
+}
+
+/**
+ * Implements hook_entity_presave().
+ */
+function gardens_misc_entity_presave($entity) {
+  _gardens_misc_filter_utf8mb4_item($entity);
+}

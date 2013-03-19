@@ -1,0 +1,62 @@
+<?php
+
+/**
+ * Implementation of hook_schema().
+ */
+function themebuilder_test_schema() {
+  $schema['themebuilder_selector_report'] = array(
+    'description' => 'Report of selectors that have theming issues.',
+    'fields' => array(
+      'iid' => array(
+        'description' => 'Primary Key: Issue id.',
+        'type' => 'serial',
+        'unsigned' => TRUE,
+        'not null' => TRUE,
+      ),
+      'base_theme' => array(
+        'description' => 'The name of the base theme.',
+        'type' => 'varchar',
+        'length' => 128,
+        'not null' => TRUE,
+        'default' => '',
+      ),
+      'version' => array(
+        'description' => 'The theme version.',
+        'type' => 'varchar',
+        'length' => 20,
+        'not null' => TRUE,
+        'default' => '',
+      ),
+      'selector' => array(
+        'description' => 'The css selector.',
+        'type' => 'varchar',
+        'length' => 2048,
+        'not null' => TRUE,
+        'default' => '',
+      ),
+      'property' => array(
+        'description' => 'The name of the css property.',
+        'type' => 'varchar',
+        'length' => 128,
+        'not null' => TRUE,
+        'default' => '',
+      ),
+      'expected' => array(
+        'description' => 'The expected value of the css property.',
+        'type' => 'varchar',
+        'length' => 512,
+        'not null' => TRUE,
+        'default' => '',
+      ),
+      'actual' => array(
+        'description' => 'The actual value of the css property.',
+        'type' => 'varchar',
+        'length' => 512,
+        'not null' => TRUE,
+        'default' => '',
+      ),
+    ),
+    'primary key' => array('iid'),
+  );
+  return $schema;
+}

@@ -1,0 +1,6 @@
+name = Analytics Variables
+description = Select server-side events to be inserted to client-side Javascript.
+core = 7.x
+configure = admin/settings/system/server-variables
+files[] = tests/server_variables.test
+package = Statistics

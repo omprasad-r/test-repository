@@ -1,0 +1,270 @@
+<?php
+/**
+ * @file
+ *   Theme builder brand tab.
+ */
+
+/**
+ * Implementation of hook_menu().
+ */
+function themebuilder_brand_menu() {
+  $items = array();
+
+  // Used to invoke the selection UI.
+  $items['themebuilder-brand-page'] = array(
+    'title' => t('Brand page'),
+    'page callback' => 'themebuilder_brand_page',
+    'type' => MENU_CALLBACK,
+  );
+
+  // Configures the site logo block
+  $items['themebuilder-brand-configure-logo'] = array(
+    'title' => t('Configures the site logo block'),
+    'page callback' => 'themebuilder_bar_ajax_request',
+    'page arguments' => array('themebuilder_brand_configure_logo_block_ajax'),
+    'type' => MENU_CALLBACK,
+  );
+
+  foreach ($items as $path => &$item) {
+    $item['access callback'] = 'themebuilder_compiler_access';
+    $item['access arguments'] = array($path);
+  }
+  return $items;
+}
+
+/**
+ * Implements hook_themebuilder_bar_tab_permissions().
+ */
+function themebuilder_brand_themebuilder_bar_tab_permissions() {
+  return array(
+    'access themebuilder brand tab' => array(
+      'title' => t('Access the brand tab'),
+      'description' => t('Configure a theme\'s logo and color scheme.'),
+    ),
+  );
+}
+
+/**
+ * Implement hook_themebuilder_init_data().
+ */
+function themebuilder_brand_themebuilder_init_data() {
+  themebuilder_log_trace_enter(__FUNCTION__);
+  $data = array();
+  $data['default_logo_path'] = theme_get_setting('default_logo_path');
+  $data['default_favicon_path'] = theme_get_setting('default_favicon_path');
+  themebuilder_log_trace_exit(__FUNCTION__);
+  return $data;
+}
+
+/**
+ * Implementation of hook_themebuilder_bar_items().
+ */
+function themebuilder_brand_themebuilder_bar_items() {
+  if (user_access('access themebuilder brand tab')) {
+    return array(array('name' => 'brand', 'title' => t('Brand'), 'link' => 'themebuilder-brand-page', 'weight' => -15));
+  }
+}
+
+function themebuilder_brand_themebuilder_bar_editor() {
+  $brand_path = drupal_get_path('module', 'themebuilder_brand');
+  $style_path = drupal_get_path('module', 'themebuilder_styleedit');
+  return array(
+    array(
+      'js'  => array(
+        $brand_path . '/LogoPicker.js',
+        $brand_path . '/themebuilder_brand.js',
+        $brand_path . '/ThemeSettingModification.js',
+        $style_path . '/palettepicker/js/PalettePicker.js',
+      ),
+      'css' => array(
+        array(
+          'data' => $brand_path . '/themebuilder_brand.css',
+        ),
+        array(
+          'data' => $style_path .'/palettepicker/css/palettepicker.css',
+        ),
+      ),
+      'weight' => 10,
+    ),
+  );
+}
+
+function themebuilder_brand_page() {
+  $tabs = array('palettes' => t('Palettes'),
+                'logo' => t('Logo'));
+
+  //create tabs
+  $bodies = '<div class="contents">';
+  $top = '<div class="tabs tb-tabs-vert"><ul class="tabnav">';
+  foreach ($tabs as $name => $title){
+    $top .= '<li class="' . $name . '"><a href="#themebuilder-brand-' . $name . '" title="' . t($title) . '">' . $title . '</a></li>';
+    $func = "themebuilder_brand_tab_" . $name;
+    $bodies .= '<div id="themebuilder-brand-' . $name . '">' . $func() . '</div>';
+  }
+  $top .= '</ul></div>';
+  $bodies .= '</div>';
+  echo $top . $bodies;
+  die(0);
+}
+
+function themebuilder_brand_tab_palettes() {
+  return '<div id="themebuilder-brand-palette-picker" class="PalettePickerMain"><div class="header"><div class="swatches"><div class="palette-list-table"></div></div></div></div>';
+}
+
+/**
+ * Display the current logo and favicon with UI controls to update/delete them.
+ */
+function themebuilder_brand_tab_logo() {
+  $output = '';
+  $theme = themebuilder_compiler_get_current_theme_name();
+
+  // Get image URLs for the current logo and favicon.
+
+  $logo_path = theme_get_setting('default_logo_path', $theme);
+  // Use the theme's logo.png as a fallback, if there is no custom logo set.
+  $logo_url = ($logo_path ? path_to_theme() . '/' . $logo_path : theme_get_setting('logo', $theme));
+  $output .= _themebuilder_brand_tab_logo_subtab('logo', 'Logo', $logo_url);
+  // 1. Use the theme's favicon if it is set
+  $favicon_path = theme_get_setting('default_favicon_path', $theme);
+  if (isset($favicon_path)) {
+    $favicon_url = path_to_theme() . '/' . $favicon_path;
+  }
+  // 2. Use the gardens misc favicon if the theme does not have one
+  else {
+    if (module_exists('gardens_misc')) {
+      $favicon_url = drupal_get_path('module', 'gardens_misc') . '/images/gardens.ico';
+    }
+  }
+  // 3. Use the misc/favicon in the default case
+  $favicon_url = isset($favicon_url) ? $favicon_url : theme_get_setting('favicon', $theme);
+  $output .= _themebuilder_brand_tab_logo_subtab('favicon', 'Favicon', $favicon_url);
+
+  return $output;
+}
+
+function _themebuilder_brand_tab_logo_subtab($tab_name, $tab_readable_name, $image_url) {
+  $output = '';
+  $output .= '<div class="themebuilder-brand-' . $tab_name . ' themebuilder-brand-subtab"><h3>' . $tab_readable_name . ':</h3>';
+  $output .= '<div class="themebuilder-brand-subtab-ui-controls">';
+  $output .= theme('image', array('path' => $image_url, 'getsize' => FALSE));
+  $output .= '<div class="themebuilder-brand-subtab-buttons">';
+  $output .= '<div class="ui-state-default ui-corner-all-really button uploader" id="' . $tab_name . '-uploader">Browse...</div>';
+  $output .= '<a href="#">Remove</a>';
+  $output .= '</div></div></div>';
+
+  return $output;
+}
+
+/**
+ * Implementation of hook_themebuilder_load_theme().
+ *
+ * Ensures the blocks for site name, site slogan, and logo are
+ * configured appropriately in the theme being edited.
+ */
+function themebuilder_brand_themebuilder_load_theme($theme, $src_theme) {
+  themebuilder_brand_copy_logo_block_config($src_theme, $theme->getName());
+  themebuilder_brand_copy_name_and_slogan_block_config($src_theme, $theme->getName());
+}
+
+/**
+ * Implementation of hook_themebuilder_save_theme().
+ *
+ * Ensures the block for the logo is configured appropriately in the
+ * theme being edited.  The site name and site slogan configuration is
+ * not copied to the saved theme because that cannot be edited within
+ * the themebuilder.
+ *
+ * @param {Theme} $theme
+ *   The source theme object.
+ * @param {String} $dst_theme
+ *   The destination theme.
+ */
+function themebuilder_brand_themebuilder_save_theme($theme, $dst_theme) {
+  themebuilder_brand_copy_logo_block_config($theme->getName(), $dst_theme);
+}
+
+/**
+ * Copies the site logo block configuration.
+ *
+ * @param {String} $src_theme
+ *   The source theme.
+ * @param {String} $dst_theme
+ *   The destination theme.
+ */
+function themebuilder_brand_copy_logo_block_config($src_theme, $dst_theme) {
+  _themebuilder_brand_copy_block_config('block_everything', 'logo', $src_theme, $dst_theme);
+}
+
+/**
+ * Copies the site name and site slogan block configuration from the
+ * source to the destination theme.
+ *
+ * @param {String} $src_theme
+ *   The source theme.
+ * @param {String} $dst_theme
+ *   The destination theme.
+ */
+function themebuilder_brand_copy_name_and_slogan_block_config($src_theme, $dst_theme) {
+  _themebuilder_brand_copy_block_config('block_everything', 'site_name', $src_theme, $dst_theme);
+  _themebuilder_brand_copy_block_config('block_everything', 'site_slogan', $src_theme, $dst_theme);
+}
+
+/**
+ * Copies the block configuration from the source theme to the
+ * destination theme.
+ *
+ * The block for which the configuration should be copied is
+ * identified by the module and delta.
+ *
+ * @param {String} $module
+ *   The module associated with the block.
+ * @param {String} $delta
+ *   The block delta.
+ * @param {String} $src_theme
+ *   The source theme.
+ * @param {String} $dst_theme
+ *   The destination theme.
+ */
+function _themebuilder_brand_copy_block_config($module, $delta, $src_theme, $dst_theme) {
+  $src_block = db_query('SELECT region, status, weight FROM {block} WHERE module = :module AND delta = :delta AND theme = :theme', array(':module' => $module, ':delta' => $delta, ':theme' => $src_theme))->fetchObject();
+  if (isset($src_block) && isset($src_block->region) && isset($src_block->status) && isset($src_block->weight)) {
+    db_update('block')
+      ->condition('theme', $dst_theme)
+      ->condition('module', $module)
+      ->condition('delta', $delta)
+      ->fields(array('region' => $src_block->region,
+          'status' => $src_block->status,
+          'weight' => $src_block->weight,))
+      ->execute();
+  }
+}
+
+/**
+ * Called by the themebuilder client to add the logo block to the page so it can be seen.
+ *
+ * This function causes the block to be provisioned in the header
+ * region.  The block configuration for the logo will be copied when
+ * the theme is saved or published, so the configuration will be
+ * preserved after ending the themebuilder session.
+ */
+function themebuilder_brand_configure_logo_block_ajax() {
+  $ret = array();
+  $ret['error'] = '';
+  $block = db_query('SELECT * FROM {block} WHERE module = :module AND delta = :delta AND theme = :theme', array(':module' => 'block_everything', ':delta' => 'logo', ':theme' => themebuilder_compiler_get_current_theme_name()))->fetchObject();
+  if (isset($block)) {
+    $fields = array();
+    if (-1 == $block->region) {
+      $fields['region'] = 'header';
+    }
+    if (0 == $block->status) {
+      $fields['status'] = '1';
+    }
+    if (count($fields) > 0) {
+      $update = db_update('block')
+        ->condition('bid', $block->bid)
+        ->fields($fields)
+        ->execute();
+    }
+  }
+  themebuilder_compiler_json_output($ret);
+}

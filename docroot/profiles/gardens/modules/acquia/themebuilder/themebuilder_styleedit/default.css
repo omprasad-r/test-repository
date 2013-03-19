@@ -1,0 +1,28 @@
+body {} /* Page background */
+a {} /* Links */
+h1 {} /* Header 1 */
+h2 {} /* Header 2 */
+h1 a {} /* Header 1 links */
+h2 a {} /* Header 2 links */
+#usernav-region ul.menu li a {} /* User navigation links */
+.messages {} /* All messages */
+.messages.error {} /* Error messages */
+#sidebar-a {} /* Sidebar A */
+#sidebar-b {} /* Sidebar B */
+#header {} /* Header */
+#footer {} /* Footer */
+.block {} /* All blocks */
+.content {} /* All content */
+#content-wrapper {} /* Main Content Wrapper */
+#page {} /* Page */
+#page-wrapper {} /* Page wrapper */
+#main {} /* Main */
+#content {} /* Content region */
+body {} /* Body */
+#site-name {} /* Site Name Container */
+#site-name a {} /* Site Name Link */
+#logo {} /* Logo Link */
+#logo img {} /* Logo */
+label {} /* All form labels */
+textarea {} /* All text areas */
+input.form-submit {} /* Form Submit Buttons */

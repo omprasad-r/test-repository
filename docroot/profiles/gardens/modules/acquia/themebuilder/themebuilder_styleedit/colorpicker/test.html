@@ -1,0 +1,23 @@
+<html>
+<head><title>ColorPicker Test</title>
+<link rel='stylesheet' href='css/colorpicker2.css'/>
+<script src='js/jquery.js'></script>
+<script src='js/jquery-ui.min.js'></script>
+<script src='js/colorpicker2.js'></script>
+</head>
+<body>
+<div style='height:300px'></div>
+<div class="colorPicker"></div>
+<!--input id="myman"/-->
+
+<script>
+console.log('oh');
+$(".colorPicker").colorPicker({
+    onChange:function(color){
+        $('.colorPicker').css('background-color',color);
+    }
+});
+</script>
+
+</body>
+</html>

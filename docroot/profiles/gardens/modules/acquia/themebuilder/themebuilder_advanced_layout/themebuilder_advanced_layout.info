@@ -1,0 +1,7 @@
+name = Themebuilder advanced layout editor
+description = Themebuilder advanced layout tab module
+core = 7.x
+package = Themebuilder
+dependencies[] = themebuilder_advanced
+dependencies[] = themebuilder_layout
+hidden = TRUE

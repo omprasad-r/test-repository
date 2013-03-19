@@ -1,0 +1,442 @@
+<?php
+
+/**
+ * @file
+ * Logs form changes or whole form submissions for the specified forms.
+ */
+
+/**
+ * Implements hook_menu().
+ */
+function audit_trail_menu() {
+  $items = array();
+  $items['admin/config/development/audit-trail'] = array(
+    'title' => 'Audit trail',
+    'description' => 'Configure audit trail settings.',
+    'page callback' => 'drupal_get_form',
+    'page arguments' => array('audit_trail_admin_configure'),
+    'access arguments' => array('administer audit trail'),
+    'file' => 'audit_trail.admin.inc',
+  );
+  $items['admin/config/development/audit-trail/manage/%/%'] = array(
+    'page callback' => 'audit_trail_admin_tracking_manage',
+    'page arguments' => array(5, 6),
+    'access arguments' => array('administer audit trail'),
+    'type' => MENU_CALLBACK,
+    'file' => 'audit_trail.admin.inc',
+  );
+  return $items;
+}
+
+/**
+ * Implements hook_permission().
+ */
+function audit_trail_permission() {
+  return array(
+    'administer audit trail' => array(
+      'title' => t('Administer audit trail'),
+      'description' => t('Perform administration tasks for audit trail.'),
+    ),
+  );
+}
+
+/**
+ * Implements hook_form_alter().
+ *
+ * Adds submit function to forms which have been picked for tracking. Depending
+ * on settings it could also add links to manage form tracking status.
+ */
+function audit_trail_form_alter(&$form, &$form_state, $form_id) {
+  // This variable will be either empty string when the form does not need to be
+  // tracked or will contain the name of the submit function that will handle
+  // the tracking. The matching pattern will hold the regexp pattern that
+  // matched the current form's form_id - to be used at the end of the form.
+  $audit_handler = $matching_pattern = '';
+
+  // Check if the form needs to be tracked for submits or changes. Submission
+  // tracking takes precedence over changes tracking because they are probably
+  // going to be used for delete confirm forms where the user is not going to
+  // change anything on the form.
+  $patterns_handlers = array(
+    'audit_trail_form_submissions' => 'audit_trail_form_submit_log',
+    'audit_trail_form_changes' => 'audit_trail_form_change_log',
+  );
+  foreach ($patterns_handlers as $variable_name => $handler) {
+    // We store tracking patterns in two variables. One that stores path
+    // patterns and an other that stores form id patterns.
+    foreach (array('_path', '') as $variable_suffix) {
+      // For grepping purposes:
+      // audit_trail_form_submissions audit_trail_form_submissions_path
+      // audit_trail_form_changes audit_trail_form_changes_path
+      $patterns = audit_trail_patterns_get(variable_get($variable_name . $variable_suffix, ''));
+      $subject = $variable_suffix == '_path' ? current_path() : $form_id;
+      foreach ($patterns as $pattern) {
+        if (preg_match($pattern, $subject)) {
+          // $matching_pattern is used when 'track management' links are being
+          // shown for the form. Currently these management links are only
+          // available for form id patterns, not for path patterns.
+          if ($variable_suffix == '') {
+            $matching_pattern = $pattern;
+          }
+          // Note which function will handle the tracking.
+          $audit_handler = $handler;
+          // One match is enough, no need to check the other patterns.
+          break 3;
+        }
+      }
+    }
+  }
+
+  if ($audit_handler == 'audit_trail_form_change_log') {
+    // In certain cases we need the original form structure as well. See
+    // _audit_trail_diff_collect().
+    if (!isset($form_state['audit_trail_old_form'])) {
+      $form_state['audit_trail_old_form'] = $form;
+    }
+  }
+
+  if ($audit_handler) {
+    // Find the possible submit places where submit functions would appear.
+    _audit_trail_submit_hook_include($form, $audit_handler);
+    // Above function acted cautiously to avoid overriding submit paths on
+    // buttons wit empty #submit fields so it might not have appended the submit
+    // handler on the $form itself.
+    if (empty($form['#submit'])) {
+      $form['#submit'][] = $audit_handler;
+    }
+  }
+
+  // Show form tracking management links if it has been configured for it and
+  // the user has access to the feature.
+  $show_track_management_link = variable_get('audit_trail_form_management_link', array());
+  if (user_access('administer audit trail') && ((arg(0) == 'admin' && !empty($show_track_management_link['admin'])) || (arg(0) != 'admin' && !empty($show_track_management_link['nonadmin'])))) {
+    $links = array();
+    // Show a link to enable form change tracking, if no tracking is set yet.
+    if (!$audit_handler) {
+      $links['track-changes'] = array(
+        'title' => t('Start tracking changes on this form'),
+        'href' => 'admin/config/development/audit-trail/manage/track-changes/' . $form_id,
+        'query' => array('token' => drupal_get_token('audit-trail-track-changes-' . $form_id)) + drupal_get_destination(),
+      );
+    }
+
+    // Show a link to enable form submit tracking, if the form is either not
+    // tracked or only form changes are being tracked.
+    if ($audit_handler != 'audit_trail_form_submit_log') {
+      $links['track-submissions'] = array(
+        'title' => t('Start tracking submissions on this form'),
+        'href' => 'admin/config/development/audit-trail/manage/track-submissions/' . $form_id,
+        'query' => array('token' => drupal_get_token('audit-trail-track-submissions-' . $form_id)) + drupal_get_destination(),
+      );
+    }
+
+    if ($audit_handler) {
+      $tracking_type = $audit_handler == 'audit_trail_form_change_log' ? 'changes' : 'submissions';
+      // If the pattern that found this form is not a dynamic one we can offer
+      // to remove the entry for the user.
+      if ($matching_pattern == '/^' . $form_id . '$/') {
+        $title = $tracking_type == 'changes' ? t('Stop tracking changes on this form') : t('Stop tracking submissions on this form');
+        $links['untrack-' . $tracking_type] = array(
+          'title' => $title,
+          'href' => 'admin/config/development/audit-trail/manage/untrack-' . $tracking_type . '/' . $form_id,
+          'query' => array('token' => drupal_get_token('audit-trail-untrack-' . $tracking_type . '-' . $form_id)) + drupal_get_destination(),
+        );
+      }
+      else {
+        // Form is being tracked with a path pattern or dynamic form id pattern.
+        if ($tracking_type == 'changes') {
+          $title = t('This form is being tracked for changes either by a path pattern or a dynamic form id pattern.');
+        }
+        else {
+          $title = t('This form is being tracked for submissions either by a path pattern or a dynamic form id pattern.');
+        }
+        $links['tracking-dynamic'] = array(
+          'title' => $title,
+        );
+      }
+    }
+
+    if ($links) {
+      $form['audit_trail_track_management_links'] = array(
+        '#theme' => 'links',
+        '#links' => $links,
+        '#weight' => -99,
+      );
+    }
+  }
+}
+
+/**
+ * Adds audit trail's submit function to handle form tracking.
+ *
+ * @param array $elements
+ *   Referenced variable that holds a set of form elements.
+ * @param string $audit_handler
+ *   The name of the submit function that will handle the tracking.
+ */
+function _audit_trail_submit_hook_include(&$elements, $audit_handler) {
+  // Find all elements which might have a #submit key on them.
+  foreach (element_children($elements) as $key) {
+    if (isset($elements[$key]) && $elements[$key]) {
+      _audit_trail_submit_hook_include($elements[$key], $audit_handler);
+    }
+  }
+  // Careful, we do not want to end up with a button that only has the audit
+  // handler among the submit functions since it would block normal submit flow.
+  if (!empty($elements['#submit'])) {
+    $elements['#submit'][] = $audit_handler;
+  }
+}
+
+/**
+ * Returns the default context for a tracked form.
+ */
+function audit_trail_default_context_get($form, $form_state) {
+  return array(
+    'time' => format_date(REQUEST_TIME, 'custom', 'Y-m-d H:i:s'),
+    'user' => $GLOBALS['user']->uid,
+    'form' => $form['#form_id'],
+    'triggering element' => $form_state['triggering_element']['#value'],
+  );
+}
+
+/**
+ * Submit handler to log form submissions.
+ */
+function audit_trail_form_submit_log($form, $form_state) {
+  $context = audit_trail_default_context_get($form, $form_state);
+  // Preserve $form_state in case an other submit function comes after us.
+  $diffs = $form_state['values'];
+  // Remove sensitive information.
+  _audit_trail_form_submit_sensitive_info_remove($form, $diffs);
+  // Remove noise.
+  unset($diffs['form_build_id'], $diffs['form_token'], $diffs['form_id'], $diffs['op']);
+  // Allow modules to interact with the data and the context.
+  drupal_alter('audit_trail_form_submit_log', $diffs, $context);
+  // If $diffs has been cleared out because logging has been solved differently
+  // then we should not keep going.
+  if ($diffs) {
+    // Write out the data. Form state could contain any kind of nested data
+    // structure, so it gets serialized.
+    audit_trail_log_push(array(serialize($diffs)), $context);
+  }
+}
+
+/**
+ * Removes sensitive information from the submission log.
+ *
+ * @param array $elements
+ *   Set of form elements.
+ * @param string $diffs
+ *   Referenced variable holding all the form submission values. The password
+ *   field values will be replaced in it.
+ */
+function _audit_trail_form_submit_sensitive_info_remove($elements, &$diffs) {
+  // Find all form elements in the tree.
+  foreach (element_children($elements) as $key) {
+    if (isset($elements[$key]) && $elements[$key]) {
+      _audit_trail_form_submit_sensitive_info_remove($elements[$key], $diffs);
+    }
+  }
+  if (isset($elements['#type']) && ($elements['#type'] == 'password')) {
+    drupal_array_set_nested_value($diffs, $elements['#parents'], t('Hidden'), TRUE);
+  }
+}
+
+/**
+ * Submit handler to log form changes.
+ */
+function audit_trail_form_change_log($form, $form_state) {
+  $diffs = array();
+  $context = audit_trail_default_context_get($form, $form_state);
+  // Find the changes the user made on the form.
+  _audit_trail_diff_collect($form, $form_state['audit_trail_old_form'], $diffs);
+  // Allow modules to interact with the data and the context.
+  drupal_alter('audit_trail_form_change_log', $diffs, $context);
+  // Compose log entries from the diffs.
+  $log_entries = audit_trail_change_log_prepare($diffs);
+  // Write out the data.
+  audit_trail_log_push($log_entries, $context);
+}
+
+/**
+ * Collects changed form elements recursively.
+ *
+ * @param array $elements
+ *   A set of form elements.
+ * @param array $original_elements
+ *   The original form elements.
+ * @param array $diffs
+ *   Referenced variable where all the diffs get stored.
+ */
+function _audit_trail_diff_collect($elements, $original_elements, &$diffs) {
+  // Some fields use children fields to accept input. The data related to these
+  // fields appear in the structure duplicated, once on the field itself, and
+  // fragments of data on the children. To avoid logging changes twice these
+  // children fields are not processed.
+  $fields_with_children = array(
+    'date',
+    'password_confirm',
+    'radios',
+    'tableselect',
+  );
+  // Find all form elements in the tree.
+  foreach (element_children($elements) as $key) {
+    if (isset($elements[$key]) && $elements[$key] && (!isset($elements['#type']) || !in_array($elements['#type'], $fields_with_children))) {
+      _audit_trail_diff_collect($elements[$key], isset($original_elements[$key]) ? $original_elements[$key] : NULL, $diffs);
+    }
+  }
+  // Processed form elements store the input in #value and the original value
+  // stays in #default_value. Some form elements start without #default_value.
+  // On the other hand, there are some form elements (like form_build_id) which
+  // start right away with a #value field and do not have a #default_value.
+  // Comparing to the original form structure allows us to identify such cases.
+  $old_value = isset($elements['#default_value']) ? $elements['#default_value'] : NULL;
+  $new_value = isset($elements['#value']) && !isset($original_elements['#value']) ? $elements['#value'] : NULL;
+  // We are expecting either scalars or arrays. If there is a form element which
+  // is storing objects then turn that into an array so it still appears.
+  if (is_object($old_value)) {
+    $old_value = (array) $old_value;
+  }
+  if (is_object($new_value)) {
+    $new_value = (array) $new_value;
+  }
+  if (isset($elements['#type']) && $elements['#type'] == 'checkboxes') {
+    // In case of checkboxes there is a bit of inconsistency between #value and
+    // #default_value - see form_type_checkboxes_value() - browsers do not
+    // submit anything for unchecked checkboxes. #value might differ in that
+    // it will contain the checked fields' names in a numeric array, while the
+    // initial #default_value might be an associative array. To be able to do
+    // the comparison we need to get both structures to the same state.
+    if ($new_value) {
+      $new_value = array_filter(array_values($new_value));
+    }
+    if ($old_value) {
+      $old_value = array_filter(array_values($old_value));
+    }
+  }
+  if (isset($new_value) && $new_value != $old_value && (!empty($new_value) || !empty($old_value))) {
+    if (is_array($new_value)) {
+      if (!is_array($old_value)) {
+        $old_value = array();
+      }
+      switch ($elements['#type']) {
+        case 'select':
+        case 'checkboxes':
+        case 'tableselect':
+          // Log added/removed items.
+          $keys_being_removed = array_diff($old_value, $new_value);
+          $keys_being_added = array_diff($new_value, $old_value);
+          $diffs['[' . implode('][', $elements['#array_parents']) . ']'] = array(
+            'old' => serialize(array_fill_keys($keys_being_removed, 1) + array_fill_keys($keys_being_added, 0)),
+            'new' => serialize(array_fill_keys($keys_being_removed, 0) + array_fill_keys($keys_being_added, 1)),
+          );
+          break;
+
+        case 'password_confirm':
+          // Hide actual data.
+          $diffs['[' . implode('][', $elements['#array_parents']) . ']'] = array(
+            'old' => t('Hidden'),
+            'new' => t('Hidden'),
+          );
+          break;
+
+        default:
+          // Log before/after data structure.
+          $diffs['[' . implode('][', $elements['#array_parents']) . ']'] = array(
+            'old' => serialize($old_value),
+            'new' => serialize($new_value),
+          );
+          break;
+      }
+    }
+    else {
+      // Do not log sensitive information.
+      if ($elements['#type'] == 'password') {
+        $old_value = t('Hidden');
+        $new_value = t('Hidden');
+      }
+      // We might get an array in $old_value. For example in case of tableselect
+      // if no default_value has been specified then core fills it with array()
+      // even when #multiple is FALSE and we expect a single value.
+      if (is_array($old_value)) {
+        $old_value = serialize($old_value);
+      }
+      $diffs['[' . implode('][', $elements['#array_parents']) . ']'] = array(
+        'old' => $old_value,
+        'new' => $new_value,
+      );
+    }
+  }
+}
+
+/**
+ * Composes log entries out of form change diff array.
+ *
+ * @param array $diffs
+ *   Associative array of form changes.
+ *
+ * @return array
+ *   Array of strings describing each form change.
+ */
+function audit_trail_change_log_prepare($diffs) {
+  $separator = variable_get('audit_trail_separator', ',');
+  $log_entries = array();
+  foreach ($diffs as $path => $diff) {
+    $log_entries[] = $path . $separator . $diff['old'] . $separator . $diff['new'];
+  }
+  return $log_entries;
+}
+
+/**
+ * Helper function to push out the logs.
+ *
+ * @param array $log_entries
+ *   An array of strings each containing a log entry.
+ * @param array $context
+ *   The context in which the form was executed.
+ */
+function audit_trail_log_push($log_entries, $context) {
+  if ($log_entries) {
+    $log_destination = variable_get('audit_trail_log_destination', 'watchdog');
+    switch ($log_destination) {
+      case 'watchdog':
+        $context_array = array();
+        foreach ($context as $name => $value) {
+          $context_array[] = $name . ': ' . $value;
+        }
+        $variables = array(
+          '@context' => implode("\n", $context_array),
+          '@logs' => implode("\n", $log_entries),
+        );
+        watchdog('audit_trail', 'Context:<pre>@context</pre>Logs:<pre>@logs</pre>', $variables, WATCHDOG_INFO);
+        break;
+
+      case 'file':
+        $separator = variable_get('audit_trail_separator', ',');
+        $prefix = implode($separator, $context);
+        $combined_logs = array();
+        foreach ($log_entries as $log_entry) {
+          // Make sure new lines in the input do not mess with our logging.
+          $combined_logs[] = str_replace(array("\n", "\r"), "", $prefix . $separator . $log_entry);
+        }
+        file_put_contents(variable_get('audit_trail_log_file', 'temporary://drupal_audit_trail.log'), implode("\n", $combined_logs) . "\n", FILE_APPEND);
+        break;
+    }
+  }
+}
+
+/**
+ * Transforms a text of patterns into a normalized array of patterns.
+ *
+ * @param string $patterns
+ *   Text of patterns spearated by $separator.
+ * @param string $separator
+ *   String used to separate patterns in a text.
+ *
+ * @return array
+ *   Array of trimmed patterns without empty items.
+ */
+function audit_trail_patterns_get($patterns, $separator = "\n") {
+  return array_filter(array_map('trim', explode($separator, $patterns)));
+}

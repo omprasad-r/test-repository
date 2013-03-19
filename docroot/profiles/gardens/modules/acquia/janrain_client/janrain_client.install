@@ -1,0 +1,166 @@
+<?php
+
+/**
+ * @file
+ *
+ * Install, update and uninstall functions for the janrain_client.
+ */
+
+/**
+ * Implements hook_enable().
+ */
+function janrain_client_enable() {
+  janrain_client_ensure_setup();
+}
+
+  /**
+ * Implements hook_schema().
+ */
+function janrain_client_schema() {
+
+
+  $schema['rpx_user_publish_authmap'] = array(
+    'description' => 'Stores 3rd party user IDs, provider names, and 3rd party preferred display names for users that enable Janrain Engage social publishing.',
+    'fields' => array(
+      'uid' => array(
+        'type' => 'int',
+        'unsigned' => TRUE,
+        'not null' => TRUE,
+        'description' => 'The user id.',
+      ),
+      'provider' => array(
+        'type' => 'varchar',
+        'length' => 30,
+        'not null' => TRUE,
+        'description' => 'The social sharing provider machine name.',
+      ),
+      'rpxid' => array(
+        'type' => 'varchar',
+        'length' => 128,
+        'not null' => TRUE,
+        'description' => 'Provider-specific user ID for the user.',
+      ),
+      'username' => array(
+        'type' => 'varchar',
+        'length' => 60,
+        'not null' => TRUE,
+        'description' => 'Provider-specific user name for the user.',
+      ),
+    ),
+    'primary key' => array('uid', 'provider'),
+  );
+
+  $schema['rpx_user_publish_node_type'] = array(
+    'description' => 'Stores the names of content types that users enable for social publishing.',
+    'fields' => array(
+      'uid' => array(
+        'type' => 'int',
+        'unsigned' => TRUE,
+        'not null' => TRUE,
+        'description' => 'The user id.',
+      ),
+      'type' => array(
+        'type' => 'varchar',
+        'length' => 32,
+        'not null' => TRUE,
+        'description' => 'Name of content type enabled for social publishing by the user.',
+      ),
+    ),
+    'primary key' => array('uid', 'type'),
+  );
+
+  return $schema;
+}
+
+/**
+ * Create a table to hold user-enabled content types for social publishing;
+ * remove unused rpx_user_publish_providers variable.
+ */
+function janrain_client_update_7001() {
+  $schema['rpx_user_publish_node_type'] = array(
+    'description' => 'Stores the names of content types that users enable for social publishing.',
+    'fields' => array(
+      'uid' => array(
+        'type' => 'int',
+        'unsigned' => TRUE,
+        'not null' => TRUE,
+        'description' => 'The user id.',
+      ),
+      'type' => array(
+        'type' => 'varchar',
+        'length' => 32,
+        'not null' => TRUE,
+        'description' => 'Name of content type enabled for social publishing by the user.',
+      ),
+    ),
+    'primary key' => array('uid', 'type'),
+  );
+
+  foreach ($schema as $name => $table) {
+    db_create_table($name, $table);
+  }
+
+  variable_del('rpx_user_publish_providers');
+}
+
+/**
+ * Rename the 'edit own list of social networks' and 'edit default social
+ * networks' permissions.
+ */
+function janrain_client_update_7002() {
+  // Since there are deployed sites that have both the old and new permission
+  // names enabled for roles, we first delete permissions with the old name
+  // that already have a counterpart with the new one. Then we rename the
+  // remaining old permissions.
+
+  $subselect = array_keys(db_query("SELECT rid FROM {role_permission} WHERE permission = 'publish to sites social networks'")->fetchAllKeyed());
+
+  if (!empty($subselect)) {
+    db_delete('role_permission')
+      ->condition('permission', 'edit default social networks')
+      ->condition('rid', $subselect, 'IN')
+      ->execute();
+  }
+
+  db_update('role_permission')
+    ->fields(array('permission' => 'publish to sites social networks'))
+    ->condition('permission', 'edit default social networks')
+    ->execute();
+
+  $subselect = array_keys(db_query("SELECT rid FROM {role_permission} WHERE permission = 'publish to own social networks'")->fetchAllKeyed());
+
+  if (!empty($subselect)) {
+    db_delete('role_permission')
+      ->condition('permission', 'edit own list of social networks')
+      ->condition('rid', $subselect, 'IN')
+      ->execute();
+  }
+
+  db_update('role_permission')
+    ->fields(array('permission' => 'publish to own social networks'))
+    ->condition('permission', 'edit own list of social networks')
+    ->execute();
+
+  return t("Renamed the 'edit default social networks' and 'edit own list of social networks' permissions to 'publish to sites social networks' and 'publish to own social networks', respectively.");
+}
+
+/**
+ * Implements hook_uninstall().
+ */
+function janrain_client_uninstall() {
+  variable_del('rpx_api_key');
+  variable_del('rpx_app_id');
+  variable_del('rpx_realm');
+  variable_del('rpx_admin_url');
+  variable_del('rpx_invite_url');
+  variable_del('rpx_default_networks');
+  variable_del('rpx_networks_string');
+  variable_del('rpx_default_action_nodes');
+  variable_del('rpx_default_user_content_nodes');
+  variable_del('rpx_default_title_nodes');
+  variable_del('rpx_default_action_comments');
+  variable_del('rpx_default_user_content_comments');
+  variable_del('rpx_default_title_comments');
+  variable_del('rpx_publish_node_types');
+  variable_del('rpx_providers');
+}

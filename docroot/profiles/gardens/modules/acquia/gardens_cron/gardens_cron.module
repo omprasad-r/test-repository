@@ -1,0 +1,244 @@
+<?php
+
+/**
+ * @file
+ *   Runs cron in a separate process to avoid long delays in servicing
+ *   user requests.  Note that this scheme will only work on Unix
+ *   platforms.
+ */
+
+/**
+ * Implementation of hook_init().
+ */
+function gardens_cron_init() {
+  // The system automatic cron runs near the end of the request.  This
+  // code is virtually a copy of what happens in the automatic cron
+  // code in the system module, except that we run it near the
+  // beginning of the request, and if it is time to run cron we change
+  // the timestamp when cron was last run to guarantee that cron isn't
+  // run at the end of this request also.
+
+  // If the site is not fully installed, suppress the automated cron run.
+  // Otherwise it could be triggered prematurely by AJAX requests during
+  // installation.
+  if (($threshold = variable_get('cron_safe_threshold', DRUPAL_CRON_DEFAULT_THRESHOLD)) > 0 && variable_get('install_task') == 'done') {
+    $cron_last = variable_get('cron_last', NULL);
+    if (!isset($cron_last) || (REQUEST_TIME - $cron_last > $threshold)) {
+      global $base_url;
+      $cron_key = escapeshellarg(variable_get('cron_key', 'drupal'));
+
+      // Run wget to request the cron url for the site in the
+      // background.  The exec call will return immediately.
+      $command = "wget -O - -q $base_url/cron.php?cron_key=$cron_key > /dev/null 2>&1 &";
+      exec($command);
+
+      // Make sure that cron is not executed at the end of this
+      // process via the autocron implemented in the system module.
+      // Here I will set the cron timestamp to the current request
+      // time.  The theory is that this scheme works almost exactly as
+      // if you had set up a crontab to run wget.  If the cron process
+      // fails, you wouldn't get a retry until the next cron
+      // invocation time.  This will work similarly, and this
+      // modification ensures that subsequent requests do not attempt
+      // to run cron again while cron is already running.  That would
+      // be wasteful and should be avoided.
+      variable_set('cron_last', REQUEST_TIME);
+    }
+  }
+}
+
+/**
+ * Implements hook_menu().
+ */
+function gardens_cron_menu() {
+  $items = array();
+
+  $items['gardens_cron_select'] = array(
+    'type' => MENU_CALLBACK,
+    'access callback' => 'gardens_cron_select_access',
+    'access arguments' => array(1),
+    'page callback' => 'gardens_cron_select',
+  );
+
+  return $items;
+}
+
+/**
+ * Access callback for /gardens_cron_select.
+ *
+ * Uses the same token for access control as gardens_misc_report_site_statistics_access.
+ */
+function gardens_cron_select_access($md5) {
+  if (empty($md5) || $md5 != gardens_misc_get_site_statistics_token()) {
+    watchdog('cron', 'Cron could not run because an invalid key was used.', array(), WATCHDOG_NOTICE);
+    return FALSE;
+  }
+  elseif (variable_get('maintenance_mode', 0)) {
+    watchdog('cron', 'Cron could not run because the site is in maintenance mode.', array(), WATCHDOG_NOTICE);
+    return FALSE;
+  }
+
+  return TRUE;
+}
+
+/**
+ * Page callback - run cron hook for selected modules only.
+ *
+ * Example call:
+ *
+ * http://example.com/gardens_cron_select/<site-hash-cron-key>?modules=<comma,separated,module,list>
+ *
+ * @see gardens_misc_get_site_statistics_token() for more information on the expected
+ * value of <site-hash-cron-key>.
+ */
+function gardens_cron_select() {
+  gardens_cron_select_cron(array_map('trim', explode(',', $_GET['modules'])));
+  drupal_exit();
+}
+
+/**
+ * Run cron for selected modules only.
+ *
+ * Copied from drupal_cron_run() with a few alterations.
+ *
+ * @param $selected
+ *   Array of modules to run cron for.
+ * @param $run
+ *   One of:
+ *     - both (default): run both cron hooks and queues for selected modules
+ *     - cron: run just cron hooks
+ *     - queue: run just queues
+ *
+ * @return
+ *   TRUE if at least one cron hook ran, otherwise FALSE.
+ */
+function gardens_cron_select_cron(array $selected, $run = 'both') {
+  // Allow execution to continue even if the request gets canceled.
+  @ignore_user_abort(TRUE);
+
+  // Prevent session information from being saved while cron is running.
+  drupal_save_session(FALSE);
+
+  // Force the current user to anonymous to ensure consistent permissions on
+  // cron runs.
+  $original_user = $GLOBALS['user'];
+  $GLOBALS['user'] = drupal_anonymous_user();
+
+  // Try to allocate enough time to run all the hook_cron implementations.
+  drupal_set_time_limit(240);
+
+  $return = FALSE;
+
+  // Try to acquire cron lock.
+  // We could have just grabbed a lock for the selected modules here, but regular cron
+  // would then still run the cron hook for those modules regardless. For now it's
+  // best to avoid all concurrent crons by maintaining just 1 lock key.
+  // If we know we're only dealing with the queue, we don't realy need the lock.
+  if ($run != 'queue') {
+    if (!lock_acquire('cron', 240.0)) {
+      // Cron is still running normally.
+      watchdog('cron', 'Attempting to re-run cron while it is already running.', array(), WATCHDOG_WARNING);
+    }
+    else {
+      // Register shutdown callback
+      drupal_register_shutdown_function('drupal_cron_cleanup');
+
+      $implementations = module_implements('cron');
+      $valid = array_intersect($implementations, $selected);
+      $invalid = array_diff($selected, $implementations);
+      if (!empty($invalid)) {
+        watchdog('cron', 'Invalid cron modules specified in: %modules. Invalid cron hooks: %invalid. Valid implementation were: %implementations', array(
+          '%modules' => implode(', ', $selected),
+          '%implementations' => implode(', ', $implementations),
+          '%invalid' => implode(',', $invalid),
+        ), WATCHDOG_WARNING);
+      }
+      if (!empty($valid)) {
+        // Return TRUE if we have at least one valid implementation.
+        $return = TRUE;
+
+        // Iterate through the modules calling their cron handlers (if any):
+        foreach ($valid as $module) {
+          // Do not let an exception thrown by one module disturb another.
+          try {
+            module_invoke($module, 'cron');
+          }
+          catch (Exception $e) {
+            watchdog_exception('cron', $e);
+          }
+        }
+      }
+      else {
+        watchdog('cron', 'No valid cron hook in specified modules: %modules. Valid implementation were: %implementations', array(
+          '%modules' => implode(', ', $selected),
+          '%implementations' => implode(', ', $implementations),
+        ), WATCHDOG_WARNING);
+      }
+
+      // Don't record cron time, as we assume this is not a full run.
+      watchdog('cron', 'Cron run completed for selected modules: %modules', array('%modules' => implode(', ', $valid)), WATCHDOG_NOTICE);
+
+      // Release cron lock.
+      lock_release('cron');
+    }
+  }
+
+  if ($run != 'cron') {
+    // Grab the defined cron queues.
+    $queues = gardens_cron_module_invoke_some('cron_queue_info', $selected);
+    drupal_alter('cron_queue_info', $queues);
+
+    // Make sure every queue exists. There is no harm in trying to recreate an
+    // existing queue.
+    foreach ($queues as $queue_name => $info) {
+      DrupalQueue::get($queue_name)->createQueue();
+    }
+
+    foreach ($queues as $queue_name => $info) {
+      $function = $info['worker callback'];
+      $end = time() + (isset($info['time']) ? $info['time'] : 15);
+      $queue = DrupalQueue::get($queue_name);
+      while (time() < $end && ($item = $queue->claimItem())) {
+        $function($item->data);
+        $queue->deleteItem($item);
+      }
+    }
+  }
+
+  // Restore the user.
+  $GLOBALS['user'] = $original_user;
+  drupal_save_session(TRUE);
+
+  return $return;
+}
+
+/**
+ * Copy of module_invoke_all that will only invoke for listed modules.
+ *
+ * Not tested on implementations that require additional arguments, but should work.
+ */
+function gardens_cron_module_invoke_some($hook, $modules) {
+  $args = func_get_args();
+  // Remove $hook and $modules from the arguments.
+  unset($args[0]);
+  unset($args[1]);
+  $return = array();
+
+  $implementations = module_implements($hook);
+  $valid = array_intersect($implementations, $modules);
+
+  foreach ($valid as $module) {
+    $function = $module . '_' . $hook;
+    if (function_exists($function)) {
+      $result = call_user_func_array($function, $args);
+      if (isset($result) && is_array($result)) {
+        $return = array_merge_recursive($return, $result);
+      }
+      elseif (isset($result)) {
+        $return[] = $result;
+      }
+    }
+  }
+
+  return $return;
+}

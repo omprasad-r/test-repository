@@ -1,0 +1,6 @@
+name = Drupal Gardens Site Duplication
+description = Helper module for duplicating Drupal Gardens sites.
+core = 7.x
+package = Drupal Gardens
+files[] = gardens_duplication.module
+hidden = TRUE

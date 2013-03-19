@@ -1,0 +1,382 @@
+#themebuilder-wrapper #themebuilder-advanced .tabs {
+  float: left;
+}
+
+#themebuilder-wrapper #themebuilder-advanced .contents {
+  padding: 0 22px 0 0;
+  width: auto;
+  overflow: hidden;
+  margin-right: 219px;
+}
+
+#themebuilder-wrapper #themebuilder-advanced .first {
+  width: 100px;
+}
+
+#themebuilder-wrapper #themebuilder-advanced textarea.themebuilder-advanced-inner {
+  width: 99%;
+  height: 180px;
+  font-family: "Courier", "monospace";
+  border: none;
+  color: #000000;
+  resize: none;
+  padding: 2px 0.5% 2px;
+}
+
+#themebuilder-wrapper #themebuilder-advanced-css {
+  margin: 0 12px 0 0;
+  padding: 0;
+  height: 222px;
+}
+
+#themebuilder-wrapper #themebuilder-advanced-history {
+  margin: 0;
+  padding: 0;
+}
+
+#themebuilder-wrapper .history-table-row {
+  overflow: hidden;
+}
+
+#themebuilder-wrapper .history-element-text {
+  color: #CCC;
+  cursor: pointer;
+}
+
+#themebuilder-wrapper .history-selector:hover {
+  color: #44BBFF;
+}
+
+#themebuilder-wrapper .history-table-row.hide .history-element-text {
+  color: #666;
+}
+
+#themebuilder-wrapper .history-selector-row.history-selected > *:first-child {
+  color: #FFF;
+}
+
+#themebuilder-wrapper .history-selector,
+#themebuilder-wrapper .history-hide,
+#themebuilder-wrapper .history-show,
+#themebuilder-wrapper .history-delete {
+  color: #0080C5;
+  cursor: pointer;
+  font-size: 11px;
+  overflow: hidden;
+}
+
+#themebuilder-wrapper #themebuilder-advanced-history .themebuilder-advanced-outer,
+#themebuilder-wrapper .palette-cheatsheet-inner,
+#themebuilder-wrapper .layout-cheatsheet-inner {
+  background-color: #2C2C2A;
+  -moz-border-radius: 5px;
+  -webkit-border-radius: 5px;
+  border-radius: 5px;
+  -moz-box-shadow: 0px 0px 6px 0px rgba(15,15,15,0.80) inset;
+  -webkit-box-shadow: 0px 0px 6px 0px rgba(15,15,15,0.80) inset;
+  box-shadow: 0px 0px 6px 0px rgba(15,15,15,0.80) inset;
+}
+
+#themebuilder-wrapper #css-history .header {
+  background-color: black;
+  -moz-border-radius-topleft: 5px;
+  -moz-border-radius-ropright: 5px;
+  -webkit-border-top-left-radius: 5px;
+  -webkit-border-top-right-radius: 5px;
+  border-top-left-radius: 5px;
+  border-top-right-radius: 5px;
+}
+
+#themebuilder-wrapper #themebuilder-advanced-css .themebuilder-advanced-outer {
+  background-color: white;
+  -moz-box-shadow: 0px 0px 6px 0px rgba(15,15,15,0.80) inset;
+  -webkit-box-shadow: 0px 0px 6px 0px rgba(15,15,15,0.80) inset;
+  box-shadow: 0px 0px 6px 0px rgba(15,15,15,0.80) inset;
+}
+
+#themebuilder-wrapper .themebuilder-advanced-inner {
+  height: 187px;
+  width: 100%;
+  margin: 0;
+}
+
+#themebuilder-wrapper #themebuilder-advanced .cheatsheet {
+  float: right;
+  margin: 10px 30px 0 -219px;
+  width: 197px;
+}
+
+#themebuilder-wrapper #themebuilder-advanced .cheatsheet-inner > span {
+  background-color: black;
+  -moz-border-radius-topleft: 5px;
+  -moz-border-radius-ropright: 5px;
+  -webkit-border-top-left-radius: 5px;
+  -webkit-border-top-right-radius: 5px;
+  border-top-left-radius: 5px;
+  border-top-right-radius: 5px;
+  display: block;
+  padding: 6px 9px;
+}
+
+#themebuilder-wrapper #themebuilder-advanced .cheatsheet.hidden {
+  display: none;
+}
+
+#themebuilder-wrapper #themebuilder-advanced .cheatsheet * {
+  visibility: inherit;
+}
+
+#themebuilder-wrapper #themebuilder-advanced .cheatsheet .scrollpane {
+  border-top: none;
+  height: 153px;
+  margin-top: 0px;
+  overflow: auto;
+  padding: 5px 0 0px 9px;
+  width: auto;
+}
+
+#themebuilder-wrapper #themebuilder-advanced .cheatsheet .category {
+  display: block;
+  margin: 3px 0 0;
+  font-size: 12px;
+  color: #FFFFFF;
+  text-decoration: none;
+}
+
+#themebuilder-wrapper #themebuilder-advanced .cheatsheet table {
+  width: 100%;
+}
+
+#themebuilder-wrapper #themebuilder-advanced .cheatsheet table.custom-colors {
+    background-image: url("../themebuilder_bar/images/sepratr-horiz.png");
+    background-repeat: repeat-x;
+}
+
+#themebuilder-wrapper #themebuilder-advanced .cheatsheet td {
+  padding: 3px 0;
+}
+
+#themebuilder-wrapper #themebuilder-advanced .color-swatch,
+#themebuilder-wrapper #themebuilder-advanced .color-swatch-label {
+  font-size: 11px;
+  cursor: default;
+  float: left;
+  color: #CCC;
+}
+
+#themebuilder-wrapper #themebuilder-advanced .cheatsheet .color-swatch {
+  width: 10px;
+  height: 10px;
+  margin: 2px 8px 0 0;
+  border: 1px solid black;
+}
+
+#themebuilder-wrapper .advanced-update-button-wrapper {
+  margin-top: 5px;
+}
+
+/**
+ * @group CSS history
+ */
+
+#themebuilder-wrapper #css-history {
+  height: 224px;
+  padding: 0 1px 0 0;
+  width: 100%;
+}
+
+#themebuilder-wrapper #css-history table {
+  width: 100%;
+}
+
+#themebuilder-wrapper #css-history table .operations {
+  width: 140px;
+  padding-right: 10px;
+}
+
+#themebuilder-wrapper .history-operation {
+  float: right;
+  width: 45px;
+}
+
+#themebuilder-wrapper th.operations .history-operation {
+  width: 70px;
+  font-weight: bold;
+  font-size: 13px;
+  margin-bottom: -4px;
+}
+
+#themebuilder-wrapper th.operations .history-operation.disabled {
+  color: #444444;
+}
+
+#themebuilder-wrapper #css-history table .history-selector-row {
+  background-image: url("../themebuilder_bar/images/sepratr-horiz.png");
+  background-repeat: repeat-x;
+}
+
+#themebuilder-wrapper #css-history table .history-selector-row:first-child {
+  background-image: none;
+}
+
+#themebuilder-wrapper .history-selector-row th,
+#themebuilder-wrapper .history-selector-row .history-operation {
+  font-weight: bold;
+}
+
+#themebuilder-wrapper #css-history table th.operations {
+  width: 150px;
+  text-align: center;
+}
+
+#themebuilder-wrapper #css-history table.header {
+  margin: 0 0 2px;
+}
+
+#themebuilder-wrapper #css-history table.header th {
+  font-size: 13px;
+  padding: 7px 9px 4px 9px;
+}
+
+#themebuilder-wrapper #css-history th,
+#themebuilder-wrapper #css-history td {
+  font-size: 11px;
+  padding: 2px 9px;
+}
+
+#themebuilder-wrapper #css-history table.body td {
+  padding-left: 2em;
+}
+
+#themebuilder-wrapper #css-history table.body tr.history-selected {
+  background-color: #444444;
+}
+
+#themebuilder-wrapper #css-history table tr.history-table-row:hover {
+  background-color: #111111;
+}
+
+#themebuilder-wrapper #css-history .scrollable {
+  height: 196px;
+  overflow: auto;
+  margin: -1px 0 0 0;
+}
+
+#themebuilder-wrapper #history-control-panel {
+  position: absolute;
+  top: 148px;
+  right: 15px;
+  width: 215px;
+}
+
+#themebuilder-wrapper .history-control-row {
+  height: 35px;
+}
+
+#themebuilder-wrapper #history-title-selector {
+  font-style: italic;
+  margin-left: 25px;
+}
+
+/**
+ * @endgroup
+ */
+
+/*
+ * CSS Styles that are needed by jScrollPane for it to operate correctly.
+ *
+ * Include this stylesheet in your site or copy and paste the styles below into your stylesheet - jScrollPane
+ * may not operate correctly without them.
+ */
+
+#themebuilder-wrapper .jspContainer {
+  overflow: hidden;
+  position: relative;
+}
+
+#themebuilder-wrapper .jspPane {
+  position: absolute;
+}
+
+#themebuilder-wrapper .jspVerticalBar {
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 10px;
+  height: 100%;
+  background: red;
+}
+
+#themebuilder-wrapper .jspHorizontalBar {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  width: 100%;
+  height: 16px;
+  background: red;
+}
+
+#themebuilder-wrapper .jspVerticalBar *,
+#themebuilder-wrapper .jspHorizontalBar * {
+  margin: 0;
+  padding: 0;
+}
+
+#themebuilder-wrapper .jspCap {
+  height: 7px;
+}
+
+#themebuilder-wrapper .jspHorizontalBar .jspCap {
+  float: left;
+}
+
+#themebuilder-wrapper .jspTrack {
+  background: #dde;
+  position: relative;
+}
+
+#themebuilder-wrapper .jspDrag {
+  background: #bbd;
+  position: relative;
+  top: 0;
+  left: 0;
+  cursor: pointer;
+}
+
+#themebuilder-wrapper .jspHorizontalBar .jspTrack,
+#themebuilder-wrapper .jspHorizontalBar .jspDrag {
+  float: left;
+  height: 100%;
+}
+
+#themebuilder-wrapper .jspArrow {
+  background: #50506d;
+  text-indent: -20000px;
+  display: block;
+  cursor: pointer;
+}
+
+#themebuilder-wrapper .jspArrow.jspDisabled {
+  cursor: default;
+  background: #80808d;
+}
+
+#themebuilder-wrapper .jspVerticalBar .jspArrow {
+  height: 7px;
+}
+
+#themebuilder-wrapper .jspHorizontalBar .jspArrow {
+  width: 10px;
+  float: left;
+  height: 100%;
+}
+
+#themebuilder-wrapper .jspVerticalBar .jspArrow:focus {
+  outline: none;
+}
+
+#themebuilder-wrapper .jspCorner {
+  background: #eeeef4;
+  float: left;
+  height: 100%;
+}

@@ -1,0 +1,249 @@
+<?php
+
+/**
+ * @file
+ * Provides a temporary user interface for testing themebuilder features that are still under development.
+ */
+
+/**
+ * Implements hook_menu().
+ */
+function themebuilder_development_ui_menu() {
+  $items['admin/config/system/theme-import'] = array(
+    'title' => 'Theme import from file upload (DEVELOPMENT ONLY)',
+    'description' => 'Upload a theme to the themebuilder, for development purposes only. Do not use this on production (do not even turn on this module)!',
+    'page callback' => 'drupal_get_form',
+    'page arguments' => array('themebuilder_development_ui_theme_import_form'),
+    'access arguments' => array('administer site configuration'),
+  );
+  $items['admin/config/system/theme-import-s3'] = array(
+    'title' => 'Theme import from S3 (DEVELOPMENT ONLY)',
+    'description' => 'Import a theme to the themebuilder directly from S3, for development purposes only. Do not use this on production (do not even turn on this module)!',
+    'page callback' => 'drupal_get_form',
+    'page arguments' => array('themebuilder_development_ui_theme_import_s3_form'),
+    'access arguments' => array('administer site configuration'),
+  );
+  $items['admin/config/system/theme-import-export-cleanup'] = array(
+    'title' => 'Theme import/export cleanup (DEVELOPMENT ONLY)',
+    'description' => "Delete themes from S3 that were exported there but aren't needed any more, for development purposes only. Do not use this on production (do not even turn on this module)!",
+    'page callback' => 'drupal_get_form',
+    'page arguments' => array('themebuilder_development_ui_theme_import_export_cleanup_form'),
+    'access arguments' => array('administer site configuration'),
+  );
+  $items['admin/config/system/theme-import-export-settings'] = array(
+    'title' => 'Theme import/export settings (DEVELOPMENT ONLY)',
+    'description' => 'Settings for importing and exporting themes, for development purposes only. Do not use this on production (do not even turn on this module)!',
+    'page callback' => 'drupal_get_form',
+    'page arguments' => array('themebuilder_development_ui_theme_import_export_settings_form'),
+    'access arguments' => array('administer site configuration'),
+  );
+
+  return $items;
+}
+
+/**
+ * Implements hook_menu_alter().
+ */
+function themebuilder_development_ui_menu_alter(&$items) {
+  // Replace theme export with a version that can send to S3 when requested.
+  $items['themebuilder-export']['page arguments'] = array('themebuilder_development_ui_export_to_s3');
+}
+
+/**
+ * Form builder; form for testing theme import via file upload.
+ */
+function themebuilder_development_ui_theme_import_form($form, &$form_state) {
+  $form['uploaded_theme'] = array(
+    '#type' => 'file',
+    '#title' => t('Exported theme file'),
+    '#description' => t('Upload a theme that was exported from the themebuilder (via a .tar.gz file).'),
+  );
+
+  $form['actions'] = array('#type' => 'actions');
+  $form['actions']['submit'] = array(
+    '#type' => 'submit',
+    '#value' => t('Submit'),
+  );
+
+  return $form;
+}
+
+/**
+ * Validation handler for the form that tests theme import via file upload.
+ */
+function themebuilder_development_ui_theme_import_form_validate($form, &$form_state) {
+  // Save the theme archive into the 'mythemes' folder (don't use /tmp since we
+  // may be on a shared filesystem). This code is mostly copied from
+  // system_theme_settings_validate().
+  // Note: There is no security here whatsoever!  The .tar.gz file can contain
+  // anything, and we will untar it in a public directory in the submit
+  // handler.
+  $validators = array('file_validate_extensions' => array('tar tar.gz'));
+  $file = file_save_upload('uploaded_theme', $validators, 'customthemes://', FILE_EXISTS_REPLACE);
+  if (isset($file)) {
+    if ($file) {
+      $form_state['values']['uploaded_theme'] = $file;
+    }
+    else {
+      form_set_error('uploaded_theme', t('The theme could not be uploaded.'));
+    }
+  }
+}
+
+/**
+ * Submit handler for the form that tests theme import via file upload.
+ */
+function themebuilder_development_ui_theme_import_form_submit($form, &$form_state) {
+  // Untar the theme archive and import it to the database.
+  // Note: There is no protection against namespace collisions here, since
+  // marketplace themes (which are the only ones we will import in reality)
+  // will eventually live under a different namespace.
+  $file = $form_state['values']['uploaded_theme'];
+  $filepath = drupal_realpath($file->uri);
+  $theme_folder = themebuilder_compiler_get_custom_theme_folder();
+  shell_exec('cd ' . escapeshellarg($theme_folder) . '; tar xfz ' . escapeshellarg($filepath));
+  $theme_name = strtok(basename($filepath), '.');
+  themebuilder_compiler_import($theme_name);
+  drupal_set_message(t('The theme %theme was successfully imported and is now available inside the themebuilder.', array('%theme' => $theme_name)));
+}
+
+/**
+ * Form builder; form for testing theme import from S3.
+ */
+function themebuilder_development_ui_theme_import_s3_form($form, &$form_state) {
+  $s3 = _themebuilder_development_ui_get_s3();
+  $theme_list = drupal_map_assoc(array_keys($s3->getBucket(themebuilder_marketplace_s3_bucket())));
+  $form['theme_s3_path'] = array(
+    '#type' => 'select',
+    '#title' => t('Choose a theme to import from S3'),
+    '#options' => $theme_list,
+  );
+
+  $form['actions'] = array('#type' => 'actions');
+  $form['actions']['submit'] = array(
+    '#type' => 'submit',
+    '#value' => t('Submit'),
+  );
+
+  return $form;
+}
+
+/**
+ * Submit handler for the form that tests theme import from S3.
+ */
+function themebuilder_development_ui_theme_import_s3_form_submit($form, &$form_state) {
+  $s3_path = $form_state['values']['theme_s3_path'];
+  $theme_name = themebuilder_marketplace_get_base_name($s3_path);
+  if (themebuilder_marketplace_copy_from_s3($s3_path)) {
+    themebuilder_compiler_import($theme_name);
+    drupal_set_message(t('The theme %theme was succesfully imported and is now available inside the themebuilder.', array('%theme' => $theme_name)));
+  }
+  else {
+    drupal_set_message(t('There was an error importing the theme %theme.', array('%theme' => $theme_name)), 'error');
+  }
+}
+
+/**
+ * Form builder; clean up and delete themes from S3.
+ */
+function themebuilder_development_ui_theme_import_export_cleanup_form($form, &$form_state) {
+  $s3 = _themebuilder_development_ui_get_s3();
+  $theme_list = drupal_map_assoc(array_keys($s3->getBucket(themebuilder_marketplace_s3_bucket())));
+  $form['theme_s3_path'] = array(
+    '#type' => 'select',
+    '#title' => t('Choose a theme to delete from S3'),
+    '#options' => $theme_list,
+  );
+
+  $form['actions'] = array('#type' => 'actions');
+  $form['actions']['submit'] = array(
+    '#type' => 'submit',
+    '#value' => t('Submit'),
+  );
+
+  return $form;
+}
+
+/**
+ * Submit handler for the form that cleans up and deletes themes from S3.
+ */
+function themebuilder_development_ui_theme_import_export_cleanup_form_submit($form, &$form_state) {
+  $s3_path = $form_state['values']['theme_s3_path'];
+  $s3 = _themebuilder_development_ui_get_s3();
+  $deleted = $s3->deleteObject(themebuilder_marketplace_s3_bucket(), $s3_path);
+  if ($deleted) {
+    drupal_set_message(t('Theme %s3_path was successfully deleted from S3.', array('%s3_path' => $s3_path)));
+  }
+  else {
+    drupal_set_message(t('Theme %s3_path could not be deleted from S3.', array('%s3_path' => $s3_path)), 'error');
+  }
+}
+
+/**
+ * Form for configuring theme import/export behavior.
+ */
+function themebuilder_development_ui_theme_import_export_settings_form($form, &$form_state) {
+  $form['themebuilder_development_ui_export_to_s3'] = array(
+    '#type' => 'checkbox',
+    '#title' => t('Make the themebuilder export themes to S3, rather than to a file.'),
+    '#default_value' => variable_get('themebuilder_development_ui_export_to_s3', FALSE),
+  );
+
+  return system_settings_form($form);
+}
+
+/**
+ * Themebuilder callback; replacement for themebuilder_bar_export() that can export to S3.
+ */
+function themebuilder_development_ui_export_to_s3() {
+  // If we aren't exporting to S3, call themebuilder_bar_export() directly so
+  // that we export to a file download as usual.
+  if (!variable_get('themebuilder_development_ui_export_to_s3', FALSE)) {
+    return themebuilder_bar_export();
+  }
+
+  // The rest of this is mostly copied from themebuilder_bar_export(), but with
+  // the indicated changes so that we export the file to S3 rather than to a
+  // file download.
+  if (!empty($_POST['name'])) {
+    if (!empty($_POST['system_name'])) {
+      $system_name = themebuilder_compiler_human_to_machine_name($_POST['system_name']);
+    }
+    else {
+      $system_name = themebuilder_compiler_human_to_machine_name($_POST['name']);
+    }
+    $output_tarball = themebuilder_compiler_export($_POST['name'], $_POST['system_name']);
+
+    // We only put .tar files into S3 (that's what the marketplace import code
+    // expects), so unzip the file that the themebuilder generated.
+    shell_exec('gunzip ' . escapeshellarg($output_tarball));
+    $output_tarball = substr($output_tarball, 0, strlen($output_tarball) - 3);
+
+    // Put the file in S3 with a randomly-generated resource name in the format
+    // that the marketplace import code expects.
+    $s3 = _themebuilder_development_ui_get_s3();
+    $resource_name = mt_rand(1000, 1000000) . '/' . mt_rand(1000, 1000000) . '/' . $system_name . '.tar';
+    $object = $s3->putObjectFile($output_tarball, themebuilder_marketplace_s3_bucket(), $resource_name);
+
+    // Instead of redirecting to the tarball, just redirect to the homepage
+    // after the export is complete (this will make the page reload).
+    themebuilder_compiler_json_output(array(
+      'export_download_url' => url(''),
+      'name' => $_POST['name'],
+      'system_name' => $system_name));
+  }
+  else {
+    throw new ThemeBuilderException(t('Invalid Arguments'));
+  }
+}
+
+/**
+ * Helper function for getting and preparing an S3 object.
+ */
+function _themebuilder_development_ui_get_s3() {
+  require_once DRUPAL_ROOT . '/../library/S3.php';
+  $creds = themebuilder_marketplace_get_s3_creds();
+  S3::$useExceptions = TRUE;
+  $s3 = new S3($creds['login'], $creds['password']);
+  return $s3;
+}

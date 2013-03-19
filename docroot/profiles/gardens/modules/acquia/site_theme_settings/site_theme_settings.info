@@ -1,0 +1,5 @@
+name = Site theme info
+description = Provide theme settings on the site information page.
+core = 7.x
+files[] = site_theme_settings.module
+hidden = TRUE

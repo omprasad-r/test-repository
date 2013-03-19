@@ -1,0 +1,197 @@
+<?php
+// $Id$
+
+/**
+ * Test the scarecrow_get_gardener_url() function.
+ */
+class ScarecrowGetGardenerURLUnitTest extends DrupalWebTestCase {
+  public static function getInfo() {
+    return array(
+      'name' => 'Find the Gardener URL',
+      'description' => 'Test the function that determines the Gardener URL.',
+      'group' => 'Gardens',
+    );
+  }
+
+  function setUp() {
+    parent::setUp('scarecrow');
+  }
+
+  function testGetGardenerURL() {
+    // A standard production Gardens site (using the default Gardens URL).
+    $this->assertEqual(scarecrow_get_gardener_url('http://mysite.drupalgardens.com'), 'https://drupalgardens.com');
+    // Sites hosted on a test cluster that has a "real-looking" URL (for
+    // example, alpha clusters, beta clusters, etc).
+    $this->assertEqual(scarecrow_get_gardener_url('http://mysite.stage.drupalgardens.com'), 'https://stage.drupalgardens.com');
+    // Sites hosted on a regular development cluster.
+    $this->assertEqual(scarecrow_get_gardener_url('http://mysite.stage.acquia-sites.com'), 'https://gardener.stage.acquia-sites.com');
+    // Sites with URLs that we don't recognize (constructed pathologically to
+    // make sure the regular expression matching in the function isn't faulty).
+    $urls = array('http://mysite.drupalgardens.com.org', 'https://mysite.acquia-sites.com.org');
+    foreach ($urls as $url) {
+      $this->assertEqual(scarecrow_get_gardener_url($url), '', t('No Gardener URL is returned when the Gardens site domain is unrecognized.'));
+    }
+    // Now repeat the above, but after setting a specific URL in the database
+    // which we expect to get back.
+    $saved_url = 'https://www.example.com';
+    variable_set('acquia_gardens_gardener_url', $saved_url);
+    foreach ($urls as $url) {
+      $this->assertEqual(scarecrow_get_gardener_url($url), $saved_url);
+    }
+    // Also make sure we get the saved variable back when we don't pass in a
+    // URL at all but rather rely on the default.
+    $this->assertEqual(scarecrow_get_gardener_url(), $saved_url);
+  }
+}
+
+/**
+ * Tests the requirement errors that Gardens users are allowed to see.
+ */
+class ScarecrowRequirementErrorsTestCase extends DrupalWebTestCase {
+  protected $profile = 'testing';
+  protected $admin_user;
+  protected $gardens_admin;
+
+  public static function getInfo() {
+    return array(
+      'name' => 'Gardens system requirements',
+      'description' => 'Test that Gardens users only see the system requirement errors they are supposed to see.',
+      'group' => 'Gardens',
+    );
+  }
+
+  function setUp() {
+    parent::setUp('scarecrow', 'gardens_client', 'gardens_misc');
+
+    // Set variables needed when testing with Gardens modules.
+    variable_set('gardens_client_site_verification_status', array('verified' => TRUE));
+    variable_set('gardens_client_send_stats', FALSE);
+    variable_set('gardens_client_phone_home', FALSE);
+    variable_set('gardens_debug_xmlrpc', TRUE);
+    variable_set('gardens_misc_ga_tracking_code', '');
+
+    // This test requires local logins for the Simpletest browser to be able to
+    // log in correctly. We need to rebuild the menu after setting this so that
+    // the login-related Drupal menu items which are altered in Gardens go back
+    // to their normal state.
+    variable_set('acquia_gardens_local_user_accounts', TRUE);
+    menu_rebuild();
+
+    // Create a regular admin user and a Gardens admin user (the latter of
+    // which has 'administer software updates' permission).
+    $this->admin_user = $this->drupalCreateUser(array('access administration pages', 'administer site configuration'));
+    $this->gardens_admin = $this->drupalCreateUser(array('access administration pages', 'administer site configuration', 'administer software updates'));
+  }
+
+  function testRequirementErrors() {
+    // Store the Xpath we expect to find on the status report page when there
+    // are database updates that need to run and the current user is supposed
+    // to be informed of that.
+    $db_update_xpath = '//td[text()="Database updates"]/following-sibling::td[text()="Out of date"]';
+
+    // Log in as a regular user. They should not see errors on either the site
+    // configuration page or the status report page.
+    $this->drupalLogin($this->admin_user);
+    $this->drupalGet('admin/config');
+    $this->assertNoText('One or more problems were detected with your Drupal installation.');
+    $this->drupalGet('admin/reports/status');
+    $db_update_errors = $this->xpath($db_update_xpath);
+    $this->assertTrue(empty($db_update_errors), t('Database update error message not found on the status report page.'));
+
+    // Now force the database updates to be out of date.
+    drupal_set_installed_schema_version('scarecrow', drupal_get_installed_schema_version('scarecrow') - 1);
+
+    // The regular user still shouldn't see any error messages.
+    $this->drupalLogin($this->admin_user);
+    $this->drupalGet('admin/config');
+    $this->assertNoText('One or more problems were detected with your Drupal installation.');
+    $this->drupalGet('admin/reports/status');
+    $db_update_errors = $this->xpath($db_update_xpath);
+    $this->assertTrue(empty($db_update_errors), t('Database update error message not found on the status report page.'));
+
+    // The Gardens admin should see error messages in both places.
+    $this->drupalLogin($this->gardens_admin);
+    $this->drupalGet('admin/config');
+    $this->assertText('One or more problems were detected with your Drupal installation.');
+    $this->drupalGet('admin/reports/status');
+    $db_update_errors = $this->xpath($db_update_xpath);
+    $this->assertTrue(!empty($db_update_errors), t('Database update error message found on the status report page.'));
+  }
+}
+
+/**
+ * Test the custom integration between Mollom and comment permissions.
+ */
+class ScarecrowMollomCommentTestCase extends MollomWebTestCase {
+  protected $profile = 'gardens';
+
+  public static function getInfo() {
+    return array(
+      'name' => 'Gardens-specific Mollom functionality',
+      'description' => 'Test the integration between Mollom and comment permissions provided by the Scarecrow module.',
+      'group' => 'Gardens',
+    );
+  }
+
+  function setUp() {
+    parent::setUp();
+
+    // MollomWebTestCase switches the theme to Garland, but Garland has no
+    // blocks in a Gardens installation which makes our test fail. So we need
+    // to preserve the original for this test. But there is no good way to
+    // figure out what it was beforehand, since before parent::setUp() is
+    // called we haven't even entered the "testing site" yet. So we use a hack
+    // to get it.
+    // @todo Remove this when MollomWebTestCase stops overriding the theme.
+    $original_theme = db_query("SELECT DISTINCT theme FROM {block} WHERE region = 'sidebar_a'")->fetchField();
+    variable_set('theme_default', $original_theme);
+
+    // Set variables needed when testing with the 'gardens' install profile.
+    variable_set('gardens_client_site_verification_status', array('verified' => TRUE));
+    variable_set('gardens_client_send_stats', FALSE);
+    variable_set('gardens_client_phone_home', FALSE);
+    variable_set('gardens_debug_xmlrpc', TRUE);
+    variable_set('gardens_misc_ga_tracking_code', '');
+
+    // This test requires local logins for the Simpletest browser to be able to
+    // log in correctly. We need to rebuild the menu after setting this so that
+    // the login-related Drupal menu items which are altered in Gardens go back
+    // to their normal state.
+    variable_set('acquia_gardens_local_user_accounts', TRUE);
+    menu_rebuild();
+  }
+
+  /**
+   * Test that on a fresh Gardens installation, we can allow anonymous users to
+   * skip comment approval, but if we do, they cannot configure Mollom
+   * to unprotect the comment form.
+   */
+  function testEnableAnonymousCommentWithoutApproval() {
+    $this->drupalLogin($this->admin_user);
+    $edit = array(DRUPAL_ANONYMOUS_RID . '[skip comment approval]' => 1);
+    $this->drupalPost('admin/people/permissions', $edit, t('Save permissions'));
+    drupal_static_reset();
+    $this->assertTrue(user_access('skip comment approval', drupal_anonymous_user()), t('Anonymous users are allowed to skip comment approval.'));
+    $this->drupalGet('admin/config/content/mollom');
+    $this->assertNoLink(t('Unprotect'));
+    $this->assertText(t('To unprotect, first enable comment moderation.'));
+    // MollomWebTestCase has its own wrapper around drupalGet which by default
+    // will throw a FAIL on any watchdog message that is more sever than a
+    // notice and the 403 Access denied triggers warning type watchdog.
+    $this->drupalGet('admin/config/content/mollom/unprotect/comment_node_article_form', array('watchdog' => WATCHDOG_WARNING));
+    $this->assertResponse(403, t('Access denied when trying to unprotect a comment form on a Gardens site where anonymous users are allowed to skip comment approval.'));
+  }
+
+  /**
+   * Test that unprotecting a comment form prevents the administrator from
+   * allowing users to skip comment approval.
+   */
+  function testUnprotectCommentForm() {
+    $this->drupalLogin($this->admin_user);
+    $this->drupalPost('admin/config/content/mollom/unprotect/comment_node_article_form', array(), t('Confirm'));
+    $edit = array(DRUPAL_ANONYMOUS_RID . '[skip comment approval]' => 1);
+    $this->drupalPost('admin/people/permissions', $edit, t('Save permissions'));
+    drupal_static_reset();
+    $this->assertFalse(user_access('skip comment approval', drupal_anonymous_user()), t('Attempting to grant anonymous users permission to skip comment approval on a site without full Mollom protection for the comment form does not succeed.'));
+  }
+}

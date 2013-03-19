@@ -1,0 +1,237 @@
+<?php
+// $Id$
+
+include_once('SqlEditor.inc');
+
+/**
+ * Implement hook_menu
+ * @return array
+ */
+function site_export_menu() {
+  $items = array();
+
+  $items['admin/config/system/site-export'] = array (
+    'title' => t('Site export'),
+    'description' => t('Download a copy of your site and database.'),
+    // Use a confirm form to prevent CSRF attacks.
+    'page callback' => 'drupal_get_form',
+    'page arguments' => array('site_export_export_confirm'),
+    'access arguments' => array('administer site configuration'),
+    'type' => MENU_NORMAL_ITEM,
+  );
+
+  $items['admin/config/system/site-export/both'] = array (
+    'title' => t('Export my site and database'),
+    'description' => t('Provides a downloadable copy of your Drupal site and database.'),
+    'page callback' => 'drupal_get_form',
+    'page arguments' => array('site_export_export_confirm'),
+    'access arguments' => array('administer site configuration'),
+    'type' => MENU_CALLBACK,
+  );
+
+  return $items;
+}
+
+/**
+ * Implementation of hook_init().
+ *
+ * When exporting a site it is often necessary to have more than the
+ * standard memory allotment.
+ */
+function site_export_init() {
+  // TODO: remove this function.  This should be done when a cache clear will
+  // not be a problem.  Next release, not during a hotfix.
+}
+
+function site_export_page() {
+  $out = '';
+  $out .= l(t('Export your site files and code'), 'admin/config/system/site-export/site');
+  $out .= "<br/>";
+  $out .= l(t('Export your database'), 'admin/config/system/site-export/db');
+  $out .= "<br/>";
+  $out .= l(t('Export both'), 'admin/config/system/site-export/both');
+
+  return $out;
+}
+
+/**
+ * Sets the timelimit (may set RAM at some point as well).
+ */
+function site_export_set_limits() {
+  if (drupal_is_cli()) {
+    // Running drush - let the container drush command set the constraints.
+  }
+  else {
+    set_time_limit(variable_get('site_export_time_limit', 300));
+    ini_set('memory_limit', '512M');
+  }
+}
+
+/**
+ * Page callback - confirm export docroot and database.
+ */
+function site_export_export_confirm() {
+  drupal_add_js(drupal_get_path('module', 'site_export') . '/site_export.js');
+
+  $cancel_path = empty($_GET['return']) ? 'admin/config/system' : array('path' => urldecode($_GET['return']), 'attributes' => array('class' => 'overlay-exclude'));
+  $form = confirm_form(array(),
+  t('Generate and download an export of your database and site files?'),
+  $cancel_path, t('This may take a while.'),
+  t('Export'), t('Cancel'));
+  $form['message'] = array(
+    '#prefix' => '<p>',
+    '#markup' => t('Usernames and passwords will be reset and stored in the archive file. To learn more, see !export_your_site.',array('!export_your_site' => l('Exporting your site','http://www.drupalgardens.com/documentation/site-export'))),
+    '#suffix' => '</p>',
+  );
+
+  $form['reason'] = array(
+    '#type' => 'select',
+    '#title' => t('Select a reason for exporting'),
+    '#name' => 'reason',
+    '#options' => array(
+      'module' => t('Want to use a module Drupal Gardens doesn\'t yet have'),
+      'theme' => t('Want to build a theme that can\'t be done in Drupal Gardens'),
+      'host' => t('Want to host it on a 3rd party hosting company'),
+      'backup' => t('Want to perform a local backup of site'),
+      'other' => t('Other'),
+    ),
+    '#required' => TRUE,
+  );
+
+  $form['explanation'] = array(
+    '#type' => 'textarea',
+    '#title' => t('Please elaborate on why you want to export your site'),
+    '#name' => 'explanation',
+    '#required' => TRUE,
+  );
+
+  $follow_up_text = array(
+    'default' => t('Please elaborate on why you want to export your site'),
+    'module' => t('What module(s) are you looking for?'),
+    'theme' => t('Can you elaborate on what is missing or include a URL to a site you feel can\'t be designed?'),
+    'host' => t('Why did you choose them and choose to maintain it yourself?'),
+    'backup' => t('Would you pay extra for us to keep on-line backups for you that you could restore as needed?'),
+    'other' => t('Please elaborate on why you want to export your site'),
+  );
+
+  $settings = array('site_export' => $follow_up_text);
+  drupal_add_js($settings, 'setting');
+
+  $form['#submit'][] = 'site_export_call_gardener';
+  $form['#submit'][] = 'site_export_export_both_download';
+  $iframe_source = variable_get('gardens_devcloud_ad_url', '');
+  if(!empty($iframe_source)) {
+    $form['#prefix'] = '<div id="site-export-form" style="float:left;width:58%;">';
+    $form['#suffix'] = '</div><div style="float:right;width:40%;">' . _site_export_show_devcloud_ad($iframe_source) . '</div>';
+  }
+
+  return $form;
+}
+
+/**
+ * Gather the information from the export form and send it to the gardener
+ */
+function site_export_call_gardener($form, &$form_state) {
+  // Do not send export stats on local development environments.
+  if (!variable_get('gardens_client_send_stats', TRUE)) {
+    return;
+  }
+
+  global $databases;
+  $stats = new stdClass();
+
+  $stats->dbname = $databases['default']['default']['database'];
+  $stats->reason = $form_state['values']['reason'];
+  $stats->explanation = $form_state['values']['explanation'];
+
+  $success = gardens_client_call_gardener('site.export.stats', $stats);
+}
+
+/**
+ * Creates a site export.
+ *
+ * This function is called by the export-s3 drush task.
+ *
+ * @param {boolean} $exclude_site_files
+ *   Indicates whether the site's files directory contents should be excluded
+ *   from the archive.  If the files are excluded, a curl script will be
+ *   provided to download the files.  This is an optional parameter, with the
+ *   default setting such that the files will be included in the archive.
+ *
+ * @return {String}
+ *   The URI of the tarball.
+ */
+function site_export_export_both($exclude_site_files = FALSE) {
+  site_export_set_limits();
+  include_once dirname(__FILE__) . '/SiteExport.inc';
+  $exporter = new SiteExport($exclude_site_files);
+  $output_tarball_uri = $exporter->export();
+  return $output_tarball_uri;
+}
+
+/**
+ * Initiates a file transfer for the export.
+ */
+function site_export_export_both_download() {
+  $output_tarball_uri = site_export_export_both(_site_export_should_exclude_site_files());
+  $export_name = SiteExport::createFilename('site_export');
+
+  $headers = array(
+    'Content-type' =>  'application/tar/gz',
+    'Content-Disposition' => 'attachment; filename="' . $export_name . '.tar.gz"',
+  );
+  file_transfer($output_tarball_uri, $headers);
+}
+
+/**
+ * Determines whether the site's files directory should be excluded from the
+ * export because that would likely make the export too large.
+ *
+ * Large files cannot be downloaded from our webnodes, apparently due to the
+ * way the balancers are configured.  By observation, anything over about 1GB
+ * will fail because the download will be interrupted.
+ *
+ * This function estimates the size of the site files and determines whether
+ * we should create a complete archive or a partial one that only includes
+ * Drupal files and the site database along with a script that allows the site
+ * owner to easily download the remaining site files.
+ *
+ * @private
+ * @return {boolean}
+ *   TRUE if the site is large enough that the site files should be excluded
+ *   from the archive; FALSE otherwise.
+ */
+function _site_export_should_exclude_site_files() {
+  $size = _site_export_get_site_file_size();
+  // Consider anything larger than 900MB too large to archive.
+  return $size > 900;
+}
+
+/**
+ * Returns an estimate of the size of the site's configuration directory, measured in megabytes.
+ *
+ * @private
+ * @return {int}
+ *   The size in megabytes.
+ */
+function _site_export_get_site_file_size() {
+  $size = -1;
+  $path = DRUPAL_ROOT . '/' . conf_path();
+  $line = exec('/usr/bin/du -smL ' . escapeshellarg($path));
+  if (!empty($line)) {
+    $fields = explode(' ', $line);
+    if (count($fields) > 0) {
+      $size = intval($fields[0]);
+    }
+  }
+  return $size;
+}
+
+/**
+ * Helper function for showing DevCloud ad on site export form.
+ *
+ */
+ function _site_export_show_devcloud_ad($iframe_source) {
+ $iframe_source = 'https://www.acquia.com/dev-cloud-export';
+    return '<iframe src ="'. $iframe_source .'" width="100%" height="490" scrolling="no" frameborder="0" align="right"></iframe>';
+ }

@@ -1,0 +1,1022 @@
+<?php
+
+/**
+ * @file
+ *   Functionality limits for Gardens features based on pricing tier.
+ */
+
+/**
+ * Warn the site owner when their storage space has reached this percentage.
+ */
+define('GARDENS_LIMITS_WARNING_THRESHOLD', 90);
+
+/**
+ * Implement hook_menu_alter().
+ */
+function gardens_limits_menu_alter(&$items) {
+  gardens_limits_storage_menu_alter($items);
+  gardens_limits_webform_menu_alter($items);
+}
+
+// == Notification bits ========================================================
+
+/**
+ * Turn on a notification bit with a specific key.
+ */
+function gardens_limits_set_notification_bit($key) {
+  $bits = variable_get('gardens_limits_notification_bits', array());
+  $bits[$key] = TRUE;
+  variable_set('gardens_limits_notification_bits', $bits);
+}
+
+/**
+ * Return all notification bits.
+ */
+function gardens_limits_get_notification_bits() {
+  return variable_get('gardens_limits_notification_bits', array());
+}
+
+/**
+ * Clear all notification bits.
+ */
+function gardens_limits_clear_notification_bits() {
+  variable_del('gardens_limits_notification_bits');
+}
+
+// == User limitation ==========================================================
+
+/**
+ * Implements hook_init().
+ */
+function gardens_limits_init() {
+  global $conf;
+
+  // Skip displaying these messages in POST requests, so when the data changes
+  // we do not print limitation messages with false data.
+  if (gardens_limits_users_are_limited()) {
+    if (empty($_POST) && ($_GET['q'] == 'admin/people')) {
+      // Add message on limits to the people management page even if the admin
+      // only views the listing.
+      if (empty($_SESSION['gardens_limits_skip_user_message'])) {
+        gardens_limits_user_message_add();
+      }
+      unset($_SESSION['gardens_limits_skip_user_message']);
+    }
+    if (!empty($conf['user_register'])) {
+      // Pretend users can only register with approval, if they could register
+      // without approval before. If this setting is 0, that is no registrations
+      // allowed, which is fine for us.
+      $conf['user_register'] = USER_REGISTER_VISITORS_ADMINISTRATIVE_APPROVAL;
+      // Skip sending one by one notification emails about new users here.
+      // People get daily emails about people trying to go over.
+      $conf['user_mail_register_pending_approval_admin_notify'] = FALSE;
+    }
+    // Signal to other modules that they should not blindly allow open user
+    // registrations again later in the page request. For example, see
+    // gardens_misc_allow_open_user_registrations_if_user_was_invited().
+    $conf['gardens_limits_do_not_allow_user_registrations'] = TRUE;
+  }
+
+  // If there are delayed messages to be displayed, display them now.
+  if (!empty($_SESSION['gardens_limits_delayed_messages'])) {
+    foreach ($_SESSION['gardens_limits_delayed_messages'] as $type => $messages) {
+      foreach ($messages as $message) {
+        drupal_set_message($message, $type);
+      }
+    }
+    unset($_SESSION['gardens_limits_delayed_messages']);
+  }
+}
+
+/**
+ * Implements hook_theme().
+ */
+function gardens_limits_theme() {
+  return array(
+    'gardens_limits_replace_form' => array(
+      'render element' => array('element' => NULL),
+    ),
+  );
+}
+
+/**
+ * Implement hook_form_FORM_ID_alter().
+ */
+function gardens_limits_form_user_admin_account_alter(&$form, &$form_state, $form_id) {
+  $form['#validate'][] = 'gardens_limits_user_admin_account_validate';
+  $form['#submit'][] = 'gardens_limits_user_admin_account_submit';
+}
+
+/**
+ * Custom validation callback to not let the form submit.
+ */
+function gardens_limits_user_admin_account_validate($form, &$form_state) {
+  if (($form_state['values']['operation'] == 'unblock') && gardens_limits_users_are_limited()) {
+    $limit = gardens_limits_user_limit();
+    form_set_error('operation', gardens_limits_user_limit_text('account_unblock_mass'));
+  }
+}
+
+/**
+ * Custom submission callback to check for unblock success.
+ */
+function gardens_limits_user_admin_account_submit($form, &$form_state) {
+  if (($form_state['values']['operation'] == 'unblock') && gardens_limits_users_are_limited()) {
+
+    // Count the number of users that are unblocked after this operation.
+    $unblocked = 0;
+    foreach ($form_state['values']['accounts'] as $uid) {
+      $account = user_load($uid);
+      if ($account->status) {
+        $unblocked++;
+      }
+    }
+
+    // Now do some really ungodly operations to remove the generic Drupal
+    // feedback message from the stack and put ours in place. Yes, it is very bad.
+    foreach ($_SESSION['messages']['status'] as $id => $message) {
+      if ($message == t('The update has been performed.')) {
+        $_SESSION['messages']['status'][$id] = format_plural($unblocked, '@count user was unblocked.', '@count users were unblocked.');
+      }
+    }
+
+    // Inform user about the number of users keep being blocked.
+    $blocked = (count($form_state['values']['accounts']) - $unblocked);
+    if (!empty($blocked)) {
+      drupal_set_message(gardens_limits_user_limit_text('account_unblock_count', $blocked), 'error');
+
+      // Yes, it is this hard to pop off a message from the message queue in Drupal.
+      $generic_message = gardens_limits_user_limit_text();
+      foreach ($_SESSION['messages']['warning'] as $num => $message) {
+        if ($message == $generic_message) {
+          unset($_SESSION['messages']['warning'][$num]);
+        }
+      }
+      if (empty($_SESSION['messages']['warning'])) {
+        unset($_SESSION['messages']['warning']);
+      }
+
+      // Skip the generic message that would be printed in the next HTTP request.
+      // Yes, this is yet another ungodly trick. Drupal does not land a good
+      // hand to help us with context-sensitive messages.
+      $_SESSION['gardens_limits_skip_user_message'] = TRUE;
+    }
+  }
+}
+
+/**
+ * Implement hook_form_FORM_ID_alter().
+ */
+function gardens_limits_form_user_admin_settings_alter(&$form, &$form_state, $form_id) {
+  $form['#validate'][] = 'gardens_limits_user_admin_settings_validate';
+}
+
+/**
+ * Custom validation callback to not let the form submit.
+ */
+function gardens_limits_user_admin_settings_validate($form, &$form_state) {
+  if (gardens_limits_users_are_limited() && !empty($form_state['values']['user_register'])) {
+     if ($form_state['values']['user_register'] != USER_REGISTER_VISITORS_ADMINISTRATIVE_APPROVAL) {
+       form_set_error('user_register', gardens_limits_user_limit_text('account_settings'));
+     }
+  }
+}
+
+/**
+ * Implement hook_form_FORM_ID_alter().
+ */
+function gardens_limits_form_user_profile_form_alter(&$form, &$form_state, $form_id) {
+  // If the limit has been reached, display the error message and disable the
+  // form element to unblock users.
+  if (gardens_limits_users_are_limited() && $form['account']['status']['#default_value'] == 0) {
+    gardens_limits_user_message_add();
+    $form['account']['status']['#disabled'] = TRUE;
+  }
+  // Add extra validation to not let the form submit without ensuring our
+  // limitations are in place. (The presave hook already solved this, but
+  // the kind of user feedback that provides in this case would be sub-par).
+  $form['#validate'][] = 'gardens_limits_user_validate';
+}
+
+/**
+ * Custom validation callback to not let the form submit.
+ */
+function gardens_limits_user_validate($form, &$form_state) {
+  if (gardens_limits_users_are_limited()) {
+    if ($form['#user']->is_new || (empty($form['#user']->status) && !empty($form_state['values']['status']))) {
+      // Trying to go over the limitation. Inform the user that this cannot
+      // be done.
+      $limit = gardens_limits_user_limit();
+      form_set_error('status', gardens_limits_user_limit_text('account_unblock'));
+    }
+  }
+}
+
+/**
+ * Implements hook_user_presave().
+ *
+ * This is used for en-mass user save operations and with any other user
+ * change that is not done through the single user admin form that is covered
+ * above. The single user admin form save hook also calls this, but that has
+ * better user experience with the above solution.
+ */
+function gardens_limits_user_presave(&$edit, $account, $category) {
+  global $user;
+
+  if (gardens_limits_users_are_limited()) {
+    // We are past the user limit now, so we can either allow blocking
+    // users or keeping a user active but not making a new active user
+    // or making a blocked user active.
+    if ($account->is_new) {
+      gardens_limits_set_notification_bit('member_limit');
+      if ((empty($account->status) && !empty($edit['status']))) {
+        $edit['status'] = 0;
+        // Additionaly display a message if *the action was performed by* a site
+        // owner (and not someone attempting to register on the site).
+        // $user intentionally used, this is not about the $account(!!!!)
+        if (in_array($user->uid, scarecrow_list_site_owner_uids())) {
+          gardens_limits_user_message_add();
+        }
+      }
+    }
+  }
+}
+
+/**
+ * The number of users allowed in the current tier.
+ */
+function gardens_limits_user_limit() {
+  return (int) gardens_client_data_get('acquia_zuora', 'member_limit');
+}
+
+/**
+ * Return the count of active users.
+ */
+function gardens_limits_user_count() {
+  return db_query('SELECT COUNT(uid) FROM {users} WHERE status = 1 AND uid > 1')->fetchField();
+}
+
+/**
+ * Return whether active users are limited on the site at the moment.
+ */
+function gardens_limits_users_are_limited() {
+  $user_limit = gardens_limits_user_limit();
+  return !empty($user_limit) && ($user_limit <= gardens_limits_user_count());
+}
+
+/**
+ * Add our standard user limitation message to the page.
+ */
+function gardens_limits_user_message_add() {
+  drupal_set_message(gardens_limits_user_limit_text(), 'warning', FALSE);
+}
+
+/**
+ * Generic text function for user limits.
+ */
+function gardens_limits_user_limit_text($type = 'basic', $data = 0) {
+  $limit = gardens_limits_user_limit();
+  $feedback = array('@upgrade' => scarecrow_get_gardener_url() . '/mysites', '@limit' => $limit);
+  switch ($type) {
+    case 'basic':
+      return t('You have reached your limit of @limit site members. <a href="@upgrade">To add more, upgrade your subscription.</a>', $feedback);
+
+    case 'account_settings':
+      return t('Cannot set direct user registration. You have reached your limit of @limit site members. <a href="@upgrade">To add more, upgrade your subscription.</a>', $feedback);
+
+    case 'account_unblock':
+      return t('Cannot unblock user. You have reached your limit of @limit site members. <a href="@upgrade">To add more, upgrade your subscription.</a>', $feedback);
+
+    case 'account_unblock_count':
+      return format_plural($data, '@count user could not unblocked. You have reached your limit of @limit site members. <a href="@upgrade">To add more, upgrade your subscription.</a>', '@count users could not unblocked. You have reached your limit of @limit site members. <a href="@upgrade">To add more, upgrade your subscription.</a>', $feedback);
+
+    case 'account_unblock_mass':
+      return t('Cannot unblock users. You have reached your limit of @limit site members. <a href="@upgrade">To add more, upgrade your subscription.</a>', $feedback);
+  }
+}
+
+// == Powered by block =========================================================
+
+/**
+ * Implement hook_form_FORM_ID_alter().
+ */
+function gardens_limits_form_block_admin_display_form_alter(&$form, &$form_state, $form_id) {
+  // Add extra validation to not let the form submit without ensuring our
+  // limitations are in place.
+  $form['#validate'][] = 'gardens_limits_blocks_validate';
+}
+
+function gardens_limits_form_block_admin_configure_alter(&$form, &$form_state, $form_id) {
+  if ($form['module']['#value'] === 'system' && $form['delta']['#value'] === 'powered-by') {
+    $form['#validate'][] = 'gardens_limits_blocks_validate';
+  }
+}
+
+/**
+ * Custom validation callback to not let the form submit.
+ */
+function gardens_limits_blocks_validate($form, &$form_state) {
+  if (gardens_limits_powered_by_forced()) {
+    // Create an array of regions indexed by form element.
+    $themes = array();
+    if ($form_state['values']['form_id'] == 'block_admin_display_form') {
+      $themes['blocks][system_powered-by'] = $form_state['values']['blocks']['system_powered-by']['region'];
+    } else {
+      foreach($form_state['values']['regions'] as $theme => $region) {
+        // Do not flag the admin themes as requiring the powered by block.
+        if (!in_array($theme, array('seven', 'blossom'))) {
+          $index = 'regions][' . $theme;
+          $themes[$index] = $region;
+        }
+      }
+    }
+
+    // Iterate through the form elements and regions and flag any invalid selections.
+    foreach($themes as $element => $region_name) {
+      if (($region_name == -1) || (strpos($region_name, 'sidebar') === 0)) {
+        form_set_error($element, t('The powered-by block cannot be disabled or put into a sidebar with your current subscription plan. <a href="@upgrade">To disable it, upgrade now.</a>', array('@upgrade' => scarecrow_get_gardener_url() . '/mysites')));
+      }
+    }
+  }
+}
+
+/**
+ * Implementation of hook_theme_registry_alter().
+ */
+function gardens_limits_theme_registry_alter(&$theme_registry) {
+  $theme_registry['system_powered_by']['function'] = 'theme_gardens_limits_system_powered_by';
+}
+
+/**
+ * Make Powered by Drupal Gardens replace Powered by Drupal.
+ *
+ * Overriding that block gives us the ability to have the block stay in the same
+ * place but changed from "Powered by Drupal Gardens" to "Powered by Drupal"
+ * when the site is exported.
+ */
+function theme_gardens_limits_system_powered_by($variables) {
+  // Using inline styles to prevent the user from theming the message away in
+  // advanced mode.
+  $image_path = '/' . drupal_get_path('module', 'gardens_misc') . '/images/PoweredbyDrupalGardens-bkg.png';
+  return '<div class="powered-by-drupal-gardens-text tb-no-select" style="background-image: url(' . $image_path . ') !important; background-repeat: no-repeat !important; width: 201px !important; height: 24px !important; display: block !important;"><a class="tb-no-select" href="http://drupalgardens.com" style="text-decoration: none !important; vertical-align: text-bottom !important; font-size: 13px !important; line-height: 26px !important; color: #232323 !important; margin-left: 24px !important; display: inline !important; font-family: Helvetica, Arial, sans-serif !important;">' . t('Powered by Drupal Gardens') . '</a></div>';
+}
+
+/**
+ * Determines whether the powered by drupal gardens block should be forced.
+ */
+function gardens_limits_powered_by_forced() {
+  return (bool) gardens_client_data_get('acquia_zuora', 'force_powered_by');
+}
+
+// == Filesize limit =========================================================
+
+/**
+ * Implements hook_element_info_alter().
+ *
+ * Disables file uploads if the storage capacity has been reached.
+ */
+function gardens_limits_element_info_alter(&$type) {
+  if (gardens_limits_storage_is_limited()) {
+    $type['file']['#disabled'] = TRUE;
+    $type['managed_file']['#disabled'] = TRUE;
+    $type['file']['#pre_render'][] = 'gardens_limits_storage_limit_pre_render';
+    $type['managed_file']['#pre_render'][] = 'gardens_limits_storage_limit_pre_render';
+  }
+}
+
+/**
+ * Invoked from hook_menu_alter() to do our alters.
+ */
+function gardens_limits_storage_menu_alter(&$items) {
+  $items['plupload-handle-uploads']['page callback'] = 'gardens_limits_plupload_handle_uploads';
+  $items['media/browser']['page callback'] = 'gardens_limits_media_browser';
+}
+
+/**
+ * Page callback override for plupload handling.
+ */
+function gardens_limits_plupload_handle_uploads() {
+  // Do not let the current upload proceed if it will put us over the storage
+  // limit. This catches both legitimate situations (where a file was added to
+  // the plupload queue that would originally not have caused the site's limit
+  // to be exceeded, but then new files uploaded to the site by someone else in
+  // the interim - before the submit button was pressed here - changed things
+  // so the limit now would be exceeded), as well as situations where we
+  // blocked the file in the plupload UI but someone is trying to hack around
+  // it.
+  $limit = gardens_limits_storage_limit();
+  $_SESSION['plupload_total_upload_size'] += $_SERVER['CONTENT_LENGTH'];
+  if (!empty($limit) && gardens_limits_storage_used() + $_SESSION['plupload_total_upload_size'] > $limit) {
+    // Store the failure in the session, so we can use it after the form is
+    // submitted.
+    $_SESSION['plupload_fail'] = TRUE;
+    // Deny access to the upload. Sending a 4xx status code causes the plupload
+    // library to trigger an error event on the client side.
+    return MENU_ACCESS_DENIED;
+  }
+  return plupload_handle_uploads();
+}
+
+/**
+ * Page callback override for the media browser.
+ */
+function gardens_limits_media_browser($selected = NULL) {
+  // After the media browser form is submitted, we get redirected back to the
+  // browser itself, normally with instructions to close the browser. In the
+  // case of a plupload failure, though, we need special handling.
+  if (!empty($_SESSION['plupload_fail']) && empty($_POST)) {
+    unset($_SESSION['plupload_fail']);
+    // Display a message about the failure. Calls to drupal_set_message() get
+    // eaten here (when the browser closes), so we need to delay it and print
+    // the messages on the next page load; see gardens_limits_init().
+    $_SESSION['gardens_limits_delayed_messages']['warning'][] = gardens_limits_storage_limit_text('plupload partial upload');
+    // If this page gets called with a 'fid' parameter corresponding to valid
+    // managed file IDs, those files will get added to the gallery and the
+    // browser will be closed. However, if none of the files that the user
+    // attempted to upload succeed, there are no files being added and the
+    // media browser code won't ever close the browser. So we need to force it
+    // to close here.
+    // @todo: Find a way to close the media browser more elegantly, so we don't
+    //   need this code.
+    $params = drupal_get_query_parameters();
+    if (empty($params['fid'])) {
+      $output['#attached']['library'][] = array('media', 'media_browser_page');
+      // This JavaScript setting is what triggers the browser to close. It
+      // doesn't seem to matter what it's set to, as long as it's not empty.
+      $selectedMedia = array(1000000);
+      $setting = array('media' => array('selectedMedia' => array_values($selectedMedia)));
+      drupal_add_js($setting, 'setting');
+      return $output;
+    }
+  }
+
+  return media_browser($selected);
+}
+
+/**
+ * Implement hook_form_FORM_ID_alter().
+ */
+function gardens_limits_form_media_internet_add_alter(&$form, &$form_state, $form_id) {
+  if (gardens_limits_storage_is_limited()) {
+    $form['#theme_wrappers'][] = 'gardens_limits_replace_form';
+  }
+}
+
+/**
+ * Implement hook_form_FORM_ID_alter().
+ */
+function gardens_limits_form_media_add_upload_alter(&$form, &$form_state, $form_id) {
+  if (gardens_limits_storage_is_limited()) {
+    $form['#theme_wrappers'][] = 'gardens_limits_replace_form';
+  }
+}
+
+/**
+ * Implement hook_form_FORM_ID_alter().
+ */
+function gardens_limits_form_media_add_upload_multiple_alter(&$form, &$form_state, $form_id) {
+  if (gardens_limits_storage_is_limited()) {
+    $form['#theme_wrappers'][] = 'gardens_limits_replace_form';
+  }
+
+  $limit = gardens_limits_storage_limit();
+  $used = gardens_limits_storage_used();
+  $settings = array(
+    'unlimited' => empty($limit),
+    'message' => gardens_limits_storage_limit_text('plupload'),
+  );
+  if (!empty($limit)) {
+    $settings['remaining'] = $limit - $used;
+  }
+  // Start the file size counter at zero; this will be incremented as the
+  // uploads occur in gardens_limits_plupload_handle_uploads().
+  $_SESSION['plupload_total_upload_size'] = 0;
+  // @todo redo with #attached JS in $form like we do elsewhere
+  drupal_add_js(array('gardens_limits' => array('storage' => $settings)), 'setting');
+  drupal_add_js(drupal_get_path('module', 'gardens_limits') . '/gardens_limits.js', array('group' => JS_DEFAULT, 'weight' => 500));
+}
+
+/**
+ * Used to replace entire forms for the media upload widgets.
+ *
+ * These are theoretically never seen by users in the media browser, because we
+ * hide the entry point links for this there. However, if they hack their way
+ * into the form anyway, this makes the form itself unusable. Also, we do
+ * display these tabs on the media embed feature on WYSIWYG editors.
+ */
+function theme_gardens_limits_replace_form($vars) {
+  drupal_add_js(drupal_get_path('module', 'gardens_limits') . '/gardens_limits.js', array('group' => JS_DEFAULT, 'weight' => 500));
+  drupal_add_css(drupal_get_path('module', 'gardens_limits') . '/gardens_limits.css');
+  return '<div class="messages warning">' . gardens_limits_storage_limit_text('basic') . '</div>';
+}
+
+/**
+ * Pre_render function to inform user that the storage limit has been reached.
+ */
+function gardens_limits_storage_limit_pre_render($element) {
+  $element['#description'] = gardens_limits_storage_limit_text();
+  return $element;
+}
+
+/**
+ * Return TRUE/FALSE depending on whether we should limit further uploads.
+ */
+function gardens_limits_storage_is_limited() {
+  $storage_limit = gardens_limits_storage_limit();
+  return !empty($storage_limit) && ($storage_limit <= gardens_limits_storage_used());
+}
+
+/**
+ * Return the limit of file storage space. 0 is unlimited.
+ */
+function gardens_limits_storage_limit() {
+  return (float) gardens_client_data_get('acquia_zuora', 'storage_limit');
+}
+
+/**
+ * Add up space used by managed files.
+ */
+function gardens_limits_storage_used() {
+  // Only count files where status = 1 (not temporary).
+  return db_query('SELECT SUM(filesize) FROM {file_managed} WHERE status = 1')->fetchField();
+}
+
+/**
+ * Implement hook_file_insert().
+ *
+ * Runs after the file is inserted into file_managed, so we can check the limit.
+ */
+function gardens_limits_file_insert($file) {
+  if (gardens_limits_storage_is_limited()) {
+    gardens_limits_set_notification_bit('storage_limit');
+  }
+}
+
+/**
+ * Return a warning or error message about the site's storage limits.
+ *
+ * Will produce a message suitable for the user currently viewing the site.
+ *
+ * @param $context
+ *   The context in which the message is being viewed. May be one of the
+ *   following:
+ *   - 'basic': Generic context (such as the site status report). Default.
+ *   - 'plupload': The plupload dialog box.
+ *   - 'plupload partial upload': Warning message after a partial upload.
+ * @param $level
+ *   The level of message to display; used for the site status report. May be
+ *   one of the following:
+ *   - 'error': Displayed when the site has reached its storage limit. Default.
+ *   - 'warning': Displayed when the site is near, but not over, its limit.
+ *   - 'ok': Displayed when the site is not yet near its limit.
+ *
+ * @return
+ *   The text.
+ */
+function gardens_limits_storage_limit_text($context = 'basic', $level = 'error') {
+  global $user;
+
+  // Show detailed text only to site owners and the Gardens admin.
+  if (intval($user->uid) === 1 || in_array($user->uid, scarecrow_list_site_owner_uids())) {
+    $limit = gardens_limits_storage_limit();
+    $used = gardens_limits_storage_used();
+    $remains = $limit - $used;
+    $feedback = array('@upgrade' => scarecrow_get_gardener_url() . '/mysites', '@limit' => format_size($limit), '@remains' => format_size($remains));
+
+    switch ($context) {
+      case 'basic':
+        if ($level == 'error') {
+          return t('The site is over the storage limit of @limit. <a href="@upgrade" target="_blank">To add new images or files, upgrade your subscription</a>.', $feedback);
+        }
+        elseif ($level == 'warning') {
+          return t('The site is nearing its storage limit of @limit and only @remains remains. <a href="@upgrade" target="_blank">Upgrade your subscription</a> for more storage space.', $feedback);
+        }
+        elseif ($level == 'ok') {
+          return t('The site has a storage limit of @limit. <a href="@upgrade" target="_blank">Upgrade your subscription</a> for more storage space.', $feedback);
+        }
+        break;
+      case 'plupload':
+        return '<h2 class="element-invisible">' . t('Warning message') . '</h2>' . t('Some files could not be added to the queue because the site has reached the storage limit of @limit. <a href="@upgrade" target="_blank">To increase the limit, upgrade your subscription.</a>', $feedback);
+      case 'plupload partial upload':
+        return t('Some files could not be uploaded because the site has reached the storage limit of @limit. <a href="@upgrade" target="_blank">To increase the limit, upgrade your subscription.</a>', $feedback);
+    }
+  }
+  // Show more generic text to non-administrators.
+  else {
+    switch ($context) {
+      case 'basic':
+        if ($level == 'error') {
+          return t('Files cannot be uploaded due to storage limits. Please contact the site owner for more information.');
+        }
+        elseif ($level == 'warning') {
+          return t('The site has nearly reached its storage limit. Please contact the site owner for more information.');
+        }
+        break;
+      case 'plupload':
+        return '<h2 class="element-invisible">' . t('Warning message') . '</h2>' . t('Some files cannot be added to the queue due to storage limits. Please contact the site owner for more information.');
+      case 'plupload partial upload':
+        return t('Some files could not be uploaded due to storage limits. Please contact the site owner for more information.');
+    }
+  }
+  return '';
+}
+
+/**
+ * Display a dsm() if a webform upload component is displayed and we are over limit.
+ */
+function gardens_limits_node_view($node, $view_mode, $langcode) {
+  if (!empty($node->webform) && gardens_limits_storage_is_limited()) {
+    foreach($node->webform['components'] as $component) {
+      if ($component['type'] == 'file') {
+        drupal_set_message(gardens_limits_storage_limit_text('basic'), 'warning', FALSE);
+      }
+    }
+  }
+}
+
+/**
+ * Alter the admin/content/media page when the limit is reached.
+ */
+function gardens_limits_form_media_admin_alter(&$form, &$form_state, $form_id) {
+  if (gardens_limits_storage_is_limited()) {
+    // Add CSS which will hide the add media link. Even if that is not hidden,
+    // the media popup items are overridden, so people who can "hack" this item
+    // will get unusable forms in the popup.
+    $form['#attached']['css'][] = drupal_get_path('module', 'gardens_limits') . '/gardens_limits.css';
+    if (empty($_POST)) {
+      // Inform the user of the limit. Do not display this if we are in an active
+      // POST request, since the data is about to change (and also could display
+      // the text twice).
+      drupal_set_message(gardens_limits_storage_limit_text('basic'), 'warning');
+    }
+  }
+}
+
+/**
+ * Flip notification bit for storage limit if file displayed, disabled and required.
+ */
+function gardens_limits_form_webform_client_form_alter(&$form, &$form_state, $form_id) {
+  foreach ($form['submitted'] as $item) {
+    if (isset($item['#webform_component']['type']) && $item['#webform_component']['type'] == 'file' && gardens_limits_storage_is_limited() && $item['#webform_component']['mandatory']) {
+      gardens_limits_set_notification_bit('storage_limit');
+    }
+  }
+}
+
+/**
+ * Implements hook_requirements().
+ */
+function gardens_limits_requirements($phase) {
+  $requirements = array();
+  if ($phase === 'runtime') {
+    // Output a message telling the site owner how much of their storage space
+    // they've used.
+    $message = array();
+
+    $limit = gardens_limits_storage_limit();
+    $used = gardens_limits_storage_used();
+    if ($limit <= 0) {
+      // Unlimited storage space.
+      $message['title'] = t('Storage space');
+      $message['value'] = t('Unlimited');
+      $message['severity'] = REQUIREMENT_OK;
+    }
+    elseif ($used >= $limit) {
+      // Storage limits reached.
+      $message['title'] = t('Storage space');
+      $message['value'] = t('Over limit');
+      $message['severity'] = REQUIREMENT_ERROR;
+      $message['description'] = gardens_limits_storage_limit_text('basic', 'error');
+    }
+    else {
+      // Storage space used is still within limits.
+      $percent_used = ($used / $limit) * 100;
+      $message['title'] = t('Storage space used');
+      $message['value'] = t('@percent%', array('@percent' => round($percent_used)));
+
+      if ($percent_used < GARDENS_LIMITS_WARNING_THRESHOLD) {
+        $message['severity'] = REQUIREMENT_OK;
+        $message['description'] = gardens_limits_storage_limit_text('basic', 'ok');
+      }
+      else {
+        $message['severity'] = REQUIREMENT_WARNING;
+        $message['description'] = gardens_limits_storage_limit_text('basic', 'warning');
+      }
+    }
+    $requirements['gardens_limits_filesize'] = $message;
+  }
+  return $requirements;
+}
+
+// == Webform submission (display) limit =======================================
+
+/**
+ * Return TRUE/FALSE depending on whether we should limit this webform.
+ */
+function gardens_limits_webform_is_limited($nid) {
+  $response_limit = gardens_limits_webform_limit();
+  if (!empty($response_limit)) {
+    $webform_submissions = gardens_limits_webform_used($nid);
+    return ($webform_submissions > $response_limit);
+  }
+}
+
+/**
+ * Return the limit of webform submissions per form. 0 is unlimited.
+ */
+function gardens_limits_webform_limit() {
+  return (int) gardens_client_data_get('acquia_zuora', 'webform_responses_form');
+}
+
+/**
+ * Implement hook_webform_submission_insert().
+ *
+ * Respond to webform submissions and flip the submission overage bit if we
+ * are over the limit for this webform now.
+ */
+function gardens_limits_webform_submission_insert($node, $submission) {
+  if (gardens_limits_webform_is_limited($node->nid)) {
+    gardens_limits_set_notification_bit('webform_responses_form');
+  }
+}
+
+/**
+ * Count submissions for the given form.
+ */
+function gardens_limits_webform_used($nid) {
+  module_load_include('inc', 'webform', 'includes/webform.submissions');
+  return webform_get_submission_count($nid);
+}
+
+/**
+ * Invoked from hook_menu_alter() to do our alters.
+ */
+function gardens_limits_webform_menu_alter(&$items) {
+  $submission_subtasks = array('', '/view', '/edit', '/delete');
+  foreach ($submission_subtasks as $subtask) {
+    // Override individual webform item paths.
+    $items['node/%webform_menu/submission/%webform_menu_submission' . $subtask]['access callback'] = 'gardens_limits_webform_submission_access_custom';
+  }
+
+  // Add a wrapper for the analysis tab page callback
+  $items['node/%webform_menu/webform-results/analysis']['page callback'] = 'gardens_limits_webform_analysis_wrapper';
+  unset($items['node/%webform_menu/webform-results/analysis']['file']);
+
+  // Add a wrapper for the submissions tab page callback
+  $items['node/%webform_menu/submissions']['page callback'] = 'gardens_limits_webform_results_submissions_wrapper';
+  unset($items['node/%webform_menu/submissions']['file']);
+  $items['node/%webform_menu/webform-results']['page callback'] = 'gardens_limits_webform_results_submissions_wrapper';
+  unset($items['node/%webform_menu/webform-results']['file']);
+  $items['node/%webform_menu/webform-results/submissions']['page callback'] = 'gardens_limits_webform_results_submissions_wrapper';
+  unset($items['node/%webform_menu/webform-results/submissions']['file']);
+}
+
+/**
+ * Returns the last viewable submission ID for a webform node.
+ *
+ * Assumes there is a limit, always check outside if the node is limited or not.
+ */
+function gardens_limits_webform_last_allowed_sid($nid) {
+  return db_select('webform_submissions')
+    ->fields('webform_submissions', array('sid'))
+    ->condition('nid', $nid)
+    ->orderBy('sid', 'ASC')
+    // Get the last item (start before the limit and get one).
+    ->range(gardens_limits_webform_limit()-1, 1)
+    ->execute()
+    ->fetchField();
+}
+
+/**
+ * Returns the list of submission IDs for a webform node.
+ *
+ * Assumes there is a limit, always check outside if the node is limited or not.
+ */
+function gardens_limits_webform_sids($nid) {
+  $last_sid = gardens_limits_webform_last_allowed_sid($nid);
+
+  $query = db_select('webform_submissions')
+            ->fields('webform_submissions', array('sid'))
+            ->condition('nid', $nid)
+            ->condition('sid', $last_sid, '<=')
+            ->orderBy('sid', 'ASC');
+
+  return $query->execute()->fetchCol();
+}
+
+/**
+ * Displays a message informing users how many more submissions are available.
+ * Restricts the sids that will be displayed.
+ */
+function gardens_limits_webform_get_sids($node) {
+  $limit = gardens_limits_webform_limit();
+  $diff = webform_get_submission_count($node->nid) - $limit;
+
+  $message = gardens_limits_webform_limit_text($diff);
+  drupal_set_message($message, 'warning');
+
+  return gardens_limits_webform_sids($node->nid);
+}
+
+/**
+ * Access callback override for webform submission items.
+ *
+ * Note _custom suffix required so this is not seen as a webform access API
+ * function (which can only be used to grant access not to revoke).
+ */
+function gardens_limits_webform_submission_access_custom($node, $submission, $op = 'view', $account = NULL) {
+  global $user;
+  $account = isset($account) ? $account : $user;
+
+  // Determine if the user has access to all webform submissions.
+  // We will impose limits later if they do and limits are in place.
+  $access_all = user_access('access all webform results', $account);
+
+  // Check if the user has access to this submission
+  $access = webform_submission_access($node, $submission, $op, $account);
+
+  // If the user does not have access to all submissions,
+  // just return whether or not they have access to this submission.
+  if (!$access_all) {
+    return $access;
+  }
+
+  // If the user has access to all submissions and the node is limited,
+  // then the user will only have access to it
+  // if the last_sid is greater than the sid of this submission.
+  if ($access_all && gardens_limits_webform_is_limited($node->nid)) {
+    $last_sid = gardens_limits_webform_last_allowed_sid($node->nid);
+    return ($submission->sid <= $last_sid) && $access;
+  }
+
+  // Otherwise just return whether or not this user has access to this submission.
+  return $access;
+}
+
+/**
+ * Process function for webform-submission-navigation.tpl.php.
+ */
+function gardens_limits_process_webform_submission_navigation(&$vars) {
+  if (gardens_limits_webform_is_limited($vars['node']->nid)) {
+    // Clear off both previous and next if they are not allowed access. Either
+    // might need to be removed if they are over limit, or either might be
+    // displayed, if the same user submitted them, and they have access to
+    // their own data (even if they are submitted over the limit).
+    $op = (arg(4) == 'edit') ? 'edit' : 'view';
+    foreach (array('previous', 'next') as $navitem) {
+      if (!empty($vars[$navitem])) {
+        $nav_submission = webform_get_submission($vars['node']->nid, $vars[$navitem]);
+        if (!gardens_limits_webform_submission_access_custom($vars['node'], $nav_submission, $op)) {
+          $vars[$navitem] = 0;
+        }
+      }
+    }
+  }
+}
+
+/**
+ * Central function for webform limit text.
+ */
+function gardens_limits_webform_limit_text($count_restricted) {
+  $feedback = array('%count' => $count_restricted, '@upgrade' => scarecrow_get_gardener_url() . '/mysites');
+  return '<h2 class="element-invisible">' . t('Warning message') . '</h2>' . t('There are %count more submissions for this webform. <a href="@upgrade">To view the rest upgrade now.</a>', $feedback);
+}
+
+/**
+ * Wrapper page callback to limit the sids returned, if necessary, for the
+ * webform analysis tab.
+ */
+function gardens_limits_webform_analysis_wrapper($node, $sids = array(), $analysis_component = NULL) {
+  module_load_include('inc', 'webform', 'includes/webform.report');
+  if (gardens_limits_webform_is_limited($node->nid)) {
+    $sids = gardens_limits_webform_get_sids($node);
+  }
+  return webform_results_analysis($node, $sids, $analysis_component);
+}
+
+/**
+ * Wrapper page callback to limit the sids returned, if necessary, for the
+ * webform submission results tab.
+ */
+function gardens_limits_webform_results_submissions_wrapper($node, $user_filter, $pager_count) {
+  module_load_include('inc', 'webform', 'includes/webform.report');
+  $extra_filters = array();
+  // Don't apply the webform submission limit to a user viewing their own
+  // submissions, only to a webform administrator viewing all submissions for a
+  // webform.
+  if (!$user_filter && gardens_limits_webform_is_limited($node->nid)) {
+    $extra_filters['sid'] = gardens_limits_webform_get_sids($node);
+  }
+  return webform_alt_ui_results_submissions($node, $user_filter, $pager_count, $extra_filters);
+}
+
+/**
+ * Implements hook_form_FORM_ID_alter().
+ */
+function gardens_limits_form_webform_results_download_form_alter(&$form, &$form_state) {
+  // Limit the number of submissions in the download, if necessary.
+  if (gardens_limits_webform_is_limited($form['node']['#value']->nid)) {
+    $form_state['webform']['extra_filters']['sid'] = gardens_limits_webform_get_sids($form['node']['#value']);
+    // We can't support the 'range' option correctly in cases where submissions
+    // are limited, so block it for now.
+    $form['range']['#access'] = FALSE;
+  }
+}
+
+/**
+ * Puts this modules menu_alter after webform_alt_ui's
+ */
+function gardens_limits_module_implements_alter(&$implementations, $hook) {
+  if ($hook == 'menu_alter') {
+    // Move gardens_limits_menu_alter() to the end of the list.
+    $group = $implementations['gardens_limits'];
+    unset($implementations['gardens_limits']);
+    $implementations['gardens_limits'] = $group;
+  }
+}
+
+/**
+ * Implement hook_oembedprovider_alter().
+ *
+ * If the API key is not provided by the Gardener, remove all of the providers
+ * to disable the embed.ly functionality.
+ */
+function gardens_limits_oembedprovider_alter(&$providers) {
+  if (!variable_get('oembedembedly_api_key', FALSE)) {
+    $providers = array();
+  }
+}
+
+/**
+ * Implements hook_form_FORM_ID_alter().
+ */
+function gardens_limits_form_aggregator_admin_form_alter(&$form, $form_state) {
+  if (in_array('aggregator', variable_get('aggregator_processors', array('aggregator')))) {
+    $form['modules']['aggregator']['aggregator_clear']['#description'] = t('You can only store a maximum of @max_count feed items, after which oldest items will be removed. Make sure <a href="@cron">cron</a> is correctly configured.', array(
+      '@cron' => url('admin/reports/status'),
+      '@max_count' => number_format(variable_get('gardens_limits_aggregator_items_max_count', 15000)),
+    ));
+  }
+}
+
+/**
+ * Implements hook_cron().
+ *
+ * Keep the aggregator_item table size under control.
+ */
+function gardens_limits_cron() {
+  if (module_exists('aggregator') && in_array('aggregator', variable_get('aggregator_processors', array('aggregator')))) {
+    $aggregator_items = (int) db_query('SELECT COUNT(*) FROM {aggregator_item}')->fetchField();
+    $max_count = (int) variable_get('gardens_limits_aggregator_items_max_count', 15000);
+
+    // We want to display a warning to the user when the number or aggregator
+    // items get close to the limit where we start deleting old items. The
+    // warning will start showing when the itemcount goes over 80%, 90% or
+    // reaches 100%. The warnings are dismissable and we will show a new one
+    // when a new limit is reached (for example if the user dismisses the
+    // warning at 80% we will issue a new one at 90%) or the itemcount goes
+    // down and then back up again.
+    $intervention_bar = $max_count ? floor(100 * $aggregator_items / $max_count) : 0;
+    if ($intervention_bar >= 100) {
+      $current_warning_level = 100;
+    }
+    elseif ($intervention_bar >= 90) {
+      $current_warning_level = 90;
+    }
+    elseif ($intervention_bar >= 80) {
+      $current_warning_level = 80;
+    }
+    else {
+      $current_warning_level = 0;
+    }
+    $aggregator_warning = variable_get('gardens_limits_aggregator_items_warning', array());
+    // Note when the warning level changes.
+    $warning_level = isset($aggregator_warning['level']) ? $aggregator_warning['level'] : 0;
+    if ($current_warning_level != $warning_level) {
+      // Mark the beginning of the new warning, we will compare against this
+      // timestamp and the level to determine if we need to show a warning.
+      if (!$warning_level) {
+        $aggregator_warning['timestamp'] = REQUEST_TIME;
+      }
+      $aggregator_warning['level'] = $current_warning_level;
+      $aggregator_warning['count'] = $aggregator_items;
+      variable_set('gardens_limits_aggregator_items_warning', $aggregator_warning);
+    }
+
+    // Kill a batch of aggregator items when there are more than the limit
+    // allows.
+    if ($aggregator_items > $max_count) {
+      $limit = min(variable_get('gardens_limits_aggregator_items_delete_size', 10000), $aggregator_items - $max_count);
+      // @index timestamp
+      $iids = db_query_range('SELECT iid FROM {aggregator_item} ORDER BY timestamp ASC', 0, $limit)->fetchCol();
+      // @index iid
+      db_delete('aggregator_category_item')
+        ->condition('iid', $iids, 'IN')
+        ->execute();
+      // @index primary key
+      db_delete('aggregator_item')
+        ->condition('iid', $iids, 'IN')
+        ->execute();
+    }
+  }
+}

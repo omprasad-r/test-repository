@@ -1,0 +1,12 @@
+.svn
+CVS
+.git
+settings.php
+index.php
+.htaccess
+sites/all/modules/views_bulk_operations/actions/script.action.inc
+sites/all/modules/gardens_statsd/gardens_statsd.install
+sites/all/modules/gardens_statsd/gardens_statsd.module
+modules/aggregator/aggregator.pages.inc
+modules/block/block.module
+sites/all/modules/antivirus/antivirus.module

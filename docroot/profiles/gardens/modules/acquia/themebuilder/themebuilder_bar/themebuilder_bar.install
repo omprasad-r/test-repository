@@ -1,0 +1,89 @@
+<?php
+
+/**
+ * @file
+ * The UI controller for the ThemeBuilder.
+ */
+
+/**
+ * Updates after the 1.19 release start at 11190.
+ */
+
+/**
+ * Split the "administer site configuration" and "administer themes" permissions
+ * into the individual ThemeBuilder tab permissions.
+ */
+function themebuilder_bar_update_11190() {
+  // Get the roles for the site.
+  $rids = array_flip(array_keys(user_roles()));
+  // Get a list of permissions by role.
+  $role_permissions = user_role_permissions($rids);
+  // These are the two permissions a role must have in order to receive the new
+  // ThemeBuilder tab permissions.
+  $themebuilder_permissions = array(
+    'administer site configuration',
+    'administer themes'
+  );
+  // New ThemeBuilder tab permissions.
+  $new_permissions = array(
+    'access themebuilder styles tab',
+    'access themebuilder brand tab',
+    'access themebuilder layout tab',
+    'access themebuilder advanced tab',
+    'access themebuilder theme tab',
+  );
+  // Give the new ThemeBuilder tab permissions to the roles already have both
+  // "administer site configuration" and "administer themes" permissions.
+  foreach($role_permissions as $rid => $permissions) {
+    $permissions = array_keys($permissions);
+    $missing_permissions = array_diff($themebuilder_permissions, $permissions);
+    // Let's remove these permissions from the anonymous and authenticated user.
+    if (($rid === 1 || $rid === 2) && count($missing_permissions) < 2) {
+      // The permissions they have that they should not have.
+      $revoke_permissions = array_diff($themebuilder_permissions, $missing_permissions);
+      // Revoke these permissions as a bit of general cleanup.
+      if (!empty($revoke_permissions)) {
+        user_role_revoke_permissions($rid, $revoke_permissions);
+      }
+      continue;
+    }
+    // There should be no difference between the themebuilder permissions and
+    // the current permissions of the role. If $missing_permissions is not empty
+    // then this user will not be able to access the ThemeBuilder currently.
+    if (empty($missing_permissions)) {
+      user_role_grant_permissions($rid, $new_permissions);
+    }
+  }
+}
+
+/**
+ * Update numbering strategy changed to sequential.
+ */
+
+/**
+ * Add "publish theme" permission for roles that should have it.
+ */
+function themebuilder_bar_update_11191() {
+  // Determine which roles have all existing Themebuilder permissions.
+  $tb_permissions = array(
+    'access themebuilder styles tab',
+    'access themebuilder brand tab',
+    'access themebuilder layout tab',
+    'access themebuilder advanced tab',
+    'access themebuilder theme tab',
+  );
+  $result = db_query("SELECT permission, rid FROM {role_permission} WHERE permission IN (:tb_permissions)", array(':tb_permissions' => $tb_permissions));
+  // Assemble a list of permissions keyed by role.
+  $role_permissions = array();
+  foreach ($result as $row) {
+    $role_permissions[$row->rid][] = $row->permission;
+  }
+
+  // If any role has all five existing permissions, grant it the "publish theme"
+  // permission as well.
+  foreach ($role_permissions as $rid => $permissions) {
+    if (count($permissions) == 5) {
+      user_role_grant_permissions($rid, array('publish theme'));
+    }
+  }
+}

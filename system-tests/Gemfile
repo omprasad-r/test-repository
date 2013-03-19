@@ -1,0 +1,12 @@
+source :rubygems
+#our own gem that bundles a lot of utility classes
+gem 'acquia_qa', :git => "ssh://git@git.acquia.com/mnt/git/repos/webdriver_qa.git"
+
+#Because of annoying "Element can't be scrolled into view bug:
+#http://groups.google.com/group/webdriver/browse_thread/thread/4768f0496ac82b8e
+#https://code.google.com/p/selenium/issues/detail?id=3075
+gem 'selenium-webdriver' , '=2.14.0'
+gem 'capybara'
+gem 'capybara-webkit'
+gem 'ci_reporter'
+gem 'rspec'

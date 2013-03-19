@@ -1,0 +1,8 @@
+; $Id:
+name = xhprof
+description = XHProf integration.
+package = Development
+core = 7.x
+
+files[] = XHProfRunsInterface.inc
+files[] = XHProfRunsFile.inc

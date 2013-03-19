@@ -1,0 +1,65 @@
+<?php
+/**
+ * @file
+ * Install, update, and uninstall functions for the MASt module.
+ */
+
+/**
+ * Implements hook_uninstall().
+ */
+function mast_uninstall() {
+  variable_del('mast_bundle_settings');
+  // If the oauth_common_login_path variable was set to mast/login, delete it.
+  $oauth_login = variable_get('oauth_common_login_path', 'user/login');
+  if ($oauth_login == 'mast/login') {
+    variable_del('oauth_common_login_path');
+  }
+  variable_del('mast_use_mast_login');
+
+  // Delete the user representing the mobile application.
+  $mast_uid = variable_get('mast_app_uid');
+  if (!empty($mast_uid)) {
+    user_delete($mast_uid);
+  }
+  variable_del('mast_app_uid');
+}
+
+/**
+ * Implements hook_install().
+ */
+function mast_install() {
+  // Enable Stark for use on the MASt login page.
+  theme_enable(array('stark'));
+  // If the oauth_common_login_path variable has not yet been explicitly set,
+  // set it to the MASt login page.
+  $oauth_login = variable_get('oauth_common_login_path', '');
+  if (empty($oauth_login)) {
+    variable_set('oauth_common_login_path', 'mast/login');
+    variable_set('mast_use_mast_login', TRUE);
+  }
+
+  // Create a user representing the mobile application.
+  $account = user_save(drupal_anonymous_user(), array(
+    'name' => 'Mobile app user',
+    'mail' => 'mobileapp@example.com',
+    'pass' => user_password(),
+    'status' => 1,
+  ));
+  variable_set('mast_app_uid', $account->uid);
+
+  // Create an oAuth consumer object corresponding to the mobile app.
+  $options = array(
+    'callback_url' => 'gardens://authorized',
+    'uid' => $account->uid,
+    'provider_consumer' => TRUE,
+    'in_database' => TRUE,
+    'context' => 'mast',
+  );
+  $consumer = new DrupalOAuthConsumer('Q29tZSBmb3IgdGhlIHNvZnR3YXJl', 'c3RheSBmb3IgdGhlIGNvbW11bml0eS4', $options);
+  $consumer->write();
+
+  // Give all users permission to authorize the mobile application.
+  user_role_change_permissions(DRUPAL_AUTHENTICATED_RID, array(
+    'oauth authorize consumers in mast' => TRUE,
+  ));
+}

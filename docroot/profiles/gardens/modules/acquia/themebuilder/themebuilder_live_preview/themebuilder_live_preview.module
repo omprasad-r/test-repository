@@ -1,0 +1,232 @@
+<?php
+
+/**
+ * @file
+ * Theme switcher for customers who want to test disabled themes.
+ */
+
+/**
+ * Implements hook_menu().
+ */
+function themebuilder_live_preview_menu() {
+  $items = array();
+
+  $items['themebuilder-live-preview-revert'] = array(
+    'page callback' => 'themebuilder_live_preview_revert',
+    'page arguments' => array(TRUE),
+    'access callback' => 'themebuilder_live_preview_custom_theme_enabled',
+    'type' => MENU_CALLBACK,
+  );
+
+  return $items;
+}
+
+/**
+ * Determines if the visitor is previewing a disabled Themebuilder theme.
+ */
+function themebuilder_live_preview_custom_theme_enabled() {
+  $custom_theme = themebuilder_live_preview_custom_theme();
+  return isset($custom_theme);
+}
+
+/**
+ * Fetches the available Themebuilder themes.
+ */
+function themebuilder_live_preview_available_themes_get() {
+  $themelist = array();
+  // While it would be good to use themebuilder_compiler_get_initial_data() to
+  // fetch the list of themes, but in that case we would get an exception due to
+  // themebuilder_themes_themebuilder_init_data().
+  $themes = themebuilder_compiler_get_theme_list();
+  $themes += themebuilder_marketplace_get_theme_list();
+  if (!empty($themes)) {
+    foreach (array('mythemes', 'featured') as $type) {
+      foreach ($themes[$type] as $system_name => $theme) {
+        $themelist[$system_name] = $theme;
+      }
+    }
+  }
+  uasort($themelist, '_themebuilder_live_preview_sort');
+  return $themelist;
+}
+
+/**
+ * Helper function to sort an array of themes.
+ */
+function _themebuilder_live_preview_sort($a, $b) {
+  return strcasecmp($a['name'], $b['name']);
+}
+
+/**
+ * Implements hook_custom_theme().
+ */
+function themebuilder_live_preview_custom_theme() {
+  $custom_theme = NULL;
+  if (isset($_COOKIE['themebuilder_live_preview_NO_CACHE']) && (!user_access('view the administration theme') || !path_is_admin(current_path()))) {
+    // Make sure hacked cookie does not throw an exception.
+    $data = @unserialize($_COOKIE['themebuilder_live_preview_NO_CACHE']);
+    // Check on data integrity.
+    if (!$data || !is_array($data) || !isset($data['token'], $data['uid'], $data['theme'])) {
+      return NULL;
+    }
+    // Check on token.
+    if ($data['token'] !== themebuilder_screenshot_get_token($data['theme'] . '::' . $data['uid'])) {
+      return NULL;
+    }
+    // Check on data validity.
+    $themes = themebuilder_live_preview_available_themes_get();
+    if (isset($themes[$data['theme']]) && ($account = user_load($data['uid'])) && user_access('themebuilder live preview a different theme', $account)) {
+      $custom_theme = $data['theme'];
+      // If the theme is disabled, we need special handling to allow it to be
+      // used.
+      if (empty($themes[$custom_theme]->status)) {
+        themebuilder_screenshot_fake_theme_enable($custom_theme);
+      }
+    }
+  }
+  return $custom_theme;
+}
+
+/**
+ * Implements hook_permission().
+ */
+function themebuilder_live_preview_permission() {
+  return array(
+    'themebuilder live preview a different theme' => array(
+      'title' => t('Allow preview of unpublished themes'),
+      'description' => t('Users can view unpublished themes.'),
+    ),
+  );
+}
+
+/**
+ * Implements hook_block_info().
+ */
+function themebuilder_live_preview_block_info() {
+  return array(
+    'theme_live_preview' => array(
+      'info' => t('Theme preview'),
+      'cache' => DRUPAL_NO_CACHE,
+    ),
+  );
+}
+
+/**
+ * Implements hook_block_view().
+ */
+function themebuilder_live_preview_block_view($delta = '') {
+  $block = array();
+  switch ($delta) {
+    case 'theme_live_preview':
+      if (!empty($GLOBALS['user']->uid) && user_access('themebuilder live preview a different theme') && (!user_access('view the administration theme') || !path_is_admin(current_path()))) {
+        $block = array(
+          'subject' => t('Theme preview'),
+          'content' => drupal_get_form('themebuilder_live_preview_theme_picker_form'),
+        );
+      }
+      break;
+  }
+  return $block;
+}
+
+/**
+ * Theme switcher form.
+ */
+function themebuilder_live_preview_theme_picker_form($form, $form_state) {
+  $themes = themebuilder_live_preview_available_themes_get();
+  $current_live_theme = themebuilder_compiler_get_published_theme_name();
+  $options = array('_none' => t('Live theme'));
+  foreach ($themes as $theme_name => $theme) {
+    if ($theme_name != $current_live_theme) {
+      $options[$theme_name] = $theme['name'];
+    }
+  }
+  $current_custom_theme = themebuilder_live_preview_custom_theme();
+  $form['theme'] = array(
+    '#description' => t('Note: You cannot use ThemeBuilder when viewing an unpublished theme.'),
+    '#type' => 'select',
+    '#options' => $options,
+    '#default_value' => $current_custom_theme,
+  );
+  $form['switch'] = array(
+    '#type' => 'submit',
+    '#value' => t('View'),
+  );
+  $form['revert'] = array(
+    '#type' => 'submit',
+    '#value' => t('Revert'),
+    '#access' => isset($current_custom_theme),
+    '#submit' => array('themebuilder_live_preview_revert'),
+  );
+  return $form;
+}
+
+/**
+ * Submit handler for the theme switcher form.
+ */
+function themebuilder_live_preview_theme_picker_form_submit($form, $form_state) {
+  if ($form_state['values']['theme'] == '_none') {
+    themebuilder_live_preview_revert();
+  }
+  else {
+    $data = array(
+      'token' => themebuilder_screenshot_get_token($form_state['values']['theme'] . '::' . $GLOBALS['user']->uid),
+      'uid' => $GLOBALS['user']->uid,
+      'theme' => $form_state['values']['theme'],
+    );
+    setcookie('themebuilder_live_preview_NO_CACHE', serialize($data), 0, '/');
+  }
+}
+
+/**
+ * Reverts the visitor back to the live theme.
+ *
+ * It is both a submit handler for the theme switching block and a menu callback
+ * handler.
+ */
+function themebuilder_live_preview_revert($redirect = FALSE) {
+  setcookie('themebuilder_live_preview_NO_CACHE', '', REQUEST_TIME - 3600, '/');
+  // When this function is being called as a menu callback handler then we
+  // should redirect back to where we came from.
+  if ($redirect) {
+    drupal_goto();
+  }
+}
+
+/**
+ * Implements hook_page_alter().
+ *
+ * When the target custom theme already has some blocks set but not this
+ * module's block then the visitor will not see an interface to revert back to
+ * the live theme so display a message with a link.
+ */
+function themebuilder_live_preview_page_alter() {
+  if (themebuilder_live_preview_custom_theme_enabled()) {
+    drupal_set_message(themebuilder_live_preview_message_get(), 'notice');
+  }
+}
+
+/**
+ * Composes the themebuilder preview warning message for the visitor.
+ */
+function themebuilder_live_preview_message_get() {
+  $available_themes = themebuilder_live_preview_available_themes_get();
+  $current_theme = themebuilder_live_preview_custom_theme();
+  $revert_url = url('themebuilder-live-preview-revert', array('query' => drupal_get_destination()));
+  return t('You are viewing the unpublished %theme_name theme. <a href="!url">Revert</a> to the live theme.', array(
+    '%theme_name' => $available_themes[$current_theme]['name'],
+    '!url' => $revert_url,
+  ));
+}
+
+/**
+ * Implementation of hook_preprocess_html().
+ *
+ * This hook sets a body class that indicates the user is in preview mode.
+ */
+function themebuilder_live_preview_preprocess_html(&$vars) {
+  if (themebuilder_live_preview_custom_theme_enabled()) {
+    $vars['classes_array'][] = 'themebuilder-live-preview';
+    drupal_add_js(drupal_get_path('module', 'themebuilder_live_preview') . '/themebuilder_live_preview.js');
+  }
+}

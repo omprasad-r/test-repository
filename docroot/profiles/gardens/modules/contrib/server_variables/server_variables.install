@@ -1,0 +1,21 @@
+<?php
+/**
+ * Implement hook_uninstall()
+ * 
+ * Delete all associated variables.
+ */
+function server_variables_uninstall() {
+  db_delete('variable')
+    ->condition('name', 'server_variables_%', 'LIKE')
+    ->execute();
+}
+
+/**
+ * Increase the module weight so that it will run after Metatag.
+ */
+function server_variables_update_7000() {
+  db_update('system')
+    ->fields(array('weight' => 2))
+    ->condition('name', 'server_variables', '=')
+    ->execute();
+}

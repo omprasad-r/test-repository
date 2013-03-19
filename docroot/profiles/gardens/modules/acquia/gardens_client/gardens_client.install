@@ -1,0 +1,193 @@
+<?php
+// $Id$
+
+/**
+ * Implements hook_update_dependencies().
+ */
+function gardens_client_update_dependencies() {
+  // Before changing permissions, we need to run the user.module update
+  // function which changes the schema of the {role_permission} table.
+  $dependencies['gardens_client'][7005] = array(
+    'user' => 7006,
+  );
+
+  return $dependencies;
+}
+
+/**
+ * Fix broken OpenID authmap entries due to innacurate pathauto setup.
+ */
+function gardens_client_update_7003() {
+  return;
+  /*include_once drupal_get_path('module', 'gardens_client') . '/gardens_client_usermap.inc';
+  $result = db_query("SELECT authname FROM {authmap} WHERE authname LIKE '%/openid'");
+  foreach ($result as $record) {
+    if (isset($usermap[$record->authname])) {
+      db_query("UPDATE {authmap} SET authname = :newname WHERE authname = :oldname", array(':oldname' => $record->authname, ':newname' => $usermap[$record->authname]));
+    }
+  }*/
+}
+
+/**
+ * Make sure all OpenID URLs are saved as http and https.
+ */
+function gardens_client_update_7004() {
+  $result = db_query("SELECT uid, authname FROM {authmap} WHERE module = 'openid'");
+  foreach ($result as $account) {
+    user_set_authmaps($account, array("authname_openid" => gardens_client_swap_url_scheme($account->authname)));
+  }
+}
+
+/**
+ * Grant overlay access to anonymous and authenticated users.
+ */
+function gardens_client_update_7005() {
+  // Make sure to enable this if they had it disabled before.
+  module_enable(array('overlay'));
+
+  // Grant overlay access to all users.
+  $roles = array(DRUPAL_ANONYMOUS_RID, DRUPAL_AUTHENTICATED_RID);
+  foreach ($roles as $rid) {
+    user_role_grant_permissions($rid, array('access overlay'));
+  }
+}
+
+/**
+ * Revoke overlay access to anonymous and authenticated users.
+ */
+function gardens_client_update_7006() {
+
+  // Grant overlay access to all users.
+  $roles = array(DRUPAL_ANONYMOUS_RID, DRUPAL_AUTHENTICATED_RID);
+  foreach ($roles as $rid) {
+    user_role_revoke_permissions($rid, array('access overlay'));
+  }
+}
+
+/**
+ * Fix previous installer bug: email verification was always enabled.
+ */
+function gardens_client_update_7007() {
+  variable_set('user_email_verification', FALSE);
+}
+
+/**
+ * Core 7 to core 7 DB update. Side effect of http://drupal.org/node/734762
+ */
+function gardens_client_update_7008() {
+  db_drop_unique_key('filter', 'fmn');
+}
+
+/**
+ * Core 7 to core 7 DB updates (April 8th, 2010).
+ */
+function gardens_client_update_7009() {
+  // object_type renamed to entity type in http://drupal.org/node/707724
+  if (db_table_exists('field_config_instance')) {
+    db_drop_index('field_config_instance', 'field_name_bundle');
+    db_change_field(
+      'field_config_instance',
+      'object_type',
+      'entity_type',
+      array(
+        'type' => 'varchar',
+        'length' => 32,
+        'not null' => TRUE,
+        'default' => ''
+      )
+    );
+    db_add_index('field_config_instance', 'field_name_bundle', array('field_name', 'entity_type', 'bundle'));
+  }
+
+  // Name became a unique column in http://drupal.org/node/640880
+  if (db_table_exists('image_styles')) {
+    db_drop_index('image_styles', 'name');
+    db_add_unique_key('image_styles', 'name', array('name'));
+  }
+
+  // Queue variables renamed, do not keep old ones http://drupal.org/node/758916
+  db_query("DELETE FROM {variable} WHERE name LIKE 'queue_module_%'");
+  cache_clear_all('variables', 'cache');
+
+  if (db_table_exists('taxonomy_vocabulary')) {
+    // Machine name now used in paths instead of vid: http://drupal.org/node/744258
+    db_add_unique_key('taxonomy_vocabulary', 'machine_name', array('machine_name'));
+  }
+  if (db_table_exists('taxonomy_index')) {
+    // Nid index for http://drupal.org/node/744972
+    db_add_index('taxonomy_index', 'nid', array('nid'));
+  }
+}
+
+/**
+ * Let openid_client_ax go.
+ */
+function gardens_client_update_7010() {
+  module_disable(array('openid_client_ax'));
+}
+
+/**
+ * Let head2head go.
+ */
+function gardens_client_update_7011() {
+  module_disable(array('head2head'));
+}
+
+/**
+ * Let head2head go (again).
+ *
+ * Scarecrow had code to keep the module enabled for sites, so we need to
+ * try and run this operation again.
+ */
+function gardens_client_update_7012() {
+  module_disable(array('head2head'));
+}
+
+// todo - fix numbering.
+
+/**
+ * Updates on trunk after gardens-beta-20 start at 12000
+ */
+
+/**
+ * Drop profile module, migrate its single block.
+ */
+function gardens_client_update_12000() {
+  // Move the profile module's block to gardens_features.
+  $tables = array('block_role', 'block_node_type', 'block');
+  foreach ($tables as $table) {
+    // If blocks were rehashed after the gardens_features code was updated but
+    // before this update function ran, there will be duplicate blocks defined
+    // in the database; in that case, get rid of the gardens_features one,
+    // since it just became available in the code recently whereas the profile
+    // module block has been there for a long time and therefore contains the
+    // settings saved by the site admin. (Note that this scenario is unlikely
+    // in Gardens anyway, since we normally run Drush updates immediately after
+    // updating the codebase.)
+    db_delete($table)
+      ->condition('module', 'gardens_features')
+      ->execute();
+    db_update($table)
+      ->fields(array('module' => 'gardens_features'))
+      ->condition('module', 'profile')
+      ->execute();
+  }
+
+  // Compute new fields based on profile field settings on old block.
+  $new_fields = array();
+  $fields = variable_get('profile_block_author_fields', array());
+  if (!empty($fields['user_profile'])) {
+    $new_fields['user_profile'] = TRUE;
+    unset($fields['user_profile']);
+  }
+  if (count(array_filter($fields))) {
+    // If the fields list had any other fields, the block showed the picture
+    // (but other fields had no data, so this was the only effect it had).
+    $new_fields['picture'] = TRUE;
+  }
+  variable_set('gardens_features_author_block_fields', $new_fields);
+
+  // Disable and uninstall profile.
+  module_disable(array('profile'), FALSE);
+  drupal_uninstall_modules(array('profile'), FALSE);
+}

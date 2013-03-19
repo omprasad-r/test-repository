@@ -1,0 +1,160 @@
+<?php
+
+/**
+ * Implements hook_schema().
+ */
+function themebuilder_marketplace_schema() {
+  $schema['themebuilder_marketplace_featured'] = array(
+    'description' => 'Information on which marketplace themes are currently featured.',
+    'fields' => array(
+      'nid' => array(
+        'description' => 'The node id of the corresponding marketplace theme node on the gardener.',
+        'type' => 'int',
+        'unsigned' => TRUE,
+        'not null' => TRUE,
+      ),
+      'vid' => array(
+        'description' => 'The current revision id of the corresponding marketplace theme node on the gardener.',
+        'type' => 'int',
+        'unsigned' => TRUE,
+        'not null' => TRUE,
+        'default' => 0,
+      ),
+      'name' => array(
+        'description' => 'The human-readable name of the theme.',
+        'type' => 'varchar',
+        'length' => '255',
+        'not null' => TRUE,
+      ),
+      's3_key' => array(
+        'description' => 'The s3 object key corresponding to this theme.',
+        'type' => 'varchar',
+        'length' => '255',
+        'not null' => TRUE,
+      ),
+      'base_theme' => array(
+        'description' => 'Whether or not this theme is a base theme maintained in the codebase.',
+        'type' => 'int',
+        'size' => 'tiny',
+        'not null' => TRUE,
+        'default' => 0,
+      ),
+      'thumbnail_url' => array(
+        'description' => 'The absolute URL for this theme\'s thumbnail screenshot.',
+        'type' => 'varchar',
+        'length' => '255',
+        'not null' => TRUE,
+      ),
+      'username' => array(
+        'description' => 'The username of the theme\'s designer.',
+        'type' => 'varchar',
+        'length' => '255',
+        'not null' => TRUE,
+      ),
+    ),
+    'primary key' => array('nid'),
+  );
+  return $schema;
+}
+
+/**
+ * Implements hook_install().
+ */
+function themebuilder_marketplace_install() {
+  // Insert hardcoded values for default themes into the themebuilder
+  // marketplace 'featured' table. These will be replaced with the up-to-date
+  // values the first time the site phones home to the Gardener
+  // post-installation, but inserting them here guarantees the themebuilder
+  // will have something to work with in the event the phone home event is
+  // delayed (and also allows the themebuilder to work on development machines
+  // that aren't connected to an instance of the Gardener).
+  $values = array(
+    array(
+      'nid' => 377851,
+      'vid' => 377441,
+      'name' => 'Broadway',
+      's3_key' => 'themes/acquia/broadway',
+      'base_theme' => 1,
+      'thumbnail_url' => 'http://www.drupalgardens.com/sites/default/files/imagecache/thumbnail/sites/default/files/marketplace_thumbnails/broadway.png',
+      'username' => 'Gardens admin',
+    ),
+    array(
+      'nid' => 377876,
+      'vid' => 377471,
+      'name' => 'Campaign',
+      's3_key' => 'themes/acquia/campaign',
+      'base_theme' => 1,
+      'thumbnail_url' => 'http://www.drupalgardens.com/sites/default/files/imagecache/thumbnail/sites/default/files/marketplace_thumbnails/campaign.png',
+      'username' => 'Gardens admin',
+    ),
+    array(
+      'nid' => 377896,
+      'vid' => 377491,
+      'name' => 'Carbon',
+      's3_key' => 'themes/acquia/carbon',
+      'base_theme' => 1,
+      'thumbnail_url' => 'http://www.drupalgardens.com/sites/default/files/imagecache/thumbnail/sites/default/files/marketplace_thumbnails/carbon.png',
+      'username' => 'Gardens admin',
+    ),
+    array(
+      'nid' => 377906,
+      'vid' => 377501,
+      'name' => 'Impact',
+      's3_key' => 'themes/acquia/impact',
+      'base_theme' => 1,
+      'thumbnail_url' => 'http://www.drupalgardens.com/sites/default/files/imagecache/thumbnail/sites/default/files/marketplace_thumbnails/impact.png',
+      'username' => 'Gardens admin',
+    ),
+    array(
+      'nid' => 377941,
+      'vid' => 377536,
+      'name' => 'Kenwood',
+      's3_key' => 'themes/acquia/kenwood',
+      'base_theme' => 1,
+      'thumbnail_url' => 'http://www.drupalgardens.com/sites/default/files/imagecache/thumbnail/sites/default/files/marketplace_thumbnails/kenwood.png',
+      'username' => 'Gardens admin',
+    ),
+    array(
+      'nid' => 377946,
+      'vid' => 377541,
+      'name' => 'Minima',
+      's3_key' => 'themes/acquia/builderbase',
+      'base_theme' => 1,
+      'thumbnail_url' => 'http://www.drupalgardens.com/sites/default/files/imagecache/thumbnail/sites/default/files/marketplace_thumbnails/minima.png',
+      'username' => 'Gardens admin',
+    ),
+    array(
+      'nid' => 377966,
+      'vid' => 377561,
+      'name' => 'Sonoma',
+      's3_key' => 'themes/acquia/sonoma',
+      'base_theme' => 1,
+      'thumbnail_url' => 'http://www.drupalgardens.com/sites/default/files/imagecache/thumbnail/sites/default/files/marketplace_thumbnails/sonoma.png',
+      'username' => 'Gardens admin',
+    ),
+    array(
+      'nid' => 378041,
+      'vid' => 377636,
+      'name' => 'Sparks',
+      's3_key' => 'themes/acquia/sparks',
+      'base_theme' => 1,
+      'thumbnail_url' => 'http://www.drupalgardens.com/sites/default/files/imagecache/thumbnail/sites/default/files/marketplace_thumbnails/sparks_0.png',
+      'username' => 'Gardens admin',
+    ),
+    array(
+      'nid' => 378096,
+      'vid' => 377691,
+      'name' => 'Bare Bones',
+      's3_key' => 'themes/acquia/barebones',
+      'base_theme' => 1,
+      'thumbnail_url' => 'http://www.drupalgardens.com/sites/default/files/imagecache/thumbnail/sites/default/files/marketplace_thumbnails/barebones.png',
+      'username' => 'Gardens admin',
+    ),
+  );
+
+  $query = db_insert('themebuilder_marketplace_featured')->fields(array('nid', 'vid', 'name', 's3_key', 'base_theme', 'thumbnail_url', 'username'));
+  foreach ($values as $record) {
+    $query->values($record);
+  }
+  $query->execute();
+}

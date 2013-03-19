@@ -1,0 +1,227 @@
+/* --------------------------------------------
+
+themebuilder_themes.css
+
+Project:     Acquia ThemeBuilder
+Version:     1.0
+Author:      Acquia Engineering Team
+URL:         http://
+Copyright:   Acquia, Inc.
+License:     
+  
+----------------------------------------------- */
+
+/* @group Components 
+----------------------------------------------- */
+
+#themebuilder-wrapper #themebuilder-themes {
+  padding-top: 36px;
+  position: relative;
+}
+
+/* @group jCarousel 
+----------------------------------------------- */
+
+/* Without this width override, the last tile in the carousel will wrap to a new line */
+#themebuilder-wrapper .jcarousel-list-horizontal {
+  width: 20000px !important;
+}
+
+#themebuilder-wrapper #themebuilder-themes .contents {
+  margin: 10px 20px 0 200px; /* Account for tab nav. */
+}
+
+/* @group Punch out 
+----------------------------------------------- */
+
+/* @end */
+
+/* @group Theme items 
+----------------------------------------------- */
+
+#themebuilder-wrapper .carousel-themes .jcarousel-item:last-child,
+#themebuilder-wrapper .carousel-themes .jcarousel-item.last {
+  width: 500px;
+}
+
+#themebuilder-wrapper .carousel-themes .theme-shot {
+  float: left; /* needed for width shrink wrapping */
+  position: relative;
+}
+
+#themebuilder-wrapper .carousel-themes .theme-shot:hover,
+#themebuilder-wrapper .carousel-themes .theme-shot img:hover {
+  cursor: pointer;
+}
+
+#themebuilder-wrapper .carousel-themes .theme-shot img {
+  background: #333;
+  border: 5px solid #000;
+  float: left;
+  height: auto;
+  margin-bottom: 4px;
+  width: 200px;
+}
+#themebuilder-wrapper .carousel-themes .theme-shot .label {
+  clear: left;
+  color: #999;
+  font-weight: bold;
+}
+
+#themebuilder-wrapper .carousel-themes .theme-shot .prep {
+  color: #999;
+  font-size: 10px;
+}
+
+#themebuilder-wrapper .carousel-themes .theme-shot .last-saved {
+  color: #999;
+  font-size: 11px;
+  margin-bottom: 3px
+}
+
+#themebuilder-wrapper .carousel-themes .theme-shot .author {
+  color: #00A5FF;
+  font-size: 10px;
+}
+
+#themebuilder-wrapper .carousel-themes .theme-shot .preview {
+  background: rgba(0, 0, 0, 0.6667) none left top no-repeat scroll;
+  bottom: 0px;
+  cursor: pointer;
+  left: 0px;
+  opacity: 0.9;
+  position: absolute;
+  right: 0px;
+  text-shadow: 1px 2px 0px black;
+  top: 0px;
+  z-index: 10;
+}
+
+#themebuilder-wrapper .carousel-themes .theme-shot .preview span {
+  color: #fff;
+  cursor: pointer;
+  font-size: 40px;
+  left: 33px;
+  opacity: 1;
+  position: absolute;
+  top: 40px;
+}
+
+#themebuilder-wrapper .carousel-themes .theme-shot.applied .prep,
+#themebuilder-wrapper .carousel-themes .theme-shot.applied .label,
+#themebuilder-wrapper .carousel-themes .theme-shot.applied .last-saved {
+  color: #fff;
+}
+
+#themebuilder-wrapper .carousel-themes .theme-shot.applied .image {
+  position: relative;
+}
+
+#themebuilder-wrapper .carousel-themes .theme-shot.applied .flag {
+  background: url("/modules/acquia/themebuilder/themebuilder_bar/images/tb-applied.png") no-repeat 0 0; 
+  height: 89px;
+  position: absolute;
+  right: 5px;
+  top: 53px;
+  width: 75px;
+  z-index: 10;
+}
+
+#themebuilder-wrapper .carousel-themes .theme-shot.live .flag {
+  background: url("/modules/acquia/themebuilder/themebuilder_themes/images/tb-live.png") no-repeat 0 0; 
+  height: 73px;
+  position: absolute;
+  right: 0;
+  top: 73px;
+  width: 70px;
+  z-index: 10;
+}
+
+/* @end */
+
+/* @group FlyoutList 
+----------------------------------------------- */
+
+#themebuilder-wrapper .carousel-themes .flyout-list,
+#themebuilder-wrapper .carousel-themes .flyout-list-outline.right {
+  left: 210px;
+}
+
+#themebuilder-wrapper .carousel-themes .flyout-list-outline.top,
+#themebuilder-wrapper .carousel-themes .flyout-list-outline.bottom {
+  width: 210px;
+}
+
+/* @end */
+
+/* @group Buttons 
+----------------------------------------------- */
+
+#themebuilder-wrapper .carousel-wrap .jcarousel-prev,
+#themebuilder-wrapper .carousel-wrap .jcarousel-next {
+  display: none;
+  position: absolute;
+  z-index: 3;
+  top: 40%;
+  cursor: pointer;
+}
+
+#themebuilder-wrapper .carousel-wrap .jcarousel-prev {
+  left: -16px;
+}
+
+#themebuilder-wrapper .carousel-wrap .jcarousel-next {
+  right: -16px;
+}
+
+#themebuilder-wrapper .carousel-wrap .jcarousel-next {
+    background: transparent url("../../themebuilder_bar/images/next-horizontal.png") no-repeat 0 0;
+    height: 32px;
+    width: 32px;
+}
+
+#themebuilder-wrapper .carousel-wrap .jcarousel-prev {
+    background: transparent url("../../themebuilder_bar/images/prev-horizontal.png") no-repeat 0 0;
+    height: 32px;
+    width: 32px;
+}
+
+#themebuilder-wrapper .carousel-wrap .jcarousel-next:hover {
+    background-position: -32px 0;
+}
+
+#themebuilder-wrapper .carousel-wrap .jcarousel-next:active {
+    background-position: -64px 0;
+}
+
+#themebuilder-wrapper .carousel-wrap .jcarousel-next-disabled,
+#themebuilder-wrapper .carousel-wrap .jcarousel-next-disabled:hover,
+#themebuilder-wrapper .carousel-wrap .jcarousel-next-disabled:active {
+    background-position: -96px 0;
+    cursor: default;
+}
+
+#themebuilder-wrapper .carousel-wrap .jcarousel-prev:hover {
+    background-position: -32px 0;
+}
+
+#themebuilder-wrapper .carousel-wrap .jcarousel-prev:active {
+    background-position: -64px 0;
+}
+
+#themebuilder-wrapper .carousel-wrap .jcarousel-prev-disabled,
+#themebuilder-wrapper .carousel-wrap .jcarousel-prev-disabled:hover,
+#themebuilder-wrapper .carousel-wrap .jcarousel-prev-disabled:active {
+    background-position: -96px 0;
+    cursor: default;
+}
+
+#themebuilder-wrapper #themebuilder-actionlist .choose-new-theme span {
+  cursor: pointer;
+}
+
+/* @end */
+
+/* @end */
+
+/* @end */

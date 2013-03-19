@@ -1,0 +1,8 @@
+; $Id$
+name = Scarecrow
+description = Protects the Drupal Gardens from visitors who might try to do it harm.
+core = 7.x
+package = Drupal Gardens
+files[] = scarecrow.module
+files[] = scarecrow.test
+hidden = TRUE

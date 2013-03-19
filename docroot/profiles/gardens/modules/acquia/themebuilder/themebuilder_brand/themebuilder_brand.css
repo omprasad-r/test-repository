@@ -1,0 +1,76 @@
+#themebuilder-main .themebuilder-brand-subtab {
+  float: left;
+  width: 265px;
+}
+
+#themebuilder-main .themebuilder-brand-subtab img {
+  border: 1px solid white;
+  padding: 2px;
+  max-width: 70px;
+  max-height: 70px;
+}
+
+#themebuilder-main .themebuilder-brand-favicon img {
+  height: 16px;
+  width: 16px;
+}
+
+#themebuilder-main .themebuilder-brand-subtab h3,
+#themebuilder-main .themebuilder-brand-subtab-ui-controls img,
+#themebuilder-main .themebuilder-brand-subtab-buttons {
+  float: left;
+  margin-right: 10px;
+}
+
+#themebuilder-main .themebuilder-brand-subtab-ui-controls {
+  float: left;
+}
+
+#themebuilder-main .themebuilder-brand-subtab-ui-controls .uploader {
+  margin-bottom: 35px;
+}
+
+#themebuilder-main .themebuilder-brand-subtab a {
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+
+/* Palette Picker related overrides */
+#themebuilder-wrapper #themebuilder-brand-palette-picker {
+  background: none;
+  padding: 0;
+  width: auto;
+}
+
+#themebuilder-wrapper #themebuilder-brand-palette-picker .header {
+  display: block;
+  background: none;
+  width: auto;
+}
+
+#themebuilder-wrapper #themebuilder-brand-palette-picker .swatches {
+  background: none;
+  margin: 0;
+  padding: 0;
+  width: auto;
+}
+
+#themebuilder-wrapper #themebuilder-brand-palette-picker .palette-list-table {
+  height: auto;
+  padding: 0;
+}
+
+#themebuilder-wrapper #themebuilder-brand-palette-picker .palette-column {
+  margin-right: 20px;
+}
+
+#themebuilder-wrapper #themebuilder-brand-palette-picker .palette-group {
+  background: none;
+  padding: 5px 10px;
+  width: 160px;
+}
+
+#themebuilder-wrapper #themebuilder-brand-palette-picker .palette-group:hover {
+  background-color: #222222;
+}

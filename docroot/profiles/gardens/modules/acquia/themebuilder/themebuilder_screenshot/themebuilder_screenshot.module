@@ -1,0 +1,555 @@
+<?php
+// $Id$
+
+/**
+ * @file
+ * Generates screenshots of themebuilder themes.
+ */
+
+/**
+ * Indicates that a screenshot request is queued remotely, but not ready yet.
+ */
+define('THEMEBUILDER_SCREENSHOT_REMOTE_REQUEST_QUEUED', 1);
+
+/**
+ * Indicates that a screenshot request failed.
+ */
+define('THEMEBUILDER_SCREENSHOT_REMOTE_REQUEST_FAILED', 2);
+
+/**
+ * Base class for all exceptions thrown while taking themebuilder screenshots.
+ */
+class ThemeBuilderScreenshotException extends Exception { }
+
+/**
+ * Implements hook_themebuilder_save_theme().
+ */
+function themebuilder_screenshot_themebuilder_save_theme($theme, $new_theme_name) {
+  // Schedule a new screenshot of the theme that was just saved.
+  $data['theme_name'] = $new_theme_name;
+  $data['scheduled'] = REQUEST_TIME;
+  $scheduled = themebuilder_screenshot_schedule_screenshot($data);
+
+  // Indicate whether or not a screenshot request was queued as a result of
+  // this theme being saved.
+  return array(
+    'theme_screenshot_scheduled' => $scheduled,
+    'screenshot_url' => url(drupal_get_path('module', 'themebuilder_screenshot') . '/images/tb-preparing-thumbnail.png'),
+  );
+}
+
+/**
+ * Schedules a screenshot to be taken of a theme.
+ *
+ * @param $data
+ *   An array of data about the scheduled screenshot, containing at least the
+ *   following keys:
+ *   - theme_name: The machine-readable name of the theme whose screenshot
+ *     needs to be taken.
+ *   - scheduled: A timestamp representing the time at which the screenshot was
+ *     first requested.
+ *
+ * @return
+ *   TRUE if a screenshot request was successfully queued, FALSE otherwise.
+ */
+function themebuilder_screenshot_schedule_screenshot($data) {
+  // We never want the same theme to have more than one entry in the screenshot
+  // queue. (If a theme has been saved more than once, the last scheduled
+  // screenshot is the only valid one anyway.) So we delete all previous queue
+  // items for the provided theme before saving the new one.
+  $queue = themebuilder_screenshot_queue();
+  foreach ($queue->getAllItems() as $item) {
+    if ($item->data['theme_name'] == $data['theme_name']) {
+      $queue->deleteItem($item);
+    }
+  }
+  return $queue->createItem($data);
+}
+
+/**
+ * Returns a themebuilder screenshot queue object.
+ */
+function themebuilder_screenshot_queue() {
+  $queue = new ThemebuilderScreenshotQueue('themebuilder_screenshot');
+  // Always try to create the queue (it's harmless to do it more than once).
+  $queue->createQueue();
+  return $queue;
+}
+
+/**
+ * Implements hook_themebuilder_phone_home().
+ */
+function themebuilder_screenshot_themebuilder_phone_home() {
+  // When the themebuilder client code phones home for updates, check for
+  // pending screenshot requests that need to be processed.
+  $new_screenshot = themebuilder_screenshot_process_screenshot_request();
+  // Record whether a screenshot request was successfully processed, so we can
+  // inform the client in themebuilder_screenshot_themebuilder_update_data()
+  // later on during this page request.
+  themebuilder_screenshot_request_processing_result($new_screenshot);
+}
+
+/**
+ * Implements hook_cron().
+ */
+function themebuilder_screenshot_cron() {
+  // Check for pending screenshot requests that need to be processed. We do
+  // this in themebuilder_screenshot_themebuilder_phone_home() also, whenever
+  // the themebuilder is open and the client-side code is polling the server
+  // for updates (for example, after a theme has been saved), since that's when
+  // we need up-to-date screenshots the most. But we do it here too so that
+  // sites which close the themebuilder shortly after saving a theme still get
+  // the up-to-date screenshot in a timely manner (e.g., for site export).
+  themebuilder_screenshot_process_screenshot_request();
+}
+
+/**
+ * Processes a single themebuilder screenshot request.
+ *
+ * This function checks the queue to see if there are any pending themebuilder
+ * screenshot requests. If so, it grabs one to process, and tries to get a
+ * screenshot of the front page of the site in that theme.
+ *
+ * If a screenshot is available, it saves the screenshot within the theme
+ * directory and removes the request from the queue.
+ *
+ * If a screenshot is not available, it puts the request back in the queue so
+ * it can be tried again (unless it's been unavailable for too long, in which
+ * case it gives up, removes the request from the queue, and logs an error).
+ *
+ * @return
+ *   TRUE if a screenshot request was successfully processed and removed from
+ *   the queue (i.e., if a new screenshot is available), or FALSE otherwise.
+ */
+function themebuilder_screenshot_process_screenshot_request() {
+  themebuilder_log_trace_enter(__FUNCTION__);
+
+  // Make sure we are using the right webnode so we can lock write
+  // access to the filesystem using a semaphore.
+  $server = new AffinityServer();
+  try {
+    $server->verify(FALSE);
+  }
+  catch (ThemeBuilderWrongWebnodeException $e) {
+    // Wrong webnode.
+    themebuilder_log_trace_exit(__FUNCTION__);
+    return FALSE;
+  }
+
+  // Lease screenshot requests from the queue for a short time only. (We expect
+  // this function to run quickly, and there is no danger if two threads try to
+  // take the same screenshot.)
+  $lease_time = 10;
+
+  $queue = themebuilder_screenshot_queue();
+  if ($item = $queue->claimItem($lease_time)) {
+    $data = $item->data;
+    try {
+      $screenshot = themebuilder_screenshot_get_front_page_screenshot($data['theme_name'], $data['scheduled']);
+      themebuilder_screenshot_save_theme_screenshot($screenshot, $data['theme_name']);
+      $queue->deleteItem($item);
+      themebuilder_log_trace_exit(__FUNCTION__);
+      return TRUE;
+    }
+    catch (ThemeBuilderScreenshotException $e) {
+      if ($e->getCode() == THEMEBUILDER_SCREENSHOT_REMOTE_REQUEST_QUEUED) {
+        // If the screenshot request was queued remotely for the first time,
+        // record the time at which this occurred and reschedule the task.
+        if (!isset($data['queued_remotely'])) {
+          $data['queued_remotely'] = REQUEST_TIME;
+          $queue->deleteItem($item);
+          $queue->createItem($data);
+        }
+        else {
+          // If the screenshot request has been queued remotely for a long time
+          // (24 hours by default) and the screenshot service still hasn't
+          // processed it, we assume there's something wrong and bail out, so
+          // that we don't continue trying a bad request forever.
+          $maximum_remote_queue_time = variable_get('themebuilder_screenshot_maximum_remote_queue_time', 86400);
+          if (REQUEST_TIME - $data['queued_remotely'] > $maximum_remote_queue_time) {
+            $queue->deleteItem($item);
+            $date = date(DATE_RFC822, $data['queued_remotely']);
+            $error_message = $e->getMessage();
+            ThemeBuilderLog()->gardensError(
+              "Theme screenshot could not be created because it was stuck in the screenshot service's queue for too long.",
+              "Failed for theme {$data['theme_name']} after at least $maximum_remote_queue_time seconds since $date; last error message was $error_message"
+            );
+          }
+          // The screenshot request is queued remotely, but hasn't expired yet,
+          // so we'll try again next time. (Note that no matter how many times
+          // we try here, we should only get billed for a new request the one
+          // time it succeeds.)
+          else {
+            $queue->releaseItem($item);
+          }
+        }
+      }
+      else {
+        // If the remote request resulted in a failure, this could be due to
+        // several things (for example, the screenshot service could have gone
+        // temporarily offline). We don't ever want to give up based on a
+        // couple such incidents, so we track them and put the item back in the
+        // queue. But if there have been too many (and if they are spread out
+        // over a long enough time period, i.e. not just a one-time problem),
+        // we assume there's something wrong and bail out, so that we don't
+        // continue trying a bad request forever.
+        $queue->deleteItem($item);
+        $data['failure_count'] = isset($data['failure_count']) ? $data['failure_count'] + 1 : 1;
+        if (!isset($data['first_failure'])) {
+          $data['first_failure'] = REQUEST_TIME;
+        }
+        $maximum_request_failures = variable_get('themebuilder_screenshot_maximum_screenshot_request_failures', 15);
+        $maximum_failure_duration = variable_get('themebuilder_screenshot_maximum_screenshot_failure_duration', 3600);
+        if ($data['failure_count'] >= $maximum_request_failures && REQUEST_TIME - $data['first_failure'] > $maximum_failure_duration) {
+          $date = date(DATE_RFC822, $data['first_failure']);
+          $error_message = $e->getMessage();
+          ThemeBuilderLog()->gardensError(
+            "Theme screenshot could not be created because there were too many failures sending it to the screenshot service.",
+            "Failed for theme {$data['theme_name']} after at least $maximum_request_failures failures during at least $maximum_failure_duration seconds since $date; last error message was $error_message"
+          );
+        }
+        else {
+          $error_message = $e->getMessage();
+          ThemeBuilderLog()->gardensWarning(
+            "The screenshot service could not create a theme screenshot with an unexpected error (but will try again).",
+            "Failed for theme {$data['theme_name']} with error message $error_message"
+          );
+          // Put the item back in the queue, with the updated failure count.
+          $queue->createItem($data);
+        }
+      }
+    }
+  }
+
+  themebuilder_log_trace_exit(__FUNCTION__);
+  return FALSE;
+}
+
+/**
+ * Attempts to get a screenshot of the site front page in the provided theme.
+ *
+ * @param $theme_name
+ *   The name of the theme which should be used for the screenshot.
+ * @param $timestamp
+ *   The timestamp at which the screenshot was originally requested. This is
+ *   used so that each screenshot request in our queue gets a unique URL
+ *   (forcing the screenshot service to take a new screenshot, even if it
+ *   already has an older one from a previous version of the same theme).
+ *
+ * @return
+ *   An image resource for the JPEG returned by the screenshot service.
+ *
+ * @throws ThemeBuilderScreenshotException
+ *
+ * @see themebuilder_screenshot_custom_theme()
+ */
+function themebuilder_screenshot_get_front_page_screenshot($theme_name, $timestamp) {
+  $query = array(
+    'theme-name' => $theme_name,
+    'timestamp' => $timestamp,
+    'theme-token' => themebuilder_screenshot_get_token($theme_name . $timestamp),
+  );
+  $site_url = url('', array('query' => $query, 'absolute' => TRUE));
+  $screenshot = themebuilder_screenshot_get_screenshot($site_url);
+  return $screenshot;
+}
+
+/**
+ * Saves a screenshot to appropriate places in the theme directory.
+ *
+ * @param $screenshot
+ *   An image resource for a JPEG returned by the screenshot service.
+ * @param $theme_name
+ *   The name of the theme to save the screenshot to.
+ *
+ * @return
+ *   TRUE if the screenshot was successfully saved to the desired places in the
+ *   theme directory, FALSE otherwise.
+ */
+function themebuilder_screenshot_save_theme_screenshot($screenshot, $theme_name) {
+  $theme_path = DRUPAL_ROOT . '/' . drupal_get_path('theme', $theme_name);
+
+  // If the directory is not there, maybe the theme was deleted and this is an
+  // out-of-date request.
+  if (!is_dir($theme_path)) {
+    return FALSE;
+  }
+
+  // Save the main theme screenshot itself.
+  $screenshot_path = $theme_path . '/screenshot.png';
+  $semaphore = themebuilder_compiler_get_semaphore();
+  if (!imagepng($screenshot, $screenshot_path)) {
+    themebuilder_compiler_release_semaphore($semaphore);
+    return FALSE;
+  }
+
+  // Resize the full screenshot to make the smaller version expected by the
+  // themebuilder. We can't use image_scale_and_crop() here since it crops
+  // equally from the top and bottom, but we want to crop the bottom only.
+  $themebuilder_screenshot = image_load($screenshot_path);
+  if (!$themebuilder_screenshot) {
+    themebuilder_compiler_release_semaphore($semaphore);
+    return FALSE;
+  }
+  if (image_scale($themebuilder_screenshot, 200) && image_crop($themebuilder_screenshot, 0, 0, 200, 120)) {
+    $result = image_save($themebuilder_screenshot, $theme_path . '/screenshot_lg.png');
+    themebuilder_compiler_release_semaphore($semaphore);
+    return $result;
+  }
+  else {
+    themebuilder_compiler_release_semaphore($semaphore);
+    return FALSE;
+  }
+}
+
+/**
+ * Takes a screenshot of a provided URL.
+ *
+ * If the screenshot is successful, it is returned. Otherwise an exception is
+ * thrown, with status code THEMEBUILDER_SCREENSHOT_REMOTE_REQUEST_QUEUED if
+ * the screenshot is still queued for processing by the remote service, or
+ * status code THEMEBUILDER_SCREENSHOT_REMOTE_REQUEST_FAILED if the request
+ * failed for an unknown reason.
+ *
+ * Note that if this function is called multiple times for the same URL and the
+ * result is THEMEBUILDER_SCREENSHOT_REMOTE_REQUEST_QUEUED each time, we should
+ * only get billed for a new request once (the one time the screenshot actually
+ * is finished and the request succeeds).
+ *
+ * @param $url
+ *   The URL for which the screenshot should be taken.
+ * @param $parameters
+ *   An array of parameters to pass along to the screenshot service. Default
+ *   values are provided by this function for any parameters that are not
+ *   passed in.
+ *
+ * @return
+ *   An image resource for the JPEG returned by the screenshot service.
+ *
+ * @throws ThemeBuilderScreenshotException
+ */
+function themebuilder_screenshot_get_screenshot($url, $parameters = array()) {
+  $service_url = variable_get('themebuilder_screenshot_service_url', 'http://snapshot.acquia.com/snap');
+  $parameters += array(
+    // The default behavior is a full page screenshot 294 pixels wide, cropped
+    // to 219 pixels high (Drupal's default screenshot size for the Appearance
+    // page).
+    // TODO: Add support to the screenshot service for specifying image height.
+    'size' => 294,
+    'filetype' => 'png',
+    'blocking' => 'false',
+    'fullpage' => 'false',
+  );
+
+  $parameters['url'] = $url;
+  $request_url = $service_url . '?' . drupal_http_build_query($parameters);
+
+  // Prepare a sanitized URL to record in the logs, and remove all sensitive
+  // information from it.
+  $log_url = drupal_strip_dangerous_protocols($request_url);
+
+  // Make the request, and parse the XML document.
+  $result = drupal_http_request($request_url);
+  if ($result->code == 201) {
+    throw new ThemeBuilderScreenshotException(t('Screenshot is not yet available.'), THEMEBUILDER_SCREENSHOT_REMOTE_REQUEST_QUEUED);
+  }
+  elseif ($result->code == 200) {
+    return imagecreatefromstring($result->data);
+  }
+
+  // We failed to get a screenshot or a notice that the screenshot is
+  // successfully queued.
+  throw new ThemeBuilderScreenshotException(t('Screenshot failed.'), THEMEBUILDER_SCREENSHOT_REMOTE_REQUEST_FAILED);
+}
+
+/**
+ * Implements hook_custom_theme().
+ */
+function themebuilder_screenshot_custom_theme() {
+  // If we are viewing the front page of the site and a valid theme name and
+  // token have been provided, display the page in the requested theme.
+  if (isset($_GET['theme-name']) && isset($_GET['theme-token']) && isset($_GET['timestamp']) && drupal_is_front_page()) {
+    $theme_name = $_GET['theme-name'];
+    $token = $_GET['theme-token'];
+    $timestamp = $_GET['timestamp'];
+    // In addition to checking the token, also check to make sure that there is
+    // actually an open screenshot request for this theme recorded in our local
+    // queue. (This helps make sure that the URL which displays this theme will
+    // not be valid forever, in case the theme is not published yet and is
+    // intended to remain private.) We could also use the $timestamp parameter
+    // here to make the token expire after a certain amount of time, but for
+    // now we aren't doing that and instead rely on the logic in
+    // themebuilder_screenshot_process_screenshot_request() to make sure that
+    // screenshot requests don't stay in our local queue forever.
+    if ($token == themebuilder_screenshot_get_token($theme_name . $timestamp) && in_array($theme_name, themebuilder_screenshot_queued_themes())) {
+      $themes = list_themes();
+      if (isset($themes[$theme_name])) {
+        // If the theme is disabled, we need special handling to allow it to be
+        // used.
+        if (empty($themes[$theme_name]->status)) {
+          themebuilder_screenshot_fake_theme_enable($theme_name);
+        }
+        return $theme_name;
+      }
+    }
+  }
+}
+
+/**
+ * Enable a theme temporarily.
+ *
+ * When switching themes with Themebuilder it disables the previous active
+ * theme. Theme switching is only allowed for enabled themes and for the admin
+ * theme in Drupal core, therefore we have to fake enable the theme in question.
+ */
+function themebuilder_screenshot_fake_theme_enable($theme_name) {
+  // Fool drupal_theme_access() into believing that this is a valid theme.
+  $GLOBALS['conf']['admin_theme'] = $theme_name;
+  // Prime the system_list() static cache, then modify it so that the theme is
+  // recorded as enabled for this page request. Any code that calls
+  // system_get_info('theme') will need this in order to work correctly for the
+  // disabled theme.
+  system_list('theme');
+  $lists = &drupal_static('system_list');
+  $lists['theme'][$theme_name]->status = TRUE;
+  // If the theme is disabled, it might not have any blocks yet. Enable them
+  // temporarily for this page request.
+  $has_blocks = (bool) db_query_range('SELECT 1 FROM {block} WHERE theme = :theme', 0, 1, array(':theme' => $theme_name))->fetchField();
+  if (!$has_blocks) {
+    drupal_register_shutdown_function('themebuilder_screenshot_disable_blocks', $theme_name);
+    block_theme_initialize($theme_name);
+  }
+}
+
+/**
+ * Returns an array of theme names which have a queued screenshot request.
+ */
+function themebuilder_screenshot_queued_themes() {
+  $themes = array();
+  $queue = themebuilder_screenshot_queue();
+  foreach ($queue->getAllItems() as $item) {
+    $themes[] = $item->data['theme_name'];
+  }
+  return $themes;
+}
+
+/**
+ * Generates a token that is per-site, but not per-session.
+ *
+ * This allows the token to be passed to the outside screenshot service and
+ * used from there.
+ *
+ * @see drupal_get_token()
+ */
+function themebuilder_screenshot_get_token($value) {
+  return drupal_hmac_base64($value, drupal_get_private_key() . drupal_get_hash_salt());
+}
+
+/**
+ * Shutdown function that disables all blocks for the provided theme.
+ */
+function themebuilder_screenshot_disable_blocks($theme_name) {
+  db_delete('block')
+    ->condition('theme', $theme_name)
+    ->execute();
+}
+
+/**
+ * Returns (or records) whether or not a screenshot request was processed.
+ *
+ * @param $set_result
+ *   (optional) Set to TRUE to indicate that a screenshot request was
+ *   successfully processed and removed from the queue during this page request
+ *   (i.e., if a new screenshot is available), or FALSE if we attempted to
+ *   process one but it wasn't ready yet.
+ *
+ * @return
+ *   TRUE if a screenshot request was successfully processed and removed from
+ *   the queue earlier in this page request, FALSE if one was attempted but it
+ *   wasn't ready yet, or NULL if none was attempted at all.
+ *
+ * @see themebuilder_screenshot_themebuilder_update_data()
+ */
+function themebuilder_screenshot_request_processing_result($set_result = NULL) {
+  $result = &drupal_static(__FUNCTION__);
+  if (isset($set_result)) {
+    $result = $set_result;
+  }
+  return $result;
+}
+
+/**
+ * Implements hook_themebuilder_init_data().
+ */
+function themebuilder_screenshot_themebuilder_init_data() {
+  $result = array();
+
+  // When the themebuilder is initialized, if there are any theme screenshot
+  // requests currently queued up, tell the client-side code that.
+  $queued_themes = themebuilder_screenshot_queued_themes();
+  if (!empty($queued_themes)) {
+    $result['behaviors_to_trigger']['theme_screenshots_scheduled'] = 'theme_screenshots_scheduled';
+  }
+
+  return $result;
+}
+
+/**
+ * Implements hook_themebuilder_update_data().
+ */
+function themebuilder_screenshot_themebuilder_update_data() {
+  $result = array();
+
+  // If a request (whether successful or not) was made by the client-side code
+  // to process the themebuilder screenshot queue on this page request (see
+  // themebuilder_screenshot_themebuilder_phone_home()), inform the client side
+  // code about what happened.
+  $processed = themebuilder_screenshot_request_processing_result();
+  if (isset($processed)) {
+    // An item from the queue was successfully processed, meaning that a theme
+    // has a new screenshot available. Tell the client side code about it.
+    if ($processed) {
+      $result['behaviors_to_trigger']['theme_screenshot_updated'] = 'theme_screenshot_updated';
+    }
+
+    // If there are no more screenshot requests queued up (either because the
+    // one processed above was the last one, or because someone else, e.g.
+    // hook_cron(), happened to finish going through the queue in the
+    // meantime), tell the client side code that we are done.
+    $queued_themes = themebuilder_screenshot_queued_themes();
+    if (empty($queued_themes)) {
+      $result['behaviors_to_trigger']['theme_screenshots_complete'] = 'theme_screenshots_complete';
+    }
+
+    // If we're sending anything to the client side, send new theme data as
+    // well, so the client has correct screenshot URLs.
+    if (!empty($result)) {
+      $init_data = themebuilder_compiler_get_initial_data();
+      $result['themes'] = $init_data['themes'];
+    }
+  }
+
+  return $result;
+}
+
+/**
+ * Implements hook_themebuilder_init_data_alter().
+ *
+ * For each theme whose screenshot is currently being processed, display our
+ * default "preparing thumbnail" image instead of the theme's current stored
+ * screenshot (which is out of date).
+ */
+function themebuilder_screenshot_themebuilder_init_data_alter(&$data) {
+  // Determine which themes, if any, are awaiting screenshots.
+  foreach (themebuilder_screenshot_queued_themes() as $theme_name) {
+    // @todo: This assumes clean URLs.
+    $screenshots[$theme_name] = url(drupal_get_path('module', 'themebuilder_screenshot') . '/images/tb-preparing-thumbnail.png');
+  }
+  if (!empty($screenshots)) {
+    foreach ($data['themes'] as &$theme) {
+      if (isset($screenshots[$theme['system_name']])) {
+        $theme['screenshot_url'] = $screenshots[$theme['system_name']];
+      }
+    }
+  }
+}

@@ -1,0 +1,126 @@
+<?php
+
+/**
+ * @file
+ * Container for resources that are available to all Themebuilder themes.
+ */
+
+/**
+ * Implement hook_themebuilder_font_stacks().
+ *
+ * Make @font-face font stacks available.
+ */
+function themebuilder_resources_themebuilder_font_stacks() {
+  include_once(drupal_get_path('module', 'themebuilder_resources') . '/FontFaceFontStack.inc');
+
+  $stack = new FontFaceFontStack('Aaargh', array('Aaargh', 'AaarghNormal'), array('Arial', 'Helvetica', 'sans-serif'), 'Aaargh is a free font by Tup Wanders, http://www.tupwanders.nl, licensed under a Creative Commons attribution license.');
+  $stacks[$stack->getName()] = $stack;
+  $stack = new FontFaceFontStack('CartoGothic', array('CartoGothic Std', 'CartoGothicStd-Book'), array('Arial', 'Helvetica', 'serif'));
+  $stacks[$stack->getName()] = $stack;
+  $stack = new FontFaceFontStack('CartoGothic Bold', array('CartoGothicStd-Bold'), array('Arial', 'Helvetica', 'serif'));
+  $stacks[$stack->getName()] = $stack;
+  $stack = new FontFaceFontStack('CartoGothic Italic', array('CartoGothicStd-Italic'), array('Arial', 'Helvetica', 'serif'));
+  $stacks[$stack->getName()] = $stack;
+  $stack = new FontFaceFontStack('CartoGothic Bold Italic', array('CartoGothicStd-BoldItalic'), array('Arial', 'Helvetica', 'serif'));
+  $stacks[$stack->getName()] = $stack;
+  $stack = new FontFaceFontStack('ChunkFive', array('ChunkFive'), array('Arial', 'Helvetica', 'serif'));
+  $stacks[$stack->getName()] = $stack;
+  $stack = new FontFaceFontStack('FreeUniversal', array('FreeUniversal', 'FreeUniversal-Regular'), array('Arial', 'Helvetica', 'serif'));
+  $stacks[$stack->getName()] = $stack;
+  $stack = new FontFaceFontStack('GoodDog', array('GoodDog'), array('Arial', 'Helvetica', 'serif'));
+  $stacks[$stack->getName()] = $stack;
+  $stack = new FontFaceFontStack('Goudy Bookletter', array('GoudyBookletter1911', 'Goudy Bookletter 1911'), array('Georgia', 'Times', 'serif'));
+  $stacks[$stack->getName()] = $stack;
+  $stack = new FontFaceFontStack('Kingthings Trypewriter', array('Kingthings Trypewriter'), array('Arial', 'Helvetica', 'serif'));
+  $stacks[$stack->getName()] = $stack;
+  $stack = new FontFaceFontStack('Lane', array('Lane - Narrow', 'Lane-Narrow'), array('Arial', 'Helvetica', 'serif'));
+  $stacks[$stack->getName()] = $stack;
+  $stack = new FontFaceFontStack('Lato Black', array('LatoBlack'), array('Arial', 'Helvetica', 'serif'));
+  $stacks[$stack->getName()] = $stack;
+  $stack = new FontFaceFontStack('Lato Black Italic', array('LatoBlackItalic'), array('Arial', 'Helvetica', 'serif'));
+  $stacks[$stack->getName()] = $stack;
+  $stack = new FontFaceFontStack('Lato Bold', array('LatoBold'), array('Arial', 'Helvetica', 'serif'));
+  $stacks[$stack->getName()] = $stack;
+  $stack = new FontFaceFontStack('Lato Bold Italic', array('LatoBoldItalic'), array('Arial', 'Helvetica', 'serif'));
+  $stacks[$stack->getName()] = $stack;
+  $stack = new FontFaceFontStack('Lato Hairline', array('LatoHairline'), array('Arial', 'Helvetica', 'serif'));
+  $stacks[$stack->getName()] = $stack;
+  $stack = new FontFaceFontStack('Lato Hairline Italic', array('LatoHairlineItalic'), array('Arial', 'Helvetica', 'serif'));
+  $stacks[$stack->getName()] = $stack;
+  $stack = new FontFaceFontStack('Lato Light', array('LatoLight'), array('Arial', 'Helvetica', 'serif'));
+  $stacks[$stack->getName()] = $stack;
+  $stack = new FontFaceFontStack('Lato Light Italic', array('LatoLightItalic'), array('Arial', 'Helvetica', 'serif'));
+  $stacks[$stack->getName()] = $stack;
+  $stack = new FontFaceFontStack('Lato Regular', array('LatoRegular'), array('Arial', 'Helvetica', 'serif'));
+  $stacks[$stack->getName()] = $stack;
+  $stack = new FontFaceFontStack('Lato Regular Italic', array('LatoRegularItalic'), array('Arial', 'Helvetica', 'serif'));
+  $stacks[$stack->getName()] = $stack;
+  $stack = new FontFaceFontStack('League Gothic', array('LeagueGothic', 'League Gothic'), array('Arial', 'Helvetica', 'serif'));
+  $stacks[$stack->getName()] = $stack;
+  $stack = new FontFaceFontStack('Liberation Mono', array('Liberation Mono', 'LiberationMono'), array('Times', 'Times New Roman', 'serif'));
+  $stacks[$stack->getName()] = $stack;
+  $stack = new FontFaceFontStack('Liberation Mono Bold', array('LiberationMono-Bold'), array('Times', 'Times New Roman', 'serif'));
+  $stacks[$stack->getName()] = $stack;
+  $stack = new FontFaceFontStack('Liberation Mono Bold Italic', array('LiberationMono-BoldItalic'), array('Times', 'Times New Roman', 'serif'));
+  $stacks[$stack->getName()] = $stack;
+  $stack = new FontFaceFontStack('Liberation Mono Italic', array('LiberationMono-Italic'), array('Times', 'Times New Roman', 'serif'));
+  $stacks[$stack->getName()] = $stack;
+  $stack = new FontFaceFontStack('Liberation Serif', array('Liberation Serif', 'LiberationSerif'), array('Times', 'Times New Roman', 'serif'));
+  $stacks[$stack->getName()] = $stack;
+  $stack = new FontFaceFontStack('Liberation Serif Bold', array('LiberationSerif-Bold'), array('Times', 'Times New Roman', 'serif'));
+  $stacks[$stack->getName()] = $stack;
+  $stack = new FontFaceFontStack('Liberation Serif Italic', array('LiberationSerif-Italic'), array('Times', 'Times New Roman', 'serif'));
+  $stacks[$stack->getName()] = $stack;
+  $stack = new FontFaceFontStack('Liberation Serif Bold Italic', array('LiberationSerif-BoldItalic'), array('Times', 'Times New Roman', 'serif'));
+  $stacks[$stack->getName()] = $stack;
+  $stack = new FontFaceFontStack('New Athena Unicode', array('New Athena Unicode', 'NewAthenaUnicode'), array('Times', 'Times New Roman', 'serif'));
+  $stacks[$stack->getName()] = $stack;
+  $stack = new FontFaceFontStack('Old Standard', array('Old Standard TT', 'OldStandardTT-Regular'), array('Times', 'Times New Roman', 'serif'));
+  $stacks[$stack->getName()] = $stack;
+  $stack = new FontFaceFontStack('Old Standard Bold', array('OldStandardTT-Bold'), array('Times', 'Times New Roman', 'serif'));
+  $stacks[$stack->getName()] = $stack;
+  $stack = new FontFaceFontStack('Old Standard Italic', array('OldStandardTT-Italic'), array('Times', 'Times New Roman', 'serif'));
+  $stacks[$stack->getName()] = $stack;
+  $stack = new FontFaceFontStack('Titillium Text Regular', array('TitilliumText14L', 'TitilliumText14L-Bold'), array('Arial', 'Helvetica', 'serif'));
+  $stacks[$stack->getName()] = $stack;
+  $stack = new FontFaceFontStack('Titillium Text 400', array('TitilliumText14L-400wt'), array('Arial', 'Helvetica', 'serif'));
+  $stacks[$stack->getName()] = $stack;
+  $stack = new FontFaceFontStack('Titillium Text 800', array('TitilliumText14L-800wt'), array('Arial', 'Helvetica', 'serif'));
+  $stacks[$stack->getName()] = $stack;
+  $stack = new FontFaceFontStack('Titillium Text 999', array('TitilliumText14L-999wt'), array('Arial', 'Helvetica', 'serif'));
+  $stacks[$stack->getName()] = $stack;
+  $stack = new FontFaceFontStack('Vegur', array('Vegur', 'Vegur-Regular', 'Vegur-R_0500'), array('Arial', 'Helvetica', 'serif'));
+  $stacks[$stack->getName()] = $stack;
+  $stack = new FontFaceFontStack('Vegur Bold', array('Vegur', 'Vegur-Bold', 'Vegur-B_0500'), array('Arial', 'Helvetica', 'serif'));
+  $stacks[$stack->getName()] = $stack;
+  $stack = new FontFaceFontStack('Vollkorn', array('Vollkorn'), array('Arial', 'Helvetica', 'serif'), 'Vollkorn is a free font by Friedrich Althausen (http://friedrichalthausen.de/) licensed under the Creative Commons Attribution 2.0 Unported license.');
+  $stacks[$stack->getName()] = $stack;
+
+  return $stacks;
+}
+
+function themebuilder_resources_add_resources($requests) {
+  foreach ($requests as $request) {
+    switch ($request->type) {
+      case 'font':
+        $stacks = themebuilder_styleedit_get_font_stacks();
+        foreach ($stacks as $name => $stack) {
+          if ($name === $request->name) {
+            themebuilder_resources_add_path($stack->getSourcePath(), $stack->getDestinationPath());
+          }
+        }
+        break;
+    }
+  }
+}
+
+/**
+ * Add a specific resource to the current theme.
+ *
+ * @param string $src
+ * @param string $dest
+ */
+function themebuilder_resources_add_path($src, $dest) {
+  $theme = themebuilder_compiler_get_current_theme();
+  $theme->addResource($src, $dest);
+}

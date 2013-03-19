@@ -1,0 +1,176 @@
+<?php
+
+/**
+ * @file
+ * Tests for the janrain_client module.
+ */
+
+class JanRainMastTest extends MAStTest {
+
+  function setUp() {
+    parent::setUp();
+    variable_set('rpx_providers', array('google' => 'Google', 'twitter' => 'Twitter',  'linkedin' => 'LinkedIn'));
+    variable_set('rpx_default_networks', array(
+        'twitter' => array(
+          'id' => 'http://twitter.com/account/profile?user_id=1',
+          'name' => 'MOCK_janrain_test',
+         ),
+        'linkedin' => array(
+          'id' => 'http://www.linkedin.com/profile?viewProfile=zZzZ',
+          'name' => 'JainRain test',
+        )
+      )
+    );
+    variable_set('rpx_api_key', '123456');
+    variable_set('rpx_app_id', 'mockme');
+    variable_set('rpx_realm', 'test.example.com');
+    variable_set('janrain_client_class', "MockRPX");
+    variable_set('rpx_publish_node_types', array('article'));
+    // It causes XML-RPC errors if janrain_client is enabled without the variables being set 1st.
+    variable_set('acquia_gardens_local_user_accounts', TRUE);
+    $modules = array('janrain_client');
+    $success = module_enable($modules, TRUE);
+    $this->assertTrue($success, t('Enabled modules: %modules', array('%modules' => implode(', ', $modules))));
+    // Reset/rebuild all data structures after enabling the modules.
+    $this->resetAll();
+    $this->rpxAdminUser = $this->drupalCreateUser(array('administer nodes', 'create article content', 'access administration pages', 'administer site configuration', 'access content', 'administer content types', 'oauth authorize any consumers', 'view the administration theme', 'administer janrain engage', 'publish to sites social networks', 'publish to own social networks'));
+    $this->rpxAdminUser->accessToken = $this->getAccessToken($this->rpxAdminUser);
+  }
+
+  public static function getInfo() {
+    return array(
+      'name' => t('Social Publish Tests'),
+      'description' => t('Tests oAuth login and access to MASt listing services.'),
+      'group' => t('Social Publish and Login'),
+    );
+  }
+
+  function testMastSocial() {
+    MockRPX::clearLastCalls();
+    $this->drupalLogin($this->rpxAdminUser);
+    // Check that the mock class works and the expected networks show up.
+    $this->drupalGet('admin/config/people/janrain');
+    $providers = variable_get('rpx_providers', array());
+    foreach ($providers as $name => $desc) {
+      $elements = $this->xpath('id(:id)', array(':id' => 'rpx-' . $name));
+      $this->assertTrue(isset($elements[0]), format_string('Found provider @desc', array('@desc' => $desc)));
+    }
+    $edit = array();
+    $edit['title'] = $this->randomName();
+    $body = 'The body ' . $this->randomName();
+    $edit['body[und][0][value]'] = $body;
+    $this->drupalPost('node/add/article', $edit, t('Save'));
+
+    $last = MockRPX::getLastCall();
+    $this->assertEqual($last['method'], 'activity');
+    $activity = json_decode($last['data']['activity'], TRUE);
+    $this->assertEqual($activity['user_generated_content'], $body);
+    $this->drupalLogout();
+
+    // MASt-enable the article content type.
+    $value = array(
+      'node' => array(
+        'article' => array(
+          'enabled' => TRUE,
+          'eligible' => TRUE,
+          'icon' => 'article_1',
+          'short_name' => 'article'
+        ),
+      ),
+    );
+    variable_set('mast_bundle_settings', $value);
+    // Grant permission to publish to site networks.
+    $rid = max(array_keys($this->endUser->roles));
+    user_role_grant_permissions($rid, array('publish to sites social networks'));
+    $response = $this->oAuthGet('/mast-api/fields.json');
+    $this->assertNoRaw('rpx_site_publish', 'Did not find rpx_site_publish key');
+    $parsed_response = json_decode($response, TRUE);
+    $this->assertTrue(empty($parsed_response['node']['article']['fields']['rpx_site_publish']), 'Did not find rpx_site_publish key');
+    $node = $this->oauthPostNodeAndCheck();
+    $last = MockRPX::getLastCall();
+    $this->assertEqual($last['method'], 'activity');
+    $activity = json_decode($last['data']['activity'], TRUE);
+    $this->assertEqual($activity['user_generated_content'], $node['body']);
+    // Add permissions and user-specific networks.
+    user_role_grant_permissions($rid, array('publish to own social networks'));
+    $record = array('uid' => $this->endUser->uid, 'type' => 'article');
+    drupal_write_record('rpx_user_publish_node_type', $record);
+    $rpx_id = 'http://twitter.com/account/profile?user_id=' . $this->endUser->uid;
+    db_insert('rpx_user_publish_authmap')
+      ->fields(array(
+        'uid' => $this->endUser->uid,
+        'provider' => 'twitter',
+        'rpxid' => $rpx_id,
+        'username' => $this->endUser->name
+      ))
+      ->execute();
+    $response = $this->oAuthGet('/mast-api/fields.json');
+    $parsed_response = json_decode($response, TRUE);
+    $this->assertTrue(!empty($parsed_response['node']['article']['fields']['rpx_user_publish']), 'Found rpx_user_publish key');
+    $this->assertTrue(in_array('twitter', $parsed_response['node']['article']['fields']['rpx_user_publish']['options']['icons']), 'Found twitter icon in rpx_user_publish key');
+    // Create node, key is present and On.
+    $node = $this->oauthPostNodeAndCheck(array('rpx_user_publish' => '1'));
+    $all = MockRPX::getLastCalls();
+    $last = end($all);
+    $this->assertEqual(3, count($all), 'Content posted to 3 networks (site and user)');
+    $this->assertEqual($last['method'], 'activity');
+    $activity = json_decode($last['data']['activity'], TRUE);
+    $this->assertEqual($activity['user_generated_content'], $node['body']);
+    $this->assertEqual($last['data']['identifier'], $rpx_id);
+    // Create node, key is present and Off.
+    $node = $this->oauthPostNodeAndCheck(array('rpx_user_publish' => '0'));
+    $all = MockRPX::getLastCalls();
+    $last = end($all);
+    $this->assertEqual(2, count($all), 'Content posted to 2 networks (site not user)');
+    $this->assertEqual($last['method'], 'activity');
+    // Only site networks should be published to.
+    user_role_revoke_permissions($rid, array('publish to sites social networks'));
+    // Create node, key is present and On.
+    $node = $this->oauthPostNodeAndCheck(array('rpx_user_publish' => '1'));
+    $all = MockRPX::getLastCalls();
+    $last = end($all);
+    $this->assertEqual(1, count($all), 'Content posted to 1 network (user)');
+    $this->assertEqual($last['method'], 'activity');
+    // Switch to the admin user.
+    $this->accessToken = $this->rpxAdminUser->accessToken;
+    $response = $this->oAuthGet('/mast-api/fields.json');
+    $parsed_response = json_decode($response, TRUE);
+    $this->assertTrue(!empty($parsed_response['node']['article']['fields']['rpx_site_publish']), 'Found rpx_site_publish key');
+    // Create node, key is present and On.
+    $node = $this->oauthPostNodeAndCheck(array('rpx_site_publish' => '1', 'author' => $this->rpxAdminUser->uid));
+    $last = MockRPX::getLastCall();
+    $this->assertEqual($last['method'], 'activity');
+    $activity = json_decode($last['data']['activity'], TRUE);
+    $this->assertEqual($activity['user_generated_content'], $node['body']);
+    // Create node, key is present and On.
+    $node = $this->oauthPostNodeAndCheck(array('rpx_site_publish' => '0', 'author' => $this->rpxAdminUser->uid));
+    $last = MockRPX::getLastCall();
+    $this->assertTrue(empty($last), 'No RPX activity');
+  }
+
+  protected function oauthPostNodeAndCheck($fields = array()) {
+    MockRPX::clearLastCalls();
+    $default = array(
+      'type' => 'article',
+      'title' => 'my article title ' . $this->randomName(),
+      'body' => 'some long string of text ' . $this->randomName(),
+      'field_tags' => array(
+        'values' => array(),
+        'create' => array(),
+      ),
+    );
+    $node = $fields + $default;
+    $data = json_encode($node);
+    $url = '/mast-api/content-by-user.json';
+    $response = $this->oAuthPost($url, array('node' => $data));
+    $this->assertResponse('200');
+    $parsed_response = json_decode($response, TRUE);
+    $this->assertTrue(!empty($parsed_response), format_string("The response was parsed to JSON: @response", array('@response' => $response)));
+    $nid = (int) $parsed_response['nid'];
+    $saved_node = node_load($nid);
+    $this->assertTrue(!empty($saved_node->nid), 'The node was saved.');
+    // Ensure that any changes to variables in the other thread are picked up.
+    $this->refreshVariables();
+    return $node;
+  }
+}

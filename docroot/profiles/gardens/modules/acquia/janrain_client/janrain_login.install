@@ -1,0 +1,156 @@
+<?php
+
+/**
+ * @file
+ *
+ * Install, update and uninstall functions for janrain_login.
+ */
+
+ /**
+ * Implements hook_install().
+ */
+function janrain_login_install() {
+  // Handle upgrade for renamed variable.
+  $old_merge_setting = variable_get('janrain_client_allow_account_merge', NULL);
+  if (isset($old_merge_setting)) {
+    variable_set('janrain_login_allow_account_merge', $old_merge_setting);
+    variable_del('janrain_client_allow_account_merge');
+  }
+}
+
+/**
+ * Implements hook_enable().
+ */
+function janrain_login_enable() {
+  // Can't use module_load_include() here, because module may not be installed
+  // yet.
+  require_once dirname(__FILE__) . '/janrain_login.admin.inc';
+  _janrain_login_profile_field_ensure_defaults();
+}
+
+/**
+ * Implements hook_requirements().
+ */
+function janrain_login_requirements($phase) {
+  $requirements = array();
+  $t = get_t();
+  if (module_exists('janrain_capture')) {
+    $requirements['janrain_login_incompatibile'] = array(
+      'title' => $t('JanRain login.'),
+      'value' => $t('Incompatible.'),
+      'description' => $t('You should not enable both JainRain Login and JanRain Capture at the same time.'),
+      'severity' => REQUIREMENT_ERROR,
+    );
+  }
+  if (!variable_get('acquia_gardens_local_user_accounts', FALSE)) {
+    $requirements['janrain_login'] = array(
+      'title' => $t('JanRain login.'),
+      'value' => $t('Local user accounts are not enabled.'),
+      'description' => $t('Local user accounts are not enabled.'),
+      'severity' => REQUIREMENT_ERROR,
+    );
+  }
+  if (!ini_get('allow_url_fopen')) {
+    $requirements['janrain_login_fopen'] = array(
+      'title' => $t('JanRain login pictures.'),
+      'value' => $t('Not available.'),
+      'description' => $t('PHP is not configured to use copy() with URLs. Profile photos cannot be downloaded.'),
+      'severity' => REQUIREMENT_WARNING,
+    );
+  }
+  return $requirements;
+}
+
+  /**
+ * Implements hook_schema().
+ */
+function janrain_login_schema() {
+  $schema['rpx_profile_field'] = array(
+    'description' => 'Stores Janrain Engage profile field information.',
+    'fields' => array(
+      'fid' => array(
+        'type' => 'serial',
+        'not null' => TRUE,
+        'description' => 'Primary Key: Unique profile field ID.',
+      ),
+      'title' => array(
+        'type' => 'varchar',
+        'length' => 255,
+        'not null' => TRUE,
+        'description' => 'Title of the field shown to the end user.',
+      ),
+      'path' => array(
+        'type' => 'varchar',
+        'length' => 255,
+        'not null' => TRUE,
+        'description' => 'Path within Engage data in a PHP-like array notation.',
+      ),
+      'parsed_path' => array(
+        'type' => 'text',
+        'not null' => TRUE,
+        'description' => 'Parsed and serialized path',
+      ),
+    ),
+    'primary key' => array('fid'),
+  );
+
+  $schema['rpx_mapping_provider'] = array(
+    'description' => 'Stores the name of last provider used in the Janrain Engage to Drupal data mapping.',
+    'fields' => array(
+      'uid' => array(
+        'type' => 'int',
+        'not null' => TRUE,
+        'description' => 'The user id for the data mapping.',
+      ),
+      'mid' => array(
+        'type' => 'int',
+        'not null' => TRUE,
+        'description' => 'The mapping id.',
+      ),
+      'name' => array(
+        'type' => 'varchar',
+        'length' => 30,
+        'not null' => TRUE,
+        'description' => 'The machine name of last provider from which the data for the mapping came.',
+      ),
+    ),
+    'primary key' => array('uid', 'mid'),
+  );
+
+  $schema['rpx_authmap_username'] = array(
+    'description' => 'Stores preferred display names for 3rd party accounts for the account linking purposes.',
+    'fields' => array(
+      'aid' => array(
+        'type' => 'int',
+        'unsigned' => TRUE,
+        'not null' => TRUE,
+        'description' => 'The authmap id.',
+      ),
+      'uid' => array(
+        'type' => 'int',
+        'unsigned' => TRUE,
+        'not null' => TRUE,
+        'description' => 'The user id.',
+      ),
+      'username' => array(
+        'type' => 'varchar',
+        'length' => 60,
+        'not null' => TRUE,
+        'description' => 'Provider-specific user name for the user.',
+      ),
+    ),
+    'primary key' => array('aid'),
+  );
+
+  return $schema;
+}
+
+/**
+ * Implements hook_uninstall().
+ */
+function janrain_login_uninstall() {
+  variable_del('rpx_default_provider_weight');
+  variable_del('rpx_profile_fields_map');
+  variable_del('rpx_mapping_api');
+  variable_del('rpx_import_profile_photo');
+}

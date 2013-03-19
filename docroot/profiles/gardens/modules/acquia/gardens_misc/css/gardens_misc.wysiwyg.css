@@ -1,0 +1,142 @@
+/**
+ * Styles for the WYSIWYG editor.
+ */
+
+/* @group WYSIWYG styles */
+
+.cke_skin_kama .cke_button .cke_button_media span.cke_icon {
+  display: none;
+}
+
+.cke_skin_kama .cke_button .cke_button_media span.cke_label {
+  background: url("/themes/seven/images/add.png") no-repeat scroll 0 center transparent;
+  color: #0074BD;
+  display: inline;
+  font-family: "Lucida Grande","Lucida Sans Unicode",sans-serif;
+  font-size: 12px;
+  font-weight: bold;
+  padding-left: 15px;
+  vertical-align: baseline;
+}
+
+.cke_wrapper .cke_editor .cke_toolbar + .cke_toolbar {
+  background: none;
+  height: 22px;
+  margin-top: 3px;
+}
+
+.cke_editor .cke_toolbox_collapser {
+  display: none;
+}
+
+.cke_wrapper .cke_editor .cke_toolbar + .cke_toolbar .cke_toolgroup {
+  background: none;
+  padding-top: 0;
+}
+
+.cke_wrapper .cke_editor .cke_toolbar + .cke_toolbar .cke_toolgroup a {
+  background: none;
+  opacity: 1;
+}
+
+.cke_wrapper .cke_editor .cke_toolbar + .cke_toolbar .cke_toolgroup a:hover span.cke_label {
+  cursor: pointer;
+}
+
+html .cke_skin_kama .cke_wrapper {
+  background: #DDD;
+  padding: 4px 2px 2px;
+  -moz-border-radius: 0;
+}
+
+html span.cke_skin_kama {
+  -moz-border-radius: 0;
+  border: none;
+  padding: 0;
+}
+
+.wysiwyg-tab-wrapper {
+  float: right;
+}
+
+.text-format-wrapper label {
+  float: left;
+}
+
+.wysiwyg-tab {
+  background: #ECECEC;
+  color: #B5B5B5;
+  cursor: pointer;
+  float: left;
+  margin-left: 4px;
+  padding: 3px 12px 2px;
+  -moz-border-radius: 6px 6px 0 0;
+  -o-border-radius: 6px 6px 0 0;
+  -webkit-border-radius: 6px 6px 0 0;
+}
+
+.wysiwyg-tab.wysiwyg-active {
+  background: #ddd;
+  color: #666;
+  cursor: default;
+}
+
+.wysiwyg-formatter > div {
+  float: left;
+  padding-top: 5px;
+}
+
+.wysiwyg-allowed {
+  background: #ddd;
+  display: none;
+  min-height: 21px;
+  padding: 7px 8px 7px 127px;
+}
+
+.textarea-processed .wysiwyg-allowed {
+  display: block;
+}
+
+.wysiwyg-toggle-wrapper {
+  display: none;
+}
+
+.cke_toolbox .wysiwyg {
+  float: left;
+  margin: 2px 4px 0 0;
+  -webkit-user-select: all;
+}
+
+.cke_browser_ie7 .cke_toolbar {
+  display: inline-block;
+}
+
+.form-textarea-wrapper .wysiwyg-none-header {
+  background: #DDD;
+  padding: 6px 2px 4px;
+  -moz-border-radius: 0;
+}
+
+.form-textarea-wrapper .wysiwyg-none-header select {
+  font-size: 12px;
+}
+
+.form-textarea-wrapper .wysiwyg-none-header span {
+  margin-left: 10px;
+}
+
+.text-format-wrapper .form-textarea-wrapper {
+  clear: right;
+}
+
+div.vertical-tabs fieldset.filter-wrapper {
+  padding: 10px 2px;
+}
+
+.wysiwyg-tabs-processed fieldset.filter-wrapper .form-type-select,
+div.vertical-tabs fieldset.filter-wrapper .form-type-select {
+  display: none;
+}
+
+/* @end */
+

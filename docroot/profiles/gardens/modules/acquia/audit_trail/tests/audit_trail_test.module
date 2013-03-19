@@ -1,0 +1,199 @@
+<?php
+
+/**
+ * @file
+ * Dummy module implementing a form to test form tracking.
+ */
+
+/**
+ * Implements hook_menu().
+ */
+function audit_trail_test_menu() {
+  $items = array();
+
+  $items['audit_trail_test_form'] = array(
+    'title' => 'Audit trail form test',
+    'page callback' => 'drupal_get_form',
+    'page arguments' => array('audit_trail_test_form'),
+    'access arguments' => array('administer audit trail'),
+  );
+
+  return $items;
+}
+
+/**
+ * Audit trail form to test form tracking.
+ */
+function audit_trail_test_form($form, $form_state) {
+  $form['test_checkbox'] = array(
+    '#type' => 'checkbox',
+    '#title' => t('Test checkbox'),
+    '#default_value' => 0,
+  );
+
+  $form['test_checkboxes'] = array(
+    '#type' => 'checkboxes',
+    '#title' => t('Test checkboxes'),
+    '#options' => array(
+      'checkbox_one' => t('One'),
+      'checkbox_two' => t('Two'),
+      'checkbox_three' => t('Three'),
+    ),
+    '#default_value' => array(
+      'checkbox_one',
+      'checkbox_two',
+    ),
+  );
+
+  $form['test_date'] = array(
+    '#type' => 'date',
+    '#title' => t('Test date'),
+    '#default_value' => array(
+      'month' => '2',
+      'day' => '2',
+      'year' => '2001',
+    ),
+  );
+
+  $form['test_fieldset'] = array(
+    '#title' => t('Test fieldset'),
+    '#tree' => TRUE,
+  );
+  $form['test_fieldset']['test_child_textfield'] = array(
+    '#type' => 'textfield',
+    '#title' => t('Test child textfield'),
+    '#default_value' => 'test child textfield default value',
+  );
+
+  $form['test_password'] = array(
+    '#type' => 'password',
+    '#title' => t('Test password'),
+  );
+
+  $form['test_password_confirm'] = array(
+    '#type' => 'password_confirm',
+    '#title' => t('Test password confirm'),
+    '#default_value' => array(
+      'pass1' => '',
+      'pass2' => '',
+    ),
+  );
+
+  $form['test_radio'] = array(
+    '#type' => 'radio',
+    '#title' => t('Test radio'),
+    '#return_value' => 'radio_value',
+    '#default_value' => FALSE,
+  );
+
+  $form['test_radios'] = array(
+    '#type' => 'radios',
+    '#title' => t('Test radios'),
+    '#options' => array(
+      'radios_one' => t('One'),
+      'radios_two' => t('Two'),
+      'radios_three' => t('Three'),
+    ),
+    '#default_value' => 'radios_one',
+  );
+
+  $form['test_select'] = array(
+    '#type' => 'select',
+    '#title' => t('Test select'),
+    '#options' => array(
+      'select_one' => t('One'),
+      'select_two' => t('Two'),
+      'select_three' => t('Three'),
+    ),
+    '#default_value' => 'select_one',
+  );
+
+  $form['test_multiselect'] = array(
+    '#type' => 'select',
+    '#title' => t('Test multiselect'),
+    '#options' => array(
+      'multiselect_one' => t('One'),
+      'multiselect_two' => t('Two'),
+      'multiselect_three' => t('Three'),
+    ),
+    '#default_value' => array(
+      'multiselect_one' => 'multiselect_one',
+      'multiselect_two' => 'multiselect_two',
+    ),
+    '#multiple' => TRUE,
+  );
+
+  $form['test_tableselect'] = array(
+    '#type' => 'tableselect',
+    '#title' => t('Test tableselect'),
+    '#header' => array(
+      'column1' => t('Column one'),
+      'column2' => t('Column two'),
+    ),
+    '#options' => array(
+      'row1' => array(
+        'column1' => 'cell11',
+        'column2' => 'cell12',
+      ),
+      'row2' => array(
+        'column1' => 'cell21',
+        'column2' => 'cell22',
+      ),
+    ),
+    '#multiple' => FALSE,
+  );
+
+  $form['test_multiple_tableselect'] = array(
+    '#type' => 'tableselect',
+    '#title' => t('Test multiple choice tableselect'),
+    '#header' => array(
+      'column1' => t('Column one'),
+      'column2' => t('Column two'),
+    ),
+    '#options' => array(
+      'row1' => array(
+        'column1' => 'cell11',
+        'column2' => 'cell12',
+      ),
+      'row2' => array(
+        'column1' => 'cell21',
+        'column2' => 'cell22',
+      ),
+    ),
+    '#multiple' => TRUE,
+  );
+
+
+  $form['test_textarea'] = array(
+    '#type' => 'textarea',
+    '#title' => t('Test textarea'),
+    '#default_value' => 'test textarea default value',
+  );
+
+  $form['test_textfield'] = array(
+    '#type' => 'textfield',
+    '#title' => t('Test textfield'),
+    '#default_value' => 'test textfield default value',
+  );
+
+  $form['test_weight'] = array(
+    '#type' => 'weight',
+    '#title' => t('Test weight'),
+    '#default_value' => 0,
+    '#delta' => 10,
+  );
+
+  $form['submit'] = array(
+    '#type' => 'submit',
+    '#value' => t('Submit'),
+  );
+
+  return $form;
+}
+
+/**
+ * Submit handler for the audit_trail_test_form form.
+ */
+function audit_trail_test_form_submit($form, $form_state) {
+  drupal_set_message(t('Audit trail form submitted'));
+}

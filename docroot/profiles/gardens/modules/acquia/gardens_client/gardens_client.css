@@ -1,0 +1,12 @@
+.gardener-overlay .overlay {
+  width: 700px;
+  min-width: 700px;
+}
+.gardener-overlay .ui-dialog-titlebar {
+  padding: 0;
+}
+.gardener-overlay #ui-dialog-title-overlay-container {
+  text-indent: -5000px;
+  height: 30px;
+  padding: 0;
+}

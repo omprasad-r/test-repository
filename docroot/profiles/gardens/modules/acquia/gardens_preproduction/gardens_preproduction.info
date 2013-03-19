@@ -1,0 +1,7 @@
+; $Id$
+name = Gardens Preproduction
+description = A module that indicates whether the site is in preproduction mode.  This is useful for enabling features that are being worked on and tested but not scheduled for release.
+core = 7.x
+package = Drupal Gardens
+files[] = gardens_preproduction.module
+hidden = TRUE

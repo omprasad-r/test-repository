@@ -1,0 +1,17 @@
+<?php
+
+/**
+ * @file
+ * Dummy module implementing MAST related hooks to test API interaction with
+ * the MASt module.
+ */
+
+/**
+ * Implements hook_mast_field_access().
+ */
+function mast_field_access_test_field_access($op, $field, $entity_type, $entity, $account) {
+  if ($field['field_name'] == 'field_image') {
+    return FALSE;
+  }
+  return TRUE;
+}

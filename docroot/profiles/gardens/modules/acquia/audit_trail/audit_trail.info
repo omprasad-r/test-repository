@@ -1,0 +1,8 @@
+name = Audit Trail
+description = Track specified forms.
+configure = admin/config/development/audit-trail
+
+core = 7.x
+package = Administration
+
+files[] = tests/audit_trail.test

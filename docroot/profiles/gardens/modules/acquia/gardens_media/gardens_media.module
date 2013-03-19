@@ -1,0 +1,759 @@
+<?php
+
+/**
+ * @file
+ * Gardens_media module.
+ */
+
+/**
+ * Implements hook_preprocess_html().
+ */
+function gardens_media_preprocess_html() {
+  // Add custom JS to all pages in case there are hand coded links to /upload/*
+  // but only do it if the user is anonymous. The js will force login via dialog.
+  if (user_is_anonymous()) {
+    $path = drupal_get_path('module', 'gardens_media');
+    drupal_add_js($path . '/gardens_media_links.js', array('weight' => '501'));
+  }
+}
+
+/**
+ * Implements hook_menu()
+ */
+function gardens_media_menu() {
+  $items['upload'] = array(
+    'title' => t('Post a photo or video'),
+    'page callback' => 'gardens_media',
+    'access callback' => array('gardens_media_access_upload_page'),
+    'access arguments' => array(1),
+  );
+  $items['upload/%/%gmedia_ajax'] = array(
+    'page callback' => 'gardens_media_ajax_callback',
+    'page arguments' => array(1, 2),
+    'access callback' => TRUE,
+    'type' => MENU_CALLBACK,
+  );
+  return $items;
+}
+
+/**
+ * Access callback for viewing the upload page
+ */
+function gardens_media_access_upload_page($type = NULL) {
+  global $user;
+  // Access denied if no "add user submitted content" permission
+  if ($user->uid > 1 && !user_access('add user submitted content')) {
+    return FALSE;
+  }
+  // Access denied if accessing /upload/$type without create permissions
+  if ($type && !user_access('create ' . $type . ' content')) {
+    return FALSE;
+  }
+  return TRUE;
+}
+
+/**
+ * Implements hook_permission()
+ */
+function gardens_media_permission() {
+  return array(
+    'add user submitted content' => array(
+      'title' => t('Add user submitted content'),
+      'description' => t('Allows a user to add content via the user submitted content page'),
+    ),
+    'always see full media widget' => array(
+      'title' => t('Always use the full media selection widget'),
+      'description' => t('If selected, a user will always see the full default media module widget for selecting media'),
+    ),
+  );
+}
+
+/**
+ * Function to return the current state of javascript
+ */
+function gmedia_ajax_load($js = 'nojs'){
+  if ($js == 'ajax') {
+    return TRUE;
+  }
+  return 0;
+}
+
+/**
+ * Ajax callback function for displaying the node forms to the end user
+ */
+function gardens_media_ajax_callback($type, $js) {
+  // Based on the node type set up some variables
+  switch ($type) {
+    case 'photo':
+      $title = t('Upload a photo');
+      $form_id = 'photo_node_form';
+      $path = 'upload/photo';
+      break;
+    case 'video':
+      $title = t('Embed a video');
+      $form_id = 'video_node_form';
+      $path = 'upload/video';
+      break;
+  }
+  // If we have javascript load/process the form and take actions accordingly
+  if ($js) {
+    drupal_add_js(array('gardensMedia' => array('defaultType' => $type)), 'setting');
+    module_load_include('inc', 'node', 'node.pages');
+    global $user;
+    $node = (object) array(
+      'uid' => $user->uid,
+      'name' => (isset($user->name) ? $user->name : ''),
+      'type' => $type,
+      'language' => LANGUAGE_NONE,
+    );
+    $node_form = drupal_get_form($form_id, $node);
+    $output = drupal_render($node_form);
+    $messages = theme('status_messages');
+    $commands[] = ajax_command_html('#gardens-media-node-selector', $messages . $output);
+    // Send the form as output
+    $page = array('#type' => 'ajax', '#commands' => $commands);
+    ajax_deliver($page);
+  }
+  // If we don't have javascript navigate to the appropriate page
+  else {
+    drupal_goto($path);
+  }
+}
+
+/**
+ * Page presented to the end user for submitting a video or photo
+ */
+function gardens_media($type = NULL) {
+
+  // Redirect anonymous users to the login page
+  if (user_is_anonymous()) {
+    drupal_goto('user', array('query'=>drupal_get_destination()));
+  }
+  // If we are accessing the /upload page directly we must check which
+  // content types the user has access to for displaying the default form
+  // TODO: Once generalized this array will be populated by a lookup function
+  $access_types = array('photo', 'video');
+  if (empty($type)) {
+    foreach ($access_types as $access_type) {
+      if (user_access('create ' . $access_type . ' content')) {
+        $type = $access_type;
+        break;
+      }
+    }
+    if (empty($type)) {
+      return drupal_access_denied();
+    }
+  }
+
+  // Include files we'll need for our node form
+  global $user;
+  $types = array();
+
+  drupal_add_js(array('gardensMedia' => array('defaultType' => $type)), 'setting');
+  module_load_include('inc', 'node', 'node.pages');
+  // Placeholder markup for our radio buttons
+  $build['radio_placeholder'] =  array(
+    '#type' => 'markup',
+    '#markup' => '<div id="gardens-media-node-selector-radios"></div>',
+  );
+
+  // Upload a photo link
+  if(user_access('create photo content')) {
+    $build['photo_link'] = array(
+      '#type' => 'link',
+      '#title' => t('Upload a photo'),
+      '#href' => 'upload/photo/nojs/',
+      '#id' => 'photo-ajax-link',
+      '#attributes' => array('class' => array('media-upload-ajax-link'), 'type' => 'photo'),
+      '#ajax' => array(
+        'wrapper' => 'gardens-media-node-selector',
+        'method' => 'html',
+      ),
+    );
+    $types['photo'] = 'Upload a photo';
+  }
+
+  // Embed a video link
+  if(user_access('create video content')) {
+    $build['video_link'] = array(
+      '#type' => 'link',
+      '#title' => t('Embed a video'),
+      '#href' => 'upload/video/nojs/',
+      '#id' => 'video-ajax-link',
+      '#attributes' => array('class' => array('media-upload-ajax-link'), 'type' => 'video'),
+      '#ajax' => array(
+        'wrapper' => 'gardens-media-node-selector',
+        'method' => 'html',
+      ),
+    );
+    $types['video'] = 'Embed a video';
+  }
+  
+  drupal_add_js(array('gardensMedia' => array('types' => $types)), 'setting');
+
+  // Build our starter node object
+  global $language;
+  $node = (object) array(
+    'uid' => $user->uid,
+    'name' => (isset($user->name) ? $user->name : ''),
+    'type' => $type,
+    'language' => LANGUAGE_NONE,
+  );
+
+  // Get and build the node form based on the type passed to the function
+  $node_form = drupal_get_form($type . '_node_form', $node);
+  $build['gardens_node_form'] = array(
+    '#markup' => drupal_render($node_form),
+  );
+  return $build;
+}
+
+/**
+ * Implements hook_wysiwyg_editor_settings_alter
+ */
+function gardens_media_wysiwyg_editor_settings_alter(&$settings, $context) {
+  if (arg(0) == 'upload') {
+    if ($context['profile']->editor == 'ckeditor') {
+      $settings['height'] = 170;
+    }
+  }
+}
+
+/**
+ * Implements hook_form_alter()
+ */
+function gardens_media_form_alter(&$form, &$form_state, $form_id) {
+  if ($form_id == 'video_node_form' || $form_id == 'photo_node_form') {
+    $node = $form['#node'];
+    drupal_add_css(drupal_get_path('module', 'gardens_media') . '/gardens_media.css');
+    // Remove the preview button.
+    unset($form['actions']['preview']);
+    // Change the body title to "Description".
+    $form['body'][LANGUAGE_NONE][0]['#title'] = t('Description');
+    // Change the size of the body textarea for normal form elements
+    $form['body'][LANGUAGE_NONE][0]['#rows'] = 10;
+    // Add selector div around the form
+    $form['#prefix'] = '<div id="gardens-media-node-selector">';
+    $form['#suffix'] = '</div>';
+
+    // Add a validation function to clear out the field wrapper if the
+    // node title fails validation so we can see all of the fields
+    $form['#validate'][] = 'gardens_media_node_form_validate';
+
+    // If we are not on the node add/edit page alter the form for the end user.
+    if (arg(0) != 'node' && (arg(1) != 'add' || arg(2) != 'edit')) {
+      // Add something to the form that is only there if we aren't on the
+      // upload page. We'll use that info if/when this is called with a
+      // system/ajax form submit once or more times.
+      if (empty($form_state['input']['uploadpage']) && arg(0) != 'system') {
+        $form['uploadpage'] = array('#type' => 'hidden', '#value' => '1');
+      }
+      // Add javascript for our radio button behaviours
+      drupal_add_js(drupal_get_path('module', 'gardens_media') . '/gardens_media.js');
+      $path = drupal_get_path('module', 'gardens_media');
+      $form['#attached'] = array(
+        'js' => array($path. '/gardens_media.js'),
+        'css' => array($path. '/gardens_media_vtab.css'),
+      );
+
+      if ($form_id == 'photo_node_form' && (!empty($form_state['input']['uploadpage']) || arg(0) == 'upload')) {
+        $form['#action'] = url('upload/photo');
+      }
+
+      if ($form_id == 'video_node_form') {
+        if (!empty($form_state['input']['uploadpage']) || arg(0) == 'upload') {
+          $form['#action'] = url('upload/video');
+        }
+
+        // Change the markup of the form for the video node type so we can
+        // hide away parts of the form until they are needed
+
+        // Get a listing of fields for the video node type
+        $fields = field_info_instances('node', 'video');
+        if (!user_access('always see full media widget')) {
+
+          $components =  array (
+            '#prefix' => '<div id="gardens-media-field-bundle-wrapper">',
+            '#suffix' => '</div>',
+            'title' => $form['title'],
+          );
+          unset($form['title']);
+          foreach ($fields as $name => $info) {
+            if ($name != 'field_video_asset') {
+              $components[$name] = $form[$name];
+              unset($form[$name]);
+            }
+          }
+          $components['actions'] = $form['actions'];
+          unset($form['actions']);
+          $form['field_bundle'] = $components;
+        }
+      }
+    }
+  }
+}
+
+function gardens_media_node_form_validate($form, &$form_state) {
+  // Re-add the js and css so they are avaialble on a validation failure
+  // drupal_add_js(drupal_get_path('module', 'gardens_media') . '/gardens_media.js');
+  drupal_add_css(drupal_get_path('module', 'gardens_media') . '/gardens_media.css');
+
+  // Unset the field wrapper div if the user has submitted the form with the save
+  // button. If the user has made it this far they should see the entire form
+  if ($form_state['triggering_element']['#value'] == "Save") {
+    unset($form_state['complete form']['field_bundle']['#prefix']);
+    unset($form_state['complete form']['field_bundle']['#suffix']);
+  }
+}
+
+/**
+ * Implements hook_node_presave()
+ *
+ * Responsible for filling in the node title if they are missing from
+ * the photo or video nodes
+ */
+function gardens_media_node_presave($node) {
+  if ($node->type == 'video' || $node->type == 'photo') {
+    if (empty($node->title)) {
+      if ($node->type == 'video') $fid = $node->field_video_asset[LANGUAGE_NONE][0]['fid'];
+      if ($node->type == 'photo') $fid = $node->field_photo_asset[LANGUAGE_NONE][0]['fid'];
+      $file = file_load($fid);
+      switch($file->type) {
+        case 'image':
+          $node->title = $file->filename;
+          break;
+        case 'video':
+          if ($file->filemime == 'video/oembed') {
+            $embed_code = str_replace('oembed://', '', $file->uri);
+          }
+          else if ($file->filemime == 'video/youtube') {
+            $embed_code = str_replace('youtube://', 'http://www.youtube.com/', $file->uri);
+          }
+          $data = oembedcore_oembed_data(urldecode($embed_code));
+          if ($data->title) {
+            $node->title = $data->title;
+          } else {
+            $node->title = $embed_code;
+          }
+          break;
+      }
+    }
+  }
+}
+
+/**
+ * Implements hook_field_widget_info().
+ */
+function gardens_media_field_widget_info() {
+  return array(
+    'gardens_media_photo' => array(
+      'label' => t('Photo file selector'),
+      'field types' => array('media'),
+      'settings' => array(
+        'allowed_types' => array('image'),
+        'allowed_schemes' => array('public', 'private'),
+      ),
+      'behaviors' => array(
+        'multiple values' => FIELD_BEHAVIOR_DEFAULT,
+        'default value' => FIELD_BEHAVIOR_NONE,
+      ),
+    ),
+   'gardens_media_video' => array(
+      'label' => t('Video URL selector'),
+      'field types' => array('media'),
+      'settings' => array(
+        'allowed_schemes' => array('public', 'private'),
+      ),
+      'behaviors' => array(
+        'multiple values' => FIELD_BEHAVIOR_DEFAULT,
+        'default value' => FIELD_BEHAVIOR_NONE,
+      ),
+    ),
+  );
+}
+
+/**
+ * Implement hook_field_widget_settings_form().
+ */
+function gardens_media_field_widget_settings_form($field, $instance) {
+  $widget = $instance['widget'];
+  $settings = $widget['settings'];
+  $form = array();
+  
+  // Setup type selection form
+  $types = media_type_get_types();
+  $options = array();
+  foreach ($types as $key => $definition) {
+    $options[$key] = $definition->label;
+  }
+
+  $streams = file_get_stream_wrappers();
+
+  $form['allowed_types'] = array(
+    '#type' => 'checkboxes',
+    '#title' => t('Allowed remote media types'),
+    '#options' => $options,
+    '#default_value' => $settings['allowed_types'],
+    '#description' => t('Media types which are allowed for this field when using remote streams.'),
+    '#weight' => 1,
+    '#access' => count(file_get_stream_wrappers(STREAM_WRAPPERS_LOCAL)) != count($streams),
+  );
+
+  $options = array();
+  unset($streams['temporary']);
+  foreach ($streams as $scheme => $data) {
+    $options[$scheme] = t('@scheme (@name)', array('@scheme' => $scheme . '://', '@name' => $data['name']));
+  }
+  $form['allowed_schemes'] = array(
+    '#type' => 'checkboxes',
+    '#title' => t('Allowed URI schemes'),
+    '#options' => $options,
+    '#default_value' => $settings['allowed_schemes'],
+    '#description' => t('URI schemes include public:// and private:// which are the Drupal files directories, and may also refer to remote sites.'),
+    '#weight' => 2,
+  );
+  return $form;
+}
+
+/**
+ * Implements hook_field_widget_form().
+ *
+ * hook_widget_form() is where Drupal tells us to create form elements for
+ * our field's widget.
+ */
+function gardens_media_field_widget_form(&$form, &$form_state, $field, $instance, $langcode, $items, $delta, $element) {
+  $field_settings = $instance['settings'];
+  $widget_settings = $instance['widget']['settings'];
+
+  include_once(drupal_get_path('module', 'media') . '/includes/media.pages.inc');
+
+  $current_value = array();
+  if (isset($items[$delta])) {
+    $current_value = $items[$delta];
+    // @todo $items[$delta] is sometimes a loaded media entity (an object)
+    //   rather than an array. This conflicts with Field API expectations (for
+    //   example, it results in fatal errors when previewing a node with a
+    //   multi-valued media field), so should be fixed. In the meantime, don't
+    //   assume that $current_value is an array.
+    if (is_array($current_value) && isset($current_value['data']) && is_string($current_value['data'])) {
+      $current_value['data'] = unserialize($current_value['data']);
+    }
+  }
+
+  // If the site administrator has chosen to use the default 'generic' media widget
+  // skip any conditional widget loading, and just display the default widget.
+  if ($instance['widget']['type'] != 'media_generic') {
+
+    // We provide two different custom media widgets for uploading photos and
+    // videos. We make use of these two widgets to get around the way the
+    // default 'generic' media_module widget works.
+    // By default, that widget will give anyone who has the permission to upload
+    // media to have full access to all assets that have already been uploaded.
+    // In any use case where you have user generated content, you don't want all
+    // users to have the power to see all those assets. So we've created these
+    // two stripped down widgets that make use of all of media module's
+    // validation etc., but don't expose existing media on the server to the
+    // user.
+    // In some cases however, we do want to show the full default media widget
+    // to some users that have the appropriate permissions (i.e. always see full
+    // media widget)
+    // If they don't we show them them the limited functionality widgets
+    // (depending on which type was exposed for this specific node (either photo
+    // or embed video))
+    $force_default_widget = user_access('always see full media widget');
+    if($force_default_widget) {
+      $element += array(
+        '#type' => 'media', // Would like to make this a fieldset, but throws some weird warning about element_children... not sure what it is about yet.
+        '#collapsed' => TRUE,
+        '#default_value' => $current_value,
+        '#required' => $instance['required'],
+        '#media_options' => array(
+          'global' => array(
+            'types' => array_filter($widget_settings['allowed_types']),
+            'schemes' => $widget_settings['allowed_schemes'],
+            'file_directory' => isset($field_settings['file_directory']) ? $field_settings['file_directory'] : '',
+            'file_extensions' => isset($field_settings['file_extensions']) ? $field_settings['file_extensions'] : media_variable_get('file_extensions'),
+            'max_filesize' => isset($field_settings['max_filesize']) ? $field_settings['max_filesize'] : NULL,
+            'uri_scheme' => !empty($field_settings['uri_scheme']) ? $field_settings['uri_scheme'] : file_default_scheme(),
+          ),
+        ),
+      );
+    }
+    else {
+      switch ($instance['widget']['type']) {
+        case 'gardens_media_photo':
+          $element['#tree'] = TRUE;
+          $element['fid'] = array(
+            '#type' => 'hidden',
+            '#default_value' => $current_value,
+          );
+          $widget = media_add_upload($form, $form_state, $field_settings);
+          //$element = array_merge($element, $widget['upload']);
+          $element['upload'] = $widget['upload'];
+          $element['upload']['#title'] = t('Upload a photo');
+          if ($element['#required']) {  // Fake the required asterisk
+            $element['upload']['#title'] .= ' ' . theme('form_required_marker', array('element' => $element['upload']));
+          }
+          $element['#validators'] = $widget['#validators'];
+          $element['upload']['#attributes'] = array('id' => array('gardens-media-widget'));
+          $element['#element_validate'] = array('_media_gardens_media_add_upload_validate');
+          break;
+        case 'gardens_media_video':
+          $widget = media_internet_add($form, $form_state, $widget_settings['allowed_types']);
+          $element['#tree'] = TRUE;
+          $element['fid'] = array(
+            '#type' => 'hidden',
+            '#default_value' => $current_value,
+          );
+          $element['#validators'] = $widget['#validators'];
+          $element['#element_validate'] = array('_media_gardens_media_internet_add_validate');
+          $element['embed_code'] = $widget['embed_code'];
+          $element['embed_code']['#attributes'] = array('id' => array('gardens-media-widget'));
+          if (module_exists('media_oembed') && variable_get('oembedembedly_api_key', FALSE)) {
+            $path = drupal_get_path('module', 'gardens_features');
+            drupal_add_js($path . '/js/gardens_features.providers.js');
+            // Add a link to the providers supported by embedly.
+            $link = l(t('See a list of providers'), 'admin/content/media/embed/providers', array('attributes' => array('class' => array('embed-providers-link'), 'target' => '_new')));
+            $element['embed_code']['#title'] = t('URL');
+            if ($element['#required']) {
+              $element['embed_code']['#title'] .= ' ' . theme('form_required_marker', array('element' => $element['upload']));
+            }
+            $element['embed_code']['#description'] = t('Paste the URL of the source you want to embed. !link.', array('!link' => $link));
+          }
+          // Ajax button for fetching data for the embed url
+          // #limit_validation_errors is set to none to ensure no additional
+          // validation is done on any fields
+          $element['embed_code_button'] = array(
+            '#type' => 'button',
+            '#value' => 'Embed',
+            '#attributes' => array('class' => array('gardens-media-embed-code-button')),
+            '#limit_validation_errors' => array(),
+            '#ajax' => array(
+              'callback' => 'gardens_media_url_selector_callback',
+              'wrapper' => 'gardens-media-node-selector',
+              'method' => 'replace',
+            ),
+          );
+          break;
+      }
+      // If there is an FID we should provide the user with some display of what
+      // 'file' is currently selected.
+      if(isset($current_value['fid']) && !$form_state['values'][$field['field_name']][$langcode][0]['fid']) {
+        // We always render our custom upload widget ($element) that works with media module
+        if ($instance['widget']['type'] == 'gardens_media_photo') {
+          $full_widget = $element;
+        }
+        elseif($instance['widget']['type'] == 'gardens_media_video'){
+          // This seems nutty, but in order to get this to work with the
+          // embed field widget, this must be this way.
+          $full_widget = $element;
+        }
+        // Load the file based on the fid.
+        $file = file_load($current_value['fid']);
+        // Show a thumbnail of the currently selected file.
+        $full_widget['thumbnail'] = array(
+          '#type' => 'markup',
+          '#markup' => drupal_render(media_get_thumbnail_preview($file)),
+        );
+        // Provide some UI to 'remove' the currently selected file and replace with
+        // a newly uploaded file.  (JS handles the hiding of the thumbnail and the
+        // showing of the upload field).
+        $full_widget['remove_item_button'] = array(
+          '#type' => 'button',
+          '#attributes' => array(
+            'id' => array('remove-button')
+          ),
+          '#value' => t('Remove this item'),
+          '#attached' => array(
+            'js' => array(drupal_get_path('module', 'gardens_media').'/gardens_media_remove.js'),
+          )
+        );
+        return $full_widget;
+      }
+    }
+  }
+  // If there was no fid, we return our custom widget without any other cruft
+  return $element;
+}
+
+/**
+ * Validation handler for media photo upload widget
+ */
+function _media_gardens_media_add_upload_validate($element, &$form_state) {
+  $node = $form_state['node'];
+  $field = $form_state['field'][$element['#field_name']][$element['#language']]['field'];
+  $field_name = $field['field_name'];
+  // No need to validate if we already have an fid
+
+  $file = file_save_upload($field_name, $element['#validators']);
+
+  if ($file === NULL) {
+    // If there was no file selected and we already have an FID, no need to go through validation
+    // Render out the thumbnail to the form and return
+    if (is_numeric(trim($form_state['values'][$field_name][LANGUAGE_NONE][0]['fid']))) {
+      $file = file_load($form_state['values'][$field_name][LANGUAGE_NONE][0]['fid']);
+      if ($file->fid) {
+        $form_state['complete form'][$field_name][LANGUAGE_NONE][0]['#suffix'] = '<div id="media-item-fetched">' . drupal_render(media_get_thumbnail_preview($file)) . '</div>';
+        return;
+      }
+    }
+    form_set_error($field_name, t('No file was specified to upload.'));
+  }
+  elseif ($file === FALSE) {
+    // If the file failed to upload to the server process the existing error text
+    foreach ($_SESSION['messages']['error'] as $position => $message) {
+      if (strpos($message, "Only files with the following extensions are allowed")) {
+        $_SESSION['messages']['error'][$position] = t("The specified file <em>@filename</em> is not one of the allowed file types.", array('@filename' => $_FILES['files']['name'][$field_name]));
+      }
+    }
+  }
+  else {
+    // We have a file and should attempt to process it
+    // Build our form to create the file entity
+    include_once(drupal_get_path('module', 'media') . '/includes/media.pages.inc');
+    $media_form_state = array();
+    $media_form_state['#validators'] = $element['#validators'];
+    $media_form_state['values']['op'] = 'Submit';
+    $media_form_state['values']['upload'] = $file;
+    // Process the submit handler for media upload
+    media_add_upload_submit(drupal_get_form('media_add_upload'), $media_form_state);
+    $media_file = $media_form_state['values']['upload'];
+    // set the value of the fid in the node
+    $file = file_load($media_file->fid);
+    form_set_value($element, array('fid' => $file->fid), $form_state);
+    unset($form_state['complete form'][$field_name][LANGUAGE_NONE][0]['thumbnail']);
+    unset($form_state['complete form'][$field_name][LANGUAGE_NONE][0]['remove_item_button']);
+    $form_state['complete form'][$field_name][LANGUAGE_NONE][0]['fid']['#value'] = $file->fid;
+    $form_state['complete form'][$field_name][LANGUAGE_NONE][0]['#suffix'] = drupal_render(media_get_thumbnail_preview($file));
+    // Unset the media entity upload success message
+    unset($_SESSION['messages']['status']);
+  }
+}
+
+/**
+ * Validation handler for media video embed widget
+ */
+function _media_gardens_media_internet_add_validate($element, &$form_state) {
+  $node = $form_state['node'];
+  module_load_include('inc', 'node', 'node.pages');
+  $field = $form_state['field'][$element['#field_name']][$element['#language']]['field'];
+  $field_name = $field['field_name'];
+
+  if (is_numeric(trim($form_state['values'][$field_name][LANGUAGE_NONE][0]['fid'])) && empty($element['embed_code']['#value'])) {
+    $file = file_load($form_state['values'][$field_name][LANGUAGE_NONE][0]['fid']);
+    if ($file->fid) {
+      return;
+    }
+  }
+  // If the button clicked was the "Embed" button, we don't need to continue, so set the fid = 0 and return
+  if ($form_state['triggering_element']['#type'] == 'button' && $form_state['triggering_element']['#value'] == "Embed") {
+    form_set_value($element, array('fid' => 0), $form_state);
+    return;
+  }
+  // Build our form to create the file entity
+  $media_form_state = array();
+  $media_form_state['#validators'] = $element['#validators'];
+  $media_form_state['values']['embed_code'] = $element['embed_code']['#value'];
+  $media_form_state['values']['op'] = 'Submit';
+  // Execute the media_add_upload form to create the entity and give us back an FID
+  $node_error = form_get_errors();
+  drupal_form_submit('media_internet_add', $media_form_state);
+  $media_error = form_get_errors();
+  $errors = array_merge((array)$node_errors, (array)$media_error);
+  // If we have errors coming back from the form unset their instance and
+  // set our new instance of the error on the proper form element
+  if (isset($errors['embed_code'])) {
+    foreach ($_SESSION['messages']['error'] as $position => $error) {
+      if ($error == $errors['embed_code']) {
+        if (count($_SESSION['messages']['error']) > 1) {
+          unset($_SESSION['messages']['error'][$position]);
+        }
+        else {
+          unset($_SESSION['messages']['error']);
+        }
+        if ($errors['embed_code'] == "Unable to handle the provided embed string or URL.") {
+          $custom_error = t('The specified URL is not from a supported provider or in a supported format.');
+        }
+        if (!$custom_error) {
+          $custom_error = $errors['embed_code'];
+        }
+        form_error($element, $custom_error);
+      }
+      // For some reason the title field doesn't want to highlight. So force it
+      if ($error == 'Title field is required.') {
+        unset($_SESSION['messages']['error'][$position]);
+        form_set_error('title', t('Title field is required.'));
+      }
+    }
+    form_set_value($element, array('fid' => 0), $form_state);
+  }
+  else {
+    $fid = $media_form_state['redirect'][1]['query']['fid'];
+    $file = file_load($fid);
+    $form_state['complete form']['field_bundle']['title']['#suffix'] = '<div id="media-item-fetched">' . drupal_render(media_get_thumbnail_preview($file)) . '</div>';
+    // set the value of the fid in the node
+    form_set_value($element, array('fid' => $fid), $form_state);
+  }
+}
+
+/**
+ * Ajax callback for oembed field
+ */
+function gardens_media_url_selector_callback($form, &$form_state) {
+  // Dig out the embed code if there is one
+  $node = $form['#node'];
+  $root = $form_state['triggering_element']['#parents'][0];
+  $language = $form_state['triggering_element']['#parents'][1];
+  $delta = $form_state['triggering_element']['#parents'][2];
+  //@TODO check both deeper and not so deep locations for this information
+  $embed_code = $form_state['complete form'][$root][$language][$delta]['embed_code']['#value'];
+  if (!empty($embed_code)) {
+    // Ensure the embed code is a proper code from a provider we support
+    try {
+      $provider = media_internet_get_provider($embed_code);
+      $provider->validate();
+    } catch (MediaInternetNoHandlerException $e) {
+      form_set_error($root, $e->getMessage());
+      return $form;
+    } catch (MediaInternetValidationException $e) {
+      form_set_error($root, $e->getMessage());
+      return $form;
+    }
+    // create a fake file object from the provider
+    try {
+      $file = $provider->getFileObject();
+      // Make media think this is a full file object so we can get the thumbnail
+      $file->fid = 0;
+      $file->type = 'video';
+      // Render a thumbnail
+      $form['field_bundle']['title']['#suffix'] = '<div id="media-item-fetched">' . drupal_render(media_get_thumbnail_preview($file)) . '</div>';
+      // If the object coming back is of type oembed, populate the form elements
+      if ($file->filemime == 'video/oembed' || $file->filemime == 'video/youtube') {
+        // Retreieve the full oembed data
+        $data = oembedcore_oembed_data($embed_code);
+        // Populate the title and description fields
+        if ($data) {
+          $form['field_bundle']['title']['#value'] = $data->title;
+          $form['field_bundle']['title']['#required'] = TRUE;
+          $form['field_bundle']['body'][LANGUAGE_NONE][0]['value']['#value'] = $data->description;
+        }
+        // If we're on an edit page and the user has embeded a new file - remove the 'old'
+        // thumbnail and the option that would 'remove' the 'old' thumbnail.
+        unset($form[$root][$language][$delta]['thumbnail']);
+        unset($form[$root][$language][$delta]['remove_item_button']);
+        // Removing the wrapper divs so the rest of the form elements can be
+        // shown to the end user
+        unset($form['field_bundle']['#prefix']);
+        unset($form['field_bundle']['#suffix']);
+      }
+    }
+    catch (Exception $e) {
+      form_set_error($root, $e->getMessage());
+      return $form;
+    }
+  }
+  else {
+    form_set_error($root, t('Enter a valid URL from a supported provider.'));
+  }
+  return $form;
+}

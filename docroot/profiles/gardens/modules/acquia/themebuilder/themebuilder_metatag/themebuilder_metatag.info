@@ -1,0 +1,6 @@
+name = Themebuilder metatag configuration
+description = Themebuilder metatag configuration tab module
+core = 7.x
+package = Themebuilder
+dependencies[] = themebuilder_advanced
+hidden = TRUE

@@ -1,0 +1,1618 @@
+<?php
+
+/**
+ * @file
+ *   Communication with the Gardener, including OpenID attribute exchange
+ *   implementation with Drupal profiles.
+ */
+
+/**
+ * Implements hook_menu().
+ */
+function gardens_client_menu() {
+  if (function_exists('scarecrow_get_gardener_url')) {
+    $items['gardens-site-manager'] = array(
+      'title' => 'Drupal Gardens Site manager',
+      'page callback' => 'drupal_goto',
+      'page arguments' => array(scarecrow_get_gardener_url() . '/mysites'),
+      // Access will be checked on the Gardener. We have no idea at this point
+      // whether the given user has any sites to manage there.
+      'access callback' => TRUE,
+      'type' => MENU_CALLBACK,
+    );
+  }
+  $items['gardens-login'] = array(
+    'title' => 'Gardens login',
+    'page callback' => 'gardens_login_page',
+    'access callback' => TRUE,
+    'type' => MENU_CALLBACK,
+    'file' => 'gardens_client.pages.inc',
+  );
+  // Overlay channeled login pages.
+  $items['gardener/login'] = array(
+    'title' => 'Gardener login',
+    'page callback' => 'gardens_client_gardener_login_page',
+    'access callback' => TRUE,
+    'type' => MENU_CALLBACK,
+    'file' => 'gardens_client.pages.inc',
+  );
+  $items['gardener/register'] = array(
+    'title' => 'Gardener registration',
+    'page callback' => 'gardens_client_gardener_login_page',
+    'page arguments' => array('register'),
+    'access callback' => TRUE,
+    'type' => MENU_CALLBACK,
+    'file' => 'gardens_client.pages.inc',
+  );
+  $items['gardener/validate'] = array(
+    'title' => 'Gardener validate',
+    'page callback' => 'gardens_client_gardener_redirection_page',
+    'page arguments' => array('validate'),
+    'access callback' => 'user_is_anonymous',
+    'type' => MENU_CALLBACK,
+    'file' => 'gardens_client.pages.inc',
+  );
+  $items['gardener/reset'] = array(
+    'title' => 'Gardener reset',
+    'page callback' => 'gardens_client_gardener_redirection_page',
+    'page arguments' => array('reset'),
+    'access callback' => 'user_is_anonymous',
+    'type' => MENU_CALLBACK,
+    'file' => 'gardens_client.pages.inc',
+  );
+  $items['gardener/resend-verification-email/%'] = array(
+    'title' => 'Resend email verification reminder',
+    'page callback' => 'gardens_client_resend_verification_email',
+    'page arguments' => array(2),
+    'access callback' => 'scarecrow_is_site_owner',
+    'delivery callback' => 'ajax_deliver',
+    'type' => MENU_CALLBACK,
+    'file' => 'gardens_client.pages.inc',
+  );
+  $items['gardens/close-verification-reminder'] = array(
+    'title' => 'Close email verification reminder',
+    'page callback' => 'gardens_client_close_verification_reminder',
+    'access callback' => 'scarecrow_is_site_owner',
+    'delivery callback' => 'ajax_deliver',
+    'type' => MENU_CALLBACK,
+    'file' => 'gardens_client.pages.inc',
+  );
+  $items['gardens/dismiss-alert'] = array(
+    'title' => 'Dismiss twitter alert',
+    'page callback' => 'gardens_client_dismiss_alert',
+    'access callback' => 'user_access',
+    'access arguments' => array('administer site configuration'),
+    'delivery callback' => 'ajax_deliver',
+    'type' => MENU_CALLBACK,
+    'file' => 'gardens_client.pages.inc',
+  );
+  $items['gardens/dismiss-aggregator-alert'] = array(
+    'title' => 'Dismiss aggregator alert',
+    'page callback' => 'gardens_client_dismiss_aggregator_alert',
+    'access callback' => 'user_access',
+    'access arguments' => array('administer site configuration'),
+    'delivery callback' => 'ajax_deliver',
+    'type' => MENU_CALLBACK,
+    'file' => 'gardens_client.pages.inc',
+  );
+
+  $items['admin/config/user-interface/admin'] = array(
+    'title' => 'Administration theme and overlay',
+    'description' => 'Configure the theme and overlay used for administration.',
+    'page callback' => 'drupal_get_form',
+    'page arguments' => array('gardens_client_admin_settings_form'),
+    'access arguments' => array('administer site configuration'),
+  );
+
+  /*
+  Disabled for now. Will need to be built out for SMB rollout.
+  $items['admin/config/people/accounts/local-accounts'] = array(
+    'title' => 'Configure the site to allow local accounts',
+    'page callback' => 'drupal_get_form',
+    'page arguments' => array('gardens_client_allow_local_user_logins_form'),
+    'access callback' => 'gardens_client_allow_local_user_logins_form_access',
+  );*/
+  return $items;
+}
+
+/**
+ * Menu access callback for confirmation form.
+ */
+function gardens_client_allow_local_user_logins_form_access() {
+  $forced_openid = gardens_client_subscription_forced_openid();
+  $using_openid = scarecrow_force_openid();
+  return user_access('administer users') && $using_openid && !$forced_openid;
+}
+
+function gardens_client_theme() {
+  return array(
+    'gardens_alert' => array(
+      'render element' => 'element',
+      'file' => 'gardens_client.theme.inc',
+      'template' => 'gardens_alert',
+    ),
+    'gardens_alerts' => array(
+      'variables' => array('alerts' => NULL),
+      'file' => 'gardens_client.theme.inc',
+    ),
+  );
+}
+
+
+/**
+ * Given a url, swap http for https (or vice versa).
+ *
+ * @param {string} $url
+ *   A URL.
+ * @return {string}
+ *   The same URL, with its protocol switched.
+ */
+function gardens_client_swap_url_scheme($url) {
+  if (!strpos($url, '://')) {
+    return $url;
+  }
+  list($scheme, $target) = explode('://', $url, 2);
+  if ($scheme == 'http') {
+    $scheme = 'https';
+  }
+  elseif ($scheme == 'https') {
+    $scheme = 'http';
+  }
+  return "{$scheme}://{$target}";
+}
+
+/**
+ * Like user_set_authmaps(), but forces the provided authmaps to be inserted as
+ * new entries, rather than replacing existing ones.
+ *
+ * This function also does not have any delete functionality, as is provided by
+ * user_set_authmaps() when passing in an empty array value within $authmaps.
+ * The user_set_authmaps() function should continue to be used for that
+ * functionality.
+ */
+function gardens_client_add_authmaps($account, $authmaps) {
+  foreach ($authmaps as $key => $value) {
+    $module = explode('_', $key, 2);
+    db_insert('authmap')
+      ->fields(array(
+        'uid' => $account->uid,
+        'authname' => $value,
+        'module' => $module[1],
+      ))
+      ->execute();
+  }
+}
+
+/**
+ * Implements hook_init().
+ */
+function gardens_client_init() {
+  // Add some additional weight so that this loads after overlay.js
+  drupal_add_js(drupal_get_path('module', 'gardens_client') . '/gardens_client.js', array('weight' => 10));
+
+  // Set P3P headers to get IE and Safari make logins for custom domains work.
+  drupal_add_http_header('P3P', 'CP="CURa ADMa OUR UNI INT STA PRE COM NAV NOI COR ONL"');
+
+  // Although we expect the overlay module to be enabled, check anyway, since
+  // otherwise this can cause issues during e.g. update.php (when we need to
+  // bootstrap Drupal before running the updates).
+  if (module_exists('overlay')) {
+    // Check for both the direct render value and indirectly to the destination
+    // page. Some page flows, like the password request or initial login make
+    // it extremely hard to pass on the render value reliably in other ways, so
+    // we infer that the destination is about to show in the overlay, we should
+    // show the registartion page too.
+    if ((isset($_GET['render']) && ($_GET['render'] == 'overlay')) ||
+        (isset($_GET['destination']) && strpos($_GET['destination'], 'render=overlay'))) {
+      // Force the overlay to open when requested (e.g., within the OpenID
+      // login flow), even in situations where the overlay module would not
+      // open it; this includes users without the 'access overlay' permission
+      // and sites that have configured the overlay to be disabled.
+      if (!user_access('access overlay') || !variable_get('gardens_client_overlay_status', 1)) {
+        overlay_set_mode('child');
+        // When we turn the overlay on here, we grab complete control of the
+        // overlay initialization process; i.e., the code in overlay_init()
+        // will not run. So we have to duplicate similar steps here (in
+        // particular, redirecting to the parent when the page shouldn't be
+        // rendered inside the overlay).
+        if (!path_is_admin($_GET['q'])) {
+          gardens_client_close_overlay($_GET['q']);
+        }
+      }
+    }
+    elseif (user_is_anonymous()) {
+      // Only force overlay parent access on anonymous users.
+      // Otherwise the 'access overlay' permission handles access.
+      overlay_set_mode('parent');
+    }
+
+    if (!variable_get('gardens_client_overlay_status', 1) && user_access('access overlay')) {
+      // Disable the overlay for this page view if requested.
+      overlay_set_mode('suppress');
+    }
+
+    // Restore messages we saved earlier for display. We carry over user
+    // rejection messages this way when the overlay is closed, since the page
+    // redirect happening there does not allow for any communication.
+    if (!empty($_SESSION['gardens_client_messages'])) {
+      foreach ($_SESSION['gardens_client_messages'] as $type => $messages) {
+        foreach ($messages as $message) {
+          drupal_set_message($message, $type);
+        }
+      }
+      unset($_SESSION['gardens_client_messages']);
+    }
+  }
+
+  // Display site blocked message instead of site page if the site is blocked.
+  $verifier = new EmailVerifier();
+  if ($verifier->needsSiteBlock() && arg(0) != 'gardener') {
+    $gardener_url = variable_get('acquia_gardens_gardener_url');
+    if ($verifier->needsDeleteReminder()) {
+      $body = t('You did not verify your user account, therefore your !service_name_long website is blocked.', array('!service_name_long' => variable_get('gardens_service_name_long', 'Drupal Gardens'))) . '<div>' . $verifier->getReminderText('to_be_deleted') .'</div>';
+    }
+    elseif (user_is_anonymous()) {
+      $body = t('This !service_name_long website is blocked. If you are the site owner, verify your email address by clicking the link in the verification email that was sent to you.  If you don\'t have the original email, please visit your <a href="@mysites">My sites</a> page to send it again.', array(
+        '@mysites' => url($gardener_url . '/user/login?destination=mysites'),
+        '!service_name_long' => variable_get('gardens_service_name_long', 'Drupal Gardens'),
+      ));
+    }
+    else {
+      if (scarecrow_is_site_owner()) {
+        $body = t('This !service_name_long website is blocked. To access your site, verify your email address by clicking the link in the verification email that was sent to you.  If you don\'t have the original email, please visit your <a href="@mysites">My sites</a> page to send it again.', array(
+          '@mysites' => url($gardener_url . '/mysites'),
+          '!service_name_long' => variable_get('gardens_service_name_long', 'Drupal Gardens'),
+        ));
+      }
+      else {
+        $body = t('This !service_name_long website is blocked.', array('!service_name_long' => variable_get('gardens_service_name_long', 'Drupal Gardens')));
+
+      }
+    }
+    $GLOBALS['conf']['maintenance_mode_message'] = $body;
+    $GLOBALS['conf']['maintenance_mode'] = 1;
+    drupal_deliver_page(MENU_SITE_OFFLINE);
+    exit;
+  }
+}
+
+/**
+ * Implements hook_page_alter().
+ */
+function gardens_client_page_alter(&$page) {
+  if (function_exists('overlay_get_mode')) {
+    if ((overlay_get_mode() == 'child') && !user_access('access overlay') && !path_is_admin($_GET['q'])) {
+      // If we forced the overlay on the user but the path is not admin, we
+      // need to close the overlay. We do this so late to be able to save
+      // the messages for output later.
+      if (!empty($_SESSION['messages'])) {
+        $_SESSION['gardens_client_messages'] = $_SESSION['messages'];
+      }
+      gardens_client_close_overlay($_GET['q']);
+    }
+  }
+}
+
+/**
+ * Implements hook_preprocess_page().
+ *
+ * Adds the email verification nag box to the top of the messages section.
+ */
+function gardens_client_preprocess_page(&$variables) {
+  global $user;
+
+  if ($user->uid > 0 && user_access('administer site configuration', $user)) {
+    $alerts = array();
+
+    $verifier = new EmailVerifier();
+    if ($verifier->needsBlockReminder()) {
+      $reminder = array(
+        'message' => $verifier->getReminderText(),
+        'type' => 'email-verification-reminder',
+        'close_path' => 'gardens/close-verification-reminder',
+      );
+      $alerts[] = $reminder;
+    }
+
+    $twitter_alert = variable_get('gardens_alert', array());
+    $dismissed = isset($twitter_alert['dismissed']) ? $twitter_alert['dismissed'] : 0;
+    $timestamp = isset($twitter_alert['timestamp']) ? $twitter_alert['timestamp'] : 0;
+    $user_dismissed = !empty($user->data['alert_dismissed']) ? $user->data['alert_dismissed'] : 0;
+    if ($timestamp > $dismissed && $timestamp > $user_dismissed) {
+      $twitter_alert['type'] = 'twitter-alert';
+      $twitter_alert['close_path'] = 'gardens/dismiss-alert';
+      $alerts[] = $twitter_alert;
+    }
+
+    if (module_exists('gardens_broadcasting_client') && user_access('receive gardens broadcasted notifications')) {
+      $notifications = gardens_broadcasting_client_notifications_get($GLOBALS['user']->uid);
+      foreach ($notifications as $tid => $notification) {
+        $alert = array(
+          'message' => check_plain($notification),
+          'type' => 'broadcasted-alert-' . $tid,
+          'close_path' => 'gardens_broadcasting_client/notifications/dismiss/' . $tid,
+        );
+        $alerts[] = $alert;
+      }
+    }
+
+    if (module_exists('aggregator') && in_array('aggregator', variable_get('aggregator_processors', array('aggregator')))) {
+      $aggregator_warning = variable_get('gardens_limits_aggregator_items_warning', array());
+      // Timestamp stores when did the aggregator started to contain near-limit
+      // amount of items. The level stores how close we are to the limit, but
+      // it can only be 80, 90 or 100%. The user may dismiss the warning, and
+      // then it will only show up again if we get closer to the limit or the
+      // aggregator itemcount cleared once already and we have a new warning.
+      $warning_level = isset($aggregator_warning['level']) ? $aggregator_warning['level'] : 0;
+      $warning_timestamp = isset($aggregator_warning['timestamp']) ? $aggregator_warning['timestamp'] : 0;
+      // The last time the user has dismissed the alert.
+      $user_dismissed_data = !empty($user->data['aggregator_alert']) ? $user->data['aggregator_alert'] : array();
+      if ($warning_level && (!$user_dismissed_data || $warning_timestamp > $user_dismissed_data['timestamp'] || $warning_level > $user_dismissed_data['level'])) {
+        $message = $warning_level == 100 ?
+          'You’ve reached the feed limit of @max_count items. Oldest items will be automatically removed so you don’t exceed the maximum limit.' :
+          'You currently have @count number of feed items, and are reaching the @max_count feed limit. You can remove items yourself, or the oldest will automatically be removed when the limit is reached.';
+        $alerts[] = array(
+          'message' => t($message, array(
+            '@count' => number_format($aggregator_warning['count']),
+            '@max_count' => number_format(variable_get('gardens_limits_aggregator_items_max_count', 15000)),
+          )),
+          'type' => 'aggregagor-item-count-warning',
+          'close_path' => 'gardens/dismiss-aggregator-alert/' . $warning_level,
+        );
+      }
+    }
+
+    if (count($alerts) > 0) {
+      if (empty($variables['messages'])) {
+        $variables['messages'] = theme('status_messages');
+      }
+      $variables['messages'] = theme('gardens_alerts', array('alerts' => $alerts)) . $variables['messages'];
+    }
+
+  }
+}
+
+/**
+ * Implements hook_menu_alter().
+ */
+function gardens_client_menu_alter(&$items) {
+  // Alter the logout callback so we can redirect to gardener to log out
+  // there as well.
+  $items['user/logout']['page callback'] = 'gardens_client_user_logout_custom';
+  unset($items['user/logout']['file']);
+
+  // Send users logging in via the mobile app to the gardener's login page,
+  // for sites that use OpenID login.
+  if (!variable_get('acquia_gardens_local_user_accounts', FALSE)) {
+    $items['mast/login'] = $items['gardener/login'];
+  }
+}
+
+/**
+ * Menu callback override for user_logout().
+ *
+ * When users log out of a gardens site, they need to be logged out of the
+ * gardener as well.
+ *
+ * @see user_logout().
+ */
+function gardens_client_user_logout_custom() {
+  global $user;
+  // Save a copy of the account (before the logout happens and $user is
+  // destroyed) so we can use it below.
+  $account = $user;
+
+  // COPIED code from user_logout(). Keep in sync as D7 changes.
+  watchdog('user', 'Session closed for %name.', array('%name' => $user->name));
+  module_invoke_all('user_logout', $user);
+  // Destroy the current session, and reset $user to the anonymous user.
+  session_destroy();
+
+  // GARDENS customized code starts here. Instead of calling drupal_goto()
+  // directly, we pass on our redirection path for the gardener if scarecrow
+  // returns a URL and if the current user is registered with OpenID. If not,
+  // we call drupal_goto().
+  $gardener_url = scarecrow_get_gardener_url();
+  if (!empty($gardener_url) && gardens_client_registered_with_openid($account)) {
+    global $base_url;
+    $url_array = parse_url($base_url);
+    $gardens_host = $url_array['host'];
+    if (isset($url_array['port'])) {
+      $gardens_host .= '/' . $url_array['port'];
+    }
+    drupal_goto($gardener_url . '/gardens-logout/' . $gardens_host);
+  }
+  else {
+    drupal_goto();
+  }
+}
+
+/**
+ * Determines if a user account is registered with the Gardens OpenID system.
+ *
+ * @param $account
+ *   The user account to check.
+ *
+ * @return
+ *   TRUE if the account is registered via OpenID, FALSE otherwise.
+ */
+function gardens_client_registered_with_openid($account) {
+  // For now, we basically assume that if the user is registered via OpenID at
+  // all, they did so via the Gardens system (i.e., they have a corresponding
+  // account on the Gardener).
+  return (bool) db_query_range("SELECT 1 FROM {authmap} WHERE module = 'openid' AND uid = :uid", 0, 1, array(':uid' => $account->uid))->fetchField();
+}
+
+/**
+ * Returns TRUE if the site name is visibly displayed in the default theme.
+ */
+function gardens_client_site_name_is_visible() {
+  $theme_name = variable_get('theme_default');
+  $block_everything = theme_get_setting('block_everything', $theme_name) && module_exists('block_everything');
+  // If the block everything module is being used, we need to look at whether
+  // the "site name" block is visible.
+  if ($block_everything) {
+    return (bool) db_query("SELECT status FROM {block} WHERE module = 'block_everything' AND delta = 'site_name' AND theme = :theme", array(':theme' => $theme_name))->fetchField();
+  }
+  // Otherwise, we use the normal theme setting.
+  else {
+    return (bool) theme_get_setting('toggle_name', $theme_name);
+  }
+}
+
+/**
+ * Returns the site's name (if it's being visibly used), or the domain if it isn't.
+ */
+function gardens_client_site_name_or_domain() {
+  if (gardens_client_site_name_is_visible()) {
+    return variable_get('site_name');
+  }
+  else {
+    $domain = $GLOBALS['base_url'];
+    $colon_position = strpos($domain, '://');
+    if ($colon_position !== FALSE) {
+      $domain = substr($domain, $colon_position + 3);
+    }
+    return $domain;
+  }
+}
+
+/**
+ * Implementation of hook_openid().
+ */
+function gardens_client_openid($op, $request = array()) {
+  if ($op == 'request') {
+    $mapping = gardens_client_ax_uri_mapping();
+    $short_names = array();
+    // Add the fields we'd like to see returned if available.
+    foreach ($mapping as $ax_uri => $local_ax_field) {
+      $request['openid.ax.type.' . $local_ax_field[0]] = $ax_uri;
+      $short_names[] = $local_ax_field[0];
+    }
+    $request['openid.ax.if_available'] = join(',', $short_names);
+
+    // Only send the site name (for the Gardener to display it) if it's being
+    // visibly used on the Gardens site itself.
+    if (gardens_client_site_name_is_visible()) {
+      $request['gardens.sitename'] = variable_get('site_name');
+    }
+
+    // Request a (gardener-specific) token for Janrain Engage auth_info() data.
+    // See comments for janrain_client_openid() for why we do it here.
+    if (module_exists('janrain_client')) {
+      $request['openid.ax.if_available'] .= ',rpx_token';
+      $request['openid.ax.type.rpx_token'] = 'http://drupalgardens.com/axschema/rpx_token';
+    }
+  }
+  return $request;
+}
+
+/**
+ * Implement hook_openid_response().
+ */
+function gardens_client_openid_response($response, $account) {
+  // Update the $account with new data received in OpenID Attribute Exchange.
+  // We do that in this hook because we want it to happen on every successful
+  // OpenID login and user registration. However, for unsuccessful
+  // registrations that are later completed manually, this hook doesn't get
+  // called; that case is handled in gardens_client_user_register_submit().
+  gardens_client_update_ax_data($response, $account);
+
+  // Clear our session data if there was an OpenID registration in progress,
+  // since the registration is now complete.
+  gardens_client_clear_openid_response();
+
+  // Now that the login is complete, close the overlay if it was open.
+  if (function_exists('overlay_get_mode') && overlay_get_mode() == 'child') {
+    $goto = drupal_get_destination();
+    gardens_client_close_overlay($goto['destination']);
+  }
+}
+
+/**
+ * Update a user account with OpenID Attribute Exchange data.
+ *
+ * @param $response
+ *   The OpenID response array.
+ * @param $account
+ *   The user account object to be updated.
+ */
+function gardens_client_update_ax_data($response, $account) {
+  $mapping = gardens_client_ax_uri_mapping();
+  $edit = array();
+  $picture_uri = '';
+  $picture_time = 0;
+
+  foreach ($mapping as $ax_uri => $local_ax_field) {
+
+    // The response has values for some fields we requested. We assume the
+    // values are from a trusted source, so we can save them right away.
+    // Our implementation uses the pattern openid.ax.type.{property_name}
+    // which then gets responded with openid.ax.value.{property_name} for single
+    // value responses.
+
+    if (isset($response['openid.ax.value.' . $local_ax_field[0]])) {
+       // Found the corresponding single value for this item.
+
+       switch ($local_ax_field[0]) {
+         case 'picture':
+           $picture_uri = $response['openid.ax.value.picture'];
+           break;
+
+         case 'picture_time':
+           $picture_time = $response['openid.ax.value.picture_time'];
+           break;
+
+         default:
+           // Other fields in user categories.
+           $edit[$local_ax_field[1]][$local_ax_field[0]] = $response['openid.ax.value.' . $local_ax_field[0]];
+           break;
+       }
+    }
+  }
+
+  // Carry over nickname and email from OpenID response.
+  // Validation is duplicated from similar (not reusable) code in user.module.
+  if (!empty($response['openid.sreg.email'])) {
+    if (db_select('users')->fields('users', array('uid'))->condition('uid', $account->uid, '<>')->condition('mail', db_like($response['openid.sreg.email']), 'LIKE')->range(0, 1)->execute()->fetchField()) {
+      drupal_set_message(t('The e-mail address %email is already taken on this site, so your e-mail address was not updated.', array('%email' => $response['openid.sreg.email'])), 'warning');
+    }
+    else {
+      $edit['account']['mail'] = $response['openid.sreg.email'];
+    }
+  }
+  if (!empty($response['openid.sreg.nickname'])) {
+    if (db_select('users')->fields('users', array('uid'))->condition('uid', $account->uid, '<>')->condition('name', db_like($response['openid.sreg.nickname']), 'LIKE')->range(0, 1)->execute()->fetchField()) {
+      drupal_set_message(t('The name %name is already taken on this site, so your username was not updated.', array('%name' => $response['openid.sreg.nickname'])), 'warning');
+    }
+    else {
+      $edit['account']['name'] = $response['openid.sreg.nickname'];
+    }
+  }
+
+  if ((empty($account->picture) && !empty($picture_time)) ||
+      (is_object($account->picture) && ($picture_time > $account->picture->timestamp))) {
+    // Either first or updated user profile image. Download remote image,
+    // save locally and set user picture to this image.
+    $image_response = drupal_http_request($picture_uri);
+    if (($image_response->code == 200) && !empty($image_response->data)) {
+      $image_file = file_save_data($image_response->data);
+      if (!empty($image_file)) {
+        // Make the file non-permanent, so we can get it moved and
+        // renamed as a proper user picture on the righ path. (which
+        // happens inside user_save()).
+        $image_file->status = 0;
+        $image_file = file_save($image_file);
+        $edit['account']['picture'] = $image_file;
+      }
+    }
+  }
+  elseif (!empty($account->picture) && empty($picture_time)) {
+    // We have a local picture, but picture was removed on server. Delete!
+    $edit['account']['picture'] = new stdClass();
+  }
+  else {
+    // Finally, keep whatever we had so far. If we don't specifically
+    // include this, the picture is removed in user_save().
+    // @todo: This is most likely obsolete and can be removed, since
+    //   http://drupal.org/node/935592 is now fixed.
+    $edit['account']['picture'] = $account->picture;
+  }
+
+  // Yes, we need to save the fields in each category in an individual
+  // user_save() call. This is how the API supports saving user data.
+  foreach($edit as $category => $fields) {
+    user_save($account, $fields, $category);
+  }
+}
+
+/**
+ * Mapping of Attribute Exchange namespace URIs to internal profile fields.
+ *
+ * Predefined URIs are documented at http://www.axschema.org/types/
+ */
+function gardens_client_ax_uri_mapping() {
+  return array(
+    // Remote picture URI of the user. The handling code
+    // fetches the image and saves it as a local user picture.
+    'http://axschema.org/media/image/default' => array('picture', 'account'),
+    // Date of the picture's last modification, so we can avoid downloading it.
+    'http://drupalgardens.com/axschema/picture_time' => array('picture_time'),
+
+    // @todo extend user data sharing coverage later. This is outdated.
+    // Maps to full name in custom user profile.
+    // 'http://axschema.org/namePerson' => array('profile_fullname', 'Personal information'),
+    // Custom profile field with a self-crafted namespace to identify.
+    // Just a freeform text field also known as
+    // http://www.w3.org/2001/XMLSchema#normalizedString.
+    // 'http://gardens.acquia.com/axschema/color' => array('profile_color', 'Personal information'),
+  );
+}
+
+/**
+ * Returns, and optionally stores, the current OpenID response for a user registration.
+ *
+ * When a new user is being registered via OpenID, the OpenID module stores the
+ * response from the server in a session variable, but deletes it before we are
+ * done with it. This function is therefore used to persist this data for a
+ * longer time, in our own custom session variable.
+ *
+ * @param $response
+ *   (optional) To store the OpenID response, pass it in via this parameter.
+ *
+ * @return
+ *   The current stored OpenID response, or an empty array if there is none
+ *   (i.e., if we are not currently in an OpenID registration flow).
+ *
+ * @see gardens_client_clear_openid_response()
+ * @see gardens_features_user_registration_openid_response()
+ */
+function gardens_client_user_registration_openid_response($response = NULL) {
+  // We need to use a session variable here, rather than drupal_static(), since
+  // we require access to the response over multiple page requests (e.g., if a
+  // user registering via OpenID is redirected to the site-specific user
+  // registration form in order to fill out profile fields).
+  if (isset($response)) {
+    $_SESSION['gardens_client_user_registration_openid_response'] = $response;
+  }
+  return isset($_SESSION['gardens_client_user_registration_openid_response']) ? $_SESSION['gardens_client_user_registration_openid_response'] : array();
+}
+
+/**
+ * Clears the currently stored OpenID response for user registration.
+ *
+ * @see gardens_client_user_registration_openid_response()
+ */
+function gardens_client_clear_openid_response() {
+  unset($_SESSION['gardens_client_user_registration_openid_response']);
+}
+
+// == Login UI =================================================================
+
+/**
+ * Implements hook_admin_paths().
+ */
+function gardens_client_admin_paths() {
+  $paths = array(
+    // Make sure requests going to the gardener will open in the overlay.
+    'gardener/*' => TRUE,
+    // Make sure requests coming back from gardener which might require
+    // keeping the overlay option will stay in the overlay.
+    'openid/authenticate' => TRUE,
+    'gardens-login' => TRUE,
+    // Since user/register is a publicly accessible path, we only want to show
+    // it in the overlay and admin theme when we need to.
+    'user/register' => gardens_client_in_overlay_registration(),
+  );
+
+  return $paths;
+}
+
+/**
+ * Returns TRUE when in the process of an OpenID registration that should be in the overlay.
+ */
+function gardens_client_in_overlay_registration() {
+  return gardens_client_user_registration_openid_response() && variable_get('gardens_client_overlay_for_registration', 1);
+}
+
+/**
+ * Implements hook_block_info().
+ */
+function gardens_client_block_info() {
+  return array(
+    'login' => array(
+      'info' => scarecrow_force_openid() ? t('Drupal Gardens login') : t('User login'),
+    ),
+    'site-manager' => array(
+      'info' => t('Drupal Gardens site manager'),
+    ),
+  );
+}
+
+/**
+ * Implements hook_block_view().
+ */
+function gardens_client_block_view($delta = '') {
+  if ($delta == 'login' && user_is_anonymous()) {
+    // For sites using Janrain Capture, there is only one login/register link.
+    if (module_exists('janrain_capture') && variable_get('janrain_capture_enforce', FALSE)) {
+      $signin_link = janrain_capture_signin_link();
+      $signin_link['#title'] = t('Log in or sign up');
+      return array(
+        'content' => $signin_link
+      );
+    }
+
+    // When there is a condition to redirect to https or http for the login or
+    // register we can not use the JavaScript powered dialog to log in as it would error
+    // out due to breaching the 'same origin' policy. Detect here if a redirect
+    // would happen, will be used in the next section.
+    $login_redirect = FALSE;
+    if (module_exists('securepages')) {
+      // Redirect would happen when exactly one of these are TRUE:
+      // - login or register path is in the protected list
+      // - we are on https
+      // Check on user/login/ajax (which the JavaScript will use) rather than
+      // user/login in case there are two different values in the secure and
+      // ignore variables - like securing user/login* but ignoring user/login.
+      $login_redirect = (securepages_match('user/login/ajax') || securepages_match('user/register/ajax')) xor !empty($GLOBALS['is_https']);
+    }
+
+    // For Gardener OpenID sites, point users to the gardener/ login path.
+    if (scarecrow_force_openid()) {
+      $login_path = 'gardener/login';
+      $register_path = 'gardener/register';
+    }
+
+    // For local login sites with dialog_user, output login/register links
+    // structured such that they will open in a dialog.
+    elseif (module_exists('dialog_user') && !$login_redirect) {
+      drupal_add_library('dialog', 'dialog');
+      $login_link = l(t('Log in'), 'user/login/nojs', array('attributes' => array('title' => t('Log in'), 'class' => array('use-ajax', 'use-dialog'))));
+      $register_link = l(t('Sign up'), 'user/register/nojs', array('attributes' => array('title' => t('Create a new user account.'), 'class' => array('use-ajax', 'use-dialog'))));
+      return array(
+        'content' => t('!login_link or !register_link', array('!login_link' => $login_link, '!register_link' => $register_link)),
+      );
+    }
+
+    // For local login sites without dialog_user, use regular user/ links.
+    else {
+      $login_path = 'user/login';
+      $register_path = 'user/register';
+    }
+    return array(
+      'content' => t(
+        '<a href="@log-in-url">Log in</a> or <a href="@sign-up-url">Sign up</a>',
+        array(
+          '@log-in-url' => url($login_path, array('query' => user_login_destination())),
+          '@sign-up-url' => url($register_path, array('query' => user_login_destination())),
+        )
+      ),
+    );
+  }
+  elseif ($delta == 'site-manager' && user_access('access administration pages')) {
+    // @todo: we actually do not have any way to tell whether this user has a
+    // site to manage on Drupal Gardens. So we pretend if they have admin access,
+    // they might be able to manage sites.
+    return array(
+      'subject' => t('Site manager'),
+      'content' => '<p>' . t('Create new sites and manage your account.') . '</p><p>' . l(t('Go to the site manager'), scarecrow_get_gardener_url() . '/mysites') . '</p>',
+    );
+  }
+}
+
+/**
+ * Override for /user menu callback. Direct to centralized login form.
+ */
+function gardens_client_user_page() {
+  global $user;
+  if ($user->uid) {
+    menu_set_active_item('user/' . $user->uid);
+    return menu_execute_active_handler(NULL, FALSE);
+  }
+  else {
+    return gardens_openid_login_message();
+  }
+}
+
+/**
+ * Implements MODULE_preprocess_HOOK().
+ */
+function gardens_client_preprocess_overlay(&$variables) {
+  // During OpenID registration, do not display the page title above the
+  // overlay because we'll display it inside the page instead; see
+  // gardens_client_preprocess_html().
+  if (gardens_client_user_registration_openid_response()) {
+    $variables['title'] = '';
+  }
+}
+
+/**
+ * Implements MODULE_preprocess_HOOK().
+ */
+function gardens_client_preprocess_html(&$variables) {
+  // During OpenID registration inside the overlay, add a class to the page
+  // body so that themes can display the page title inside the overlay in these
+  // situations only (we prevented the page title from displaying above the
+  // overlay in gardens_client_preprocess_overlay()).
+  if (gardens_client_user_registration_openid_response() && overlay_get_mode() == 'child') {
+    $variables['classes_array'][] = 'overlay-login';
+  }
+}
+
+/**
+ * Override for the user/register page.
+ */
+function gardens_client_user_register_page() {
+  // If we are redirected to user/register in the middle of an OpenID
+  // registration, it's because the programmatic submission of the registration
+  // form failed (probably because there are profile fields that need to be
+  // filled out). In that case, show the user a modified version of the form
+  // that focuses on the profile fields and hides other distractions.
+  if ($response = gardens_client_user_registration_openid_response()) {
+    // If the site does not allow open registrations, temporarily allow them if
+    // the user who is trying to register was invited by a site owner. This
+    // allows the form below to be submitted successfully and the invited user
+    // to be registered right away.
+    gardens_misc_allow_open_user_registrations_if_user_was_invited($response);
+
+    // Make sure email verification is turned off for the remainder of this
+    // request. (We need it off for OpenID registrations, but the site may have
+    // it on in general if local user logins are allowed.)
+    $GLOBALS['conf']['user_email_verification'] = FALSE;
+
+    // Set a custom page title. We use a different title depending on whether
+    // we are inside or outside the overlay, since inside the overlay the user
+    // is not "inside" the site yet so it makes sense to refer to it in the
+    // third person, but outside the overlay it doesn't :)
+    if (variable_get('gardens_client_overlay_for_registration', 1)) {
+      drupal_set_title(t('The site !site-name wants to know more about you.', array('!site-name' => '<em class="placeholder">' . filter_xss_admin(gardens_client_site_name_or_domain()) . '</em>')), PASS_THROUGH);
+    }
+    else {
+      drupal_set_title(t('Complete your registration'));
+    }
+
+    // Remove breadcrumb.
+    drupal_set_breadcrumb(array());
+
+    // Clear messages from previous request. On submission in this request,
+    // the error message will show proper, if fields are still not properly
+    // set. This is to avoid the errors showing up from OpenID module trying
+    // to submit this form in the previous request and failing (that is why
+    // we are here at the first place).
+    drupal_get_messages();
+
+    // Add CSS to make page content look more like the pages from gardener.
+    if (variable_get('gardens_client_overlay_for_registration', 1)) {
+      drupal_add_css(drupal_get_path('module', 'gardens_client') . '/gardens_client_register.css');
+    }
+
+    $form = drupal_get_form('user_register_form');
+    // Hide user name, password and OpenID URL info.
+    $form['account']['#access'] = FALSE;
+    $form['openid_display']['#access'] = FALSE;
+    // Retitle submit button.
+    $form['actions']['submit']['#value'] = t('Finish');
+
+    return $form;
+  }
+  // If we're not in the middle of an OpenID registration, either display the
+  // normal user registration page (if local logins are allowed), or display
+  // the centralized login message, as in gardens_client_user_page(), if local
+  // logins are not allowed.
+  elseif (!scarecrow_force_openid()) {
+    return drupal_get_form('user_register_form');
+  }
+  else {
+    return gardens_openid_login_message();
+  }
+}
+
+/**
+ * Override of /user/login and /user/password (and sometimes /user/register).
+ */
+function gardens_openid_login_message() {
+  drupal_set_title(t('Log in or sign up'));
+  $links = gardens_client_block_view('login');
+  return '<p>' . t('This site is hosted on the !service_name_long service.', array('!service_name_long' => variable_get('gardens_service_name_long', 'Drupal Gardens'))) . ' ' . $links['content'] . '</p>';
+}
+
+/**
+ * Override of the access callback for user/register.
+ */
+function gardens_client_user_register_access() {
+  // Same as user_register_access(), but when we are in the middle of an OpenID
+  // registration, allow access to user/register to users who have been invited
+  // (even if the site doesn't normally allow user registrations), since they
+  // might need it to fill out profile fields.
+  if (user_register_access()) {
+    return TRUE;
+  }
+  elseif ($response = gardens_client_user_registration_openid_response()) {
+    return user_is_anonymous() && gardens_misc_openid_response_user_invite_exists($response);
+  }
+  else {
+    return FALSE;
+  }
+}
+
+/**
+ * Specific theme callback for user/register.
+ */
+function gardens_client_user_register_theme() {
+  // When user registration takes place in the overlay, display it in the
+  // Blossom theme for all users (regardless of whether they would normally
+  // have permission to see that theme). We want to use Blossom here even if it
+  // is not enabled, rather than variable_get('admin_theme'), in order to match
+  // the admin theme provided by the Gardener in previous parts of the user
+  // registration workflow.
+  if (gardens_client_in_overlay_registration()) {
+    // Since Blossom may not be enabled, we need to pretend that it is the
+    // admin theme and enabled for this page request; this is needed so that
+    // drupal_theme_access() accepts it as a valid theme when it is returned
+    // from this function, and also so any code that calls
+    // system_get_info('theme') will work correctly. See similar code in
+    // themebuilder_screenshot_custom_theme().
+    $theme_name = 'blossom';
+    $GLOBALS['conf']['admin_theme'] = $theme_name;
+    system_list('theme');
+    $lists = &drupal_static('system_list');
+    $lists['theme'][$theme_name]->status = TRUE;
+    return $theme_name;
+  }
+}
+
+/**
+ * Implements hook_form_FORM_ID_alter().
+ */
+function gardens_client_form_user_register_form_alter(&$form, &$form_state) {
+  // When a new user is being registered via OpenID, the OpenID module stores
+  // the response from the server in a session variable for use in
+  // hook_form_USER_REGISTER_FORM_alter(), but then deletes it before we are
+  // done with it.  Therefore, we need to persist the data here.
+  if (isset($_SESSION['openid']['response'])) {
+    gardens_client_user_registration_openid_response($_SESSION['openid']['response']);
+  }
+
+  $form['#validate'][] = 'gardens_client_user_register_validate';
+  $form['#submit'][] = 'gardens_client_user_register_submit';
+}
+
+/**
+ * Custom validation handler for user_register_form().
+ */
+function gardens_client_user_register_validate($form, &$form_state) {
+  // If an OpenID registration is in progress and this is a programmatic form
+  // submission from openid_authentication(), make sure the registration fails
+  // if there are *any* user profile fields that are supposed to appear on the
+  // user registration form and that the user (who is not logged in yet) has
+  // access to edit. This ensures that the user will be redirected to
+  // user/register after the OpenID process is done and be given a chance to
+  // fill these fields out before their account is created.  (Note: The core
+  // OpenID module will do this automatically if there are *required* profile
+  // fields without a default value, because then the programmatic form
+  // submission will fail due to the missing fields. But here, we want it to
+  // happen in other cases too, so that the "Display on user registration form"
+  // checkbox on user fields actually has meaning in the context of the Gardens
+  // OpenID process.)
+  if (!empty($form_state['programmed']) && gardens_client_user_registration_openid_response()) {
+    foreach (field_info_instances('user', 'user') as $instance) {
+      if (!empty($instance['settings']['user_register_form'])) {
+        $field_name = $instance['field_name'];
+        $field = field_info_field($field_name);
+        if (field_access('edit', $field, 'user', $form['#user'])) {
+          // We don't need or want a user facing message here, so just set an
+          // error on the entire form to make it fail validation.
+          form_error($form);
+          break;
+        }
+      }
+    }
+  }
+}
+
+/**
+ * Custom submit handler for user_register_form().
+ */
+function gardens_client_user_register_submit($form, &$form_state) {
+  // If the user registration form is submitted via the UI while an OpenID
+  // registration is in process, that can only be because the original,
+  // programmatic form submission in openid_authentication() failed (e.g., due
+  // to the site having user profile fields that needed to be filled out), and
+  // the user has now come back and completed the registration manually. Under
+  // this scenario, we need to do the steps here that we would have done for a
+  // normal OpenID registration in gardens_client_openid_response(), since the
+  // OpenID module does not invoke hook_openid_response() unless the OpenID
+  // login itself was successful.
+  if (empty($form_state['programmed']) && ($response = gardens_client_user_registration_openid_response())) {
+    gardens_client_update_ax_data($response, $form_state['user']);
+    // The OpenID registration is now complete, so clear our session data.
+    gardens_client_clear_openid_response();
+  }
+}
+
+/**
+ * Provide a simple user interface to turn off the admin use of the overlay.
+ */
+function gardens_client_admin_settings_form($form, &$form_state) {
+  $theme_options = array(
+    'seven' => t('Seven (Default Drupal administration theme)'),
+    'blossom' => t('Blossom (Drupal Gardens administration theme)'),
+  );
+  module_load_include('inc', 'system', 'system.admin');
+  $form = system_themes_admin_form($form, $form_state, $theme_options);
+
+  $form['overlay_status'] = array(
+    '#type' => 'fieldset',
+    '#weight' => -10,
+    '#title' => t('Overlay'),
+  );
+  if (scarecrow_force_openid()) {
+    $title = t('Use the overlay for custom user fields during registration');
+    $description = t("During registration, account fields are always displayed in the overlay. If enabled, custom fields will use the overlay also, instead of the site's page.");
+  }
+  else {
+    $title = t('Use the overlay for custom user fields during !service_name_long account registration', array(
+      '!service_name_long' => variable_get('gardens_service_name_long', 'Drupal Gardens'),
+    ));
+    $description = t("When a user registers with a !service_name_long account, fields provided by !service_name_long are always displayed in the overlay. If enabled, custom fields will use the overlay also, instead of the site's page.", array(
+      '!service_name_long' => variable_get('gardens_service_name_long', 'Drupal Gardens'),
+    ));
+  }
+  $form['overlay_status']['gardens_client_overlay_for_registration'] = array(
+    '#type' => 'checkbox',
+    '#title' => $title,
+    '#description' => $description,
+    '#default_value' => variable_get('gardens_client_overlay_for_registration', 1),
+  );
+  $form['overlay_status']['gardens_client_overlay_status'] = array(
+    '#type' => 'checkbox',
+    '#title' => t('Use the overlay for administration pages'),
+    '#default_value' => variable_get('gardens_client_overlay_status', 1),
+  );
+
+  $form['actions'] = $form['admin_theme']['actions'];
+  unset($form['admin_theme']['actions']);
+
+  return $form;
+}
+
+/**
+ * Extra form submission callback for overlay settings form.
+ */
+function gardens_client_admin_settings_form_submit(&$form, &$form_state) {
+  drupal_set_message(t('The configuration options have been saved.'));
+  variable_set('admin_theme', $form_state['values']['admin_theme']);
+  variable_set('node_admin_theme', $form_state['values']['node_admin_theme']);
+  variable_set('gardens_client_overlay_status', $form_state['values']['gardens_client_overlay_status']);
+  variable_set('gardens_client_overlay_for_registration', $form_state['values']['gardens_client_overlay_for_registration']);
+
+  if (empty($form_state['values']['gardens_client_overlay_status'])) {
+    if (!empty($form['overlay_status']['gardens_client_overlay_status']['#default_value'])) {
+      // If we were in the overlay and the overlay was disabled, we need to
+      // close it down and prevent the form redirect.
+      gardens_client_close_overlay('admin/config/user-interface/overlay');
+      $form_state['redirect'] = '';
+    }
+  }
+  elseif (empty($form['overlay_status']['gardens_client_overlay_status']['#default_value'])) {
+    // Going to the overlay from the non-overlay admin. Since the admin
+    // pages will not activate the overlay, we need to redirect out from
+    // there (to the front page).
+    $form_state['redirect'] = '';
+  }
+}
+
+/**
+ * Request to reload the parent page and close the overlay.
+ */
+function gardens_client_close_overlay($redirect = NULL) {
+  overlay_request_page_refresh();
+  overlay_close_dialog($redirect);
+}
+
+/**
+ * Implements hook_menu_site_status_alter().
+ */
+function gardens_client_menu_site_status_alter(&$menu_site_status, $path) {
+  // Allow access to openid/authenticate even if site is in offline mode.
+  if ($menu_site_status == MENU_SITE_OFFLINE && user_is_anonymous()) {
+    if (preg_match('!^gardens-login(/|$)!', $path) || preg_match('!^gardener(/|$)!', $path)) {
+      $menu_site_status = MENU_SITE_ONLINE;
+    }
+  }
+}
+
+/**
+ * Implementation of hook_cron().
+ *
+ * This function is responsible for gathering site statistics and
+ * sending them to the gardener site once per day.
+ */
+function gardens_client_cron() {
+  // When in development, this is set to FALSE.
+  // For some reason, Simpletest isn't reading the variable from settings.php
+  // so we've added the $GLOBAL here.
+  if (variable_get('gardens_client_send_stats', TRUE) &&
+    !isset($GLOBALS['drupal_test_info']) &&
+    !drupal_installation_attempted() /* Don't run this during install */) {
+    $last_stats_run = variable_get('gardens_stats_time', 0);
+    // Only gather and sends the stats once per day.  Since we would
+    // like site statistics every day we set a threshold of 18 hours
+    // after which site data will be sent again.  If we do this every
+    // 24 hours then we can lose site data because cron may have been
+    // run just less than 24 hours ago due to the inherent variance of
+    // the cron service as it works through perhaps less sites than
+    // the day before (due to site deletions) or because cron on each
+    // site takes more or less time than the day before.
+    $eighteen_hours = 60*60*18; // 18 hours expressed in seconds.
+    if (REQUEST_TIME >= ($last_stats_run + $eighteen_hours)) {
+      gardens_client_send_site_data();
+    }
+  }
+
+  gardens_client_check_twitter_alerts();
+}
+
+function gardens_client_send_site_data() {
+  // Lock access to the code that sends site data.  If the code is currently
+  // being executed we can exit and not worry about sending it again.  If this
+  // code is executed multiple times simultaneously, PDO exceptions occur on
+  // the gardener.
+  if (lock_acquire('gardens_client_site_data', 240.0)) {
+    $path = dirname(__FILE__);
+    include_once("$path/stats.inc");
+    $stats = gardens_client_generate_site_stats();
+    $rpc_result = gardens_client_call_gardener('set.site.stats', array($stats));
+    if ($rpc_result !== NULL) {
+      variable_set('gardens_stats_time', REQUEST_TIME);
+    }
+    else {
+      syslog(LOG_ERR, 'GardensError: AN-22473 - Failed to send site stats for site GardensError:' .$_SERVER['HTTP_HOST']);
+    }
+    // Also get data from the gardener.
+    if (!gardens_client_phone_home()) {
+      if (gardens_client_gardener_unreachable_alert()) {
+        syslog(LOG_ERR, 'GardensError: Failed to retrieve Gardener data for site GardensError:' .$_SERVER['HTTP_HOST']);
+      }
+    }
+    else {
+      gardens_client_gardener_unreachable_alert(TRUE);
+    }
+  }
+}
+
+function gardens_client_check_twitter_alerts() {
+  // Check to see if there are any alerts in the twitter stream
+  $alerts = variable_get('gardens_alert', array());
+  // Global killswitch for the gardens alerts.
+  if (!variable_get('gardens_show_twitter_alerts', TRUE)) {
+    // Clear any existing alerts.
+    if (!empty($alerts)) {
+      variable_set('gardens_alert', array());
+    }
+    return;
+  }
+  $last_update = isset($alerts['last_update']) ? $alerts['last_update'] : 0;
+
+  // Default to displaying alerts from the production Twitter stream; only use
+  // the test account if we're sure we're in a test environment.
+  $production = (empty($_ENV['AH_SITE_ENVIRONMENT']) || $_ENV['AH_SITE_ENVIRONMENT'] === 'prod');
+  $interval = $production ? 600 : 1;
+
+  if ($last_update + $interval < time()) {
+    $screenname = $production ? 'drupalgardens' : 'GardensTester1';
+
+    module_load_include('inc', 'aggregator', 'aggregator.fetcher');
+    module_load_include('inc', 'aggregator', 'aggregator.parser');
+    $feed = new stdClass();
+    $feed->url = 'http://api.twitter.com/1/statuses/user_timeline.rss?screen_name=' . $screenname . '&count=200';
+    $feed->etag = NULL;
+    $feed->modified = $last_update;
+    $feed->link = '';
+
+    $success = aggregator_aggregator_fetch($feed);
+    $success = $success ? aggregator_aggregator_parse($feed) : FALSE;
+
+    if ($success) {
+      global $user;
+      $dismissed = isset($alerts['dismissed']) ? $alerts['dismissed'] : 0;
+      $timestamp = isset($alerts['timestamp']) ? $alerts['timestamp'] : 0;
+      $user_dismissed = isset($user->data['alert_dismissed']) ? $user->data['alert_dismissed'] : 0;
+      foreach($feed->items as $item) {
+        $time = isset($item['pubdate']) ? strtotime($item['pubdate']) : 0;
+
+        // Check to make sure the message is newer than the most recent dismissal
+        // and the most recent hashed message.
+        if ($time > $dismissed && $time > $timestamp && $time > $user_dismissed) {
+          if ($position = strpos($item['description'], '#alert')) {
+            $raw_message = check_plain(substr($item['description'], $position + 6));
+            // Turn URLs in the message into links.
+            $filters = filter_get_filters();
+            $filter = new stdClass();
+            $filter->settings = array(
+              'filter_url_length' => 140,
+            );
+            $message = $filters['filter_url']['process callback']($raw_message, $filter);
+            // Replace confusing URLs from the Twitter message (e.g., links
+            // pointing to bit.ly) with the actual URL they redirect to
+            // (usually a URL on drupalgardens.com) so that the alert message
+            // is friendlier and more professional-looking when displayed
+            // inside the Gardens site.
+            $html_dom = filter_dom_load($message);
+            $links = $html_dom->getElementsByTagName('a');
+            $replaced = FALSE;
+            foreach ($links as $link) {
+              $original_url = $link->getAttribute('href');
+              $result = drupal_http_request($original_url, array('max_redirects' => 0));
+              if (isset($result->redirect_url)) {
+                $replaced = TRUE;
+                $link->setAttribute('href', $result->redirect_url);
+                // Only replace the anchor text if it originally consisted of
+                // the URL itself.
+                if ($link->nodeValue == $original_url) {
+                  // In the special case where the link appears at the end of
+                  // the message (after the last sentence), we can assume it's
+                  // a "read more" link and use that as the anchor text.
+                  if (preg_match('/\.\s' . preg_quote($original_url, '/') . '$/', $raw_message)) {
+                    $link->nodeValue = t('Read more');
+                  }
+                  // Otherwise use the new URL as the anchor text.
+                  else {
+                    $link->nodeValue = $result->redirect_url;
+                  }
+                }
+              }
+            }
+            if ($replaced) {
+              $message = filter_dom_serialize($html_dom);
+            }
+            // Save the final alert message and its timestamp.
+            $alerts['message'] = $message;
+            $alerts['timestamp'] = $time;
+          }
+          else if (strpos($item['description'], '#clear')) {
+            $alerts['dismissed'] = $time;
+            $alerts['timestamp'] = $time;
+          }
+        }
+      }
+    }
+    $alerts['last_update'] = time();
+    variable_set('gardens_alert', $alerts);
+  }
+}
+
+/**
+ * Helper function to retrieve stored data from the Gardener.
+ */
+function gardens_client_data_get($module, $name = NULL) {
+  $data = variable_get('gardens_client_gardener_data', array());
+  if ($name) {
+    return (isset($data[$module]) && isset($data[$module][$name]) ? $data[$module][$name] : NULL);
+  }
+  else {
+    return (isset($data[$module]) ? $data[$module] : array());
+  }
+}
+
+// == XML-RPC integration ======================================================
+
+/**
+ * Make an XML-RPC request on the Gardener and record the data.
+ *
+ * Returns TRUE if data was retrieved, FALSE otherwise.
+ */
+function gardens_client_phone_home() {
+  // This feature can be disabled for development.
+  if (variable_get('gardens_client_phone_home', TRUE)) {
+    $nid = gardens_client_get_site_identifier();
+    $rpc_result = (array) gardens_client_call_gardener('phone.home', array($nid));
+    if ($rpc_result) {
+      $data_before = variable_get('gardens_client_gardener_data', array());
+      // Store the new value.
+      variable_set('gardens_client_gardener_data', $rpc_result);
+
+      // Give modules a chance to look at data changes and act on them
+      // (such as rebuild caches of stuff that is limited).
+      foreach (module_implements('gardens_client_phone_home') as $module) {
+        $function = $module . '_gardens_client_phone_home';
+        $function($data_before, $rpc_result);
+      }
+      return TRUE;
+    }
+  }
+
+  return FALSE;
+}
+
+/**
+ * Get the nid of the Gardener site node corresponding to this site.
+ */
+function gardens_client_get_site_identifier() {
+  global $databases;
+
+  // For production and staging sites, the site identifier is the same as the
+  // DB name.
+  if (scarecrow_is_enabled()) {
+    $gsite = $databases['default']['default']['database'];
+    $nid = ltrim($gsite, 'g');
+    return $nid;
+  }
+  // Allow developers testing locally to specify their site nid.
+  else {
+    return variable_get('acquia_gardens_site_identifier', FALSE);
+  }
+}
+
+/**
+ * Make an XML-RPC request on the Gardener.
+ *
+ * @param $method
+ *   The method to call on the Gardener. It will be prefixed with the
+ *   "acquia.gardens" namespace.
+ * @param $data
+ *   The data to pass to the method being called. Defaults to an empty array.
+ *
+ * @return
+ *   The result of the XML-RPC call, if any, or NULL if no result was available.
+ */
+function gardens_client_call_gardener($method, $data = array()) {
+  @include_once('acquia_gardens_xmlrpc.inc');
+  if (!function_exists('acquia_gardens_call')) {
+    $path	= DRUPAL_ROOT .'/../library';
+    @include_once("$path/acquia_gardens_xmlrpc.inc");
+  }
+  if (function_exists('acquia_gardens_call')) {
+    try {
+      $result = acquia_gardens_call($method, $data, scarecrow_get_gardener_url());
+      return $result;
+    }
+    catch (AcquiaFieldsRpcException $e) {
+      syslog(LOG_INFO, "Error calling the Gardener: " . $e->getMessage());
+      return NULL;
+    }
+  }
+  else {
+    // We are probably in a local development environment. Local developers
+    // can put a file named acquia_gardens_xmlrpc.inc into their include path
+    // if they want to mock up a version that works locally.
+    syslog(LOG_ERR, "GardensError: AN-22475 - acquia_gardens_xmlrpc.inc was not included, gardens_client_call_gardener has failed for method GardensError: method: $method.");
+    return NULL;
+  }
+}
+
+/**
+ * Tells the caller if an alert should be sent for gardener unreachability.
+ *
+ * Keeps a count of how many times the error has occurred and can reset the
+ * counter if all OK.  Handling the error logging here would be cumbersome, as
+ * different callers do different things with the error (exception, syslog etc).
+ * Cache flushes caused by the variable_set should be acceptable as the phone
+ * home code itself calls variable_set().
+ *
+ * @param $reset
+ *   Pass TRUE to reset the error counter to zero.
+ *
+ * @return
+ *   TRUE if this site has exceeded its threshold for being unable to reach the
+ *   gardener.
+ *   FALSE if all is OK, or the threshold has not yet been reached
+ */
+function gardens_client_gardener_unreachable_alert($reset = FALSE) {
+  if ($reset) {
+    // default is 0, so no need to keep this set.
+    variable_del('gardens_client_gardener_unreachable_count');
+    return FALSE;
+  }
+
+  variable_set('gardens_client_gardener_unreachable_count', variable_get('gardens_client_gardener_unreachable_count', 0) + 1);
+  if (variable_get('gardens_client_gardener_unreachable_count', 0) > variable_get('gardens_client_gardener_unreachable_threshold', 3)) {
+    return TRUE;
+  }
+  return FALSE;
+}
+
+/**
+ * Whether the subscription used by the site allows local user accounts.
+ */
+function gardens_client_subscription_forced_openid() {
+  return (bool) gardens_client_data_get('acquia_zuora', 'force_openid');
+}
+
+/**
+ * Implements hook_form_FORM_ID_alter().
+ */
+/* Disabled for now. Will need to build out proper for SMB.
+function gardens_client_form_user_admin_settings_alter(&$form, &$form_state) {
+  $forced_openid = gardens_client_subscription_forced_openid();
+  $using_openid = scarecrow_force_openid();
+
+  $message = '';
+  if ($using_openid) {
+    $message = t('User accounts are registered with and shared within !service_name_long.', array('!service_name_long' => variable_get('gardens_service_name_long', 'Drupal Gardens')));
+    if (!$forced_openid) {
+      $message .= '<br />' . t() . t('You can optionally <a href="@enable-local">enable the use of local user accounts</a>.', array('@enable-local' => url('admin/config/people/accounts/local-accounts')));
+    }
+  }
+  else {
+    $message = t('User accounts for administrators are registered with and shared within !service_name_long. Other user accounts are local to this website only.', array('!service_name_long' => variable_get('gardens_service_name_long', 'Drupal Gardens')));
+  }
+  $form['registration_cancellation']['force_openid'] = array(
+    '#type' => 'item',
+    '#title' => t('Account sharing'),
+    '#markup' => $message,
+    '#weight' => -200,
+  );
+}*/
+
+/**
+ * Confirmation form to turn on local user accounts.
+ */
+function gardens_client_allow_local_user_logins_form($form, &$form_state) {
+  $question = t('Are you sure you want to turn on local user accounts?');
+  $description = t('Currently, user accounts are registered with and shared within !service_name_long. Allowing local user accounts means users will be individually managed on this site and no cross-site relations are maintained. <strong>This change is irreversible.</strong>', array('!service_name_long' => variable_get('gardens_service_name_long', 'Drupal Gardens')));
+  return confirm_form($form, $question, 'admin/config/people/accounts', $description);
+}
+
+/**
+ * Form submission callback for the confirmation form.
+ */
+function gardens_client_allow_local_user_logins_form_submit($form, &$form_state) {
+  scarecrow_allow_local_user_logins();
+  drupal_set_message(t('Local user account creation enabled.'));
+  $form_state['redirect'] = 'admin/config/people/accounts';
+}
+
+/**
+ * The EmailVerifier class is responsible for determining whether this site is
+ * owned by someone who has verified their email address, and whether they
+ * need a reminder.
+ */
+class EmailVerifier {
+
+  private $verified = 0;
+  private $site_to_be_blocked_date = '';
+  private $site_to_be_deleted_date = '';
+  private $warn_site_deletion = '';
+  private $message_muted = 0;
+  private $last_updated = 0;
+  // How often we re-check status at the gardener.
+  const CACHE_STATUS_FOR = 300;
+  // If the user mutes, how long until we nag again.
+  const MUTE_FOR = 86400;
+
+  public function __construct() {
+    $status = (array) gardens_client_data_get('gardens_signup', 'verification_status');
+    foreach ($status as $key => $value) {
+      $this->$key = $value;
+    }
+    $this->message_muted = variable_get('gardens_client_verification_message_muted', NULL);
+    if (!$this->isVerified()) {
+      $this->scheduleStatusCheck();
+    }
+  }
+
+  /**
+   * Indicates whether the email has been verified.
+   *
+   * @return
+   *   TRUE if the email has been verified; FALSE otherwise.
+   */
+  public function isVerified() {
+    // PHP '0' evaluates to TRUE.
+    if ($this->verified === '0' || !$this->verified) {
+      return FALSE;
+    }
+    return TRUE;
+  }
+
+  /**
+   * Determine whether the user needs a reminder to verify their email address.
+   *
+   * @return <boolean>
+   *   TRUE if they need a reminder, FALSE otherwise.
+   */
+  public function needsBlockReminder() {
+    // Only pester site owners who have not verified their address and who
+    // have not acknowledged the nag box recently.
+    return !$this->isVerified() && !$this->isMuted() && scarecrow_is_site_owner();
+  }
+
+  /**
+   * Determine whether the user needs a strong reminder to verify their email address.
+   *
+   * @return <boolean>
+   *   TRUE if they need a reminder, FALSE otherwise.
+   */
+  public function needsDeleteReminder() {
+    // Only pester site owners who have not verified their address and who
+    // have not acknowledged the nag box recently.
+    return !$this->isVerified() && scarecrow_is_site_owner() && $this->warn_site_deletion;
+  }
+
+  /**
+   * Determine whether the site should be blocked from access.
+   */
+  public function needsSiteBlock() {
+    return !$this->isVerified() && $this->warn_site_deletion;
+  }
+
+  /**
+   * Get information from the Gardener about this site's verification status.
+   */
+  private function scheduleStatusCheck() {
+    // If we haven't requested verification status from the gardener recently,
+    // schedule a check at the end of this page request. Never do this during
+    // installation, since the site (especially dev sites) might not be set up
+    // correctly for it yet.
+    $recheck_at = $this->last_updated + self::CACHE_STATUS_FOR;
+    if (REQUEST_TIME > $recheck_at && !drupal_installation_attempted()) {
+      drupal_register_shutdown_function('gardens_client_phone_home');
+    }
+  }
+
+  /**
+   * Determine whether the site owner has closed the verification nag recently.
+   *
+   * @return <boolean>
+   *   TRUE if the nag has been muted recently, FALSE otherwise.
+   */
+  private function isMuted() {
+    if (empty($this->message_muted)) {
+      return FALSE;
+    }
+    $start_nagging = $this->message_muted + self::MUTE_FOR;
+    return (REQUEST_TIME < $start_nagging);
+  }
+
+  /**
+   * Returns personalized reminder text for use in the nag box.
+   */
+  public function getReminderText($deadline_type = 'to_be_blocked') {
+    $reminder = '<div>' . t('<strong>Check your e-mail to complete registration.</strong> An e-mail has been sent to @email. ', array('@email' => $GLOBALS['user']->mail)) . '</div>';
+    // Skip this part if we don't have a date.
+    $date = $this->getVerificationDeadline($deadline_type);
+    if ($date) {
+      $reminder .= t('Click the link in the message by @date to avoid having your account and site deleted.', array('@date' => $date));
+    }
+    else {
+      $reminder .= t('Click the link in the message immediately to avoid having your account and site deleted.');
+    }
+
+    $id = 'resend-email-link';
+    $url = 'gardener/resend-verification-email/' . drupal_get_token('gardens_client_resend_verification_email');
+    $reminder .= '<div class="resend-email">' . l(t('Resend'), $url, array('attributes' => array('id' => $id))) . '</div>';
+
+    $ajax_settings = array();
+    $ajax_settings[$id . '-close'] = array(
+      'selector' => '#' . $id,
+      'url' => base_path() . $url,
+      'event' => 'click',
+    );
+    drupal_add_js(array('ajax' => $ajax_settings), 'setting');
+
+    return $reminder;
+  }
+
+  /**
+   * Return the email verification deadline in human-readable string format.
+   */
+  private function getVerificationDeadline($deadline_type) {
+    $property = ($deadline_type == 'to_be_deleted') ? 'site_to_be_deleted_date' : 'site_to_be_blocked_date';
+    if (!empty($this->$property)) {
+      // Properties come from the Gardener in human-readable format.
+      // TODO: Internationalize.
+      return $this->$property;
+    }
+    return FALSE;
+  }
+}
+
+/**
+ * Implements hook_gardens_health_report();
+ */
+function gardens_client_gardens_health_report() {
+  $client = new GardensClientHealthReport('Gardens Client XMLRPC');
+  return array($client);
+}

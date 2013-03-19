@@ -1,0 +1,5 @@
+name = Site Info
+description = Display diagnostic information about a site
+core = 7.x
+files[] = siteinfo.module
+hidden = TRUE

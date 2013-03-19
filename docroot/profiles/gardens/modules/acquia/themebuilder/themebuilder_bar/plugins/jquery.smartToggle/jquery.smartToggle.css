@@ -1,0 +1,22 @@
+/* --------------------------------------------
+
+jquery.smartToggle.css
+
+Project:     Acquia ThemeBuilder
+Version:     1.0
+Author:      Acquia Engineering Team
+URL:         http://
+Copyright:   Acquia, Inc.
+License:     
+  
+----------------------------------------------- */
+
+/* @group Behavior 
+----------------------------------------------- */
+
+.smart-hidden {
+  left: -999em !important;
+  position: absolute !important;
+  top: 0 !important;
+  width: 100% !important;
+}

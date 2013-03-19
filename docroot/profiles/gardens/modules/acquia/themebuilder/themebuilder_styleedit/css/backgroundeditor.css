@@ -1,0 +1,61 @@
+/* @group Background Tab */
+
+#themebuilder-style-background table {
+	text-align:left;
+}
+
+#themebuilder-style-background .background-image {
+  background-image:url(../no-image.png);
+	width:75px;
+	height:75px;
+	border: 1px solid #cccccc;
+	margin: 0px 7px 0px 3px;
+}
+
+#themebuilder-style-background .background-image img{
+  width:75px;
+	height:75px;
+}
+
+#themebuilder-style-background .background-image img {
+  max-width:100px;
+}
+
+#themebuilder-style-background td {
+	padding: 5px 0px 0px 0px !important;
+	height: 24px;
+}
+
+#themebuilder-style-background #upload {
+  display:block;
+
+}
+
+#style-background-color.disabled {
+	background-color: transparent;
+	background-image: url(transparent.png);
+}
+
+#themebuilder-style-background #uploader{
+	background: url(../../themebuilder_bar/images/tb-button-upload.png) no-repeat;
+	width: 82px;
+	height: 25px;
+	color: black;
+	position: relative;
+	text-indent: -999px;
+	cursor: pointer;
+	 margin-right: 10px;
+}
+
+#themebuilder-style-background #background-remove{
+	background: none;
+}
+
+#uploader input {
+  position:absolute;
+  right:0;
+  top:0;
+  opacity:0;
+  filter:alpha(opacity=0); /* for IE */
+}
+

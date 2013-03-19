@@ -1,0 +1,712 @@
+<?php
+// $Id:$
+
+function themebuilder_compiler_schema() {
+  $schema['themebuilder_css'] = array(
+    'description' => 'CSS properties.',
+    'fields' => array(
+      'pid' => array(
+        'description' => 'Primary Key: Unique css ID.',
+        'type' => 'serial',
+        'unsigned' => TRUE,
+        'not null' => TRUE,
+      ),
+      'aid' => array (
+        'description' => 'The asset this property is attached to.',
+        'type' => 'int',
+        'unsigned' => TRUE,
+        'not null' => TRUE,
+      ),
+      'theme_name' => array(
+        'description' => 'The name of the associated theme.',
+        'type' => 'varchar',
+        'length' => 128,
+        'not null' => TRUE,
+        'default' => '',
+      ),
+      'selector' => array(
+        'description' => 'The css selector.',
+        'type' => 'varchar',
+        'length' => 2048,
+        'not null' => TRUE,
+        'default' => '',
+      ),
+      'property_name' => array(
+        'description' => 'The name of the css property.',
+        'type' => 'varchar',
+        'length' => 128,
+        'not null' => TRUE,
+        'default' => '',
+      ),
+      'value' => array(
+        'description' => 'The value of the css property.',
+        'type' => 'varchar',
+        'length' => 512,
+        'not null' => TRUE,
+        'default' => '',
+      ),
+      'generated' => array(
+        'description' => 'Whether or not the css property was automatically generated.',
+        'type' => 'int',
+        'unsigned' => TRUE,
+        'not null' => TRUE,
+        'default' => 0,
+      ),
+    ),
+    'unique keys' => array(
+      'pid_aid' => array('pid', 'aid'),
+    ),
+    'foreign keys' => array(
+      'aid' => array('themebuilder_assets' => 'aid'),
+      'tid' => array('themebuilder_themes' => 'tid'),
+    ),
+    'primary key' => array('pid'),
+  );
+
+  $schema['themebuilder_assets'] = array(
+    'description' => 'Assets for a theme',
+    'fields' => array(
+      'aid' => array (
+          'description' => 'An asset id',
+          'type' => 'serial',
+          'unsigned' => TRUE,
+          'not null' => TRUE,
+        ),
+      'tid' => array (
+          'description' => 'Theme Id',
+          'type' => 'int',
+          'unsigned' => TRUE,
+          'not null' => TRUE,
+        ),
+      'type' => array (
+          'description' => 'Type of asset',
+          'type' => 'varchar',
+          'length' => 128,
+          'not null' => TRUE,
+          'default' => '',
+        ),
+      'name' => array (
+          'description' => 'Filename of the asset',
+          'type' => 'varchar',
+          'length' => 128,
+          'not null' => TRUE,
+          'default' => '',
+        ),
+      ),
+    'foreign keys' => array(
+      'tid' => array('themebuild_themes' => 'tid')
+    ),
+    'primary key' => array('aid', 'tid'),
+  );
+
+  // This is the library of all php template functions that we expose to the
+  // user.  As an example, consider the various implementations of hook_breadcrumb
+  // that can create various markups to give the site a different look.
+  $schema['themebuilder_php'] = array(
+    'description' => 'PHP functions for the themebuilder properties.',
+    'fields' => array(
+      'fid' => array(
+        'description' => 'Primary Key: Unique php function ID.',
+        'type' => 'serial',
+        'unsigned' => TRUE,
+        'not null' => TRUE,
+      ),
+      'design_name' => array(
+        'description' => 'The name of the design this hook is associated with by default.',
+        'type' => 'varchar',
+        'length' => 128,
+        'not null' => TRUE,
+        'default' => '',
+      ),
+      'hook_name' => array(
+        'description' => 'The name of the hook this function implements.',
+        'type' => 'varchar',
+        'length' => 256,
+        'not null' => TRUE,
+        'default' => '',
+      ),
+      'args' => array(
+        'description' => 'The arguments to the function.',
+        'type' => 'varchar',
+        'length' => 512,
+        'not null' => TRUE,
+        'default' => '',
+      ),
+      'code' => array(
+        'description' => 'The php source code associated with this hook implementation.',
+        'type' => 'text',
+        'not null' => TRUE,
+        'size' => 'big',
+      ),
+    ),
+    'primary key' => array('fid'),
+  );
+
+  // These are the user selections that will comprise the template.php for any
+  // theme being created or customized.
+  $schema['themebuilder_function'] = array(
+    'description' => 'A mapping between themes and the selected theme functions.',
+    'fields' => array(
+      'tid' => array(
+        'description' => 'Primary Key: Unique php function ID.',
+        'type' => 'serial',
+        'unsigned' => TRUE,
+        'not null' => TRUE,
+      ),
+      'theme_name' => array(
+        'description' => 'The name of the theme this function is associated with.',
+        'type' => 'varchar',
+        'length' => 128,
+        'not null' => TRUE,
+        'default' => '',
+      ),
+      'hook_name' => array(
+        'description' => 'The name of the hook this function implements.',
+        'type' => 'varchar',
+        'length' => 128,
+        'not null' => TRUE,
+        'default' => '',
+      ),
+      'args' => array(
+        'description' => 'The arguments in the function signature.',
+        'type' => 'varchar',
+        'length' => 256,
+        'not null' => TRUE,
+        'default' => '',
+      ),
+      'fid' => array(
+        'description' => 'The function id from the themebuilder_php table.',
+        'type' => 'int',
+        'unsigned' => TRUE,
+        'not null' => TRUE,
+      ),
+    ),
+    'primary key' => array('tid'),
+  );
+
+
+  // This is the library of all templates that we expose to the
+  // user.
+  $schema['themebuilder_markup'] = array(
+    'description' => 'Templates for the themebuilder.',
+    'fields' => array(
+      'tid' => array(
+        'description' => 'Primary Key: Unique template id.',
+        'type' => 'serial',
+        'unsigned' => TRUE,
+        'not null' => TRUE,
+      ),
+      'design_name' => array(
+        'description' => 'The name of the design this template is associated with by default.',
+        'type' => 'varchar',
+        'length' => 128,
+        'not null' => TRUE,
+        'default' => '',
+      ),
+      'template_name' => array(
+        'description' => 'The name of the template.',
+        'type' => 'varchar',
+        'length' => 256,
+        'not null' => TRUE,
+        'default' => '',
+      ),
+      'code' => array(
+        'description' => 'The source code associated with this template.',
+        'type' => 'text',
+        'not null' => TRUE,
+        'size' => 'big',
+      ),
+    ),
+    'primary key' => array('tid'),
+  );
+
+  // These are the user selections that will comprise the template.php for any
+  // theme being created or customized.
+  $schema['themebuilder_template'] = array(
+    'description' => 'A mapping between themes and the selected templates.',
+    'fields' => array(
+      'fid' => array(
+        'description' => 'Primary Key: Unique ID.',
+        'type' => 'serial',
+        'unsigned' => TRUE,
+        'not null' => TRUE,
+      ),
+      'theme_name' => array(
+        'description' => 'The name of the theme this template is associated with.',
+        'type' => 'varchar',
+        'length' => 128,
+        'not null' => TRUE,
+        'default' => '',
+      ),
+      'selector' => array(
+        'description' => 'The selector part of the filename.',
+        'type' => 'varchar',
+        'length' => 128,
+        'not null' => TRUE,
+        'default' => '',
+      ),
+      'tid' => array(
+        'description' => 'The template id from the themebuilder_markup table.',
+        'type' => 'int',
+        'unsigned' => TRUE,
+        'not null' => TRUE,
+      ),
+    ),
+    'primary key' => array('fid'),
+  );
+
+  // These are the themes created using the themebuilder.
+  $schema['themebuilder_themes'] = array(
+    'description' => 'Identifies themes created with the themebuilder.',
+    'fields' => array(
+      'tid' => array(
+        'description' => 'Primary Key: theme id.',
+        'type' => 'serial',
+        'unsigned' => TRUE,
+        'not null' => TRUE,
+      ),
+      'theme_name' => array(
+        'description' => 'The name of the theme this template is associated with.',
+        'type' => 'varchar',
+        'length' => 128,
+        'not null' => TRUE,
+        'default' => '',
+      ),
+      'label' => array(
+        'description' => 'The friendly name of the theme',
+        'type' => 'varchar',
+        'length' => 128,
+        'not null' => TRUE,
+        'default' => '',
+      ),
+      'origin' => array(
+        'description' => 'The name of the original theme this was copied from.',
+        'type' => 'varchar',
+        'length' => 128,
+        'not null' => TRUE,
+        'default' => '',
+      ),
+      'layout' => array(
+        'description' => 'The string identifying the layout of this theme.',
+        'type' => 'varchar',
+        'length' => 30,
+        'not null' => TRUE,
+        'default' => '',
+      ),
+      'modified' => array(
+        'description' => 'Indicates whether this theme has been modified from the original.',
+        'type' => 'int',
+        'unsigned' => TRUE,
+        'not null' => TRUE,
+        'default' => 0,
+      ),
+      'basetheme' => array(
+        'description' => 'The string identifying the base theme for this theme.',
+        'type' => 'varchar',
+        'length' => 128,
+        'not null' => TRUE,
+        'default' => '',
+      ),
+      'version' => array(
+        'description' => 'The string identifying the theme version of this theme.',
+        'type' => 'varchar',
+        'length' => 128,
+        'not null' => TRUE,
+        'default' => '',
+      ),
+      'marketplace_version' => array(
+        'description' => 'The string identifying the marketplace version of this theme (if it was derived from a theme in the Acquia marketplace).',
+        'type' => 'varchar',
+        'length' => 128,
+        'not null' => TRUE,
+        'default' => '',
+      ),
+    ),
+    'primary key' => array('tid'),
+    'indexes' => array(
+      'theme_name' => array('theme_name'),
+    ),
+  );
+
+  $schema['themebuilder_undo'] = array(
+    'description' => 'Holds the undo and redo stacks.',
+    'fields' => array(
+      'mid' => array(
+        'description' => 'Primary Key: modification id.',
+        'type' => 'serial',
+        'unsigned' => TRUE,
+        'not null' => TRUE,
+      ),
+      'theme_name' => array(
+        'description' => 'The name of the associated theme.',
+        'type' => 'varchar',
+        'length' => 128,
+        'not null' => TRUE,
+        'default' => '',
+      ),
+      'direction' => array(
+        'description' => '0 if this modification is on the undo stack; 1 if on the redo stack.',
+        'type' => 'int',
+        'unsigned' => TRUE,
+        'not null' => TRUE,
+        'default' => '0',
+      ),
+      'selector' => array(
+        'description' => 'The selector that the modification applies to.',
+        'type' => 'varchar',
+        'length' => 256,
+        'not null' => TRUE,
+        'default' => '',
+      ),
+      'prior_state' => array(
+        'description' => 'The state before this modification was applied.',
+        'type' => 'text',
+        'not null' => TRUE,
+        'size' => 'big',
+      ),
+      'new_state' => array(
+        'description' => 'The state after this modification was applied.',
+        'type' => 'text',
+        'not null' => TRUE,
+        'size' => 'big',
+      ),
+      'children' => array(
+        'description' => 'The child modifications associated with this modification.',
+        'type' => 'text',
+        'not null' => TRUE,
+        'size' => 'big',
+      ),
+      'type' => array(
+        'description' => 'Indicates the type of modification -css, layout, etc.',
+        'type' => 'varchar',
+        'length' => 30,
+        'not null' => TRUE,
+        'default' => '',
+      ),
+    ),
+    'primary key' => array('mid'),
+    'indexes' => array(
+      'theme_name' => array('theme_name'),
+    ),
+  );
+
+  $schema['themebuilder_session'] = array(
+    'description' => "Stores a user's current theme object.",
+    'fields' => array(
+      'uid' => array(
+        'description' => 'The {users}.uid corresponding to the themebuilder user.',
+        'type' => 'int',
+        'unsigned' => TRUE,
+        'not null' => TRUE,
+        'default' => 0,
+      ),
+      'sid' => array(
+        'description' => "Primary key: A session ID. The value is generated by PHP's Session API.",
+        'type' => 'varchar',
+        'length' => 64,
+        'not null' => TRUE,
+        'default' => '',
+      ),
+      'webnode' => array(
+        'description' => 'The hostname of the webnode this edit session is associated with.',
+        'type' => 'varchar',
+        'length' => 128,
+        // If we take a webnode down we could set this field to NULL to
+        // indicate a new cookie should be issued.
+        'not null' => FALSE,
+        'default' => NULL,
+      ),
+      'session' => array(
+        'description' => 'The serialized contents of the theme object.',
+        'type' => 'text',
+        'size' => 'big',
+        'not null' => FALSE,
+      ),
+    ),
+    'primary key' => array('uid'),
+    'indexes' => array(
+      'sid' => array('sid'),
+    ),
+  );
+  return $schema;
+}
+
+/**
+ * Implementation of hook_install.
+ */
+function themebuilder_compiler_install() {
+  // Set the update level so the themebuilder will work.
+  themebuilder_compiler_reset_update_level();
+}
+
+function themebuilder_compiler_update_7000() {
+  $schema = themebuilder_compiler_schema();
+  db_create_table('themebuilder_session', $schema['themebuilder_session']);
+}
+
+/**
+ * Add a session ID column
+ */
+function themebuilder_compiler_update_7001() {
+  // Truncate any existing edit sessions
+  db_query('TRUNCATE {themebuilder_session};');
+}
+
+/**
+ * Destroy any current themebuilder sessions, to make sure sites which are
+ * using the themebuilder during the upgrade don't break.
+ *
+ * This will cause them to lose any unsaved work, but it's better than some of
+ * the potential alternatives.
+ */
+function themebuilder_compiler_update_7002() {
+  $accounts = db_query("SELECT uid, name, theme FROM {users} WHERE uid > 0")->fetchAll();
+  $removed_themes = array();
+  foreach ($accounts as $account) {
+    // If the user is currently using a themebuilder draft theme, delete it,
+    // following the procedure from themebuilder_compiler_revert_session()
+    // as best we can.
+    if (!empty($account->theme) && $account->theme == "acq_{$account->name}_session") {
+      // Unassign the theme from this user.
+      themebuilder_compiler_set_user_theme($account->uid);
+      // Remove any record of it in the themebuilder database tables.
+      db_delete('themebuilder_undo')
+        ->condition('theme_name', $account->theme)
+        ->execute();
+      // Delete the theme directory itself.
+      $info_path = db_query("SELECT filename FROM {system} WHERE type = 'theme' AND name = :name", array(':name' => $account->theme))->fetchField();
+      if (!empty($info_path)) {
+        $theme_path = dirname($info_path);
+        file_unmanaged_delete_recursive($theme_path);
+      }
+      // Keep track of the theme that was removed.
+      $removed_themes[] = $account->theme;
+    }
+  }
+  // If we did anything here, rebuild the theme data and return a status
+  // message.
+  if (!empty($removed_themes)) {
+    system_rebuild_theme_data();
+    return t('Deleted the following active themebuilder sessions: @themes', array('@themes' => implode(', ', $removed_themes)));
+  }
+}
+
+/**
+ * Add a field to themebuilder_css to track whether or not the css was
+ * automatically generated.
+ */
+function themebuilder_compiler_update_7003() {
+  if (db_field_exists('themebuilder_css', 'generated')) {
+    return;
+  }
+  db_add_field('themebuilder_css', 'generated', array(
+    'description' => 'Whether or not the css property was automatically generated.',
+    'type' => 'int',
+    'unsigned' => TRUE,
+    'not null' => TRUE,
+    'default' => 0,
+  ));
+  $sessions = db_query('SELECT * FROM themebuilder_session');
+  $path = drupal_get_path('module', 'themebuilder_compiler');
+  include_once($path . '/Theme.inc');
+  include_once($path . '/editable.inc');
+  include_once($path . '/inc/colorset.inc');
+  include_once($path . '/inc/colormanager.inc');
+  include_once($path . '/inc/customcolorset.inc');
+  include_once($path . '/palette.inc');
+  include_once($path . '/assets/css.inc');
+  foreach ($sessions as $row) {
+    $theme = unserialize($row->session);
+    $updated = $theme->themebuilderCompilerUpdate7003();
+    if ($updated) {
+      db_update('themebuilder_session')
+        ->fields(array('session' => serialize($theme)))
+        ->condition('uid', $row->uid)
+        ->condition('sid', $row->sid)
+        ->execute();
+    }
+  }
+}
+
+/**
+ * Reenable the themebuilder when the site has been updated.
+ */
+function themebuilder_compiler_update_7004() {
+  themebuilder_compiler_reset_update_level();
+}
+
+/**
+ * Add a webnode field to the themebuilder_sessions table.  This will be used
+ * to make sure all themebuilder sessions are tied to the same webnode.
+ */
+function themebuilder_compiler_update_7005() {
+  if (!db_field_exists('themebuilder_session', 'webnode')) {
+    db_add_field('themebuilder_session', 'webnode', array(
+      'description' => 'The hostname of the webnode this edit session is associated with.',
+      'type' => 'varchar',
+      'length' => 128,
+      // If we take a webnode down we could set this field to NULL to
+      // indicate a new cookie should be issued.
+      'not null' => FALSE,
+      'default' => NULL,
+      ));
+  }
+}
+
+/**
+ * Increase the length of the selector in the themebuilder_css table.
+ */
+function themebuilder_compiler_update_7006() {
+  db_change_field('themebuilder_css', 'selector', 'selector', array(
+    'description' => 'The css selector.',
+    'type' => 'varchar',
+    'length' => 2048,
+    'not null' => TRUE,
+    'default' => '',
+  ));
+}
+
+/**
+ * Add table indexes for faster data access.
+ */
+function themebuilder_compiler_update_11000() {
+  db_query('ALTER TABLE {themebuilder_session} ADD INDEX (sid)');
+  db_query('ALTER TABLE {themebuilder_undo} ADD INDEX (theme_name)');
+  db_query('ALTER TABLE {themebuilder_themes} ADD INDEX (theme_name)');
+}
+
+/**
+ * Add fields to the themebuilder_themes table to indicate the base
+ * theme and theme version.
+ */
+function themebuilder_compiler_update_11001() {
+  if (!db_field_exists('themebuilder_themes', 'basetheme')) {
+    db_add_field('themebuilder_themes', 'basetheme', array(
+        'description' => 'The string identifying the base theme for this theme.',
+        'type' => 'varchar',
+        'length' => 128,
+        'not null' => TRUE,
+        'default' => '',
+      )
+    );
+  }
+  if (!db_field_exists('themebuilder_themes', 'version')) {
+    db_add_field('themebuilder_themes', 'version', array(
+        'description' => 'The string identifying the theme version of this theme.',
+        'type' => 'varchar',
+        'length' => 128,
+        'not null' => TRUE,
+        'default' => '',
+      )
+    );
+  }
+}
+
+/**
+ * Add a field to the themebuilder_themes table to indicate the marketplace theme version.
+ */
+function themebuilder_compiler_update_11002() {
+  if (!db_field_exists('themebuilder_themes', 'marketplace_version')) {
+    db_add_field('themebuilder_themes', 'marketplace_version', array(
+        'description' => 'The string identifying the marketplace version of this theme (if it was derived from a theme in the Acquia marketplace).',
+        'type' => 'varchar',
+        'length' => 128,
+        'not null' => TRUE,
+        'default' => '',
+      )
+    );
+  }
+}
+
+/**
+ * Updates on trunk after the 1.04 release start at 11040.
+ */
+
+/**
+ * Switch sites still using a base theme to a custom themebuilder theme instead.
+ */
+function themebuilder_compiler_update_11040() {
+  // If the site isn't using a themebuilder theme currently (i.e., if they are
+  // running off a base theme), create one here from the default theme, and
+  // switch to it. Don't do this for preinstalled sites without a site
+  // template, though, because their themes might still switch once the site is
+  // claimed and a template is installed, and in that case a theme will be
+  // created for them then; see install_gardens().
+  $default_theme = variable_get('theme_default', 'bartik');
+  if (variable_get('site_template_current_template') && !Theme::loadByName($default_theme)->fetchAll()) {
+    // Copy the default theme to create a new one. Make sure not to overwrite a
+    // theme with the same name that the site might already have.
+    $label = 'My theme';
+    $counter = 1;
+    $system_name = themebuilder_compiler_human_to_machine_name($label);
+    while (themebuilder_compiler_find_theme($system_name)) {
+      $counter++;
+      $label = "My theme ($counter)";
+      $system_name = themebuilder_compiler_human_to_machine_name($label);
+    }
+    $new_default_theme = themebuilder_compiler_copy_theme($default_theme, $label);
+    // Enable the new theme and disable the old one. Do a streamlined enable
+    // and disable to avoid unnecessary menu rebuilds (the menu will be rebuilt
+    // once at the end of the update process anyway, and that's all we need
+    // here).
+    db_update('system')
+      ->fields(array('status' => 1))
+      ->condition('type', 'theme')
+      ->condition('name', $new_default_theme)
+      ->execute();
+    list_themes(TRUE);
+    drupal_theme_rebuild();
+    module_invoke_all('themes_enabled', array($new_default_theme));
+    // Set the default theme last (so as to not mess up block initialization
+    // that occurs during the above module_invoke_all call).
+    variable_set('theme_default', $new_default_theme);
+    // Now begin disabling the former default theme.
+    db_update('system')
+      ->fields(array('status' => 0))
+      ->condition('type', 'theme')
+      ->condition('name', $default_theme)
+      ->execute();
+    list_themes(TRUE);
+    drupal_theme_rebuild();
+    module_invoke_all('themes_disabled', array($default_theme));
+  }
+}
+
+/**
+ * Install the themebuilder_metatag module.
+ */
+function themebuilder_compiler_update_11190() {
+  module_enable(array('themebuilder_metatag'), FALSE);
+}
+
+/**
+ * Clean up deleted Themebuilder themes' block configuration.
+ */
+function themebuilder_compiler_update_11191() {
+  $themes_w_blocks = db_query('SELECT DISTINCT theme FROM {block}')->fetchCol();
+  $themes = themebuilder_compiler_get_theme_list();
+  $themes += themebuilder_marketplace_get_theme_list();
+  $available_themes = array();
+  if (!empty($themes)) {
+    foreach (array('mythemes', 'featured') as $type) {
+      foreach ($themes[$type] as $system_name => $theme) {
+        $available_themes[] = $system_name;
+      }
+    }
+  }
+
+  $cleanup_candidates = array();
+  if ($themes_w_blocks && $available_themes) {
+    foreach ($themes_w_blocks as $theme) {
+      if (preg_match('/^acq_/', $theme) && substr($theme, -8) != '_session' && !in_array($theme, $available_themes)) {
+        $cleanup_candidates[] = $theme;
+      }
+    }
+  }
+
+  if ($cleanup_candidates) {
+    db_delete('block')
+      ->condition('theme', $cleanup_candidates)
+      ->execute();
+  }
+}

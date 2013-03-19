@@ -1,0 +1,169 @@
+<?php
+/**
+ * @file
+ *   Theme builder layout selector prototype.
+ */
+
+/**
+ * Implementation of hook_menu().
+ */
+function themebuilder_layout_menu() {
+  $items = array();
+  // Used to invoke the selection UI.
+  $items['layout-editor'] = array(
+    'title' => t('Layout wizard'),
+    'page callback' => 'themebuilder_layout_main',
+    'type' => MENU_CALLBACK,
+  );
+
+  foreach ($items as $path => &$item) {
+    $item['access callback'] = 'themebuilder_compiler_access';
+    $item['access arguments'] = array($path);
+  }
+
+  return $items;
+}
+
+/**
+ * Implements hook_themebuilder_bar_tab_permissions().
+ */
+function themebuilder_layout_themebuilder_bar_tab_permissions() {
+  return array(
+    'access themebuilder layout tab' => array(
+      'title' => t('Access the layout tab'),
+      'description' => t('Configure page layouts in a theme.'),
+    ),
+  );
+}
+
+/**
+ * Implementation of hook_themebuilder_bar_items().
+ *
+ * If user has sufficient privileges, add layout picker tool to the page.
+ */
+function themebuilder_layout_themebuilder_bar_items($base_weight) {
+  if (user_access('access themebuilder layout tab')) {
+    try {
+      $global_layout = themebuilder_layout_get_global_index();
+      $local_layout = themebuilder_layout_get_index(true);
+
+      drupal_add_js(
+        array(
+          'layoutEditorPath' => url('layout-editor', array('query' => array('destination' => url($_GET['q'])))),
+          'layoutIndex' => $local_layout,
+          'layoutPagePath' => $_GET['q'],
+          'layoutGlobal' => $global_layout
+        ),
+        array('type' => 'setting')
+      );
+      return array(array(
+        'name' => 'layout',
+        'title' => t('Layout'),
+        'link' => 'layout-editor',
+        'weight' => -10,
+        ));
+    }
+    catch (Exception $e) {
+      // If an error was encountered while trying to get the theme layout, that
+      // just means the current theme is not themebuilder-enabled (for example,
+      // we might be on an admin page). So catch the exception and move on.
+    }
+  }
+}
+
+function themebuilder_layout_themebuilder_bar_editor() {
+  $path = drupal_get_path('module', 'themebuilder_layout');
+  return array(array(
+    'css' => array(
+      array(
+        'data' => $path .'/themebuilder_layout.css'),
+      ),
+    'js'  => array($path . '/themebuilder_layout.js')
+  ));
+}
+
+function themebuilder_layout_get_possible_layouts($theme) {
+  drupal_theme_initialize();
+
+  $themes_info = system_get_info('theme');
+  $configurations = $themes_info[$theme]['configurations'];
+
+  // Fill up layout metadata according to the theme's .info file.
+  $layouts = array();
+  foreach ($configurations as $layout_option => $column_tags) {
+    foreach ($column_tags as $column_tag => $column_configs) {
+      foreach ($column_configs as $column_config => $screenshot_path) {
+        $layouts["{$layout_option}-{$column_config}"] = array($column_tag, $layout_option, trim($screenshot_path, ' /'));
+      }
+    }
+  }
+
+  return $layouts;
+}
+
+/**
+ * Menu callback. Generates the layout wizard without further page theming.
+ */
+function themebuilder_layout_main() {
+  global $base_path, $theme;
+
+  $layouts = themebuilder_layout_get_possible_layouts($theme);
+
+  // Layout picker shell to announce tool name
+
+  $html = '<div class="layout-options"><div id="layouts_list" class="carousel-wrap punch-out"><div id="layouts_carousel"><ul>';
+
+  $global = themebuilder_layout_get_global_index();
+  $current = themebuilder_layout_get_index();
+
+  foreach ($layouts as $layout_id => $layout_props) {
+    if ($layout_props[2] == 'default') {
+      $image_url = drupal_get_path('module', 'themebuilder_layout') . '/images/' . $layout_id . '.png';
+    }
+    else {
+      $image_url = drupal_get_path('theme', $theme) . '/' . $layout_props[2];
+    }
+
+    $html .= '<li><div style="background-image: url(' . $base_path . $image_url . ');'
+      . 'width: 200px; height: 125px" '
+      . 'title="" '
+      . 'onClick="ThemeBuilder.LayoutEditor.getInstance().pickLayout(\'' . $layout_id . '\');" '
+      . 'class="layout-shot layout-' . $layout_id . ' layout-' . $layout_props[0] . ' layout-' . $layout_props[1] . ($global == $layout_id ? ' all' : ($current == $layout_id ? ' single' : '')) . '">'
+      . '<div class="applied"></div>'
+      . '<div class="spacer"></div>'
+      . '<div class="preview">' . t('previewing') . '</div>'
+      . '<div class="cancel" onClick="ThemeBuilder.LayoutEditor.getInstance().cancelPreview(event);">'
+      . t('cancel') . '</div>'
+      . '<div class="applyto">' . t('Apply To') . '</div>'
+      . '<div class="options"><table><tr><td><div class="applyoption" '
+    . 'onClick="ThemeBuilder.LayoutEditor.getInstance().pickLayout(\'' . $layout_id . '\',\'all\');return false;">'
+      . t('All pages') . '</div></td>'
+      . '<td><div class="applyoption" '
+      . 'onClick="ThemeBuilder.LayoutEditor.getInstance().pickLayout(\'' . $layout_id . '\',\'single\');return false;">'
+      . t('Just this page') . '</div></td></tr></table></div>'
+      . '</div></li>';
+  }
+  $html .= '</ul></div></div></div>';
+
+  // Print layout picker without page theming.
+  print $html;
+}
+
+/**
+ * Find out proper layout index for current page.
+ */
+function themebuilder_layout_get_index($nodefault = false) {
+  if (isset($_GET['page'])){
+    $page = $_GET['page'];
+  } else {
+    $page = $_GET['q'];
+  }
+  return substr( themebuilder_compiler_get_current_theme()->getLayout($page, $nodefault), strlen("body-layout-"));
+}
+
+/**
+ * Find out proper layout index for current page.
+ */
+function themebuilder_layout_get_global_index() {
+  return substr( themebuilder_compiler_get_current_theme()->getLayout(), strlen("body-layout-"));
+}

@@ -1,0 +1,37 @@
+<?php
+
+/**
+ * @file
+ * Install functions for the original_author module
+ */
+
+/**
+ * Implements hook_schema().
+ */
+function original_author_schema() {
+  $schema['original_author'] = array(
+    'description' => 'Stores the original author for each node',
+    'fields' => array(
+      'nid' => array(
+        'type' => 'int',
+        'not null' => TRUE,
+        'default' => 0,
+        'unsigned' => TRUE,
+        'description' => 'The {node}.nid node id.',
+      ),
+      'uid' => array(
+        'type' => 'int',
+        'not null' => TRUE,
+        'default' => 0,
+        'unsigned' => TRUE,
+        'description' => 'The {user}.uid user id.',
+      ),
+    ),
+    'primary key' => array('nid'),
+    'indexes' => array(
+      'uid' => array('uid'),
+    ),
+  );
+
+  return $schema;
+}

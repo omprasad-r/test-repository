@@ -1,0 +1,6 @@
+name = Drupal Gardens broadcasted notification handler
+description = Handles notifications being sent to customers.
+core = 7.x
+dependencies[] = gardens_broadcasting_client
+package = Drupal Gardens
+hidden = TRUE

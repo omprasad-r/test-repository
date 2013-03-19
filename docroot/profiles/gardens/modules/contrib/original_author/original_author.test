@@ -1,0 +1,83 @@
+<?php
+
+/**
+ * @file
+ * Tests for original_author module.
+ */
+
+class OriginalAuthorTest extends DrupalWebTestCase {
+  public static function getInfo() {
+    return array(
+      'name' => t('Original Author tests'),
+      'description' => t('Tests related to the Original Author functionality.'),
+      'group' => t('Original Author'),
+    );
+  }
+
+  function setUp() {
+    parent::setUp();
+    // Create some content before we enable the original_author module.
+    $this->drupalCreateNode(array('type' => 'page'));
+    $this->drupalCreateNode(array('type' => 'article'));
+    $success = module_enable(array('original_author'), TRUE);
+    // Reset/rebuild all data structures after enabling the module.
+    $this->resetAll();
+    $this->assertTrue($success, t('Enabled modules: original_author'));
+    // Setup some users to create content or have it attributed to them.
+    $this->adminUser = $this->drupalCreateUser(array('access administration pages', 'administer site configuration', 'administer nodes', 'administer content types'));
+    $this->firstContentCreator = $this->drupalCreateUser(array('administer nodes', 'create article content', 'create page content'));
+    $this->secondContentCreator = $this->drupalCreateUser(array('create article content', 'create page content'));
+  }
+
+  /**
+   * Tests that the content-by-user listing returns the correct data.
+   */
+  function testOriginalAuthor() {
+    // Login the first content creator
+    $this->drupalLogin($this->firstContentCreator);
+    $langcode = LANGUAGE_NONE;
+    $title_key = "title";
+    $body_key = "body[$langcode][0][value]";
+    // Create node and attribute it to a different user.
+    $edit = array();
+    $edit[$title_key] = $this->randomName(8);
+    $edit[$body_key] = $this->randomName(16);
+    $edit['name'] = $this->secondContentCreator->name;
+    $this->drupalPost('node/add/page', $edit, t('Save'));
+    $node = $this->drupalGetNodeByTitle($edit[$title_key]);
+
+    // Check that a record was created in the original_author table with the
+    // actual creator's uid.
+    $uid = db_query('SELECT uid FROM {original_author} WHERE nid = :nid', array(':nid' => $node->nid))->fetchField();
+    $this->assertEqual($this->firstContentCreator->uid, $uid, t('Stored the correct uid for the original author of the node'));
+
+    // Assign secondContentUser as the author of the other content we created.
+    $node1 = node_load(1);
+    $node1->original_author = $this->secondContentCreator->uid;
+    node_save($node1);
+
+    // Confirm that node 1 has no entry in the original_author table.
+    $uid = db_query('SELECT uid FROM {original_author} WHERE nid = 1')->fetchField();
+    $this->assertFalse($uid, t('No record stored for node 1'));
+
+    // Confirm that node 2 has no entry in the original_author table.
+    $uid = db_query('SELECT uid FROM {original_author} WHERE nid = 2')->fetchField();
+    $this->assertFalse($uid, t('No record stored for node 2'));
+
+    // Now login as the admin user to run the bulk add operation on all nodes.
+    $this->drupalLogout();
+    $this->drupalLogin($this->adminUser);
+
+    // Run the bulk add operation via the UI.
+    $this->drupalPost('admin/config/content/original_author', array(), t('Bulk add nodes'));
+    $this->cronRun();
+
+    // Confirm that node 1 has user 1 as its original author.
+    $uid = db_query('SELECT uid FROM {original_author} WHERE nid = 1')->fetchField();
+    $this->assertEqual($uid, 1, t('Uid 1 stored as creator of node 1'));
+
+    // Confirm that node 2 has user 1 as its original author.
+    $uid = db_query('SELECT uid FROM {original_author} WHERE nid = 2')->fetchField();
+    $this->assertEqual($uid, 1, t('Uid 1 stored as creator of node 2'));
+  }
+}

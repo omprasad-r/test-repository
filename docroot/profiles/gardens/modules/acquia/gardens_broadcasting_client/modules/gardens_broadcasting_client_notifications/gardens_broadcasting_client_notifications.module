@@ -1,0 +1,127 @@
+<?php
+
+/**
+ * @file
+ * Broadcasted notification handler module.
+ */
+
+/**
+ * Implements hook_menu().
+ */
+function gardens_broadcasting_client_notifications_menu() {
+  $items = array();
+
+  $items['gardens_broadcasting_client/notifications/dismiss/%gardens_broadcasting_client_notifications'] = array(
+    'title' => 'Dismiss broadcasted notification',
+    'page callback' => 'gardens_broadcasting_client_notifications_dismiss',
+    'page arguments' => array(3),
+    'delivery callback' => 'ajax_deliver',
+    'access arguments' => array('receive gardens broadcasted notifications'),
+    'type' => MENU_LOCAL_TASK,
+  );
+
+  return $items;
+}
+
+/**
+ * Broadcasted notification task loader.
+ */
+function gardens_broadcasting_client_notifications_load($tid) {
+  return db_query('SELECT * FROM {gardens_broadcasting_client_notifications} WHERE tid = :tid', array(':tid' => $tid))->fetch();
+}
+
+/**
+ * Implements hook_permission().
+ */
+function gardens_broadcasting_client_notifications_permission() {
+  return array(
+    'receive gardens broadcasted notifications' => array(
+      'title' => t('Receive Acquia Gardens notifications'),
+      'description' => t('Allows receiving Acquia Gardens notifications.'),
+    ),
+  );
+}
+
+/**
+ * Gets unread notifications.
+ *
+ * @param int $uid
+ *   User id.
+ *
+ * @return array
+ *   Array of notifications to be displayed.
+ */
+function gardens_broadcasting_client_notifications_get($uid) {
+  $notifications = array();
+  // @index query_idx
+  $notification_rs = db_query('
+    SELECT n.tid, n.expire, n.notification, rn.uid
+    FROM {gardens_broadcasting_client_notifications} n
+    LEFT JOIN {gardens_broadcasting_client_read_notifications} rn ON rn.tid = n.tid AND rn.uid = :uid
+    WHERE n.has_expired = 0
+    ORDER BY n.created ASC', array(':uid' => $uid));
+  foreach ($notification_rs as $notification_row) {
+    // Dismissed notifications will have the uid field populated. While we try
+    // to keep the expired notifications flagged during cron it is possible that
+    // some might return before the cron manages to flag them. Of course we
+    // could add extra WHERE clauses as well to handle both dismissed / expired
+    // notifications, but that would affect query performance / index usage.
+    if (empty($notification_row->uid) && $notification_row->expire >= REQUEST_TIME) {
+      $notifications[$notification_row->tid] = $notification_row->notification;
+    }
+  }
+  return $notifications;
+}
+
+/**
+ * Dismiss broadcasted notification.
+ */
+function gardens_broadcasting_client_notifications_dismiss($notification) {
+  db_merge('gardens_broadcasting_client_read_notifications')
+    ->key(array(
+      'uid' => $GLOBALS['user']->uid,
+      'tid' => $notification->tid,
+    ))
+    ->execute();
+
+  $commands = array(
+    array('command' => 'fadeAlert'),
+  );
+
+  return array('#type' => 'ajax', '#commands' => $commands);
+}
+
+/**
+ * Implements hook_cron().
+ *
+ * Sets has_expired column in the gardens_broadcasting_client_notifications
+ * table.
+ */
+function gardens_broadcasting_client_notifications_cron() {
+  gardens_broadcasting_client_expired_flag_set();
+}
+
+/**
+ * Sets expired flag on old notifications.
+ */
+function gardens_broadcasting_client_expired_flag_set() {
+  db_query('UPDATE {gardens_broadcasting_client_notifications} SET has_expired = 1 WHERE has_expired = 0 AND expire < :expire', array(':expire' => REQUEST_TIME));
+}
+
+/**
+ * Handles broadcasted notification task.
+ *
+ * @see gardens_broadcasting_client_task_handle().
+ */
+function gardens_broadcasting_client_notifications_task_handler($task) {
+  $notification = unserialize($task['task']);
+  $expiration = mktime(0, 0, 0, $notification['expire']['month'], $notification['expire']['day'], $notification['expire']['year']);
+  $notification_data = array(
+    'tid' => $task['tid'],
+    'created' => $task['created'],
+    'expire' => $expiration,
+    'has_expired' => intval($expiration < REQUEST_TIME),
+    'notification' => $notification['notification'],
+  );
+  return drupal_write_record('gardens_broadcasting_client_notifications', $notification_data);
+}

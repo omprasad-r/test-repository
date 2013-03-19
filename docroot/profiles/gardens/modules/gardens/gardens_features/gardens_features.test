@@ -1,0 +1,51 @@
+<?php
+
+class GardensFeaturesThemeSettingsTestCase extends DrupalWebTestCase {
+  protected $privileged_user;
+
+  public static function getInfo() {
+    return array(
+      'name' => 'Test general UI settings',
+      'description' => 'Test that general UI settings get populated into javascript',
+      'group' => 'Gardens',
+    );
+  }
+
+  function setUp() {
+    parent::setUp('gardens_features');
+
+    $this->privileged_user = $this->drupalCreateUser(array(
+      'access administration pages',
+      'access general ui configuration',
+      ));
+    $this->drupalLogin($this->privileged_user);
+  }
+
+  /**
+   * Test that there is nothing preset.
+   */
+  public function testDefaultSettings() {
+    $html = $this->drupalGet('<front>');
+    $this->assertFalse(preg_match('/"gardens_hoverintent"/', $html), t('General UI config: Drupal.settings.gardens_hoverintent should not be set by default.'));
+  }
+
+  /**
+   * Test that we can set configuration and see it in javascript.
+   */
+  public function testCustomSettings() {
+    // Submit the configuration change.
+    $edit = array();
+    $edit['gardens_hoverintent[enabled]'] = 1;
+    $edit['gardens_hoverintent[sensitivity]'] = '3';
+    $edit['gardens_hoverintent[interval]'] = '400';
+    $edit['gardens_hoverintent[timeout]'] = '500';
+
+    $this->drupalPost('admin/config/user-interface/general-ui-config', $edit, t('Save configuration'));
+
+    $html = $this->drupalGet('<front>');
+
+    // See if our JSON is available in the html response.
+    $this->assertTrue(preg_match('/"gardens_hoverintent":{"enabled":1,"sensitivity":"3","interval":"400","timeout":"500"}/', $html), 'General UI config: After submitting hoverintent form, Drupal.settings.hoverintent JSON should be available in the html.');
+  }
+
+}

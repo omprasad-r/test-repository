@@ -1,0 +1,333 @@
+.rpx-icon-small {
+  display: block;
+  width: 16px;
+  height: 16px;
+  margin: 1px;
+  float: left;
+  clear: none !important;
+  background-image: url(images/providers_icons16.png);
+}
+
+.rpx-icon-medium {
+  display: block;
+  width: 30px;
+  height: 30px;
+  margin: 1px;
+  float: left;
+  clear: none !important;
+  background-image: url(images/providers_icons32.png);
+}
+
+.rpx-icon-inline {
+  vertical-align: middle;
+  margin: 0px;
+  display: inline-block;
+  float: none;
+}
+
+.rpx-provider-title {
+  margin-left: 5px;
+}
+
+.rpx-facebook-small {
+  background-position: 0px 0px;
+}
+
+.rpx-google-small {
+  background-position: 0px -16px;
+}
+
+.rpx-linkedin-small {
+  background-position: 0px -32px;
+}
+
+.rpx-myspace-small {
+  background-position: 0px -48px;
+}
+
+.rpx-twitter-small {
+  background-position: 0px -64px;
+}
+
+.rpx-live_id-small {
+  background-position: 0px -80px;
+}
+
+.rpx-yahoo-small {
+  background-position: 0px -96px;
+}
+
+.rpx-aol-small {
+  background-position: 0px -112px;
+}
+
+.rpx-blogger-small {
+  background-position: 0px -128px;
+}
+
+.rpx-flickr-small {
+  background-position: 0px -144px;
+}
+
+.rpx-hyves-small {
+  background-position: 0px -160px;
+}
+
+.rpx-livejournal-small {
+  background-position: 0px -176px;
+}
+
+.rpx-myopenid-small {
+  background-position: 0px -192px;
+}
+
+.rpx-netlog-small {
+  background-position: 0px -208px;
+}
+
+.rpx-openid-small {
+  background-position: 0px -224px;
+}
+
+.rpx-verisign-small {
+  background-position: 0px -240px;
+}
+
+.rpx-wordpress-small {
+  background-position: 0px -256px;
+}
+
+.rpx-paypal-small {
+  background-position:0px -272px;
+}
+
+.rpx-orkut-small {
+  background-position:0px -288px;
+}
+
+.rpx-vzn-small {
+  background-position:0px -304px;
+}
+
+.rpx-salesforce-small {
+  background-position:0px -320px;
+}
+
+.rpx-foursquare-small {
+  background-position:0px -336px;
+}
+
+.rpx-other-small {
+  background-position:0px -352px;
+}
+
+.rpx-facebook-medium {
+  background-position: 0px 0px;
+}
+
+.rpx-google-medium {
+  background-position: 0px -30px;
+}
+
+.rpx-linkedin-medium {
+  background-position: 0px -60px;
+}
+
+.rpx-myspace-medium {
+  background-position: 0px -90px;
+}
+
+.rpx-twitter-medium {
+  background-position: 0px -120px;
+}
+
+.rpx-live_id-medium {
+  background-position: 0px -150px;
+}
+
+.rpx-yahoo-medium {
+  background-position: 0px -180px;
+}
+
+.rpx-aol-medium {
+  background-position: 0px -210px;
+}
+
+.rpx-blogger-medium {
+  background-position: 0px -240px;
+}
+
+.rpx-flickr-medium {
+  background-position: 0px -270px;
+}
+
+.rpx-hyves-medium {
+  background-position: 0px -300px;
+}
+
+.rpx-livejournal-medium {
+  background-position: 0px -330px;
+}
+
+.rpx-myopenid-medium {
+  background-position: 0px -360px;
+}
+
+.rpx-netlog-medium {
+  background-position: 0px -390px;
+}
+
+.rpx-openid-medium {
+  background-position: 0px -420px;
+}
+
+.rpx-verisign-medium {
+  background-position: 0px -450px;
+}
+
+.rpx-wordpress-medium {
+  background-position: 0px -480px;
+}
+
+.rpx-paypal-medium {
+  background-position:0px -510px;
+}
+
+.rpx-orkut-medium {
+  background-position:0px -540px;
+}
+
+.rpx-vzn-medium {
+  background-position:0px -570px;
+}
+
+.rpx-salesforce-medium {
+  background-position:0px -600px;
+}
+
+.rpx-foursquare-medium {
+  background-position:0px -630px;
+}
+
+.rpx-other-medium {
+  background-position:0px -660px;
+}
+
+.rpx-path-tree {
+  font-size: 0.85em;
+  margin-left: 19px;
+}
+
+.rpx-path-tree td, .rpx-path-tree th {
+  padding-top: 0;
+  padding-bottom: 0;
+}
+
+#janrain-client-profile-field-overview-form .add-new-placeholder {
+  font-weight: bold;
+  padding-bottom: .5em;
+}
+
+#rpx-site-publish-edit,
+#rpx-user-publish-edit {
+  padding-left: 5px;
+}
+
+#rpx-site-publish-settings,
+#rpx-user-publish-settings {
+  padding-left: 30px;
+}
+
+/*
+ * Sometimes a second janrain signin widget is loaded. This should really be
+ * fixed in the JavaScript, but all attempts so far have failed.
+ * Hide these duplicates.
+ */
+.janrainContent ~ .janrainContent {
+  display: none !important;
+}
+
+.rpx-signin {
+  position: relative;
+}
+
+.ui-dialog .rpx-signin {
+  padding-left: 40px;
+}
+
+.rpx-or {
+  font-weight: bold;
+  font-size: 1.25em;
+}
+
+.block .rpx-or {
+  text-align: center;
+  line-height: 1;
+  margin-bottom: 1.3333em;
+}
+
+.ui-dialog .rpx-or,
+.ui-dialog .rpx-or span {
+  left: 0;
+}
+
+.ui-dialog .rpx-or {
+  height: 100%;
+  min-height: 1px;
+  position: absolute;
+  top: 0;
+}
+
+.rpx-or::before,
+.rpx-or::after {
+  border-color: #aaa;
+  content: " ";
+  display: block;
+}
+
+.block .rpx-or::before,
+.block .rpx-or::after {
+  border-top-style: solid;
+  border-top-width: 1px;
+  height: 0;
+  top: 50%;
+  position: absolute;
+  top: 1.25ex;
+  width: 46%;
+}
+
+.ui-dialog .rpx-or::before,
+.ui-dialog .rpx-or::after {
+  border-left-style: solid;
+  border-left-width: 1px;
+  height: 40%;
+  left: 50%;
+  position: absolute;
+  width: 0;
+}
+
+.block .rpx-or::before {
+  left: 0;
+}
+
+.block .rpx-or::after {
+  right: 0.5%;
+}
+
+.ui-dialog .rpx-or::before {
+  top: 0;
+}
+
+.ui-dialog .rpx-or::after {
+  bottom: 0;
+  height: 35%;
+}
+
+.rpx-or span {
+  display: inline-block;
+  line-height: 0;
+  height: 0;
+  overflow: visible;
+  position: absolute;
+  top: 50%;
+}

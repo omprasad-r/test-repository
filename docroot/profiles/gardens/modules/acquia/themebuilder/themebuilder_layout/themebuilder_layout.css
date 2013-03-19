@@ -1,0 +1,142 @@
+/* @override http://gardens-css.dev:8888/modules/acquia/themebuilder/themebuilder_layout/themebuilder_layout.css?Z */
+
+/* @group Apply Layout */
+
+#themebuilder-wrapper #layouts_list {
+  padding-top: 30px;
+  padding-bottom: 30px;
+  margin-top: 15px;
+}
+
+#layouts_list .layout-shot .applyto {
+  position: absolute;
+  top: 0;
+  font-weight: bold;
+  color: #777;
+}
+
+#layouts_list .layout-shot {
+  position: relative;
+  border-color: #000;
+  border-style: solid;
+  border-width: 5px;
+}
+
+#layouts_list .layout-shot:hover {
+  border-color: #202020;
+  cursor: pointer;
+}
+
+#layouts_list .layout-shot div {
+  display: none;
+  width: 100%;
+  padding: 5px 0;
+  text-align: center;
+}
+
+#layouts_list .layout-shot .applied {
+  height: 115px;
+  position: absolute;
+  top: 0;
+  width: 100%;
+}
+
+#layouts_list .layout-shot.single .applied,
+#layouts_list .layout-shot.all .applied {
+  background-color: rgba(0,0,0,0.3333);
+  display: block;
+}
+
+#layouts_list .layout-shot.single .applied {
+  background-image: url("images/this-page.png");
+}
+
+#layouts_list .layout-shot.all .applied {
+  background-image: url("images/global.png");
+}
+
+#layouts_list .layout-shot:hover .applied,
+#layouts_list .layout-shot.single:hover .applied,
+#layouts_list .layout-shot.all:hover .applied{
+  background-color: rgba(255,255,255,0.1);
+  cursor: pointer;
+  display: block;
+}
+
+#layouts_list .layout-shot.preview .applied,
+#layouts_list .layout-shot.preview:hover .applied {
+  background-color: black;
+  background-color: rgba(0,0,0,0.9);
+  background-image: none;
+}
+
+#layouts_list .layout-shot .applyoption {
+  font-size: 14px;
+  color: #fff;
+}
+
+#layouts_list .layout-shot .options {
+  position:absolute;
+  bottom: 0;
+  padding: 0;
+  cursor: pointer;
+}
+
+#layouts_list .layout-shot .options div:hover {
+  background: #aaa;
+  color: #444;
+}
+
+#layouts_list .layout-shot table {
+  background: #000;
+  width: 100%;
+}
+
+#layouts_list .layout-shot .spacer {
+  padding: 0;
+  height: 120px;
+  opacity: .7;
+}
+
+#layouts_list .layout-shot.preview div,
+#themes_list .theme-shot.preview .cover {
+  display: block;
+}
+
+#layouts_list .layout-shot .cover {
+  display: none;
+  height: 13px;
+  background-color: black;
+  filter: alpha(opacity = 75);
+  opacity: .75;
+}
+
+#layouts_list .layout-shot.preview .cancel, 
+#layouts_list .layout-shot:hover.preview .preview {
+  display: none;
+}
+
+#layouts_list .layout-shot.preview:hover .cancel,
+#layouts_list .layout-shot.preview .preview {
+  display: block;
+}
+
+#layouts_list .layout-shot .preview, #layouts_list .layout-shot .cancel {
+  position:absolute;
+  top:50%;
+  margin-top:-25px;
+  font-size:2em;
+  cursor:pointer;
+  color:#555;
+  background-color:transparent;
+}
+
+#layouts_list .layout-shot .cover.middle {
+  height: 5px;
+}
+
+#layouts_list table {
+  margin:0;
+}
+
+/* @end */

@@ -1,0 +1,20 @@
+<?php
+
+/**
+ * @file
+ * Install file for the gardens_mail_media module.
+ */
+
+/**
+ * Implements hook_disable()
+ */
+function gardens_mail_media_disable() {
+  $module_list = array (
+      'mailhandler',
+      'mailhandler_sendto_auth',
+      'mailhandler_medialink',
+      'mailhandler_singlemailbox',
+      'mail_media',
+  );
+  module_disable($module_list, FALSE);
+}

@@ -1,0 +1,10 @@
+; $Id$
+name = Miscellaneous Gardens Stuff
+description = A holding pen for things which don't belong anywhere else.  Currently has GA tracking code in it.
+core = 7.x
+package = Drupal Gardens
+files[] = gardens_misc.module
+files[] = gardens_misc.install
+files[] = gardens_misc.test
+files[] = plugins/views_handler_field_user_picture_url.inc
+hidden = TRUE

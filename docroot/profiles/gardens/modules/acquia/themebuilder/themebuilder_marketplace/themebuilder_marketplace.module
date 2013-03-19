@@ -1,0 +1,232 @@
+<?php
+/**
+ * @file themebuilder_marketplace.module
+ * Provides themebuilder integration with the theme marketplace.
+ */
+
+/**
+ * Determines which AWS s3 bucket we should be using.
+ *
+ * @return
+ *   The name of the AWS s3 bucket to use.
+ *
+ * @throws Exception if run on the command line (where the bucket is unknown).
+ */
+function themebuilder_marketplace_s3_bucket() {
+  // The bucket we use depends on the environment we are in. On webnodes in
+  // Hosting, we expect the AH_SITE_ENVIRONMENT environment variable to always
+  // be set whenever PHP is run via a web browser, so we use that.
+  if (isset($_ENV['AH_SITE_ENVIRONMENT'])) {
+    $environment = $_ENV['AH_SITE_ENVIRONMENT'];
+  }
+  // The AH_SITE_ENVIRONMENT environment variable is not defined when Drupal is
+  // run from the command line, including installation steps. There should be
+  // no installation code that triggers access to the bucket, so throw an
+  // exception if we ever get here in that case.
+  elseif (drupal_is_cli()) {
+    throw new Exception('Themebuilder marketplace S3 bucket information cannot be requested from the command line.');
+  }
+  // No environment variable, and Drupal is not being run from the command
+  // line, so this is probably a local development machine. Fall back to using
+  // the same environment we would expect to see on gsteamer.
+  else {
+    $environment = 'development';
+  }
+
+  // Webnodes in production have credentials to an AWS account with access to
+  // the gardens-default.marketplace-themes s3 bucket.
+  if ($environment === 'prod') {
+    return 'gardens-default.marketplace-themes';
+  }
+  // Webnodes on gsteamer have credentials to an AWS account with access to the
+  // gsteamer.marketplace-themes bucket. Local development environments should
+  // use the same AWS account as gsteamer does.
+  else {
+    return 'gsteamer.marketplace-themes';
+  }
+}
+
+/**
+ * Get a list of featured marketplace themes.
+ *
+ * @return array
+ *   A list of themes suitable for the themebuilder themes tab.
+ */
+function themebuilder_marketplace_get_theme_list() {
+  $themes = array();
+  $query = db_query('SELECT name, username, s3_key FROM {themebuilder_marketplace_featured}');
+  foreach ($query as $result) {
+    $system_name = themebuilder_marketplace_get_base_name($result->s3_key);
+    if ($result->username == 'Gardens admin') {
+      $meta = t("!service_name_long base theme", array(
+        '!service_name_long' => variable_get('gardens_service_name_long', 'Drupal Gardens'),
+      ));
+    }
+    else {
+      $meta = t('@author', array('@author' => $result->username));
+    }
+    $themes[$system_name] = array(
+      'name' => $result->name,
+      'meta' => $meta,
+      'is_base' => TRUE,
+    );
+  }
+  return array('featured' => $themes);
+}
+
+/**
+ * Implements hook_gardens_client_phone_home().
+ *
+ * Stores theme information from the gardener in our own database table, instead
+ * of the crowded variables table.
+ */
+function themebuilder_marketplace_gardens_client_phone_home($previous_data, &$data) {
+  // Acquire a lock, since multiple phone home requests may be running at once.
+  if (lock_acquire('themebuilder_marketplace_gardens_client_phone_home')) {
+    $featured_themes = $data['gardener_site']['featured_themes'];
+    db_delete('themebuilder_marketplace_featured')->execute();
+    $query = db_insert('themebuilder_marketplace_featured')->fields(array('nid', 'vid', 'name', 's3_key', 'base_theme', 'thumbnail_url', 'username'));
+    foreach ($featured_themes as $record) {
+      $query->values($record);
+    }
+    $query->execute();
+    unset($data['gardener_site']['featured_themes']);
+    lock_release('themebuilder_marketplace_gardens_client_phone_home');
+  }
+}
+
+/**
+ * Copy an archived theme from S3 and expand it into a destination directory.
+ *
+ * @param string $theme_name
+ *   The full name of the theme being retrieved, including any folders, such as
+ *   378096/377691/barebones.tar
+ * @param string $destination
+ *   The directory into which the theme should be copied. Defaults to the site's
+ *   mythemes directory.
+ * @return boolean
+ *   TRUE if the new theme files were created successfully, or FALSE if not.
+ */
+function themebuilder_marketplace_copy_from_s3($s3path, $destination = NULL) {
+  // Copy into themes/mythemes by default.
+  if (empty($destination)) {
+    $destination = DRUPAL_ROOT . '/' . themebuilder_compiler_get_custom_theme_folder();
+  }
+  $theme_name = themebuilder_marketplace_get_base_name($s3path);
+
+  // Retrieve the file from s3.
+  require_once DRUPAL_ROOT . '/../library/S3.php';
+  $creds = themebuilder_marketplace_get_s3_creds();
+  if (!$creds) {
+    return FALSE;
+  }
+  S3::$useExceptions = TRUE;
+  $s3 = new S3($creds['login'], $creds['password']);
+  $semaphore = themebuilder_compiler_get_semaphore();
+  try {
+    // Check to see whether Amazon thinks this file exists and is a tarball.
+    $bucket = themebuilder_marketplace_s3_bucket();
+    $info = $s3->getObjectInfo($bucket, $s3path);
+    if ($info['size'] && ($info['type'] === 'application/x-tar')) {
+      // Copy the tarball to its destination.
+      $s3->getObject($bucket, $s3path, $destination . "/$theme_name.tar");
+    }
+    else {
+      themebuilder_compiler_release_semaphore($semaphore);
+      return FALSE;
+    }
+  }
+  catch (Exception $e) {
+    themebuilder_compiler_release_semaphore($semaphore);
+    return FALSE;
+  }
+  // If we retrieved the tarball successfully, expand it in place.
+  $success = themebuilder_marketplace_untar_file($destination, "$theme_name.tar", $info['hash']);
+  themebuilder_compiler_release_semaphore($semaphore);
+  return $success;
+}
+
+/**
+ * Extract a tarball into a destination folder, and delete the original file.
+ *
+ * @param string $destination
+ *   The directory into which the tarball should be extracted.
+ * @param string $filename
+ *   The name of the tarball.
+ * @param string $hash
+ *   The MD5 hash we expect the tarball to have. Optional.
+ * @return boolean
+ *   TRUE on success, or FALSE on failure.
+ */
+function themebuilder_marketplace_untar_file($destination, $filename, $hash = '') {
+  $path = $destination . '/' . $filename;
+  if (!file_exists($path)) {
+    return FALSE;
+  }
+  if ($hash && !themebuilder_marketplace_verify_hash($path, $hash)) {
+    return FALSE;
+  }
+  $command = 'cd ' . escapeshellarg($destination) . '; tar -xf ' . $filename;
+  exec($command . ' 2>&1', $output, $result);
+  // If the extraction was successful, delete the tarball.
+  if ($result === 0) {
+    unlink($destination . '/' . $filename);
+    return TRUE;
+  }
+  return FALSE;
+}
+
+/**
+ * Get the appropriate s3 credentials.
+ *
+ * @return array
+ *   An associative array as returned from netrc, keyed as follows:
+ *   - login: the s3 key
+ *   - password: the s3 secret key
+ */
+function themebuilder_marketplace_get_s3_creds() {
+  include_once '/usr/ah/lib/netrc.php';
+  // On staging and production, we'll have netrc.php available.
+  if (function_exists('netrc_read')) {
+    $netrc = netrc_read();
+    if (empty($netrc['aws.gardens.archive.client'])) {
+      // This is a staging/production machine without the right netrc creds.
+      return FALSE;
+    }
+    $creds = $netrc['aws.gardens.archive.client'];
+  }
+  // Developers who want these credentials can find them in .netrc on any
+  // gsteamer webnode, and then set this variable by hand. The variable should
+  // be in the format
+  // array('login' => '<s3 key>', 'password' => '<s3 secret>');
+  else {
+    $creds = variable_get('themebuilder_marketplace_s3_credentials', FALSE);
+  }
+  return $creds;
+}
+
+/**
+ * Given an s3 marketplace theme identifier, return the theme's base name.
+ *
+ * @param string $s3path
+ *   An s3 identifier, or "path" (such as 378096/377691/barebones.tar).
+ * @return string
+ *   The base name of the theme (barebones).
+ */
+function themebuilder_marketplace_get_base_name($s3path) {
+  $parts = explode('/', $s3path);
+  // Get the last element in the array.
+  $name = array_slice($parts, -1, 1);
+  // Get the first element of the one-element array.
+  $name = $name[0];
+  $name = preg_replace('/\.tar$/', '', $name);
+  return $name;
+}
+
+/**
+ * Check a file's MD3 hash against an expected value.
+ */
+function themebuilder_marketplace_verify_hash($path, $hash) {
+  $actual_hash = md5_file($path);
+  return $actual_hash === $hash;
+}

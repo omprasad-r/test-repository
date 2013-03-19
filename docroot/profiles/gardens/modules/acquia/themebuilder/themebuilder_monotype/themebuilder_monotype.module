@@ -1,0 +1,114 @@
+<?php
+
+/**
+ * @file
+ * Themebuilder/Monotype integration.
+ */
+
+/**
+ * Returns the currently configured Monotype account token.
+ *
+ * @return
+ *   A string containing the account token.
+ */
+function themebuilder_monotype_get_token() {
+  return check_plain(variable_get('font_management_webfonts_token', ''));
+}
+
+/**
+ * Returns the currently configured project key.
+ *
+ * @return
+ *   A string containing the project key.
+ */
+function themebuilder_monotype_get_project_key() {
+  return check_plain(variable_get('font_management_webfonts_project', FALSE));
+}
+
+/**
+ * Implement hook_themebuilder_font_stacks().
+ *
+ * Make Monotype font stacks available to Themebuilder.
+ */
+function themebuilder_monotype_themebuilder_font_stacks() {
+  try {
+    $token = themebuilder_monotype_get_token();
+    $enabled = themebuilder_monotype_enabled();
+    $project_key = themebuilder_monotype_get_project_key();
+    $stacks = array();
+    if ($token && $enabled && !empty($project_key)) {
+      // Get information on all the fonts available in this Monotype project.
+      $project = themebuilder_monotype_get_project_info($token, $project_key);
+      if ($project) {
+        foreach ($project->Font as $index => $font) {
+          $stack = new MonotypeFontStack((string)$font->FontName, (string)$font->FontCSSName);
+          $stacks[$stack->getName()] = $stack;
+        }
+      }
+    }
+    ksort($stacks);
+    return $stacks;
+  }
+  catch (FontManagementMonotypeException $e) {
+    font_management_monotype_handle_exception($e);
+  }
+}
+
+/**
+ * Implement hook_form_FORM_ID_alter().
+ *
+ * TODO (AN-26268): This code will no longer run, since it is altering a form
+ * provided by the Typekit module, but we are no longer using that module
+ * (we've replaced it with the Font Management module instead).
+ */
+function themebuilder_monotype_form_typekit_admin_settings_alter(&$form, &$form_state) {
+  // Display a warning message to people who have entered a key, but who have no
+  // Monotype fonts set up yet,
+  if (!empty($form['font_management_webfonts_token']['#default_value']) && $project_key) {
+    try {
+      if (!empty($token) && !empty($project_key)) {
+        $project = themebuilder_monotype_get_project_info($token, $project_key);
+        if (!$project || empty($project->Font) || count($project->Font) <= 0) {
+          $form['monotype_enable']['#prefix'] = '<div class="messages warning">' . t('Your Fonts.com Web Fonts are not published yet.') . '</div>';
+        }
+      }
+    }
+    catch (FontManagementMonotypeException $e) {
+      font_management_monotype_handle_exception($e);
+    }
+  }
+}
+
+/**
+ * Get info for a particular Monotype project from the Monotype API.
+ *
+ * @param {String} $token
+ *   The authentication token.
+ * @param {String} $project_key
+ *   The project key.
+ *
+ * @return stdClass
+ *   An object with the Monotype information for a project.
+ */
+function themebuilder_monotype_get_project_info($token, $project_key) {
+  if ($token && $project_key) {
+    try {
+      $fonts = FontManagementMonotype::getInstance()->getFontList($token, $project_key);
+      return $fonts;
+    }
+    catch (FontManagementMonotypeException $e) {
+      font_management_monotype_handle_exception($e);
+    }
+  }
+  return NULL;
+}
+
+/**
+ * Determine whether Monotype is enabled on the site.
+ *
+ * @return {Boolean}
+ *   TRUE if Monotype fonts are enabled; FALSE otherwise.
+ */
+function themebuilder_monotype_enabled() {
+  return module_exists('font_management') && variable_get('font_management_webfonts_enable', FALSE);
+}

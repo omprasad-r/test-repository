@@ -1,0 +1,7 @@
+; $Id$
+name = Site Export
+description = Exports your site.
+core = 7.x
+package = Drupal Gardens
+files[] = site_export.module
+hidden = TRUE

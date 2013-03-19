@@ -1,0 +1,113 @@
+<?php
+/**
+ * @file
+ *   Theme builder advanced layout editor.
+ */
+
+/**
+ * Implementation of hook_menu().
+ */
+function themebuilder_advanced_layout_menu() {
+  $items = array();
+  $items['themebuilder-advanced-layout-load'] = array(
+    'title' => t('Advanced layout retrieval'),
+    'page callback' => 'themebuilder_bar_ajax_request',
+    'page arguments' => array('themebuilder_advanced_layout_load'),
+    // @todo: is this the right permission to check for?
+    'access arguments' => array('access themebuilder advanced tab'),
+    'type' => MENU_CALLBACK,
+  );
+  return $items;
+}
+
+/**
+ * Menu callback to retrieve layout information.
+ */
+function themebuilder_advanced_layout_load() {
+  global $theme;
+
+  $layouts_configured = themebuilder_compiler_get_current_theme()->getLayouts();
+  $output = '';
+  foreach ($layouts_configured as $path => $layout) {
+    $output .= $path . ': ' . str_replace('body-layout-', '', $layout) . "\n";
+  }
+  print $output;
+
+  exit();
+}
+
+/**
+ * Implements hook_themebuilder_bar_editor().
+ */
+function themebuilder_advanced_layout_themebuilder_bar_editor() {
+  $path = drupal_get_path('module', 'themebuilder_advanced_layout');
+  return array(array(
+    'css' => array(
+      array(
+        'data' => $path .'/themebuilder_advanced_layout.css',
+      ),
+     ),
+    'js'  => array(
+      $path . '/js/LayoutEditor.js',
+    ),
+  ));
+}
+
+/**
+ * Implements hook_themebuilder_advanced_tabs_alter().
+ */
+function themebuilder_advanced_layout_themebuilder_advanced_tabs_alter(&$tabs) {
+  $tabs['layout'] = t('Page layouts');
+}
+
+
+/**
+ * Implements hook_themebuilder_advanced_pre_alter().
+ */
+function themebuilder_advanced_layout_themebuilder_advanced_pre_alter(&$advanced_pre) {
+  global $theme;
+
+  $title = t('Layout options');
+  $advanced_pre .= <<<EOD
+<div class="themebuilder-advanced-outer layout-cheatsheet cheatsheet hidden">
+    <div class="themebuilder-advanced-inner layout-cheatsheet-inner cheatsheet-inner">
+   <span>$title</span>
+   <div class="scrollpane">
+   <ul>
+EOD;
+
+  $layouts_available = themebuilder_layout_get_possible_layouts($theme);
+  foreach ($layouts_available as $layout_key => $layout_info) {
+   $advanced_pre .= '<li>'. $layout_key . '</li>';
+  }
+
+  $advanced_pre .= <<<EOD
+   </ul>
+   </div>
+  </div>
+</div>
+EOD;
+
+}
+
+/**
+ * Implements hook_themebuilder_advanced_contents_alter().
+ */
+function themebuilder_advanced_layout_themebuilder_advanced_contents_alter(&$contents) {
+
+  $layout_tab = <<<EOD
+ <div id="themebuilder-advanced-layout">
+    <div class="themebuilder-advanced-outer">
+        <textarea id="layout_edit" class="themebuilder-advanced-inner codepress linenumbers-off" cols="60" rows="10" spellcheck="false" />
+    </div>
+    <div class="advanced-update-button-wrapper">
+      !update_button
+    </div>
+  </div>
+EOD;
+  $layout_tab = format_string($layout_tab, array(
+    '!update_button' => theme('themebuilder_button', array('id' => 'advanced-layout-update-button', 'text' => 'Update', 'class' => 'disabled')),
+  ));
+
+  $contents .= $layout_tab;
+}

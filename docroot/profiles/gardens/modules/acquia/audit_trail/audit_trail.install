@@ -1,0 +1,32 @@
+<?php
+
+/**
+ * @file
+ * Install, update, and uninstall functions for the audit trail module.
+ */
+
+/**
+ * Implements hook_install().
+ */
+function audit_trail_install() {
+  db_query("UPDATE {system} SET weight = 9999 WHERE name = 'audit_trail'");
+}
+
+/**
+ * Implements hook_uninstall().
+ */
+function audit_trail_uninstall() {
+  $variables = array(
+    'audit_trail_separator',
+    'audit_trail_log_destination',
+    'audit_trail_log_file',
+    'audit_trail_form_changes',
+    'audit_trail_form_changes_path',
+    'audit_trail_form_submissions',
+    'audit_trail_form_submissions_path',
+    'audit_trail_form_management_link',
+  );
+  foreach ($variables as $variable) {
+    variable_del($variable);
+  }
+}

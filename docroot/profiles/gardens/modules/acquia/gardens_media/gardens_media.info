@@ -1,0 +1,14 @@
+name = Gardens Media
+description = Adds Photo and Video nodes and fields programatically.
+core = 7.x
+files[] = gardens_media.module
+files[] = gardens_media.install
+files[] = gardens_media.css
+files[] = gardens_media.test
+dependencies[] = taxonomy
+dependencies[] = token
+dependencies[] = media
+dependencies[] = media_internet
+dependencies[] = media_oembed
+dependencies[] = oembedcore
+dependencies[] = oembedembedly

@@ -1,0 +1,403 @@
+<?php
+/**
+ * @file
+ * MASt module - provides service endpoints for content authoring.
+ */
+
+define('MAST_MAX_ALLOWED_NODE_TYPES', 4);
+
+/**
+ * Implements hook_menu().
+ */
+function mast_menu() {
+  $items['admin/config/content/mast'] = array(
+    'type' => MENU_NORMAL_ITEM,
+    'description' => 'Configure how mobile apps interact with your site.',
+    'title' => 'Mobile app settings',
+    'page callback' => 'drupal_get_form',
+    'page arguments' => array('mast_settings_form'),
+    'access arguments' => array('administer site configuration'),
+    'file' => 'mast.ui.inc',
+  );
+  $items['mast-api-available'] = array(
+    'type' => MENU_CALLBACK,
+    'title' => 'Verify MASt availability',
+    'page callback' => 'mast_api_available',
+    'access callback' => TRUE,
+    'file' => 'mast.services.inc',
+  );
+  $items['mast-api-available.json'] = array(
+    'type' => MENU_CALLBACK,
+    'title' => 'Verify MASt availability',
+    'page callback' => 'mast_api_available',
+    'access callback' => TRUE,
+    'file' => 'mast.services.inc',
+  );
+  $items['mast/login'] = array(
+    'type' => MENU_CALLBACK,
+    'title' => '',
+    'access callback' => 'user_is_anonymous',
+    'page callback' => 'mast_user_login_page',
+    'theme callback' => 'mast_login_flow_theme_callback',
+    'file' => 'mast.ui.inc',
+  );
+  $items['mast/password'] = array(
+    'type' => MENU_CALLBACK,
+    'title' => '',
+    'access callback' => 'user_is_anonymous',
+    'page callback' => 'mast_user_pass',
+    'theme callback' => 'mast_login_flow_theme_callback',
+    'file' => 'mast.ui.inc',
+  );
+  return $items;
+}
+
+/**
+ * Theme callback; forces the user login flow to use the Stark theme.
+ */
+function mast_login_flow_theme_callback() {
+  return 'stark';
+}
+
+/**
+ * Implements hook_hook_info().
+ *
+ * All hooks relating to the enabling and disabling of content types for use
+ * with MASt are in the mast.ui.inc file, so as to keep the .module file purely
+ * for the main functionality.
+ */
+function mast_hook_info() {
+  $hooks['form_user_pass_alter'] = array(
+    'group' => 'ui',
+  );
+  $hooks['form_user_login_alter'] = array(
+    'group' => 'ui',
+  );
+  $hooks['form_user_admin_account_alter'] = array(
+    'group' => 'ui',
+  );
+  $hooks['form_user_cancel_confirm_form_alter'] = array(
+    'group' => 'ui',
+  );
+  $hooks['form_node_type_form_alter'] = array(
+    'group' => 'ui',
+  );
+  $hooks['field_create_instance'] = array(
+    'group' => 'ui',
+  );
+  $hooks['field_update_instance'] = array(
+    'group' => 'ui',
+  );
+  $hooks['field_delete_instance'] = array(
+    'group' => 'ui',
+  );
+  $hooks['form_field_ui_field_overview_form_alter'] = array(
+    'group' => 'ui',
+  );
+  $hooks['services_resources'] = array(
+    'group' => 'services',
+  );
+  $hooks['mast_classes'] = array(
+    'group' => 'services',
+  );
+  $hooks['mast_field_types'] = array(
+    'group' => 'services',
+  );
+  return $hooks;
+}
+
+/**
+ * Implements hook_theme().
+ */
+function mast_theme() {
+  return array(
+    'mast_icon_options' => array(
+      'render element' => 'mast_icon',
+    ),
+    'page__mast__login' => array(
+      'render element' => 'elements',
+      'template' => 'page--mast--login',
+    ),
+    'page__mast__password' => array(
+      'render element' => 'elements',
+      'template' => 'page--mast--login',
+    ),
+    'mast_field' => array(
+      'render element' => 'element',
+    )
+  );
+}
+
+/**
+ * Checks whether a bundle is MASt enabled.
+ *
+ * @param String $entity_type
+ *  The machine name of the entity type.
+ *
+ * @param String $bundle
+ *  The machine name of the bundle.
+ *
+ * Returns TRUE if the bundle is MASt-enabled, FALSE otherwise.
+ */
+function mast_enabled($entity_type, $bundle) {
+  $value = variable_get('mast_bundle_settings', array());
+  if (isset($value[$entity_type]) && isset($value[$entity_type][$bundle])) {
+    return $value[$entity_type][$bundle]['enabled'];
+  }
+  return FALSE;
+}
+
+/**
+ * Returns whether the passed in bundle is eligible to be MASt enabled.
+ *
+ * @param String $entity_type
+ *  The machine name of the entity type.
+ *
+ * @param String $bundle
+ *  The machine name of the bundle.
+ *
+ * @return boolean
+ *   Whether the bundle is eligible to be MASt-enabled.
+ */
+function mast_eligible($entity_type, $bundle) {
+  module_load_include('inc', 'mast', 'mast.ui');
+  $eligibility = mast_get_bundle_eligibility();
+  if (isset($eligibility[$entity_type]) && isset($eligibility[$entity_type][$bundle])) {
+    return $eligibility[$entity_type][$bundle];
+  }
+  mast_bundle_update_eligibility($entity_type, $bundle);
+  return mast_eligible($entity_type, $bundle);
+}
+
+/**
+ * Implements hook_mast_unsupported_bundles().
+ */
+function mast_mast_unsupported_bundles() {
+  return array(
+    'node' => array(
+      'poll',
+    )
+  );
+}
+
+/**
+ * Implements hook_page_alter().
+ */
+function mast_page_alter(&$page) {
+  if (current_path() === 'mast/login' || current_path() == 'mast/password') {
+    // Strip all non-content regions from the mast/login page.
+    foreach (element_children($page) as $region) {
+      if ($region !== 'content') {
+        unset($page[$region]);
+      }
+    }
+  }
+}
+
+/**
+ * Implements hook_css_alter().
+ */
+function mast_css_alter(&$css) {
+  $path = current_path();
+  if ($path  == 'mast/login' || $path == 'mast/password') {
+    // Remove layout.css from Stark theme.
+    unset($css[drupal_get_path('theme', 'stark') . '/layout.css']);
+  }
+}
+
+/**
+ * Implements hook_ctools_plugin_api().
+ */
+function mast_ctools_plugin_api($module, $api) {
+  if ($module == "oauth_common" && $api == "oauth") {
+    return array(
+      "version" => 1,
+      "file" => 'mast.services.inc',
+    );
+  }
+  if ($module == "services" && $api == "services") {
+    return array(
+      "version" => 3,
+    );
+  }
+}
+
+/**
+ * Implements hook_image_default_styles().
+ */
+function mast_image_default_styles() {
+  $styles = array();
+  $styles['mobile_thumbnail'] = array(
+    'effects' => array(
+      array(
+        'name' => 'image_scale_and_crop',
+        'data' => array(
+          'width' => 100,
+          'height' => 100,
+        ),
+        'weight' => 0,
+      ),
+    ),
+  );
+  return $styles;
+}
+
+
+/**
+ * Implements hook_default_oauth_common_context().
+ */
+function mast_default_oauth_common_context() {
+  $contexts = array();
+
+  // Note: The authorization_options below include an 'automatic_authorization'
+  // key that will disappear if you edit via the UI and re-export. Make sure
+  // to add it back in after exporting.
+  $context = new stdClass;
+  $context->disabled = FALSE; /* Edit this to true to make a default context disabled initially */
+  $context->api_version = 1;
+  $context->name = 'mast';
+  $context->title = 'MASt Mobile App Services';
+  $context->authorization_options = array(
+    'automatic_authorization' => TRUE,
+    'access_token_lifetime' => NULL,
+    'signature_methods' => array(
+      0 => 'HMAC-SHA1',
+    ),
+    'default_authorization_levels' => array(
+      0 => '*',
+    ),
+  );
+  $context->authorization_levels = array(
+    '*' => array(
+      'name' => '*',
+      'title' => 'All permissions',
+      'default' => 1,
+      'delete' => 0,
+      'description' => 'Gives the mobile app the same permissions you have on the regular site.',
+    ),
+  );
+  $contexts['mast'] = $context;
+
+  return $contexts;
+}
+
+
+/**
+ * Theme function for multivalue fields included in teasers.
+ *
+ * Because MASt strips html tags from the teaser it returns, we need to make
+ * sure that multivalue fields included in the teaser don't just get squashed
+ * together with no spaces.
+ */
+function theme_mast_field($variables) {
+  $element = $variables['element'];
+  $output = '';
+  $items = array();
+  // Render the label, if it's not hidden.
+  if ($element['#label_display'] != 'hidden') {
+    $output .= check_plain($element['#title']) . ':&nbsp;';
+  }
+  foreach ($element['#items'] as $delta => $item) {
+    if (!empty($element[$delta])) {
+      $items[] = drupal_render($element[$delta]);
+    }
+  }
+  $output .= implode(', ', $items);
+  return $output;
+}
+
+/***************************** HELPER FUNCTIONS *******************************/
+
+function mast_field_info_fields() {
+  $fields = field_info_fields();
+  foreach ($fields as &$field) {
+    $field['mast_field_type'] = mastFactory::FIELD_TYPE_FIELD_API;
+  }
+
+  // Fake node properties as fields to make our life easier.
+  $fields['author'] = array(
+    'type' => 'user_reference',
+    'cardinality' => '1',
+    'mast_field_type' => mastFactory::FIELD_TYPE_PROPERTY,
+  );
+  $fields['title'] = array(
+    'type' => 'text',
+    'cardinality' => '1',
+    'mast_field_type' => mastFactory::FIELD_TYPE_PROPERTY,
+  );
+  // Maybe someone else wants to mess with them too.
+  drupal_alter('mast_field_info_fields', $fields);
+  return $fields;
+}
+
+function mast_field_info_field($field_name) {
+  $fields = mast_field_info_fields();
+  if (isset($fields[$field_name])) {
+    return $fields[$field_name];
+  }
+}
+
+function mast_field_info_instances($entity_type = NULL, $bundle_name = NULL) {
+  $instances = field_info_instances($entity_type, $bundle_name);
+
+  if (isset($entity_type) && ($entity_type == 'node')) {
+    // Fake node properties as fields to make our life easier.
+    $fake['author'] = array(
+      'label' => t('Author'),
+      'default' => '',
+      'required' => TRUE,
+      'field_name' => 'author',
+      'widget' => array(
+        'weight' => 1000,
+      ),
+    );
+    $fake['title'] = array(
+      'label' => t('Title'),
+      'default' => '',
+      'required' => TRUE,
+      'field_name' => 'title',
+      'widget' => array(
+        'weight' => -99,
+      ),
+    );
+    if (isset($bundle_name)) {
+      $instances += $fake;
+    }
+    else {
+      foreach ($instances as $bundle_name => &$instance) {
+        $instance += $fake;
+      }
+    }
+  }
+  // Maybe someone else wants to mess with them too.
+  drupal_alter('mast_field_info_instances', $instances, $entity_type, $bundle_name);
+  return $instances;
+}
+
+function mast_field_info_instance($entity_type, $field_name, $bundle_name) {
+  $instances = mast_field_info_instances($entity_type, $bundle_name);
+  if (isset($instances[$field_name])) {
+    return $instances[$field_name];
+  }
+}
+
+/**
+ * Returns TRUE if the passed in field type is supported by the MASt module or
+ * by another module that implements hook_mast_field_types().
+ */
+function mast_field_type_supported($type) {
+  $types = &drupal_static(__FUNCTION__, array());
+  if (empty($types)) {
+    $types = mast_services_get_supported_field_types();
+  }
+  return in_array($type, $types);
+}
+
+/**
+ * Returns the full list of field types that are supported by MASt and other
+ * modules implementing hook_mast_field_types().
+ */
+function mast_services_get_supported_field_types() {
+  $types = module_invoke_all('mast_field_types');
+  return $types;
+}

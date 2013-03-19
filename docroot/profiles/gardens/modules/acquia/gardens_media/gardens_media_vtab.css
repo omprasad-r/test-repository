@@ -1,0 +1,7 @@
+/**
+ * Removes the vertical tabs for node forms in the upload page
+ */
+
+.vertical-tabs {
+  display: none;
+}

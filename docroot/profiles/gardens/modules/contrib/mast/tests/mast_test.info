@@ -1,0 +1,13 @@
+name = "MASt module functional tests"
+description = "Support module for MASt-related testing."
+package = Testing
+core = 7.x
+hidden = TRUE
+dependencies[] = mast
+
+; Information added by drupal.org packaging script on 2013-01-17
+version = "7.x-1.0-rc1"
+core = "7.x"
+project = "mast"
+datestamp = "1358437930"
+

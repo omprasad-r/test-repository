@@ -1,0 +1,377 @@
+<?php
+
+/**
+ * Implementation of hook_menu().
+ */
+function jsunit_menu() {
+  $items['admin/jsunit'] = array(
+    'page callback' => 'jsunit_display_link',
+    'type' => MENU_DEFAULT_LOCAL_TASK,
+    'access arguments' => array('administer site configuration'),
+  );
+  $items['jsunit'] = array(
+    'page callback' => 'jsunit_render_test',
+    'access arguments' => array('access content'),
+    'type' => MENU_CALLBACK,
+  );
+  return $items;
+}
+
+/**
+ * Displays a link available at /admin/jsunit which takes you to the
+ * jsunit test harness.
+ */
+function jsunit_display_link() {
+  $path = drupal_get_path('module', 'jsunit');
+  return l('Go to jsunit test harness', "$path/jsunit/testRunner.html");
+}
+
+/**
+ * An instance of the JsUnit class holds the configuration for a
+ * single unit test.  This class is not used at all for a test suite.
+ *
+ * To configure the JsUnit instance, the following should be set according
+ * to your test requirements:
+ *
+ * jsunit javascript includes (addJavaScriptFile)
+ * css files (addCssFile)
+ * javascript test code (addJavaScriptTest
+ * 
+ */
+class JsUnit {
+  private $title = 'Unknown - set the title with $jsunit->setTitle(string);';
+  private $jsunit_javascript = array('jsUnitCore.js');
+  private $javascript_files = array();
+  private $jsunit_css = array('jsUnitStyle.css');
+  private $css_files = array();
+  private $javascript = '';
+  private $html = '';
+
+  /**
+   * Adds a JavaScript include file.  This is necessary for all JavaScript
+   * files required to run the associated unit test.  By default, only the
+   * jsUnitCore.js file is included, which is the core of the jsunit test
+   * API.
+   *
+   * To include a jsunit JavaScript file, simply provide the associated
+   * filename, with no path.  For all other JavaScript files, provide
+   * both the filename and the path.
+   *
+   * @param $filename
+   *   The name of a JavaScript file to include when rendering a unit
+   *   test.
+   * @param $path
+   *   The path to the specified JavaScript file.  If the path is omitted,
+   *   the JavaScript file will be included from the jsunit/app directory
+   *   within the jsunit module (the directory in which all of the jsunit
+   *   include files can be found).
+   */
+  public function addJavaScriptFile($filename, $path = NULL) {
+    if (!$path) {
+      // This will be a jsunit javascript file
+      $this->jsunit_javascript[] = $filename;
+    }
+    else {
+      $this->javascript_files[] = "$path/$filename";
+    }
+  }
+
+  /**
+   * Adds a CSS file.  This is necessary for all CSS files required to
+   * run the associated unit test.  By default, only the
+   * jsUnitStyle.css file is included.
+   *
+   * To include a jsunit CSS file, simply provide the associated
+   * filename, with no path.  For all other CSS files, provide
+   * both the filename and the path.
+   *
+   * @param $filename
+   *   The name of a CSS file to include when rendering a unit
+   *   test.
+   * @param $path
+   *   The path to the specified CSS file.  If the path is omitted,
+   *   the CSS file will be included from the jsunit/css directory
+   *   within the jsunit module (the directory in which all of the jsunit
+   *   css files can be found).
+   */
+  public function addCssFile($filename, $path = NULL) {
+    if (!$path) {
+      $this->jsunit_css[] = $filename;
+    }
+    else {
+      $this->css_files[] = $path . "/$filename";
+    }
+  }
+  
+  public function addHTML($html) {
+    $this->html .= $html;
+  }
+  
+  public function getHTML() {
+    return $this->html;
+  }
+
+  /**
+   * Renders the CSS files as links within the unit test markup.  This
+   * call is used in the unit test template.
+   *
+   * @return
+   *   A string containing the resulting CSS markup.
+   */
+  public function getCssMarkup() {
+    $css_path = drupal_get_path('module', 'jsunit') . '/jsunit/css';
+    $css = '';
+    foreach ($this->jsunit_css as $css_file) {
+      $css .= $this->renderCssLink(base_path() . "$css_path/$css_file");
+    }
+    foreach ($this->css_files as $css_file) {
+      $css .= $this->renderCssLink(base_path() . "$css_file");
+    }
+    return $css;
+  }
+
+  /**
+   * Renders the actual CSS link.
+   *
+   * @param $path
+   *   The path and filename of the CSS file being included, starting from
+   *   the Drupal docroot.
+   *
+   * @return
+   *   A string containing the markup for the link tag.
+   */
+  private function renderCssLink($path) {
+    return '<link rel="stylesheet" type="text/css" href="' . $path . '"></link>' . "\n";
+  }
+
+  /**
+   * Renders the JavaScript include files as script tags within the unit
+   * test markup.  This call is used in the unit test template.
+   *
+   * @return
+   *   A string containing the resulting JavaScript markup.
+   */
+  public function getJavaScriptMarkup() {
+    $js_path = drupal_get_path('module', 'jsunit') . '/jsunit/app';
+    $js = '';
+    foreach($this->jsunit_javascript as $js_file) {
+      $js .= $this->renderJavaScriptTag(base_path() . "$js_path/$js_file");
+    }
+    foreach($this->javascript_files as $js_file) {
+      $js .= $this->renderJavaScriptTag(base_path() . "$js_file");
+    }
+    return $js;
+  }
+
+  /**
+   * Renders the actual JavaScript script tag.
+   *
+   * @param $path
+   *   The path and filename of the JavaScript file being included,
+   *   starting from the Drupal docroot.
+   *
+   * @return
+   *   A string containing the markup for the script tag.
+   */
+  private function renderJavaScriptTag($path) {
+    return '<script type="text/javascript" src="' . $path . '"></script>' . "\n";
+  }
+
+  /**
+   * Adds a JavaScript test function to the unit test.
+   *
+   * @param $js
+   *   A string containing a javascript unit test function, or set of
+   *   functions.
+   */
+  public function addJavaScriptTest($js) {
+    $this->javascript .= "$js\n";
+  }
+
+  /**
+   * Adds a JavaScript test file to the unit test.  The entire contents of
+   * the file are assumed to be jsunit test code.
+   *
+   * @param $filepath
+   *   A string containing the path to a javascript unit test file.
+   */
+  public function addJavaScriptTestFile($filepath) {
+    $this->javascript .= file_get_contents(DRUPAL_ROOT . "/$filepath");
+  }
+
+  /**
+   * Returns the JavaScript test functions associated with this unit test.
+   *
+   * @return
+   *   A string containing the javascript code.
+   */
+  public function getJavaScriptTests() {
+    return $this->javascript;
+  }
+
+  /**
+   * Sets the title of the test, which will appear in the junit test
+   * harness as the test is being executed.
+   *
+   * @param $title
+   *   The title of the test.
+   */
+  public function setTitle($title) {
+    $this->title = $title;
+  }
+
+  /**
+   * Returns the title of the test.
+   *
+   * @return
+   *   The test title.
+   */
+  public function getTitle() {
+    return $this->title;
+  }
+}
+
+/**
+ * This is the test entry point.  This function figures out if
+ * we are trying to execute a unit test or a test suite and calls
+ * the appropriate function to render the corresponding test.
+ *
+ * @param $module
+ *   (Optional) The name of the module that contains the desired test(s).
+ *   If the module is not provided, a full test suite including all
+ *   available jsunit tests will be rendered.
+ * @param $test_name
+ *   (Optional) The name of the test within the specified module that
+ *   corresponds to the desired test.  If the $test_name parameter is
+ *   not specified and the $module parameter is specified, the test
+ *   suite for the specified module wil be rendered.
+ */
+function jsunit_render_test($module = NULL, $test_name = NULL) {
+  if ($module) {
+    if (!$test_name) {
+      // This is a test suite
+      jsunit_render_test_suite($module);
+    }
+    else {
+      jsunit_render_unit_test($module, $test_name);
+    }
+  }
+  else {
+    jsunit_render_all_unit_tests();
+  }
+}
+
+/**
+ * Causes all jsunit tests known to the system to be rendered for
+ * execution.
+ */
+function jsunit_render_all_unit_tests() {
+  $modules = module_implements("jsunit_suite");
+  $javascript = '';
+  foreach ($modules as $module) {
+    $javascript .= _jsunit_get_test_suite_javascript($module);
+  }
+  return _jsunit_render_suite_test_page(t('All jsunit tests'), $javascript);
+}
+
+/**
+ * Causes all jsunit tests known to the specified module to be rendered
+ * for execution.
+ *
+ * @param $module
+ *   The name of the module that contains the desired suite of unit tests.
+ */
+function jsunit_render_test_suite($module) {
+  if ($module) {
+    $javascript = _jsunit_get_test_suite_javascript($module);
+    $title = t('All jsunit tests for module @module', array('@module' => $module));
+    return _jsunit_render_suite_test_page($title, $javascript);
+  }
+}
+
+/**
+ * Constructs JavaScript code for including multiple jsunit tests as
+ * a single test suite.  All of the jsunit tests associated with the
+ * specified module will be included.
+ *
+ * @param $module
+ *   The name of the module that contains the desired unit tests.
+ *
+ * @return
+ *   A string containing JavaScript code required to bundle all jsunit
+ *   tests associated with the specified module as a single test suite.
+ */
+function _jsunit_get_test_suite_javascript($module) {
+  if (!module_exists($module)) {
+    return;
+  }
+  $path = drupal_get_path('module', $module);
+  include_once("$path/$module.module");
+  $function = $module . '_jsunit_suite';
+  $test_functions = $function();
+  $javascript = '';
+  foreach ($test_functions as $name) {
+    $javascript .= "result.addTestPage('".base_path()."jsunit/$module/$name');\n";
+  }
+  return $javascript;
+}
+
+/**
+ * Renders the actual page that specifies a unit test.
+ *
+ * @param $title
+ *   The title of the test suite.
+ * @param $javascript
+ *   The JavaScript code associated with the test suite.
+ */
+function _jsunit_render_suite_test_page($title, $javascript) {
+  $path = drupal_get_path('module', 'jsunit');
+  $path_to_jsunit = base_path() . "$path/jsunit";
+  $template_file = "$path/suite_test.tpl";
+  ob_start();
+  include DRUPAL_ROOT . "/$template_file";
+  $contents = ob_get_contents();
+  ob_end_clean();
+
+  echo $contents;
+  drupal_exit();
+}
+
+/**
+ * Renders the specified unit test for the specified module.
+ *
+ * @param $module
+ *   The module that contains the desired unit test.
+ * @param $test_name
+ *   The name associated with the desired unit test.
+ */
+function jsunit_render_unit_test($module, $test_name) {
+  if (!module_exists($module)) {
+    return;
+  }
+  $path = drupal_get_path('module', $module);
+  include_once("$path/$module.module");
+  $jsunit = new JsUnit();
+  $function = $module . '_jsunit_initialize';
+  $function($jsunit, $test_name);
+
+  _jsunit_render_unit_test_page($jsunit);
+}
+
+/**
+ * This private function does the actual rendering of the unit test template.
+ *
+ * @param $jsunit
+ *   The JsUnit instance that describes the unit test.
+ */
+function _jsunit_render_unit_test_page($jsunit) {
+  $path = drupal_get_path('module', 'jsunit');
+  $template_file = "$path/unit_test.tpl";
+  ob_start();
+  include DRUPAL_ROOT . "/$template_file";
+  $contents = ob_get_contents();
+  ob_end_clean();
+
+  echo $contents;
+  drupal_exit();
+}

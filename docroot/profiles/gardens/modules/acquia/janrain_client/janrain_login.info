@@ -1,0 +1,10 @@
+name = Social Login
+description = Allow users to log in using third party services like Facebook and Twitter
+core = 7.x
+dependencies[] = janrain_client
+dependencies[] = gardens_client
+dependencies[] = dialog
+dependencies[] = dialog_user
+package = Drupal Gardens
+configure = admin/config/people/janrain
+version = "7.x-1.0-beta2"

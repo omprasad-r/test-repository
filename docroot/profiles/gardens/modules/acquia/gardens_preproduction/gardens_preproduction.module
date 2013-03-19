@@ -1,0 +1,25 @@
+<?php
+
+/**
+ * @file
+ *   Simple tag module that indicates whether we are in production mode or
+ *   testing mode.  By testing whether this module is enabled we can make any
+ *   behavior enabled when testing and disabled in production.  Also, by
+ *   disabling this module in testing, we can test as if the code were in
+ *   production.
+ */
+
+/**
+ * Implementation of hook_init().
+ *
+ * Provides a setting that indicates we are in preproduction mode for
+ * javascript code.
+ */
+function gardens_preproduction_init() {
+  $current_js = drupal_add_js(
+    array(
+      'gardens_preproduction' => TRUE,
+    ),
+    array('type' => 'setting')
+  );
+}

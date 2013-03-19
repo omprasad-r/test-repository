@@ -1,0 +1,167 @@
+<?php
+
+/**
+ * @file
+ * Install file for Gardens Media module.
+ */
+
+/**
+ * Implements hook_install().
+ */
+function gardens_media_install() {
+  $t = get_t();
+
+  // Create the content types for video and photo if they do not already exist
+  $system_types = node_type_get_types();
+  $node_types = array('video', 'photo');
+  foreach ($node_types as $type) {
+    if (!array_key_exists($type, $system_types)) {
+      _gardens_media_create_node_type($type);
+    }
+  }
+
+  // Define the basic details of our fields
+  $media_fields = array(
+    'field_video_asset' => array(
+      'machine_name' => 'video_asset',
+      'title' => $t('Video asset'),
+      'type' => 'media',
+      'widget' => 'gardens_media_video'
+    ),
+    'field_photo_asset' => array(
+      'machine_name' => 'photo_asset',
+      'title' => $t('Photo asset'),
+      'type' => 'media',
+      'widget' => 'gardens_media_photo'
+    ),
+  );
+
+  // Create our fields if they are not already defined
+  $fields = field_info_fields();
+  foreach ($media_fields as $field => $properties) {
+    if(!array_key_exists($field, $fields)) {
+      _gardens_media_create_field($field, $properties);
+    }
+  }
+
+
+  $fields = field_info_fields();
+  // Create instances of our video field if none already exists for our the
+  // video node type
+  if (!isset($fields['field_video_asset']['bundles']['node'])) {
+    _gardens_media_create_field_instance('field_video_asset', $media_fields['field_video_asset'], 'video');
+  }
+  else {
+    if (!in_array('video', $fields['field_video_asset']['bundles']['node'])) {
+      _gardens_media_create_field_instance('field_video_asset', $media_fields['field_video_asset'], 'video');
+    }
+  }
+
+  // Create instances of our photo field if none already exists for our the
+  // photo node type
+  if (!isset($fields['field_photo_asset']['bundles']['node'])) {
+    _gardens_media_create_field_instance('field_photo_asset', $media_fields['field_photo_asset'], 'photo');
+  }
+  else {
+    if (!in_array('photo', $fields['field_photo_asset']['bundles']['node'])) {
+      _gardens_media_create_field_instance('field_photo_asset', $media_fields['field_photo_asset'], 'photo');
+    }
+  }
+}
+
+function gardens_media_uninstall() {
+}
+
+function _gardens_media_create_node_type($type) {
+  $t = get_t();
+  // We define the node type as an associative array.
+  $node = array(
+    'type' => $type,
+    'name' => ucfirst($type),
+    // 'base' tells Drupal the base string for hook functions.
+    // This is often the module name; if base is set to 'mymodule', Drupal
+    // would call mymodule_insert() or similar for node hooks.
+    // In this case, we set base equal to 'node_content' so Drupal will handle
+    // our node as if we had designed it in the UI.
+    'base' => 'node_content',
+    'description' => $type,
+    'body_label' => $t('Description'),
+    'custom' => TRUE,
+  );
+
+  // Complete the node type definition by setting any defaults not explicitly
+  // declared above.
+  // http://api.drupal.org/api/function/node_type_set_defaults/7
+  $content_type = node_type_set_defaults($node);
+  node_add_body_field($content_type);
+
+  // Save the content type
+  node_type_save($content_type);
+}
+
+function _gardens_media_create_field($field_name, $properties) {
+  switch($properties['type']) {
+    case 'media':
+      $field = array(
+        'field_name' => $field_name,
+        'type' => 'media',
+      );
+      break;
+    case 'taxonomy':
+      break;
+  }
+  field_create_field($field);
+}
+
+function _gardens_media_create_field_instance($field_name, $properties, $node_type) {
+  $instance =  array(
+    'entity_type' => 'node',
+    'field_name' => $field_name,
+    'label' => $properties['title'],
+    'required' => 0,
+    'settings' => array(
+      'file_extensions' => 'jpg jpeg gif png',
+      'user_register_form' => FALSE,
+    ),
+    'description' => '',
+    'widget' => array(
+      'active' => 1,
+      'module' => 'media',
+      'settings' => array(
+        'allowed_schemes' => array(
+          'oembed' => 'oembed',
+          'public' => 'public',
+          'youtube' => 0,
+        ),
+        'allowed_types' => array(
+          'audio' => 0,
+          'default' => 0,
+          'image' => 'image',
+          'video' => 'video',
+        ),
+        'file_extensions' => 'jpg jpeg gif png',
+        'progress_indicator' => 'throbber',
+      ),
+      'type' => $properties['widget'],
+      'weight' => -10,
+    ),
+    'display' => array(
+      'default' => array(
+        'label' => 'above',
+        'module' => NULL,
+        'settings' => array(),
+        'type' => 'media_large',
+        'weight' => 11,
+      ),
+      'teaser' => array(
+        'label' => 'above',
+        'settings' => array(),
+        'type' => 'hidden',
+        'weight' => 0,
+      ),
+    ),
+  );
+  $instance['entity_type'] = 'node';
+  $instance['bundle'] = $node_type;
+  field_create_instance($instance);
+}

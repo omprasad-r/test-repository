@@ -1,0 +1,76 @@
+<?php
+
+/**
+ * Implement hook_menu();
+ */
+function siteinfo_menu() {
+  $items = array();
+
+  $items['siteinfo'] = array(
+    'title' => 'Site Info',
+    'description' => 'Site information',
+    'page callback' => 'siteinfo_view',
+    'access arguments' => array('access site information'),
+    'type' => MENU_CALLBACK,
+  );
+
+  return $items;
+}
+
+/**
+ * Implement hook_permission();
+ */
+function siteinfo_permission() {
+  return array (
+    'access site information' => array(
+      'title' => 'Can view diagnostic site information',
+      'description' => 'Can view diagnostic site information',
+    ),
+  );
+}
+
+function siteinfo_view($format = 'json') {
+  $site_info = array();
+  foreach(module_implements('siteinfo') as $module) {
+    $site_info[$module] = call_user_func("{$module}_siteinfo");
+  }
+  $output = theme('siteinfo_' . $format, array('site_info' => $site_info));
+  if ($format == 'json') {
+    print $output;
+    die();
+  }
+  return $output;
+
+}
+
+/**
+ * Implement hook_theme();
+ */
+function siteinfo_theme($existing, $type, $theme, $path) {
+  return array(
+    'siteinfo_json' => array (
+      'arguments' => array('site_info' => NULL),
+    ),
+    'siteinfo_html' => array (
+      'arguments' => array('site_info' => NULL),
+    ),
+  );
+}
+
+function theme_siteinfo_json($site_info) {
+  return drupal_json_encode($site_info);
+}
+
+function theme_siteinfo_html($site_info) {
+  return '<pre>' . var_export($site_info, TRUE) . '</pre>';
+}
+
+/**
+ * Implements hook_siteinfo();
+ * @return unknown_type
+ */
+function siteinfo_siteinfo() {
+  return array('foo' => 'bar');
+}
+
+?>

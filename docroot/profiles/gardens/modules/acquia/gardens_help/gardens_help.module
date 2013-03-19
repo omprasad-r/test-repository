@@ -1,0 +1,217 @@
+<?php
+
+/**
+ * @file
+ *   Gardens centralized help integrator.
+ *
+ *   Note that where GARDENS_HELP_SMB_GARDENER is used, the intention is that
+ *   the SMB gardener should have that content/functionality, such as
+ *   documentation, search, videos, forums. Therefore the constant use was
+ *   applied consistently.
+ */
+
+/**
+ * Help documentation and videos are on the SMB gardener.
+ */
+define('GARDENS_HELP_SMB_GARDENER', 'http://www.drupalgardens.com');
+
+/**
+ * Implements hook_menu().
+ */
+function gardens_help_menu() {
+  $items = array();
+  if (!module_exists('help')) {
+    $items['admin/help'] = array(
+      'title' => 'Help',
+      'description' => 'Reference for usage, configuration, and modules',
+      'page callback' => 'gardens_help_main',
+      'access arguments' => array('access administration pages'),
+      'weight' => 9,
+    );
+  }
+  return $items;
+}
+
+/**
+ * Implements hook_contextual_links_view_alter() in order to add links to
+ * Drupal Gardens documentation.
+ */
+function gardens_help_contextual_links_view_alter(&$element, $items) {
+  $links = gardens_help_contextual_links();
+
+  foreach($element['#contextual_links'] as $module => $module_links) {
+    if (isset($links[$module])) {
+      $element['#links'] = array_merge($element['#links'], $links[$module]);
+    }
+  }
+}
+
+/**
+ * Returns an array of help links indexed by module.
+ */
+function gardens_help_contextual_links() {
+  $links = array(
+    'menu' => array(
+      'menu-help' => array(
+        'title' => t('What is a menu?'),
+        'href' => GARDENS_HELP_SMB_GARDENER . '/documentation/menus',
+        'attributes' => array('target' => '_blank'),
+      ),
+    ),
+    'block' => array(
+      'block-help' => array(
+        'title' => t('What is a block?'),
+        'href' => GARDENS_HELP_SMB_GARDENER . '/documentation/blocks',
+        'attributes' => array('target' => '_blank'),
+      ),
+    ),
+    'views_ui' => array(
+      'views-help' => array(
+        'title' => t('What is a view?'),
+        'href' => GARDENS_HELP_SMB_GARDENER . '/documentation/views',
+        'attributes' => array('target' => '_blank'),
+      ),
+    ),
+    'node' => array(
+      'node-help' => array(
+        'title' => t('What is content?'),
+        'href' => GARDENS_HELP_SMB_GARDENER . '/documentation/working-content',
+        'attributes' => array('target' => '_blank'),
+      ),
+    ),
+  );
+
+  return $links;
+}
+
+/**
+ * Page callback used for help page when help module is not enabled.
+ */
+function gardens_help_main() {
+  drupal_goto('http://www.drupalgardens.com/help');
+}
+
+/**
+ * Implementation of hook_init().
+ */
+function gardens_help_init() {
+  global $user;
+
+  $path = drupal_get_path('module', 'gardens_help');
+  drupal_add_css($path . '/gardens_help.css');
+  drupal_add_js($path . '/gardens_help.js', array('weight' => 50));
+  drupal_add_js(array('gardenerHelpSearchURL' => GARDENS_HELP_SMB_GARDENER), 'setting');
+
+  if (!isset($_COOKIE[session_name()]) && $user->uid == 1) {
+      drupal_add_js($path . '/gardens_help_popup.js');
+  }
+}
+
+/**
+ * Implement hook_permission().
+ */
+function gardens_help_permission() {
+  return array(
+    'use parature support' => array(
+      'title' => t('Use Parature support'),
+      'description' => t('Can go to ask support questions via Parature'),
+    ),
+  );
+}
+
+/**
+ * Implements hook_page_alter().
+ *
+ * Add help window to the page_top region automatically.
+ */
+function gardens_help_page_alter(&$page) {
+  $path = drupal_get_path('module', 'gardens_help');
+
+  $page['page_top']['toolbar'] = array(
+    '#pre_render' => array('gardens_help_pre_render'),
+    '#access' => user_access('access toolbar'),
+    'toolbar_drawer' => array(),
+  );
+  $blank = array('attributes' => array('target' => '_blank'));
+
+  $current_gardener = scarecrow_get_gardener_url();
+  $current_client = variable_get('gardens_client_name', '');
+  $current_gardener_is_smb = empty($current_client);
+  $support = '';
+
+  // Forums link only incldued if the parent gardener is SMB.
+  if ($current_gardener_is_smb) {
+    $support .= '<li>' . l(t('Forums'), GARDENS_HELP_SMB_GARDENER . '/forum', $blank) . '</li>';
+  }
+  // Build support links based on available permissions.
+  // Parature related links go to local gardener, not SMB.
+  if (user_access('use parature support')) {
+    $support .= '<li>' . l(t('Tickets'), $current_gardener .'/gardener-help/history', $blank) . '</li>';
+  }
+
+  $page['page_top']['toolbar_help'] = array(
+    '#type' => 'markup',
+    '#access' => user_access('access toolbar'),
+    '#markup' => '
+    <div style="display: none;" id="help-header">
+
+      <div class="help-section" id="help-section-search">
+        <div class="help-section-inner">
+          <form id="gardens-help-search-form" target="_blank">
+            <input type="text" id="gardens-help-search-query" placeholder="'. t('What are you looking for') .'">
+            <input type="submit" class="form-submit extra" value="">
+          </form>
+        </div>
+      </div>
+      <div class="help-section" id="help-section-links">
+        <ul>
+          <li>'. l(t('Videos'), GARDENS_HELP_SMB_GARDENER . '/videos', $blank) .'</li>
+          <li>'. l(t('Documentation'), GARDENS_HELP_SMB_GARDENER . '/documentation', $blank) .'</li>' . $support .'
+        </ul>
+      </div>
+    </div>',
+  );
+}
+
+/**
+ * Build a toolbar variant that matches our desires for providing help.
+ */
+function gardens_help_pre_render($toolbar) {
+  global $user;
+
+  if (!function_exists('toolbar_view')) {
+    return array();
+  }
+  // Get built-in toolbar view.
+  $build = toolbar_view();
+
+  // Remove the last element of the menu links (Help), and remember it.
+  $help_link = array_pop($build['toolbar_menu']['#links']);
+
+  if ($user->uid) {
+    // Add my sites link and help link if logged in.
+    $build['toolbar_user']['#links']['mysites'] = array(
+      'title' => t('My sites'),
+      // Link to my sites page on gardener.
+      'href' => scarecrow_get_gardener_url() . '/mysites',
+      'html' => TRUE,
+      'attributes' => array('title' => t('Site manager'), 'target' => '_self'),
+    );
+    // Link to help page on gardener (no JS and right-click).
+    $help_link['href'] = GARDENS_HELP_SMB_GARDENER . '/help';
+    $build['toolbar_user']['#links']['help'] = $help_link;
+
+
+    $links = $build['toolbar_user']['#links'];
+    $links['account']['title'] = t('<strong>@username</strong>', array('@username' => format_username($user)));
+    // Re-order the links
+    $ordered_links = array();
+    $ordered_links['help'] = $links['help'];
+    $ordered_links['mysites'] = $links['mysites'];
+    $ordered_links['account'] = $links['account'];
+    $ordered_links['logout'] = $links['logout'];
+    $build['toolbar_user']['#links'] = $ordered_links;
+  }
+
+  return array_merge($toolbar, $build);
+}

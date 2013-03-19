@@ -1,0 +1,23 @@
+/**
+ * Styles for the MASt login flow.
+ */
+
+/* @group MASt login flow styles */
+
+@media only screen and (max-device-width: 320px) {
+  .page-mast-login,
+  .page-mast-password {
+    background: #d1e6f8 url(../images/grass_bkg.png) 0 -62px no-repeat;
+  }
+}
+
+@media only screen and (-webkit-min-device-pixel-ratio: 2) {
+  .page-mast-login,
+  .page-mast-password {
+    background: #d1e6f8 url(../images/grass_bkg_x2.png) 0 -62px no-repeat;
+    background-size: 320px 480px;
+  }
+}
+
+/* @end */
+

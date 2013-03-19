@@ -1,0 +1,25 @@
+<?php
+
+/**
+ * If any of the themes has the powered-by block in an invalid region move it
+ * into the copyright or footer_first region.
+ */
+function gardens_limits_install() {
+  foreach(list_themes() as $theme) {
+    // The block can be disabled in the admin themes, so we don't check them.
+    if (!in_array($theme->name, array('blossom', 'seven'))) {
+      $block = db_query('SELECT * FROM {block} WHERE module = :module AND delta = :delta AND theme = :theme',
+          array(':module' => 'system', ':delta' => 'powered-by', ':theme' => $theme->name))->fetchObject();
+      if ($block  && in_array($block->region, array('sidebar_a', 'sidebar_b', -1))) {
+        $region = isset($theme->info['regions']['copyright']) ? 'copyright' : 'footer_first';
+        db_update('block')
+          ->fields(array(
+            'region' => $region,
+            'status' => 1,
+          ))
+          ->condition('bid', $block->bid)
+          ->execute();
+      }
+    }
+  }
+}

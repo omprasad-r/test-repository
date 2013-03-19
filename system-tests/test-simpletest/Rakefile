@@ -1,0 +1,44 @@
+require 'rubygems'
+require "bundler/setup"
+require 'rake/testtask'
+require 'net/ssh'
+require 'net/scp'
+require 'helper/00_simpletest_helper'
+require '../helpers/qa_backdoor'
+
+host = ENV['SUT_URL'] || "#{ENV['SUBDOMAIN']}.gardensqa.acquia-sites.com"
+@host = host.gsub('http://','').chomp('/')
+@key_path = "../instance-setup-fog/keys/gardens_qa_id_rsa"
+
+@log = Logger.new(STDOUT)
+@log.level = Logger::INFO
+
+include Test00SimpletestHelper
+
+desc 'Configure a gardens site for simpletest'
+task :setup_simpletest => [
+  :configure_php_for_simpletest,
+  :enable_simpletest_module
+]
+
+desc 'Configure set PHP execution limits for simpletest'
+task :configure_php_for_simpletest do
+  ssh(@host, @key_path) do |session|
+    @log.info session.exec!(
+      "find /etc/php5 -name php.ini | xargs sudo sed -ibak 's/max_execution_time = [0-9]*/max_execution_time = 300/'"
+    )
+    @log.info session.exec!("sudo /etc/init.d/apache2 restart")
+  end
+end
+
+desc 'Install and enable simpletest drupal module'
+task :enable_simpletest_module do
+  backdoor = QaBackdoor.new("http://#{@host}", { :logger => @log })
+  puts backdoor.enable_module('simpletest')
+end
+
+desc "Run test cases ascii sorted"
+Rake::TestTask.new('run') do |t|
+  t.test_files = FileList['*_test.rb'].sort
+  t.verbose = true
+end

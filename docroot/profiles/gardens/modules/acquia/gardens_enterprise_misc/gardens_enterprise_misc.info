@@ -1,0 +1,6 @@
+; $Id$
+name = Miscellaneous enterprise gardens Stuff
+description = Common enterprise related Gardens features, updates, etc.
+core = 7.x
+package = Drupal Enterprise Gardens
+hidden = TRUE

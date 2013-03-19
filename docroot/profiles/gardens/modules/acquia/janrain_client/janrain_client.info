@@ -1,0 +1,16 @@
+name = Social Publish and API
+description = Allow users to log in using third party services like Facebook and Twitter, and push content out to these services
+core = 7.x
+dependencies[] = gardens_client
+dependencies[] = dialog
+dependencies[] = dialog_user
+package = Drupal Gardens
+files[] = janrain_client.module
+files[] = janrain_client.admin.inc
+files[] = janrain_client.pages.inc
+files[] = janrain_client.webapi.inc
+files[] = tests/janrain_client.test
+files[] = tests/janrain_client.webapi_mock.inc
+stylesheets[all][] = janrain_client.css
+configure = admin/config/people/janrain
+version = "7.x-1.0-beta2"

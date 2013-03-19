@@ -1,0 +1,68 @@
+<?php
+
+/**
+ * Implements hook_menu().
+ */
+function original_author_menu() {
+  $items = array();
+  $items['admin/config/content/original_author'] = array(
+    'title' => t('Original Author'),
+    'type' => MENU_NORMAL_ITEM,
+    'page callback' => 'drupal_get_form',
+    'page arguments' => array('original_author_bulk_add'),
+    'access arguments' => array('administer site configuration'),
+    'file' => 'original_author.admin.inc',
+  );
+  return $items;
+}
+
+/**
+ * Implements hook_node_insert().
+ */
+function original_author_node_insert($node) {
+  global $user;
+  $insert = db_insert('original_author')->fields(array('nid', 'uid'));
+  $insert->values(array('nid' => $node->nid, 'uid' => $user->uid));
+  $insert->execute();
+}
+
+/**
+ * Implements hooks_node_load().
+ */
+function original_author_node_load($nodes) {
+  $result = db_query('SELECT nid, uid FROM {original_author} WHERE nid IN(:nids)', array(':nids' => array_keys($nodes)));
+  foreach ($result as $record) {
+    $nodes[$record->nid]->original_author = $record->uid;
+  }
+}
+
+/**
+ * Implements hook_cron_queue_info().
+ */
+function original_author_cron_queue_info() {
+  $queues['original_author_queue'] = array(
+    'worker callback' => 'original_author_queue_process_item',
+    'time' => 60,
+  );
+  return $queues;
+}
+
+/**
+ * Processes a single queued item.
+ */
+function original_author_queue_process_item($item) {
+  if (isset($item['nid']) && is_numeric($item['nid'])) {
+    // Find the uid from the revisions table - if the original author's uid is
+    // to be found anywhere it's with the first revision for this node.
+    $vid = db_query('SELECT MIN(vid) FROM {node_revision} WHERE nid = :nid', array(':nid' =>$item['nid']))->fetchField();
+    $uid = db_query('SELECT uid FROM {node_revision} WHERE vid = :vid', array(':vid' => $vid))->fetchField();
+    $insert = db_insert('original_author')->fields(array('nid', 'uid'));
+    $insert->values(array('nid' => $item['nid'], 'uid' => $uid));
+    try {
+      $insert->execute();
+    }
+    catch (Exception $e) {
+      watchdog_exception('Original Author', $e);
+    }
+  }
+}

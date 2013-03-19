@@ -1,0 +1,1203 @@
+<?php
+// $Id$
+
+/**
+ * Implement hook_install().
+ */
+function scarecrow_install() {
+  // Since this module is intended to modify and secure the output of many
+  // other modules, we really really really want it to always act last.
+  db_update('system')
+    ->fields(array('weight' => 10000000))
+    ->condition('name', 'scarecrow')
+    ->execute();
+}
+
+/**
+ * Recursively replace 'title_display' in the form builder cache.
+ *
+ * This function changes the title display options in the form builder cache in
+ * the same way that the main body of scarecrow_update_11041() does for saved
+ * webform components.
+ *
+ * @param $data
+ *   An array containing the cached form builder data.
+ *
+ * @return
+ *   TRUE if at least one 'title_display' was updated, FALSE otherwise.
+ */
+function _scarecrow_update_replace_title_display(&$data) {
+  $replaced = FALSE;
+  if (is_array($data)) {
+    if (isset($data['#title_display'])) {
+      $title_display_map = array(
+        'above' => 'before',
+        'below' => 'before',
+        'before' => 'inline',
+        'after' => 'inline',
+        'invisible' => 'none',
+      );
+      if (isset($title_display_map[$data['#title_display']])) {
+        $data['#title_display'] = $title_display_map[$data['#title_display']];
+        $replaced = TRUE;
+      }
+    }
+    foreach ($data as &$child) {
+      $replaced_in_child = _scarecrow_update_replace_title_display($child);
+      $replaced = $replaced || $replaced_in_child;
+    }
+  }
+  return $replaced;
+}
+
+/**
+ * Recursively add defaults to select elements in the form builder cache.
+ *
+ * This function adds default values to non-required select elements in the
+ * form builder cache that currently have no default value, in the same way
+ * that the main body of scarecrow_update_11041() does for saved webform
+ * components.
+ *
+ * @param $data
+ *   An array containing the cached form builder data.
+ *
+ * @return
+ *   TRUE if at least one select element was updated to add a default value,
+ *   FALSE otherwise.
+ */
+function _scarecrow_update_add_select_default(&$data) {
+  $added = FALSE;
+  if (is_array($data)) {
+    if (isset($data['#type']) && $data['#type'] == 'select' && empty($data['#multiple']) && empty($data['#required']) && !isset($data['#default_value']) && !empty($data['#options'])) {
+      $options = array_keys($data['#options']);
+      $data['#default_value'] = array_shift($options);
+      $added = TRUE;
+    }
+    foreach ($data as &$child) {
+      $added_in_child = _scarecrow_update_add_select_default($child);
+      $added = $added || $added_in_child;
+    }
+  }
+  return $added;
+}
+
+/**
+ * Grant parature usage to site owners.
+ */
+function scarecrow_update_7001() {
+  module_enable(array('gardens_help'), TRUE);
+  // Should have used user_role_load_by_name(), when available in core.
+  $site_owner = db_select('role', 'r')
+    ->fields('r')
+    ->condition('name', 'site owner')
+    ->execute()
+    ->fetchObject();
+  user_role_grant_permissions($site_owner->rid, array('use parature support'), array('gardens_help'));
+}
+
+/**
+ * gardens-beta-7 hotfixes number 10700 to 10799.
+ */
+
+/**
+ * Make sure toolbar module is enabled for all users.
+ */
+function scarecrow_update_10700() {
+  module_enable(array('toolbar'), FALSE);
+}
+
+/**
+ * gardens-beta-8 hotfixes number 10800 to 10899.
+ */
+
+/**
+ * gardens-beta-9 hotfixes number 10900 to 10999.
+ */
+
+/**
+ * Make sure simpleviews module is enabled for all users.
+ */
+function scarecrow_update_10900() {
+  module_enable(array('simpleviews'), FALSE);
+}
+
+/**
+ * gardens-beta-10 hotfixes number 11000 to 10099.
+ */
+
+/**
+ * gardens-1.00 hotfixes number 11000 to 11099.
+ */
+
+/**
+ * Logging page was public before, people might have tweaked settings.
+ *
+ * See AN-24607.
+ */
+function scarecrow_update_11000() {
+  // system.module setting
+  variable_set('error_level', 0); // ERROR_REPORTING_HIDE
+  // dblog setting
+  variable_del('dblog_row_limit'); // default is fine
+  // syslog setting
+  variable_del('syslog_facility'); // set by AH
+  variable_del('syslog_identity'); // default is fine
+  variable_set('syslog_format', '!message; !base_url; !timestamp; !type; !ip; !request_uri; !referer; !uid; !link');
+}
+
+/**
+ * Enable the Gardens Contextual module for all users
+ */
+
+function scarecrow_update_11010() {
+  module_enable(array('contextual_flyout_links'), FALSE);
+}
+
+/**
+ * Updates on trunk after the 1.01 release start at 11015.
+ */
+
+/**
+ * Enable the Save draft and Filter tips dialog modules.
+ */
+function scarecrow_update_11015() {
+  module_enable(array('save_draft', 'dialog', 'filter_tips_dialog'), FALSE);
+}
+
+/**
+ * Rerun webform_update_7309() on existing sites.
+ */
+function scarecrow_update_11016() {
+  // The webform module's update functions were previously misnumbered in
+  // Gardens but have now been straightened out to match the actual module.
+  // The content of this update function never ran, so we run it here.
+  if (drupal_get_installed_schema_version('webform') != SCHEMA_UNINSTALLED) {
+    webform_update_7309();
+  }
+}
+
+/**
+ * Updates on trunk after the 1.02 release start at 11020.
+ */
+
+/**
+ * Enable the Simplified Menu Administration module.
+ */
+function scarecrow_update_11020() {
+  module_enable(array('simplified_menu_admin'), FALSE);
+}
+
+/**
+ * Enable Monotype font support.
+ */
+function scarecrow_update_11021() {
+  // Move variables from the Typekit module to font_management.
+  $key = variable_get('typekit_key');
+  if (isset($key)) {
+    variable_set('font_management_typekit_key', $key);
+  }
+  $enable = variable_get('typekit_enable');
+  if (isset($enable)) {
+    variable_set('font_management_typekit_enable', $enable);
+  }
+  // Disable the typekit module if it's in use, and enable font_management
+  // in its place.
+  if (module_exists('typekit')) {
+    $to_enable[] = 'font_management';
+    module_disable(array('typekit'), FALSE);
+    // Run typekit's uninstall hook so we can remove it from the codebase later.
+    module_load_install('typekit');
+    typekit_uninstall();
+  }
+  // The themebuilder monotype module is now required, so enable it for all
+  // sites, regardless of whether they currently use typekit.
+  $to_enable[] = 'themebuilder_monotype';
+  module_enable($to_enable);
+}
+
+/**
+ * Updates on trunk after the 1.03 release start at 11030.
+ */
+
+/**
+ * Updates on trunk after the 1.04 release start at 11040.
+ */
+
+/**
+ * Enable the Themebuilder Marketplace module.
+ */
+function scarecrow_update_11040() {
+  module_enable(array('themebuilder_marketplace'), FALSE);
+}
+
+/**
+ * Update webform components and form builder caches to reflect recent changes.
+ */
+function scarecrow_update_11041() {
+  // Fix issues with saved webform components.
+  if (drupal_get_installed_schema_version('webform') != SCHEMA_UNINSTALLED) {
+    $components = db_query("SELECT * FROM {webform_component}")->fetchAll();
+    foreach ($components as $component) {
+      $to_save = FALSE;
+      $component->extra = unserialize($component->extra);
+      // The 'title_display' options that were eventually committed to Webform
+      // are different from the ones in the patch we were running in Gardens,
+      // so we need to change ours.
+      if (isset($component->extra['title_display'])) {
+        $title_display = &$component->extra['title_display'];
+        // In addition to name changes, "below" and (inline) "after" no longer
+        // exist, so convert them while at least preserving the inline status.
+        $title_display_map = array(
+          'above' => 'before',
+          'below' => 'before',
+          'before' => 'inline',
+          'after' => 'inline',
+          'invisible' => 'none',
+        );
+        if (isset($title_display_map[$title_display])) {
+          $title_display = $title_display_map[$title_display];
+          $to_save = TRUE;
+        }
+      }
+      // An issue was fixed in Webform in which non-required select lists with
+      // no default values now get an automatic "-None-" option inserted as the
+      // default. Since this will change the behavior of existing webforms in a
+      // way the site owner might not want, we update these components to have
+      // the first element as the explicit default value (preserving the same
+      // behavior in the browser as users would have seen before).
+      if ($component->type == 'select' && !empty($component->extra['aslist']) && empty($component->extra['multiple']) && empty($component->mandatory) && $component->value === '') {
+        module_load_include('inc', 'webform', 'components/select');
+        $items = _webform_select_options_from_text($component->extra['items'], FALSE, FALSE);
+        if (!empty($items)) {
+          $options = array_keys($items);
+          $component->value = array_shift($options);
+          $to_save = TRUE;
+        }
+      }
+      // Save the updated component, if necessary.
+      if ($to_save) {
+        // drupal_write_record() won't serialize this column automatically
+        // since the 'serialize' key isn't used for it in webform_schema().
+        $component->extra = serialize($component->extra);
+        drupal_write_record('webform_component', $component, array('nid', 'cid'));
+      }
+    }
+  }
+
+  // Fix the same issues as above, but for the form builder cache (for webforms
+  // that may be in the process of being edited).
+  if (drupal_get_installed_schema_version('form_builder') != SCHEMA_UNINSTALLED) {
+    $cached_forms = db_query("SELECT * FROM {form_builder_cache}")->fetchAll();
+    foreach ($cached_forms as $cached_form) {
+      $to_save = FALSE;
+      $cached_form->data = unserialize($cached_form->data);
+      if (_scarecrow_update_replace_title_display($cached_form->data)) {
+        $to_save = TRUE;
+      }
+      if (_scarecrow_update_add_select_default($cached_form->data)) {
+        $to_save = TRUE;
+      }
+      if ($to_save) {
+        db_update('form_builder_cache')
+          ->fields(array('data' => serialize($cached_form->data)))
+          ->condition('sid', $cached_form->sid)
+          ->condition('type', $cached_form->type)
+          ->condition('form_id', $cached_form->form_id)
+          ->execute();
+      }
+    }
+  }
+}
+
+/**
+ * Update Media field formatters in field-based Views.
+ */
+function scarecrow_update_11042() {
+  // Update the saved Views.
+  if (db_table_exists('views_display')) {
+    $result = db_select('views_display', 'v')->fields('v', array('vid', 'id', 'display_options'))->execute();
+    foreach ($result as $record) {
+      if (!empty($record->display_options)) {
+        $display_options = unserialize($record->display_options);
+        if (_scarecrow_update_11042_update_display_options($display_options)) {
+          db_update('views_display')
+            ->fields(array('display_options' => serialize($display_options)))
+            ->condition('vid', $record->vid)
+            ->condition('id', $record->id)
+            ->execute();
+        }
+      }
+    }
+  }
+
+  // Update the Views being edited. Objects in the CTools cache are instances of
+  // classes, so the Views module must be enabled to unserialize it correctly.
+  if (db_table_exists('ctools_object_cache') && module_exists('views')) {
+    $result = db_select('ctools_object_cache', 'c')->fields('c', array('sid', 'name', 'obj', 'data'))->condition('obj', 'view')->execute();
+    foreach ($result as $record) {
+      $view = unserialize($record->data);
+      if (!empty($view->display)) {
+        $updated = FALSE;
+        foreach ($view->display as $display_name => $display) {
+          if (!empty($display->display_options) && _scarecrow_update_11042_update_display_options($display->display_options)) {
+            $updated = TRUE;
+          }
+        }
+        if ($updated) {
+          db_update('ctools_object_cache')
+            ->fields(array('data' => serialize($view)))
+            ->condition('sid', $record->sid)
+            ->condition('name', $record->name)
+            ->condition('obj', $record->obj)
+            ->execute();
+        }
+      }
+    }
+  }
+
+  // Clear caches that might contain stale Views displays.
+  if (module_exists('views')) {
+    cache_clear_all('*', 'cache_views', TRUE);
+    cache_clear_all('*', 'cache_views_data', TRUE);
+  }
+  if (module_exists('block')) {
+    cache_clear_all('*', 'cache_block', TRUE);
+  }
+  cache_clear_all('*', 'cache_page', TRUE);
+}
+
+/**
+ * Helper function for scarecrow_update_11042().
+ */
+function _scarecrow_update_11042_update_display_options(&$display_options) {
+  $updated = FALSE;
+  if (!empty($display_options['fields'])) {
+    foreach ($display_options['fields'] as $field_name => $field_options) {
+      if (isset($field_options['type'])) {
+        if (in_array($field_options['type'], array('media_link', 'media_preview', 'media_small', 'media_large', 'media_original'), TRUE)) {
+          $display_options['fields'][$field_name]['type'] = 'media';
+          if (empty($display_options['fields'][$field_name]['settings'])) {
+            $display_options['fields'][$field_name]['settings'] = array();
+          }
+          $display_options['fields'][$field_name]['settings']['file_view_mode'] = $field_options['type'];
+          $updated = TRUE;
+        }
+        elseif (in_array($field_options['type'], array('media_gallery_thumbnail', 'media_gallery_lightbox', 'media_gallery_detail', 'media_gallery_block_thumbnail', 'media_gallery_collection_thumbnail'), TRUE)) {
+          $display_options['fields'][$field_name]['type'] = 'media_gallery';
+          if (empty($display_options['fields'][$field_name]['settings'])) {
+            $display_options['fields'][$field_name]['settings'] = array();
+          }
+          $display_options['fields'][$field_name]['settings']['file_view_mode'] = $field_options['type'];
+          $updated = TRUE;
+        }
+        elseif (in_array($field_options['type'], array('media', 'media_gallery'), TRUE) && empty($display_options['fields'][$field_name]['settings']['file_view_mode'])) {
+          if (empty($display_options['fields'][$field_name]['settings'])) {
+            $display_options['fields'][$field_name]['settings'] = array();
+          }
+          $display_options['fields'][$field_name]['settings']['file_view_mode'] = ($field_options['type'] === 'media') ? 'default' : 'media_gallery_thumbnail';
+          $updated = TRUE;
+        }
+      }
+    }
+  }
+  return $updated;
+}
+
+/**
+ * Updates on trunk after the 1.05 release start at 11050.
+ */
+
+/**
+ * Enable the Simplified Modules module.
+ */
+function scarecrow_update_11050() {
+  // Only enable Simplified Modules if the site is currently using the Gardens
+  // Features module (since the functionality of this new module is derived
+  // from code we moved out of Gardens Features).
+  if (module_exists('gardens_features')) {
+    module_enable(array('simplified_modules'), FALSE);
+  }
+}
+
+/**
+ * Enable the Backports module.
+ */
+function scarecrow_update_11051() {
+  module_enable(array('backports'), FALSE);
+}
+
+/**
+ * Updates on trunk after the 1.06 release start at 11060.
+ */
+
+/**
+ * Enable Date and related modules.
+ */
+function scarecrow_update_11060() {
+  $modules = array('date_api', 'date', 'date_popup');
+  if (module_exists('views')) {
+    $modules[] = 'date_views';
+  }
+  module_enable($modules, FALSE);
+}
+
+/**
+ * Enable SEO related modules.
+ */
+function scarecrow_update_11061() {
+  module_enable(array('redirect', 'seo_ui'), FALSE);
+  if (module_exists('pathauto')) {
+    module_enable(array('pathauto_live_preview'), FALSE);
+  }
+}
+
+/**
+ * Updates on trunk after the 1.08 release start at 11080.
+ */
+
+/**
+ * Enable the embed.ly modules
+ */
+function scarecrow_update_11080() {
+  module_enable(array('oembedcore', 'oembedembedly', 'media_oembed', 'remote_stream_wrapper', 'gardens_features_required', 'media_oembed_thumbnail_style'), FALSE);
+}
+
+/**
+ * Add the janrain domain 'rpxnow.com' to the set of blacklisted domains for the
+ * extlink module.
+ */
+function scarecrow_update_11081() {
+  if(module_exists('extlink')) {
+    variable_set('extlink_exclude', '(acquia-sites.com|drupalgardens.com|rpxnow.com)');
+  }
+}
+
+/**
+ * Enable field_permissions module for all.
+ */
+function scarecrow_update_11082() {
+  module_enable(array('field_permissions'), FALSE);
+}
+
+/**
+ * Enable the edit_profile module for sites that have no user fields and haven't installed it.
+ */
+function scarecrow_update_11083() {
+  if (drupal_get_installed_schema_version('edit_profile') == SCHEMA_UNINSTALLED) {
+    // We only turn on the module for existing sites if they don't have user
+    // fields, since otherwise it would be too disruptive a change to their
+    // end-user UI.
+    if (!field_info_instances('user', 'user')) {
+      module_enable(array('edit_profile'), FALSE);
+    }
+    elseif (function_exists('drush_log')) {
+      // If they had user fields, we want to know about it in the update log.
+      drush_log(t('Site @url had existing user fields so edit_profile was not enabled during this update.', array('@url' => $GLOBALS['base_url'])), 'warning');
+    }
+  }
+  elseif (function_exists('drush_log') && !module_exists('edit_profile')) {
+    // If they explicitly disabled the module, we want to know about it in the
+    // logs.
+    drush_log(t('Site @url explicitly disabled edit_profile so it was not enabled during this update.', array('@url' => $GLOBALS['base_url'])), 'warning');
+  }
+
+}
+
+/**
+ * Updates on trunk after the 1.09 release start at 11090.
+ */
+
+/**
+ * Inivite email body changes in DG-712. Update sites using the default.
+ */
+function scarecrow_update_11090() {
+  $service_name = trim(strip_tags(variable_get('gardens_service_name_long', 'Drupal Gardens')));
+  $old_body = "You have been invited to be a member of [site:url-brief], a site hosted by $service_name.\n\nPlease log in using the link below and the e-mail address [user:mail] to complete your registration:\n\n[site:register-url]\n";
+  $new_body = "You have been invited to be a member of [site:url-brief], a site hosted by $service_name.\n\nPlease complete your registration using the link below and the e-mail address [user:mail]:\n\n[site:register-url]\n";
+  $site_body = variable_get('user_mail_register_admin_created_body', NULL);
+  if (!empty($site_body) && ($site_body == $old_body)) {
+    // Only set the new body if the site setting was saved and it is equal to
+    // the default from the installer. Otherwise it might be customized with
+    // any kind of text and we should not change.
+    variable_set('user_mail_register_admin_created_body', $new_body);
+  }
+}
+
+/**
+ * Enable views_load_more if views is enabled
+ */
+function scarecrow_update_11091() {
+  if (module_exists('views')) {
+    module_enable(array('views_load_more'), FALSE);
+  }
+}
+
+/**
+ * Remove node records without a type, as they cause errors in Drupal 7.8 and above.
+ */
+function scarecrow_update_11092() {
+  $nids = db_query('SELECT nid FROM {node} WHERE type = :type', array(':type' => ''))->fetchCol();
+  if ($nids) {
+    if (function_exists('drush_log')) {
+      drush_log(t('Deleted @nids from node table for site @url because they had invalid empty type.', array('@url' => $GLOBALS['base_url'], '@nids' => implode(', ', $nids))), 'warning');
+    }
+    db_delete('node')
+      ->condition('nid', $nids, 'IN')
+      ->execute();
+  }
+}
+
+/**
+ * Updates on trunk after the 1.11 release start at 11110.
+ */
+
+/**
+ * Enable dialog_user on sites by default.
+ * Only has a visible effect if SSO is turned off.
+ */
+function scarecrow_update_11110() {
+  $enable = array('dialog', 'dialog_user');
+  module_enable($enable, FALSE);
+}
+
+/**
+ * Enable date repeat as a default module.
+ */
+function scarecrow_update_11111() {
+  module_enable(array('date_repeat', 'date_repeat_field'), FALSE);
+}
+
+/**
+ * Sets the standard (e.g. mysites.drupalgardens.com) domain for all existing sites.
+ */
+function scarecrow_update_11112() {
+  // Older Gardens sites all use the standard domain in their file_public_path
+  // variable, so we can parse it out of that. Note that this might not work
+  // correctly for preinstalled sites, but it doesn't matter since those sites
+  // will have the correct value set once the site is configured; see
+  // install_gardens.inc.
+  if (($file_public_path = variable_get('file_public_path')) && preg_match('/sites\/([^\/]+)\/files/', $file_public_path, $matches)) {
+    variable_set('gardens_misc_standard_domain', $matches[1]);
+  }
+  // If there are sites this doesn't work for, make sure we know about it in
+  // the update log.
+  elseif (function_exists('drush_log')) {
+    drush_log(t('Site @url could not determine a standard domain from file path @path.', array('@url' => $GLOBALS['base_url'], '@path' => $file_public_path)), 'warning');
+  }
+}
+
+/**
+ * One-time update to identify all Warner and Florida Hospital sites and turn
+ * their custom modules on.
+ */
+function scarecrow_update_11113() {
+  // Use the Hosting stage to determine if this is a Warner or Florida Hospital
+  // site. Note: This is a one-time hack to force the correct behavior for all
+  // existing Warner and Florida hospital sites on the staging and production
+  // clusters. Once this has run, new code can safely use the
+  // 'gardens_client_name' variable to determine which cluster we are on.
+  $hostname = trim(`hostname`);
+  $components = explode('.', $hostname);
+  $stage = isset($components[1]) ? $components[1] : '';
+  if (strpos($stage, 'wmg-') === 0) {
+    $client_name = 'warner';
+  }
+  elseif (strpos($stage, 'fpmg-') === 0) {
+    $client_name = 'florida_hospital';
+  }
+  else {
+    $client_name = NULL;
+  }
+
+  // This duplicates the code that runs for new sites via gardens.profile or
+  // install_gardens.inc.
+  if ($client_name) {
+    variable_set('gardens_client_name', $client_name);
+    $module_name = "{$client_name}_misc";
+
+    if (module_exists($module_name)) {
+      $info = drupal_parse_info_file(drupal_get_path('module', $module_name) . "/$module_name.info");
+      $to_enable = array();
+      if (!empty($info['dependencies'])) {
+        foreach ($info['dependencies'] as $dependency) {
+          if (!module_exists($dependency)) {
+            $to_enable[] = $dependency;
+          }
+        }
+      }
+
+      if (!empty($to_enable)) {
+        module_enable($to_enable);
+      }
+    }
+    else {
+      // Deliberately do not pass FALSE as the second parameter, since these
+      // modules can have dependencies (e.g. florida_hospital_misc depends on
+      // webform_ssl) which we want to automatically enable. The number of sites
+      // on enterprise Gardens clusters is small enough now that this won't be a
+      // performance problem.
+      module_enable(array($module_name));
+    }
+  }
+}
+
+/**
+ * Enable Improved Text Trim module.
+ */
+function scarecrow_update_11114() {
+  module_enable(array('improved_text_trim'), FALSE);
+}
+
+/**
+ * Fix fields that were erroneously set to translatable.
+ */
+function scarecrow_update_11115() {
+  // Set every field to not translatable, since that is the default as of
+  // Drupal 7.6. Drupal Gardens contains no field translation UI module anyway,
+  // and we want sites in a consistent state.
+  foreach (field_read_fields(array('translatable' => 1), array('include_inactive' => TRUE)) as $field) {
+    // It's usually recommended to use field_update_field(), but this is safe,
+    // faster, and less likely to encounter errors from a weird state.
+    db_update('field_config')
+      ->fields(array('translatable' => 0))
+      ->condition('field_name', $field['field_name'])
+      ->execute();
+    // If the locale module is enabled, then it's been negotiating between the
+    // entity language and LANGUAGE_NONE. Once the field is no longer
+    // translatable, only LANGUAGE_NONE data is used. For entities containing
+    // field data in a single language, move that to LANGUAGE_NONE. Leave
+    // entities containing field data in multiple languages (or a language and
+    // LANGUAGE_NONE) alone. Those may need to be dealt with manually.
+    if (module_exists('locale')) {
+      foreach (array(_field_sql_storage_tablename($field), _field_sql_storage_revision_tablename($field)) as $table) {
+        if (db_table_exists($table)) {
+          $ambiguous_entity_ids = db_select($table, 'fd')
+            ->fields('fd', array('entity_id'))
+            ->groupBy('entity_id')
+            ->having('COUNT(DISTINCT language) > 1')
+            ->execute()
+            ->fetchCol();
+
+          $query = db_update($table)
+            ->fields(array('language' => LANGUAGE_NONE))
+            ->condition('language', LANGUAGE_NONE, '!=');
+          if ($ambiguous_entity_ids) {
+            $query->condition('entity_id', $ambiguous_entity_ids, 'NOT IN');
+            // Make sure we know about fields that need manual inspection.
+            if (function_exists('drush_log')) {
+              drush_log(t('Site @url had entities with more than one language for field @field in table @table (entity IDs: @ids).', array(
+                '@url' => $GLOBALS['base_url'],
+                '@field' => $field['field_name'],
+                '@table' => $table,
+                '@ids' => implode(',', $ambiguous_entity_ids),
+              )), 'warning');
+            }
+          }
+          $query->execute();
+        }
+      }
+    }
+    // If the locale module isn't enabled, it still may have been enabled at
+    // one point. If so, it's possible there is field data that does not use
+    // LANGUAGE_NONE. We don't want to auto-correct this (since it might make
+    // previously-invisible data visible on the site again) but we do want to
+    // know about it.
+    else {
+      foreach (array(_field_sql_storage_tablename($field), _field_sql_storage_revision_tablename($field)) as $table) {
+        if (db_table_exists($table)) {
+          $entities_with_language = db_select($table, 'fd')
+            ->fields('fd', array('entity_id', 'language'))
+            ->condition('language', LANGUAGE_NONE, '!=')
+            ->execute()
+            ->fetchAll();
+          if (!empty($entities_with_language) && function_exists('drush_log')) {
+            foreach ($entities_with_language as $entity) {
+              drush_log(t('Site @url had locale module disabled but entity @id had language @language for field @field in table @table.', array(
+                '@url' => $GLOBALS['base_url'],
+                '@id' => $entity->entity_id,
+                '@language' => $entity->language,
+                '@field' => $field['field_name'],
+                '@table' => $table,
+              )), 'warning');
+            }
+          }
+        }
+      }
+    }
+  }
+  field_cache_clear(TRUE);
+}
+
+/**
+ * Updates on trunk after the 1.12 release start at 11120.
+ */
+
+/**
+ * Enable Comment goodness module.
+ */
+function scarecrow_update_11120() {
+  module_enable(array('comment_goodness'), FALSE);
+}
+
+/**
+ * Enable the sending of cache headers for redirects.
+ */
+function scarecrow_update_11121() {
+  variable_set('redirect_page_cache', 1);
+}
+
+/**
+ * Enable the link and gardens_link_ui modules.
+ */
+function scarecrow_update_11122() {
+  module_enable(array('link', 'gardens_link_ui'), FALSE);
+}
+
+/**
+ * No-op. This update function has been removed.
+ */
+function scarecrow_update_11123() {
+}
+
+/**
+ * Update syslog to only log emergency, alert, critical and error messages.
+ * Suppress warning, notice, info and debugging messages.
+ *
+ * This functionality is enabled by the core patch here:
+ *   http://drupal.org/node/1408208
+ *
+ * This is being driven by Splunk. We need to stop going over our 1G indexed per
+ * day to comply with our license. If this reduces the volume of data we're indexing
+ * enough, we might want to reenable logging for warnings.
+ *
+ * If we move Gardens off Splunk and onto Graylog2 or something else hosted in-house,
+ * it would be nice to reenable warnings and notices for syslog.
+ */
+function scarecrow_update_11124() {
+  $allowed_severity = array(
+    WATCHDOG_EMERGENCY => WATCHDOG_EMERGENCY,
+    WATCHDOG_ALERT => WATCHDOG_ALERT,
+    WATCHDOG_CRITICAL => WATCHDOG_CRITICAL,
+    WATCHDOG_ERROR => WATCHDOG_ERROR,
+    WATCHDOG_WARNING => 0,
+    WATCHDOG_NOTICE => 0,
+    WATCHDOG_INFO => 0,
+    WATCHDOG_DEBUG => 0,
+  );
+  variable_set('syslog_allowed_severity', $allowed_severity);
+}
+
+/**
+ * Remove the restrictions on dblog messages set during a previous hotfix.
+ *
+ * (Customers were noticing their absence, and we only need to limit syslog for
+ * now.)
+ */
+function scarecrow_update_11125() {
+  variable_del('dblog_allowed_severity');
+}
+
+/**
+ * Updates on trunk after the 1.13 release start at 11130.
+ */
+
+/**
+ * Make sure that the custom Enterprise module is picked up in the new location and switch to new install profiles.
+ */
+function scarecrow_update_11130() {
+  if ($client_name = variable_get('gardens_client_name', '')) {
+    // Important to set the profile name before rebuilding module data, or the profile
+    // module might not be found.
+    variable_set('install_profile', $client_name);
+    // Let's not take any risks that rebuild didn't happen before the update.  The client
+    // modules at least will have moved, profiles themselves also do not get picked up.
+    system_list_reset();
+    system_rebuild_module_data();
+    // Pass TRUE to module_enable() so that dependent modules are also enabled.
+    // Normally, for performance, we would list dependencies here explicitly and
+    // pass FALSE, but in this case, we've already incurred the penalty of rebuilding
+    // the module data, so can allow module_enable() to benefit from that.
+    module_enable(array($client_name), TRUE);
+  }
+}
+
+/**
+ * Warn us of sites that might have had access to a brief PHP code execution vulnerability.
+ */
+function scarecrow_update_11131() {
+  $has_script_action = (bool) db_query_range("SELECT 1 FROM {actions} WHERE callback = 'views_bulk_operations_script_action'", 0, 1)->fetchField();
+  if ($has_script_action) {
+    throw new DrupalUpdateException(t('Site @url may have enabled a VBO action that allowed PHP code to be executed.', array('@url' => $GLOBALS['base_url'])));
+  }
+}
+
+/**
+ * Enable role_indicators on all sites (professional+) that have taxonomy_access enabled.
+ */
+function scarecrow_update_11132() {
+  // This is done for consistency among professioanl+ sites, which from now on
+  // will get role_indicators when taxonomy_access is enabled, but that doesn't
+  // apply to sites that already had taxonomy_access enabled.
+
+  // role_indicators is only available to professional sites and upward, but so is
+  // taxonomy_access, so we shouldn't need any extra checks here.
+  if (module_exists('taxonomy_access')) {
+    module_enable(array('role_indicators'), FALSE);
+  }
+}
+
+/**
+ * Enable the agrcache module.
+ */
+function scarecrow_update_11133() {
+  module_enable(array('agrcache'), TRUE);
+}
+
+/**
+ * Updates on trunk after the 1.14 release start at 11140.
+ */
+
+/**
+ * Enable the token_filter module; Set Coppa fields to sentence case rather than title case.
+ */
+function scarecrow_update_11140() {
+  module_enable(array('token_filter'), FALSE);
+
+  // Doing this in scarecrow rather than coppa_lite.install. Any users of coppa_lite.module
+  // outside of gardens that are interested in this case change could make the change in the UI.
+  if (module_exists('coppa_lite')) {
+    $fields = coppa_lite_get_required_date_fields();
+    foreach ($fields as $field_name => $label) {
+      if ($label == 'Date of Birth') {
+        $info = field_info_instance('user', $field_name, 'user');
+        $info['label'] = t('Date of birth');
+        field_update_instance($info);
+      }
+    }
+  }
+}
+
+/**
+ * Turn on block cache.
+ */
+function scarecrow_update_11141() {
+  variable_set('block_cache', TRUE);
+}
+
+/**
+ * Change default image toolkit to ImageMagick to improve performance
+ */
+function scarecrow_update_11150() {
+  $ret = array();
+  // enable module
+  module_enable(array('imagemagick'));
+
+  $convert_path = 'convert';
+
+  // add configuration
+  variable_set('image_toolkit', 'imagemagick');
+  variable_set('imagemagick_convert', $convert_path);
+  variable_set('imagemagick_debug', 0);
+  variable_set('imagemagick_quality', '75');
+
+  return $ret;
+}
+
+/**
+ * Move the directory for mailhandler temporary managed files into the site
+ * directory.
+ */
+function scarecrow_update_11152() {
+  // A prior update was run on FLH that set the temporary path to the
+  // site directory.  That doesn't actualy work because the value is
+  // overridden in the settings.php include file, but make it
+  // consistent here.  It is also nice to do this for anyone that may
+  // be running a local install that ran the updates.
+  variable_set('file_temporary_path', '/tmp');
+  $tmp_dir = 'public://gardens_temp/';
+  variable_set('mailhandler_temporary_path', $tmp_dir);
+  gardens_misc_create_tmp_dir($tmp_dir);
+}
+
+/**
+ * Set the correct default image style for media_crop
+ */
+function scarecrow_update_11153() {
+  variable_set('media_crop_default_style', 'large');
+}
+
+/**
+ * Inhibit general cache flushes for oembed cache.
+ */
+function scarecrow_update_11154() {
+  variable_set('oembed_cache_flush', FALSE);
+}
+
+/**
+ * Enable the entitycache module.
+ */
+function scarecrow_update_11155() {
+  module_enable(array('entitycache'), TRUE);
+}
+
+/**
+ * Enable the imagemagick module for any new sites that
+ * are still using the gd library.
+ */
+function scarecrow_update_11156() {
+  $ret = array();
+  if (image_get_toolkit() !== 'imagemagick') {
+    if (!module_exists('imagemagick')) {
+      module_enable(array('imagemagick'));
+    }
+
+    // Defaults set up in gardens.install
+    gardens_setup_image_toolkit();
+  }
+
+  return $ret;
+}
+
+/**
+ * Disable entitycache on all sites until the webform/entitycache interaction is
+ * fixed.
+ */
+function scarecrow_update_11158() {
+  // Removed ... This update has already run everywhere we want to run it, so
+  // the code has been removed to retain schema_version consistency, but it will
+  // be a no-op from now on.
+}
+
+/**
+ * Rebuild the registry because services and oauth modules have been moved from
+ * modules/acquia to sites/all/modules.
+ */
+function scarecrow_update_11159() {
+  drupal_flush_all_caches();
+}
+
+/**
+ * Set variable for SMB gardens to show DevCloud ad on site export page
+ *
+ */
+function scarecrow_update_11160() {
+  $client_name = variable_get('gardens_client_name', '');
+  //apply for SMB gardens only
+  if(empty($client_name)) {
+    variable_set('gardens_devcloud_ad_url', 'https://www.acquia.com/dev-cloud-export');
+  }
+}
+
+/**
+ * Enables agressive cache fixes on the extlink_extra module.
+ */
+function scarecrow_update_11169() {
+  variable_set('extlink_cache_fix', 1);
+}
+
+/**
+ * Set up default audit trail settings and restrictions.
+ */
+function scarecrow_update_11170() {
+  // Hide audit trail configuration permission.
+  $forbidden_permissions = scarecrow_forbidden_permissions();
+  if (!in_array('administer audit trail', $forbidden_permissions)) {
+    $forbidden_permissions[] = 'administer audit trail';
+    variable_set('scarecrow_forbidden_permissions', $forbidden_permissions);
+  }
+  // Default audit trail settings.
+  variable_set('audit_trail_form_changes_path', '/^admin/');
+  variable_set('audit_trail_form_submissions', '|.*/delete/?.*|');
+}
+
+/**
+ * Enable extlinks_extra module for every site that has extlinks module enabled.
+ */
+function scarecrow_update_11171() {
+  if (module_exists('extlink') && !module_exists('extlink_extra')) {
+    module_enable(array('extlink_extra'), FALSE);
+  }
+}
+
+/**
+ * Ensure that colorbox is enabled where extlink_extra is used.
+ */
+function scarecrow_update_11172() {
+  if (module_exists('extlink_extra') && !module_exists('colorbox')) {
+    module_enable(array('colorbox'), FALSE);
+  }
+}
+
+/**
+ * Enable task broadcasting client module to be able to send notifications.
+ */
+function scarecrow_update_11173() {
+  module_enable(array('gardens_broadcasting_client', 'gardens_broadcasting_client_notifications'));
+}
+
+/**
+ * Enable the gardens_statsd module.
+ */
+function scarecrow_update_11174() {
+  module_enable(array('gardens_statsd'), FALSE);
+  variable_set('gardens_statsd_enabled', 1);
+  variable_set('gardens_statsd_prefix', 'gardens');
+  variable_set('gardens_statsd_host', 'stats-1.acquia.com');
+  variable_set('gardens_statsd_port', '8125');
+
+  // Depending on when this function runs relative to the enterprise functions,
+  // make sure that one or the other can set the stage name.
+  if (!variable_get('gardens_statsd_stage', NULL)) {
+    variable_set('gardens_statsd_stage', 'smb');
+  }
+}
+
+/**
+ * Enable and setup Timeago module.
+ */
+function scarecrow_update_11175() {
+  if (!module_exists('timeago')) {
+    module_enable(array('timeago'));
+  }
+
+  _scarecrow_setup_timeago();
+}
+
+/**
+ * Create date types that make use of Timeago date format types.
+ *
+ * By default, disable Timeago for nodes/comments.
+ */
+function _scarecrow_setup_timeago() {
+  module_load_include('module', 'timeago');
+
+  // Define timeago date format types.
+  $timeago_date_types = array(
+    'timeago_long' => t('Timeago - Long'),
+    'timeago_medium' => t('Timeago - Medium'),
+    'timeago_short' => t('Timeago - Short'),
+  );
+
+  foreach ($timeago_date_types as $type => $type_title) {
+    system_date_format_type_save(array(
+      'type' => $type,
+      'title' => $type_title,
+      'is_new' => TRUE,
+    ));
+  }
+
+  // Disable timeago for nodes/comments by default.
+  variable_set('timeago_node', 0);
+  variable_set('timeago_comment', 0);
+
+  // Set the timeago date format types to use the timeago date formats.
+  variable_set('date_format_timeago_short', TIMEAGO_FORMAT_SHORT);
+  variable_set('date_format_timeago_medium', TIMEAGO_FORMAT_MEDIUM);
+  variable_set('date_format_timeago_long', TIMEAGO_FORMAT_LONG);
+}
+
+/**
+ * Set up default audit trail settings if they have not been so far.
+ *
+ * Theoretically audit_trail has been set up by scarecrow_update_11170() but
+ * there might be some new enterprise sites which have been created when the
+ * initial setup was not happening on new site creation.
+ */
+function scarecrow_update_11176() {
+  if (module_exists('audit_trail')) {
+    $current_audit_trail_setting = variable_get('audit_trail_form_changes_path', NULL);
+    if (!isset($current_audit_trail_setting)) {
+      variable_set('audit_trail_form_changes_path', '/^admin/');
+      variable_set('audit_trail_form_submissions', '|.*/delete/?.*|');
+    }
+  }
+}
+
+/**
+ * Ensure that mollom protection is enabled for all comment forms.
+ */
+function scarecrow_update_11177() {
+  $anon_may_comment = user_access('post comments', drupal_anonymous_user()) || user_access('skip comment approval', drupal_anonymous_user());
+  if ($anon_may_comment && !variable_get('gardens_client_name', FALSE)) {
+    foreach (node_type_get_names() as $node_type => $name) {
+      $form_id = 'comment_node_' . $node_type . '_form';
+      if (!mollom_form_load($form_id)) {
+        $mollom_form = mollom_form_new($form_id);
+        mollom_form_save($mollom_form);
+      }
+    }
+  }
+}
+
+/**
+ * Fix audit trail delete form submission tracking setup.
+ */
+function scarecrow_update_11178() {
+  $patterns = array_map('trim', explode("\n", variable_get('audit_trail_form_submissions_path', '')));
+  if (!in_array('|.*/delete/?.*|', $patterns)) {
+    $patterns[] = '|.*/delete/?.*|';
+    variable_set('audit_trail_form_submissions_path', implode("\n", $patterns));
+  }
+}
+
+/**
+ * Fix up extlink alert text variable when extlink_extra is enabled.
+ */
+function scarecrow_update_11179() {
+  if (module_exists('extlink_extra')) {
+    gardens_misc_modules_enabled(array('extlink_extra'));
+  }
+}
+
+/**
+ * Force-enable the dblog disabler module on all sites, all stages.
+ */
+function scarecrow_update_11180() {
+  module_enable(array('dblog_disable'), FALSE);
+}
+
+/**
+ * Ensures that anonymous users get a Mollom CAPTCHA when creating nodes.
+ */
+function scarecrow_update_11181() {
+  $anon_user = drupal_anonymous_user();
+  // Bypassing content access control permission is banned for anonymous users.
+  // Moreover a couple of permissions would also disable mollom:
+  // edit any <node type> content
+  // delete any <node type> content
+  $dangerous_permissions = array(
+    'administer nodes',
+    'bypass mollom protection',
+    'bypass node access',
+  );
+  foreach (node_permissions_get_configured_types() as $node_type) {
+    $dangerous_permissions[] = 'edit any ' . $node_type . ' content';
+    $dangerous_permissions[] = 'delete any ' . $node_type . ' content';
+  }
+  // This function is doing a delete and resets static cache. We could do a user
+  // access check first if there is anything to delete, but even that would go
+  // to the DB, so might as well just fire the delete.
+  user_role_revoke_permissions(DRUPAL_ANONYMOUS_RID, $dangerous_permissions);
+
+  // Nodes that can be created by anonymous users need to be protected by Mollom
+  // with a CAPTCHA on SMB.
+  if (!variable_get('gardens_client_name', '') && module_exists('mollom')) {
+    foreach (node_permissions_get_configured_types() as $node_type) {
+      if (user_access('create ' . $node_type . ' content', $anon_user)) {
+        $form_id = $node_type . '_node_form';
+        if (!mollom_form_load($form_id)) {
+          $mollom_form = mollom_form_new($form_id);
+          $mollom_form['mode'] = MOLLOM_MODE_CAPTCHA;
+          mollom_form_save($mollom_form);
+        }
+      }
+    }
+  }
+}
+
+/**
+ * Enable the gardens_health module.
+ */
+function scarecrow_update_11182() {
+  module_enable(array('gardens_health'), TRUE);
+}

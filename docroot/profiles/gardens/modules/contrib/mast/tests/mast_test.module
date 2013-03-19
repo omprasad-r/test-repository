@@ -1,0 +1,61 @@
+<?php
+
+/**
+ * @file
+ * Dummy module implementing MAST related hooks to test API interaction with
+ * the MASt module.
+ */
+
+/**
+ * Implements hook_mast_field_info_fields_alter().
+ */
+function mast_test_mast_field_info_fields_alter(&$fields) {
+  $fields['mast_test_feature1'] = array(
+    'type' => 'feature_toggle',
+    'default' => '0',
+    'cardinality' => '1',
+    'mast_field_type' => mastFactory::FIELD_TYPE_EXTRA,
+  );
+  $fields['mast_test_social1'] = array(
+    'type' => 'social_publish_toggle',
+    'cardinality' => '1',
+    'mast_field_type' => mastFactory::FIELD_TYPE_EXTRA,
+  );
+}
+
+/**
+ * Implements hook_mast_field_info_instances_alter().
+ */
+function mast_test_mast_field_info_instances_alter(&$instances, $entity_type, $bundle_name) {
+  if (isset($entity_type) && ($entity_type == 'node')) {
+    // Fake node properties for article content type.
+    $fake['mast_test_feature1'] = array(
+      'label' => t('Add blink tags'),
+      'required' => TRUE,
+      'field_name' => 'mast_test_feature1',
+    );
+    $fake['mast_test_social1'] = array(
+      'label' => t('Notify my friends'),
+      'required' => TRUE,
+      'icons' => array('myfriends', 'twitbook'),
+      'field_name' => 'mast_test_social1',
+    );
+    if (isset($bundle_name) && ($bundle_name == 'article')) {
+      $instances += $fake;
+    }
+    elseif (isset($instances['article'])) {
+      $instances['article'] += $fake;
+    }
+  }
+}
+
+/**
+ * Implements hook_mast_unsupported_bundles().
+ */
+function mast_test_mast_unsupported_bundles() {
+  return array(
+    'node' => array(
+      'blog',
+    )
+  );
+}

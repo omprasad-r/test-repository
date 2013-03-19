@@ -1,0 +1,48 @@
+/* --------------------------------------------
+
+themebuilder_themes-lte-ie-8.css
+
+Project:     Acquia ThemeBuilder
+Version:     1.0
+Author:      Acquia Engineering Team
+URL:         http://
+Copyright:   Acquia, Inc.
+License:             
+  
+----------------------------------------------- */
+
+/* @group Components 
+----------------------------------------------- */
+
+/* @group Themes carousel 
+----------------------------------------------- */
+
+#themebuilder-wrapper .carousel-wrap.punch-out {
+  background: url(../../images/tb-carousel-bkg-left.png) no-repeat 0 0;
+  border: 0 none;
+  padding-bottom: 0;
+  padding-top: 0;
+}
+
+#themebuilder-wrapper .punch-out > .jcarousel-container {
+  background: url(../../images/tb-carousel-bkg-right.png) no-repeat right 0;
+  padding-bottom: 21px;
+  padding-top: 15px;
+}
+
+/* Without this width override, the last tile in the carousel will wrap to a new line */
+#themebuilder-wrapper .jcarousel-list-horizontal {
+  width: 20000px !important;
+}
+
+#themebuilder-wrapper .carousel-themes .jcarousel-item.last {
+  width: 500px;
+}
+
+#themebuilder-wrapper .carousel-themes .theme-shot .preview {
+  background: transparent url("../../images/tile-preview-background.png") left top repeat scroll;
+}
+
+/* @end */
+
+/* @end */

@@ -1,0 +1,44 @@
+
+div.gardens-alert.messages {
+  background-image: url('images/alert-icon.png');
+  background-repeat: no-repeat;
+  background-position: 11px center;
+  padding: 11px 11px 11px 84px;
+  line-height: 1.35em;
+  min-height: 2em;
+}
+
+div.email-verification-reminder.messages {
+  background-image: url('images/mail-sent-alert-icon.png');
+}
+
+.messages a.close:link,
+.messages a.close:active,
+.messages a.close:visited,
+.messages a.close:hover {
+  float: right;
+  color: #0080C5;
+}
+
+.messages a:link,
+.messages a:active,
+.messages a:visited,
+.messages a:hover {
+  color: #0080C5;
+}
+
+/* The AJAX framework wraps all content returned from the server in <div/>s. */
+.messages .resend-email {
+  margin-left: .5em;
+}
+
+.messages div.resend-email,
+.messages div.resend-email div {
+  display: inline-block;
+  float: none;
+}
+
+.messages div.resend-email div.display-block {
+  display: block;
+}
+

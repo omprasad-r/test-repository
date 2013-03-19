@@ -1,0 +1,73 @@
+/* @group UI Generic */
+
+#themebuilder-wrapper .scroll-pane,
+#themebuilder-wrapper .scroll-content { 
+  float: left; 
+}
+
+#themebuilder-wrapper .scroll-pane {
+  position: relative;
+  z-index: 1000;
+}
+
+#themebuilder-wrapper .scroll-content {
+  position: relative;
+  z-index: 1100;
+}
+
+/* @end */
+
+/* @group Horizontal Carousel */
+
+#themebuilder-wrapper .horizontal-carousel {
+  overflow: hidden;
+  width: 100%;
+}
+
+#themebuilder-wrapper .horizontal-carousel .button {
+  background-color: transparent;
+  background-image: url("../images/ui-sprite.png");
+  background-repeat: no-repeat;
+  border-color: #222;
+  border-style: solid;
+  display: block;
+  height: 28px;
+  position: relative;
+  width: 11px;
+  z-index: 1200;
+}
+
+#themebuilder-wrapper .horizontal-carousel .button:hover {
+  cursor: pointer;
+}
+
+#themebuilder-wrapper .horizontal-carousel .decrement.button {
+  background-position: 0 -31px;
+  border-width: 0 1px 0 0;
+  float: left; 
+  margin-right: 2px;
+}
+
+#themebuilder-wrapper .horizontal-carousel .decrement.button:hover {
+  background-position: 0 -71px;
+  border-color: #2c2c2c;
+}
+
+#themebuilder-wrapper .horizontal-carousel .increment.button {
+  background-position: -86px -31px;
+  border-width: 0 0 0 1px;
+  float: right; 
+  margin-left: 2px;
+}
+
+#themebuilder-wrapper .horizontal-carousel .increment.button:hover {
+  background-position: -86px -71px;
+  border-color: #2c2c2c;
+}
+
+#themebuilder-wrapper .horizontal-carousel .button.disabled {
+  filter: alpha(opacity = 10);
+  opacity: 0.1;
+}
+
+/* @end */

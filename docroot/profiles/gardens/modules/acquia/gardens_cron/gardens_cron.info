@@ -1,0 +1,7 @@
+name = Drupal Gardens cron
+description = Executes cron in a separate process so the user request is not delayed.
+core = 7.x
+dependencies[] = scarecrow
+package = Drupal Gardens
+files[] = gardens_cron.module
+hidden = TRUE

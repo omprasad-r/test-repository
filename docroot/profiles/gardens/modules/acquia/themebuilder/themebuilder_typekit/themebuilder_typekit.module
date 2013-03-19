@@ -1,0 +1,82 @@
+<?php
+
+/**
+ * @file
+ * Themebuilder/Typekit integration.
+ */
+
+/**
+ * Implement hook_themebuilder_font_stacks().
+ *
+ * Make Typekit font stacks available to Themebuilder.
+ */
+function themebuilder_typekit_themebuilder_font_stacks() {
+  $key = themebuilder_typekit_get_key();
+  $enabled = themebuilder_typekit_enabled();
+  $stacks = array();
+  if ($key && $enabled) {
+    // Get information on all the fonts available in this Typekit kit.
+    $kit = themebuilder_typekit_get_kit_info($key);
+    if ($kit) {
+      foreach ($kit->families as $family) {
+        $stack = new TypekitFontStack($family->name, $family->css_stack);
+        $stacks[$stack->getName()] = $stack;
+      }
+    }
+  }
+  return $stacks;
+}
+
+/**
+ * Implement hook_form_FORM_ID_alter().
+ */
+function themebuilder_typekit_form_font_management_admin_settings_alter(&$form, &$form_state) {
+  // Display a warning message to people who have entered a key, but who have no
+  // Typekit fonts set up yet,
+  if (!empty($form['font_management_typekit_key']['#default_value'])) {
+    $key = $form['font_management_typekit_key']['#default_value'];
+    $kit = themebuilder_typekit_get_kit_info($key);
+    if (!$kit || empty($kit->families[0])) {
+      $form['font_management_typekit_enable']['#prefix'] = '<div class="messages warning">' . t('Your Typekit fonts are not published yet. Go to <a href="@link" target="_blank">typekit.com</a>, select "Launch Kit Editor" and click "Publish."', array('@link' => 'http://typekit.com')) . '</div>';
+    }
+  }
+}
+
+/**
+ * Get info for a particular Typekit kit from the Typekit API.
+ *
+ * @param string $key
+ * @return stdClass
+ *   An object with the Typekit information for a kit. Contains a families
+ *   property consisting of an array of available fonts. See
+ *   http://typekit.com/docs/api/v1/:format/kits/:kit/published.
+ */
+function themebuilder_typekit_get_kit_info($key) {
+  if ($key) {
+    $json = file_get_contents("https://typekit.com/api/v1/json/kits/$key/published");
+    if ($json) {
+      $data = json_decode($json);
+      if ($data->kit) {
+        return $data->kit;
+      }
+    }
+  }
+  return FALSE;
+}
+
+/**
+ * Returns the currently configured Typekit key.
+ *
+ * @return
+ *   A string containing the project key.
+ */
+function themebuilder_typekit_get_key() {
+  return check_plain(variable_get('font_management_typekit_key', ''));
+}
+
+/**
+ * Determine whether Typekit is enabled on the site.
+ */
+function themebuilder_typekit_enabled() {
+  return module_exists('font_management') && variable_get('font_management_typekit_enable', FALSE);
+}

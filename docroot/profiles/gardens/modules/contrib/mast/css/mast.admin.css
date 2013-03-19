@@ -1,0 +1,97 @@
+/**
+ * @file
+ * Admin-related styles for the MASt module.
+ */
+
+#edit-mast-icon .form-item {
+  width: 7em;
+  float: left;
+  position: relative;
+  margin-bottom: 1em;
+}
+
+#edit-mast-icon .form-item .form-radio {
+  position: absolute;
+  top: 30%;
+}
+
+.form-wrapper .form-item-mast-icon {
+  margin-bottom: 0;
+  padding-bottom: 0;
+}
+
+.form-item-mast-icon .form-type-radio label {
+  width: 70px;
+  text-align: center;
+  display: block;
+}
+
+.form-item-mast-icon .form-type-radio label:hover {
+  cursor: pointer;
+}
+
+.sprite-mast-icon {
+  background: url('../images/mast.icons.png') 0 0 no-repeat;
+  display: block;
+  width: 30px;
+  height: 30px;
+  overflow: hidden;
+  margin-left: 20px;
+}
+
+#mast-icon-content-type-album {
+  background-position: 0 0;
+}
+
+#mast-icon-content-type-audio {
+  background-position: 0 -30px;
+}
+
+#mast-icon-content-type-blog {
+  background-position: 0 -60px;
+}
+
+#mast-icon-content-type-book {
+  background-position: 0 -90px;
+}
+
+#mast-icon-content-type-event {
+  background-position: 0 -120px;
+}
+
+#mast-icon-content-type-faq {
+  background-position: 0 -150px;
+}
+
+#mast-icon-content-type-forum {
+  background-position: 0 -180px;
+}
+
+#mast-icon-content-type-gallery {
+  background-position: 0 -210px;
+}
+
+#mast-icon-content-type-image {
+  background-position: 0 -240px;
+}
+
+#mast-icon-content-type-page {
+  background-position: 0 -270px;
+}
+
+#mast-icon-content-type-photo {
+  background-position: 0 -300px;
+}
+
+#mast-icon-content-type-poll {
+  background-position: 0 -330px;
+}
+
+#mast-icon-content-type-video {
+  background-position: 0 -360px;
+}
+
+#mast-icon-content-type-webform {
+  background-position: 0 -390px;
+}
+

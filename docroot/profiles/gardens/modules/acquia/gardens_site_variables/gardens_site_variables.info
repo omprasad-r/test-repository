@@ -1,0 +1,5 @@
+name = Gardens site variables
+description = Exposes values sent from the gardener related to this site as tokens and Javascript values.
+core = 7.x
+package = Drupal Gardens
+dependencies[] = gardens_client

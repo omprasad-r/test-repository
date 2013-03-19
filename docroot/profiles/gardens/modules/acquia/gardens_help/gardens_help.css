@@ -1,0 +1,134 @@
+/* Gardens Specific Rules */
+
+#toolbar #toolbar-user a {
+  cursor: pointer;
+}
+
+#toolbar .help-active {
+  background: url(images/help-top.png) no-repeat top center;
+  padding-top: 5px;
+  margin-top: -5px;
+}
+
+#toolbar .help-active a {
+  background-color: transparent;
+}
+
+#toolbar #toolbar-user li {
+  lmargin: -5px 0;
+  lborder-right: 1px solid #666;
+}
+
+#toolbar #toolbar-user li.account,
+#toolbar #toolbar-user li.logout {
+  border-right: none;
+}
+
+#toolbar #toolbar-user li.help a {
+  background-image: url('images/toolbar_help.png');
+  background-position: 8px center;
+  background-repeat: no-repeat;
+  padding-left: 30px;
+}
+
+/* Gardener Specific Rules */
+
+.wrapper.mast .help-active a {
+  background: url(images/help-top.png) no-repeat top center ;
+}
+
+/* Unified Help Styling */
+
+#help-header {
+  color: #fff;
+  font-size: 13px;
+}
+
+div#help-header {
+  background: #333;
+  color: #FFFFFF;
+  font-family: "Helvetica Neue", Arial, Helvetica, Geneva, sans-serif;
+  height: 35px;
+  min-width: 980px;
+  overflow: hidden;
+  padding: 5px 0 0;
+  width: 100%;
+}
+
+#help-header .help-section {
+  float: right;
+  height: 100%;
+  padding: 2px 0;
+}
+
+#help-header ul {
+  display: block;
+  float: left;
+  height: 41px;
+  list-style: none;
+  margin: 0;
+  padding: 7px;
+  width: 100%;
+}
+
+#help-header ul li {
+  font-size: 12px;
+  float: left;
+  line-height: 15px;
+  margin: 0 10px;
+}
+
+#toolbar #help-header ul li a {
+  float: left;
+  height: 16px;
+  margin: 0;
+  overflow: hidden;
+  font-size: 12px;
+}
+
+#help-header ul li a:link,
+#help-header ul li a:visited,
+#help-header ul li a:hover,
+#help-header ul li a:active {
+  color: #FFFFFF;
+  text-decoration: none;
+}
+
+#help-header #gardens-help-search-query {
+  -moz-border-radius: 6px 6px 6px 6px;
+  -webkit-border-raduis: 6px 6px 6px 6px;
+  background: url("images/Search.png") no-repeat scroll right -1px #CCCCCC;
+  border: 2px solid #000000;
+  font-size: 12px;
+  height: 21px;
+  padding: 0 23px 0 6px;
+  width: 250px;
+  margin-right: 5px;
+}
+#gardens-help-search-query::-webkit-input-placeholder {
+  font-style: italic;
+}
+#gardens-help-search-query::-moz-placeholder {
+  font-style: italic;
+}
+
+#help-header input.form-submit {
+  -moz-border-radius: 0;
+  -webkit-border-radius: 0;
+  border-radius: 0;
+  -moz-box-shadow: none;
+  -webkit-box-shadow: none;
+  box-shadow: none;
+  background: none repeat scroll 0 0 transparent;
+  border: none;
+  float: right;
+  height: 25px;
+  left: -12px;
+  margin: 0;
+  outline: none;
+  padding: 0;
+  position: relative;
+  top: -25px;
+  width: 0;
+  z-index: 100;
+}

@@ -1,0 +1,6 @@
+name = Themebuilder blocks
+description = Themebuilder blocks prototype module
+core = 7.x
+package = Themebuilder
+files[] = themebuilder_blocks.module
+hidden = TRUE

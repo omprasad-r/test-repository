@@ -1,0 +1,2184 @@
+<?php
+// $Id$
+
+/**
+ * @file
+ *   Protects the Acquia Gardens from visitors who might try to do it harm.
+ */
+
+/**
+ * @defgroup scarecrow_hooks Scarecrow hook implementations
+ * @{
+ * Each hook that provides security features for the site, should, for the time
+ * being, check scarecrow_is_enabled() before making any changes, so that the
+ * effects of the module can be selectively overridden.
+ */
+
+/**
+ * Implement hook_menu().
+ */
+function scarecrow_menu() {
+  $items = array();
+
+  // Don't call us, we'll call you...
+  $items['user/1/contact'] = array(
+    'title' => 'contact acquia',
+    'page callback' => 'check_plain',
+    'page arguments' => array('Acquia admin'),
+    'access callback' => FALSE,
+    'type' => MENU_CALLBACK,
+  );
+  $items['user/1/follow'] = $items['user/1/shortcuts'] = $items['user/1/track'] = $items['user/1/contact'];
+
+  // Scarecrow configuration. Restricted to Gardens Admin.
+  $items['admin/config/system/scarecrow'] = array(
+    'title' => 'Drupal Gardens security',
+    // For now, this is the only configuration setting on the form. Update the
+    // description when more settings are added.
+    'description' => 'Set whether in-development modules can be enabled on gsteamer.',
+    'page callback' => 'drupal_get_form',
+    'page arguments' => array('scarecrow_settings_form'),
+    'access callback' => 'scarecrow_is_gardens_admin',
+    'type' => MENU_NORMAL_ITEM,
+  );
+
+  return $items;
+}
+
+/**
+ * Implementation of hook_init().
+ */
+function scarecrow_init() {
+  // Add the gardener URL to the page for further use.
+  drupal_add_js(
+    array('gardenerURL' => scarecrow_get_gardener_url()),
+    'setting'
+  );
+
+  // Notes (this function disables modules not covered by a site owner's subscription):
+  // 1. init won't run on a cached page, so any modules will remain
+  //    enabled until the first non-cached call (either a logged-in user or cache
+  //    rebuild.) - this should be ok, as most real functionality from modules
+  //    won't be accessible from cached pages anyway.
+  // 2. Modules need to be disabled reasonably quickly - cron has the potential
+  //    of leaving modules enabled on free sites for up to 24 hrs.
+  // 3. /When/ no modules get disabled, this is cheap - a variable_get, retrieve
+  //    cached module list and compare.
+  // 4. It should be quite rare that modules need to be disabled, and unlikely to
+  //    switch much between enabled/disabled, but it will show a slow page load occasionally
+  //    to some users.
+  // 5. IMO ideally we'd enqueue the disable, but triggering queue processing requires
+  //    cron too.
+  _scarecrow_disable_unsubscribed_modules();
+}
+
+/**
+ * List of the uids of all non-blocked site owners (not including user 1).
+ */
+function scarecrow_list_site_owner_uids() {
+  $owner_rid = variable_get('gardens_site_owner_role', 0);
+  $query = db_select('users_roles', 'ur');
+  $query->join('users', 'u', 'u.uid = ur.uid');
+  $query->addField('u', 'uid', 'uid');
+  $query->condition('ur.uid', 1, '>');
+  $query->condition('ur.rid', $owner_rid);
+  $query->condition('u.status', 1);
+
+  $uids = $query->execute()->fetchCol();
+  return drupal_map_assoc($uids);
+}
+
+/**
+ * Get the user id of the site owner on whose mysites page this site appears.
+ *
+ * @return <int>
+ *   The site owner's uid.
+ */
+function scarecrow_get_site_owner_id() {
+  $owner = variable_get('acquia_gardens_site_owner');
+  if (empty($owner)) {
+    // For sites that don't have the site owner set as a variable on
+    // installation, we fall back to assuming that the second user in the users
+    // table is the site owner.
+    $owner = db_query("SELECT uid FROM {users} WHERE uid > 1 ORDER BY uid ASC LIMIT 1")->fetchField();
+    if (empty($owner)) {
+      // During site installation, before the site is assigned to anyone, use
+      // user 1 as the site owner, and don't log an error.
+      if (drupal_installation_attempted()) {
+        $owner = 1;
+      }
+      else {
+        // We've somehow failed to retrieve the owner's uid. We definitely don't
+        // want to return 0, however, since that would imply that the anonymous
+        // user owns this site. Fall back to user 1 and log the error.
+        $owner = 1;
+        syslog(LOG_ERR, "GardensError: Couldn't retrieve site owner GardensError:");
+      }
+    }
+    else {
+      variable_set('acquia_gardens_site_owner', $owner);
+    }
+  }
+  return $owner;
+}
+
+/**
+ * Determine whether the current user is the site owner.
+ *
+ * @return <boolean>
+ *   TRUE if the current user is the site owner, FALSE otherwise.
+ */
+function scarecrow_is_site_owner() {
+  $owner = scarecrow_get_site_owner_id();
+  return $GLOBALS['user']->uid == $owner;
+}
+
+/**
+ * Determine whether the current user is the Gardens administrator (user 1).
+ *
+ * @return <boolean>
+ *   TRUE if the current user is the Gardens administrator, FALSE otherwise.
+ */
+function scarecrow_is_gardens_admin() {
+  return $GLOBALS['user']->uid == 1;
+}
+
+/**
+ * Determine whether the reset link is for the admin user, they should always be allowed.
+ *
+ * @return <boolean>
+ *   TRUE if the current password reset is for user 1, FALSE otherwise.
+ */
+function scarecrow_user_reset_access() {
+  return arg(2) == '1';
+}
+
+/**
+ * Implement hook_modules_installed().
+ */
+function scarecrow_modules_installed($modules) {
+  if (!scarecrow_is_enabled()) {
+    return;
+  }
+  // Assign all available permissions to the site owner role.
+  $owner_rid = variable_get('gardens_site_owner_role', 0);
+  $all_rids = array_keys(user_roles());
+  // Make sure that if any of this module's forbidden permissions were
+  // automatically assigned when the module was installed (for example, by
+  // user.module, which tries to assign them all to the administrator role),
+  // we undo those permission assignments here.
+  foreach ($modules as $module) {
+    if ($module_permissions = module_invoke($module, 'permission')) {
+      $permissions = array_keys($module_permissions);
+      $forbidden = scarecrow_forbidden_permissions();
+      $permissions_to_remove = array_intersect($permissions, $forbidden);
+      $permissions_to_add = array_diff($permissions, $forbidden);
+      if ($owner_rid && !empty($permissions_to_add)) {
+        user_role_grant_permissions($owner_rid, $permissions_to_add);
+      }
+      if (!empty($permissions_to_remove)) {
+        foreach ($all_rids as $rid) {
+          user_role_revoke_permissions($rid, $permissions_to_remove);
+        }
+      }
+    }
+  }
+}
+
+/**
+ * Implements hook_node_type_insert().
+ */
+function scarecrow_node_type_insert($info) {
+  // Work around a caching bug that prevents node_list_permissions() below from
+  // working here.
+  node_type_cache_reset();
+
+  // Add node permissions for this node type to the site owner role.
+  $owner_rid = variable_get('gardens_site_owner_role');
+  if (!empty($owner_rid)) {
+    $permissions = array_keys(node_list_permissions($info->type));
+    if (!empty($permissions)) {
+      user_role_grant_permissions($owner_rid, $permissions);
+    }
+  }
+}
+
+function scarecrow_form_user_multiple_cancel_confirm_alter(&$form, &$form_state) {
+  if (!isset($form['#validate'])) {
+    $form['#validate'] = array();
+  }
+  $form['#validate'][] = 'scarecrow_user_multiple_cancel_validate';
+}
+
+function scarecrow_user_multiple_cancel_validate($form, &$form_state) {
+  $owner_uids = scarecrow_list_site_owner_uids();
+  if (count($owner_uids) < 2 && array_intersect_key($form_state['values']['accounts'], $owner_uids)) {
+    form_set_error('account', t('You cannot cancel the only remaining site maintainer account.'));
+  }
+  if (isset($form_state['values']['accounts'][1])) {
+    form_set_error('account', t('You cannot cancel the user #1 account.'));
+  }
+}
+
+/**
+ * Scarecrow settings form.
+ */
+function scarecrow_settings_form() {
+  $form['scarecrow_show_unreleased_modules_on_gsteamer'] = array(
+    '#type' => 'checkbox',
+    '#title' => t('Allow modules not yet released to Drupal Gardens to be enabled when this site is in a development or staging enviornment.'),
+    '#default_value' => variable_get('scarecrow_show_unreleased_modules_on_gsteamer', FALSE),
+  );
+  return system_settings_form($form);
+}
+
+/**
+ * Implements hook_form_alter().
+ */
+function scarecrow_form_alter(&$form, $form_state, $form_id) {
+  // Perform the same check as webform_form_alter(), but only run this when the
+  // webform_alt_ui module is enabled.
+  if (isset($form['#node']->type) && $form_id == $form['#node']->type . '_node_form' && module_exists('webform_alt_ui') && in_array($form['#node']->type, webform_variable_get('webform_node_types'))) {
+    // Add our custom validation.
+    $form['#validate'][] = 'scarecrow_webform_alt_ui_form_validate';
+
+    // Add a description to the spam protection checkbox. This will be modified
+    // by JavaScript when appropriate.
+    $form['submission']['spam_protection']['#description'] = t('Spam protection can only be disabled if anonymous users do not have access to this webform.');
+
+    // Add a process function to add a description to the anonymous user
+    // checkbox after it has been expanded. This will be modified by JavaScript
+    // when appropriate.
+    $form['role_control']['roles']['#process'] = array_merge(element_info_property('checkboxes', '#process', array()), array('scarecrow_webform_alt_ui_process_roles'));
+
+    // Add a hidden field which JavaScript uses to store the fact that it has
+    // checked and disabled the spam protection checkbox (since browsers do not
+    // submit anything for a checkbox that is disabled).
+    $form['submission']['spam_protection_force_enabled'] = array(
+      '#type' => 'hidden',
+      '#default_value' => 0,
+    );
+    // Use a custom value callback for the spam protection checkbox which takes
+    // into account the value of that hidden field.
+    $form['submission']['spam_protection']['#value_callback'] = 'scarecrow_webform_alt_ui_spam_protection_value';
+
+    // Add JavaScript to perform the above modifications.
+    $form['#attached']['js'][] = drupal_get_path('module', 'scarecrow') . '/gardens-webform-protect.js';
+  }
+}
+
+/**
+ * Validation handler for the webform creation form.
+ */
+function scarecrow_webform_alt_ui_form_validate($form, &$form_state) {
+  if (!$form_state['values']['spam_protection'] && in_array(DRUPAL_ANONYMOUS_RID, $form_state['values']['roles'])) {
+    form_set_error('spam_protection', t('You must turn spam protection on to allow this webform to be accessed by anonymous users.'));
+  }
+}
+
+/**
+ * Process function; adds a description to the webform anonymous user checkbox.
+ */
+function scarecrow_webform_alt_ui_process_roles($element) {
+  $element[DRUPAL_ANONYMOUS_RID]['#description'] = t('Anonymous users can only be allowed to access this webform if spam protection is enabled.');
+  return $element;
+}
+
+/**
+ * Custom value callback for the spam protection checkbox.
+ */
+function scarecrow_webform_alt_ui_spam_protection_value($element, $input, $form_state) {
+  // If JavaScript set the hidden field indicating that spam protection should
+  // be enabled, set the value of the spam protection checkbox to on.
+  if (!empty($form_state['input']['spam_protection_force_enabled'])) {
+    return TRUE;
+  }
+  // Otherwise return the standard value.
+  else {
+    return form_type_checkbox_value($element, $input, $form_state);
+  }
+}
+
+/**
+ * Implement hook_form_FORM_ID_alter().
+ */
+function scarecrow_form_user_admin_account_alter(&$form, &$form_state) {
+  if (isset($form['accounts']['#options'][1])) {
+    $form['accounts']['#options'][1]['operations'] = '';
+  }
+}
+
+/**
+ * Implement hook_form_FORM_ID_alter().
+ */
+function scarecrow_form_system_site_maintenance_mode_alter(&$form, &$form_state) {
+  // If we are in "hard" maintenance mode, don't let the admin
+  // uncheck the checkbox.
+  $expected = variable_get('scarecrow_maintenance_time', 0);
+  if ($expected && variable_get('maintenance_mode', 0)) {
+    $message = '<strong>' . t('!service_name_long maintenance in progress.', array('!service_name_long' => variable_get('gardens_service_name_long', 'Drupal Gardens'))) . '</strong><br />';
+    if (REQUEST_TIME > $expected) {
+      // Something went wrong.
+      $message .= t('The maintenance was expected to be done already - please be patient. Reload this page to see if maintenance is complete.');
+    }
+    else {
+      // Never show an interval less than 1 minute.
+      $remaining = format_interval(60 + $expected - REQUEST_TIME, 1);
+      $message .= t('The maintenance should be completed within !interval. Reload this page to see if maintenance is complete.', array('!interval' => $remaining));
+    }
+    $form['maintenance_mode']['#disabled'] = TRUE;
+    $ele['scarecrow_message'] = array(
+      '#type' => 'markup',
+      '#markup' => '<div class="messages warning">' . $message . '</div>',
+    );
+    $form = array_merge($ele, $form);
+  }
+  $form['#submit'][] = 'scarecrow_system_site_maintenance_mode_submit';
+}
+
+/**
+ * Submit handler for the system_site_maintenance_mode form.
+ */
+function scarecrow_system_site_maintenance_mode_submit(&$form, &$form_state) {
+  // Gardens can force a site into maintenance mode, so when a site admin
+  // puts their site into maintenance purposely, we need to track it.
+  $maintenance_mode = (int) $form_state['values']['maintenance_mode'];
+  if ($maintenance_mode) {
+    variable_set('site_owner_maintenance_mode', $maintenance_mode);
+  }
+  else {
+    // It's important to use variable_del() here; ms-drush can easily determine
+    // whether a variable is set at all, but retrieving its value is harder.
+    variable_del('site_owner_maintenance_mode');
+  }
+}
+
+/**
+ * Implement hook_form_FORM_ID_alter().
+ */
+function scarecrow_form_user_admin_permissions_alter(&$form, &$form_state) {
+  if (!scarecrow_is_enabled()) {
+    return;
+  }
+  // Hide the display of certain permissions on the permissions form. Actually
+  // unset the element rather than setting #access to FALSE, to preserve the
+  // theming of the permissions table.
+  foreach (scarecrow_hidden_permissions() as $permission) {
+    unset($form['permission'][$permission]);
+  }
+  // Next we need to make sure that if all a module's permissions are hidden,
+  // the module itself won't be listed on the page. This is somewhat ugly due
+  // to the odd structure of the permissions form.
+  $elements = &$form['permission'];
+  foreach (element_children($elements) as $key) {
+    // Module names are interspersed with their permissions in the form
+    // definition, but they can be identified because they have numeric keys
+    // and also have the #id key set to the module name. So we can search for
+    // two such elements in a row, and unset the first one in those cases.
+    if (isset($previous_key) && is_numeric($previous_key) && isset($elements[$previous_key]['#id']) && is_numeric($key) && isset($elements[$key]['#id'])) {
+      unset($elements[$previous_key]);
+    }
+    $previous_key = $key;
+  }
+  // If the last entry on the permissions page is a module name (i.e. we've
+  // hidden all the permissions for the last module on the page), make sure it
+  // gets hidden as well.
+  if (is_numeric($key) && isset($elements[$key]['#id'])) {
+    unset($elements[$key]);
+  }
+  // Also hide the display of the individual checkboxes for the hidden
+  // permissions (we can only do this after the checkbox group has been
+  // expanded).
+  foreach (element_children($form['checkboxes']) as $rid) {
+    $form['checkboxes'][$rid]['#after_build'][] = '_scarecrow_disable_hidden_permission_checkboxes';
+  }
+  $owner_rid = variable_get('gardens_site_owner_role', 0);
+  if ($owner_rid && isset($form['checkboxes'][$owner_rid])) {
+    $form['checkboxes'][$owner_rid]['#disabled'] = TRUE;
+  }
+
+  if (!_scarecrow_comments_protected_by_mollom()) {
+    $form['permission']['post comments']['#description'] = $form['permission']['skip comment approval']['#description'] = t('To enable this permission for anonymous users, configure <a href="!mollom">Mollom comment protection</a> on the comment form for all content types.', array('!mollom' => url('admin/config/content/mollom')));
+  }
+  foreach (node_permissions_get_configured_types() as $node_type) {
+    if (!_scarecrow_node_protected_by_mollom($node_type)) {
+      $form['permission']['create ' . $node_type . ' content']['#description'] = t('To enable this permission for anonymous users, configure <a href="!mollom">Mollom content protection</a>.', array('!mollom' => url('admin/config/content/mollom')));
+    }
+  }
+
+  // Finally, perform our own form validation to ensure that these permissions
+  // are correctly set when the form is submitted.
+  $form['#validate'][] = '_scarecrow_permissions_validate';
+}
+
+function _scarecrow_comments_protected_by_mollom() {
+  if (!module_exists('mollom') || _mollom_status() !== TRUE) {
+    return FALSE;
+  }
+
+  foreach (node_type_get_types() as $type) {
+    $comment_form = mollom_form_load("comment_node_{$type->type}_form");
+    if (!$comment_form || $comment_form['mode'] == MOLLOM_MODE_DISABLED) {
+      return FALSE;
+    }
+  }
+
+  return TRUE;
+}
+
+/**
+ * Returns if a node type is being protected by mollom.
+ */
+function _scarecrow_node_protected_by_mollom($node_type) {
+  $mollom_protection = FALSE;
+  if (module_exists('mollom') && _mollom_status() === TRUE) {
+    $form = mollom_form_load($node_type . '_node_form');
+    if ($form && $form['mode'] != MOLLOM_MODE_DISABLED) {
+      $mollom_protection = TRUE;
+    }
+  }
+  return $mollom_protection;
+}
+
+/**
+ * Implement hook_form_FORM_ID_alter().
+ */
+function scarecrow_form_mollom_admin_settings_alter(&$form, &$form_state) {
+  if (scarecrow_is_enabled()) {
+    $form['access-keys']['#access'] = FALSE;
+  }
+}
+
+/**
+ * Implements hook_form_FORM_ID_alter().
+ */
+function scarecrow_form_mollom_admin_configure_form_alter(&$form, &$form_state) {
+  if (variable_get('scarecrow_hide_mollom_moderation', TRUE)) {
+    $form['mollom']['moderation']['#access'] = FALSE;
+  }
+
+  // Only enterprise customers may select the option "Accept the post" for "unsure"
+  // responses from mollom analysis.
+  if (!variable_get('gardens_client_name', FALSE)) {
+    unset($form['mollom']['unsure']['#options']['binary']);
+  }
+}
+
+/**
+ * Implements hook_form_FORM_ID_alter().
+ */
+function scarecrow_form_webform_component_edit_form_alter(&$form, &$form_state) {
+  if ($form['type']['#value'] == 'file') {
+    // If the Webform module is being used (without our custom UI), still
+    // prevent people from allowing uploads of arbitrary file extensions. This
+    // is an extra security measure, although Drupal should in general protect
+    // us from allowing PHP files to be uploaded and executed anyway.
+    $form['validation']['filtering']['addextensions']['#access'] = FALSE;
+    // Also add file size validation to prevent uploading very large files
+    // (this repeats what webform_alt_ui.module itself does).
+    $form['validation']['filtering']['size']['#element_validate'][] = 'scarecrow_webform_alt_ui_file_size_validate';
+  }
+}
+
+/**
+ * Implements hook_form_FORM_ID_alter().
+ */
+function scarecrow_form_form_builder_field_configure_alter(&$form, &$form_state) {
+  if (!module_exists('webform_alt_ui')) {
+    // If the Form Builder module is being used with Webform, but without our
+    // custom UI, still prevent people from allowing uploads of arbitrary file
+    // extensions.  This is an extra security measure, although Drupal should
+    // in general protect us from allowing PHP files to be uploaded and
+    // executed anyway.
+    if (isset($form['webform_file_filtering']['addextensions'])) {
+      $form['webform_file_filtering']['addextensions']['#access'] = FALSE;
+    }
+    // Also add file size validation to prevent uploading very large files
+    // (this repeats what webform_alt_ui.module itself does).
+    if (isset($form['webform_file_filtering']['size'])) {
+      $form['webform_file_filtering']['size']['#element_validate'][] = 'scarecrow_webform_alt_ui_file_size_validate';
+    }
+  }
+}
+
+/**
+ * Additional file size validation for webform file upload fields.
+ */
+function scarecrow_webform_alt_ui_file_size_validate($element, &$form_state) {
+  if ($element['#value'] > 20000) {
+    form_error($element, t('The maximum size must be less than 20,000 KB.'));
+  }
+}
+
+/**
+ * Implement hook_form_FORM_ID_alter().
+ */
+function scarecrow_form_user_profile_form_alter(&$form, &$form_state) {
+  if (!scarecrow_is_enabled()) {
+    return;
+  }
+  $account = $form['#user'];
+  // Hide the "cancel account" button if it is present and if we are preventing
+  // the account from being canceled, and don't let the user be blocked.
+  if (!scarecrow_user_cancel_access($account)) {
+    $form['actions']['cancel']['#access'] = FALSE;
+    $form['account']['status']['#disabled'] = TRUE;
+  }
+  if (!empty($form['account']['pass']) && scarecrow_force_openid()) {
+    $form['account']['gardens_id'] = array(
+      '#title' => t('Username and e-mail address'),
+      '#type' => 'item',
+      '#markup' => check_plain($account->name) . '<br />' . check_plain($account->mail),
+      '#description' => t('Change these values, your password and your avatar on <a href="@url">the !service_name_long server</a>.', array(
+        '@url' => scarecrow_get_gardener_url() . '/user',
+        '!service_name_long' => variable_get('gardens_service_name_long', 'Drupal Gardens'),
+      )),
+      '#weight' => -20,
+    );
+    $form['account']['name']['#access'] = FALSE;
+    $form['account']['mail']['#access'] = FALSE;
+    $form['account']['pass']['#access'] = FALSE;
+    $form['account']['current_pass']['#access'] = FALSE;
+  }
+}
+
+/**
+ * Implements hook_form_FORM_ID_alter().
+ *
+ * Remove non-gardens themes from the theme selection page.
+ */
+function scarecrow_form_system_themes_form_alter(&$form, &$form_state) {
+  if (!scarecrow_is_enabled()) {
+    return;
+  }
+  $remove_themes = array('bartik', 'garland', 'seven', 'stark');
+  foreach ($form as $name => $value) {
+    if (is_array($value) && !empty($value['screenshot'])) {
+      $themename = $name;
+      if (in_array($themename, $remove_themes) ||
+          themebuilder_compiler_theme_is_draft($themename)) {
+        // Remove the theme from the form.
+        unset($form[$themename]);
+        unset($form['theme_default']['#options'][$themename]);
+        unset($form['status']['#options'][$themename]);
+      }
+    }
+  }
+}
+
+/**
+ * Implement hook_form_FORM_ID_alter().
+ */
+function scarecrow_form_block_admin_display_form_alter(&$form, $form_state) {
+  // Remove the user login block from sight. Do this even if OpenID logins
+  // aren't forced on, since this block has an ugly "Log in using OpenID" link
+  // that we don't want, and our custom gardens_client login block is used as a
+  // replacement for it anyway.
+  unset($form['blocks']['user_login']);
+}
+
+/**
+ * Implement hook_form_FORM_ID_alter().
+ */
+function scarecrow_form_user_login_block_alter(&$form, $form_state) {
+  // Disallow access to the regular login block. Do this even if OpenID logins
+  // aren't forced on, since this block has an ugly "Log in using OpenID" link
+  // that we don't want, and our custom gardens_client login block is used as a
+  // replacement for it anyway.
+  $form['#access'] = FALSE;
+}
+
+/**
+ * Implement hook_form_FORM_ID_alter().
+ */
+function scarecrow_form_user_login_alter(&$form, &$form_state) {
+  if (!scarecrow_is_enabled()) {
+    return;
+  }
+  // Do not allow direct access to OpenID login form. We use the underlying
+  // technology, but not this form.
+  $form['openid_links']['#access'] = FALSE;
+  $form['openid_identifier']['#access'] = FALSE;
+  $form['openid.return_to']['#access'] = FALSE;
+}
+
+/**
+ * Implement hook_form_FORM_ID_alter().
+ */
+function scarecrow_form_user_admin_settings_alter(&$form, &$form_state) {
+  if (!scarecrow_is_enabled()) {
+    return;
+  }
+
+  // Do not allow the email verification setting to be changed. (We require it
+  // to be off if the site is forcing OpenID logins and on otherwise.)
+  $form['registration_cancellation']['user_email_verification']['#access'] = FALSE;
+
+  if (scarecrow_force_openid()) {
+    // Hide certain email settings which are not applicable.
+    $form['email_password_reset']['#access'] = FALSE;
+
+    // Admins are not allowed to create accounts directly (only invite users to
+    // create them).
+    $form['email_admin_created']['#title'] = t('Welcome (new user invited by administrator)');
+    $form['email_admin_created']['#description'] = t('Edit the e-mail message sent to users invited to join the site by an administrator.');
+    $form['registration_cancellation']['user_register']['#options'][USER_REGISTER_ADMINISTRATORS_ONLY] = t('Only people invited by an administrator');
+  }
+}
+
+/**
+ * Implements hook_views_plugins_alter().
+ */
+function scarecrow_views_plugins_alter(&$cache) {
+  // Removes PHP code execution plugins from views.
+  unset($cache['argument default']['php']);
+  unset($cache['argument validator']['php']);
+}
+
+/**
+ * Implement hook_menu_alter().
+ */
+function scarecrow_menu_alter(&$items) {
+  if (!scarecrow_is_enabled()) {
+    return;
+  }
+
+  // Go through each menu item, and if its access check will be of the form
+  // user_access('permission') with a permission that is on our list of
+  // forbidden permissions, deny all access to the corresponding page.
+  foreach ($items as &$item) {
+    if ((!isset($item['access callback']) || $item['access callback'] == 'user_access') && !empty($item['access arguments']) && count($item['access arguments']) == 1 && in_array(reset($item['access arguments']), scarecrow_forbidden_permissions())) {
+      $item['access callback'] = FALSE;
+    }
+  }
+
+  // Modify other access callbacks, including all paths underneath them or
+  // derived from them (i.e., if 'admin/modules' is in the list below, that
+  // also means that 'admin/modules/*' and 'admin/modules-something' will be
+  // modified). Note that the second part of that behavior may actually be a
+  // bug, but it's a risky one to fix :)
+  $access_callbacks = array(
+    // There is no reason for Gardens users to change the location of their
+    // files directory, and allowing them to do so could possibly open up a
+    // security hole (if they conflict with other Gardens sites). Note that
+    // this page also contains an option to switch from public to private file
+    // downloads, which we might want to allow eventually, but no reason to
+    // bother for now.
+    'admin/config/media/file-system' => FALSE,
+    // Lock down the image toolkit settings
+    'admin/config/media/image-toolkit' => 'scarecrow_is_gardens_admin',
+    // Lock down audit trail settings.
+    'admin/config/development/audit-trail' => 'scarecrow_is_gardens_admin',
+    // Prevent certain user accounts from being deleted.
+    'user/%user/cancel' => 'scarecrow_user_cancel_access',
+    'user/%user/cancel/confirm/%/%' => 'scarecrow_user_cancel_access',
+    'user/%user/edit' => 'scarecrow_user_edit_access',
+    'user/%user/edit-profile' => 'scarecrow_user_edit_profile_access',
+    'admin/people/permissions/roles/edit' => 'scarecrow_role_edit_access',
+    'admin/people/permissions' => 'scarecrow_role_permissions_edit_access',
+    // Prevent access to the user OpenID setup page.
+    'user/%user/openid' => FALSE,
+    // Don't contact user 1.
+    'user/%user/contact' => 'scarecrow_contact_tab_access',
+    // People shouldn't be able to change their site template
+    'admin/structure/templates' => FALSE,
+    // Deny access to phpinfo().
+    'admin/reports/status/php' => FALSE,
+    // Disallow access to logging settings changes,
+    'admin/config/development/logging' => FALSE,
+    // Disallow access to date popup config page.
+    'admin/config/date/date_popup' => FALSE,
+    'admin/reports/fields/permissions' => FALSE,
+    // Even for enterprise sites that have the Secure Pages module on, there
+    // are too many ways to break your site with it so we don't want them to be
+    // allowed to configure it.
+    'admin/config/system/securepages' => FALSE,
+    // Hide the main feeds.module menu item.  Should be all we need to hide for
+    // now, as nothing else seems to work without Feeds Admin UI.
+    'import' => FALSE,
+    // Also, hide the Feeds admin UI for now (WM-29)
+    'admin/structure/feeds' => FALSE,
+    // Hide all akamai admin callbacks.
+    'admin/config/system/akamai' => FALSE,
+    'admin/config/system/akamai/settings' => FALSE,
+    'admin/config/system/akamai/refresh' => FALSE,
+    // Hide Views import function, because it allows running PHP code (DG-2818)
+    'admin/structure/views/import' => FALSE,
+    'admin/config/system/antivirus' => 'scarecrow_is_gardens_admin',
+    // Hide Flag import facility, because it allows running PHP code (DG-5651)
+    'admin/structure/flags/import' => FALSE,
+    // MASt-related config pages - no need to allow customization on these.
+    'admin/config/services/oauth' => FALSE,
+    'admin/config/content/original_author' => FALSE,
+    'admin/config/development/gardens-statsd' => 'scarecrow_is_gardens_admin',
+  );
+
+  // The migrate_d2d UI module requires use of the Migrate dashboard - otherwise
+  // hide it (from wordpress_migrate users in particular).
+  if (!module_exists('migrate_d2d_ui')) {
+    $access_callbacks['admin/content/import'] = FALSE;
+  }
+
+  if (scarecrow_force_openid()) {
+    // Disallow creation of local users.
+    $access_callbacks['admin/people/create'] = FALSE;
+    // Disallow access to local password reset URLs for non-user-1 requests.
+    $access_callbacks['user/reset/%/%/%'] = 'scarecrow_user_reset_access';
+  }
+  else {
+    $access_callbacks['admin/people/invite'] = FALSE;
+  }
+  _scarecrow_alter_menu_tree_access_callbacks($items, $access_callbacks);
+
+  // We don't want to modify all paths underneath this one, since the clean URL
+  // access check is (probably?) important.
+  $items['admin/config/search/clean-urls']['access callback'] = FALSE;
+
+  // Gardens OpenID based user page overrides. We have this override here, so
+  // disabling scarecrow features for development will allow local accounts.
+  if (scarecrow_force_openid()) {
+    foreach (array('user/login', 'user/password', 'user/register') as $key) {
+      // See below; user/register is handled separately.
+      if ($key != 'user/register') {
+        $items[$key]['page callback'] = 'gardens_openid_login_message';
+        unset($items[$key]['page arguments']);
+        unset($items[$key]['file']);
+      }
+
+      // Override to be callbacks instead of tabs. This way the pages will not
+      // be visible, but if links point to them, we still expose the same output
+      // on them with explanation on the centralized login system.
+      $items[$key]['type'] = MENU_CALLBACK;
+    }
+
+    // Override page callback for user page.
+    $items['user']['page callback'] = 'gardens_client_user_page';
+  }
+
+  if (!(module_exists('janrain_capture_ui') && variable_get('janrain_capture_enforce', FALSE))) {
+    // The user/register page must be overridden on all non-Capture-enabled sites
+    // (even those that don't require OpenID), since it is used inside the OpenID
+    // login flow for users who are registering that way.
+    $items['user/register']['page callback'] = 'gardens_client_user_register_page';
+    $items['user/register']['access callback'] = 'gardens_client_user_register_access';
+    $items['user/register']['theme callback'] = 'gardens_client_user_register_theme';
+    unset($items['user/register']['page arguments']);
+    unset($items['user/register']['file']);
+  }
+
+  // Require mollom or moderation setup.
+  $items['admin/config/content/mollom/unprotect/%mollom_form']['access callback'] = 'scarecrow_mollom_require_access';
+  $items['admin/config/content/mollom/unprotect/%mollom_form']['access arguments'] = array(5);
+
+  // Remove meta tag export tab, but keep the callback active.
+  if (isset($items['admin/config/search/metatags/config/%metatag_config/export'])) {
+    $items['admin/config/search/metatags/config/%metatag_config/export']['type'] = MENU_VISIBLE_IN_BREADCRUMB;
+  }
+}
+
+/**
+ * Implements hook_menu_local_tasks_alter().
+ */
+function scarecrow_menu_local_tasks_alter(&$data, $router_item, $root_path) {
+  // Hide the tabs on the user registration form if we encounter it in the
+  // middle of an OpenID login. This is necessary for sites where OpenID logins
+  // are optional, since the code in scarecrow_menu_alter() above which sets
+  // these tabs to MENU_CALLBACKs everywhere will not run.
+  if ($root_path == 'user/register' && gardens_client_user_registration_openid_response()) {
+    $data['tabs'][0]['output']['#access'] = FALSE;
+  }
+}
+
+/**
+ * Check whether moderation is on.
+ */
+function _scarecrow_comments_protected_by_moderation() {
+  return !user_access('skip comment approval', drupal_anonymous_user());
+}
+
+/**
+ * Determines if a form ID belongs to a webform that anonymous users can access.
+ *
+ * @param $form_id
+ *   The form ID. This will be of the form "webform_client_form_N" if it is
+ *   associated with a webform.
+ *
+ * @return
+ *   TRUE only if Webform is enabled, a webform form ID is passed in, and
+ *   anonymous users have access to the form. FALSE otherwise.
+ */
+function _scarecrow_webform_anonymous_access_allowed($form_id) {
+  $anonymous_allowed = FALSE;
+
+  if (preg_match('/^webform_client_form_([0-9]+)$/', $form_id, $matches) && module_exists('webform')) {
+    $nid = $matches[1];
+    $anonymous_allowed = (bool) db_query_range('SELECT 1 FROM {webform_roles} WHERE nid = :nid and rid = :rid', 0, 1, array(':nid' => $nid, ':rid' => DRUPAL_ANONYMOUS_RID))->fetchField();
+  }
+
+  return $anonymous_allowed;
+}
+
+/**
+ * Do not allow certain forms to be unprotected in Mollom in particular cases.
+ */
+function scarecrow_mollom_require_access($mollom_form) {
+  // Do not allow the comment form to be removed if commment moderation is off.
+  if (!_scarecrow_comments_protected_by_moderation() && preg_match('/^comment_node_(.*)_form$/', $mollom_form['form_id'], $matches)) {
+    $candidate_node_type = $matches[1];
+    if (in_array($candidate_node_type, array_keys(node_type_get_types()))) {
+      return FALSE;
+    }
+  }
+
+  // Do not allow webforms to be removed if the webform is available to be
+  // submitted by anonymous users.
+  if (_scarecrow_webform_anonymous_access_allowed($mollom_form['form_id'])) {
+    return FALSE;
+  }
+
+  // Do not allow removing a node from's Mollom protection if anonymous users
+  // may create such nodes.
+  $node_form = preg_match('/^([a-z0-9_]+)_node_form$/', $mollom_form['form_id'], $matches) && !empty($matches[1]) && in_array($matches[1], node_permissions_get_configured_types());
+  if (!variable_get('gardens_client_name', '') && $node_form && user_access('create ' . $matches[1] . ' content', drupal_anonymous_user())) {
+    return FALSE;
+  }
+
+  return user_access('administer mollom');
+}
+
+/**
+ * Access callback for personal contact form.
+ */
+function scarecrow_contact_tab_access(stdClass $account) {
+  // Anonymous users cannot have contact forms.
+  // Don't bother Acquia support.
+  if (empty($account->uid) || $account->uid == 1) {
+    return FALSE;
+  }
+  return _contact_personal_tab_access($account);
+}
+
+/**
+ * Access callback for editing permissions for a role.
+ */
+function scarecrow_role_permissions_edit_access() {
+  $rid = arg(3);
+  if ($rid && $rid == variable_get('gardens_site_owner_role', 0)) {
+    return FALSE;
+  }
+  return user_access('administer permissions');
+}
+
+/**
+ * Access callback for editing roles.
+ */
+function scarecrow_role_edit_access() {
+  $rid = arg(5);
+  if ($rid && $rid == variable_get('gardens_site_owner_role', 0)) {
+    return FALSE;
+  }
+  return user_access('administer permissions');
+}
+
+/**
+ * Implement hook_theme_registry_alter().
+ */
+function scarecrow_theme_registry_alter(&$theme_registry) {
+  $theme_registry['user_admin_new_role']['function'] = 'scarecrow_admin_new_role';
+
+  // Override media download link theme with ours to show a different kind of
+  // link for oembed images. More documentation at the theme function.
+  if (isset($theme_registry['media_gallery_download_link'])) {
+    $theme_registry['media_gallery_download_link']['function'] = 'theme_scarecrow_media_gallery_download_link';
+  }
+}
+
+/**
+ * Implement hook_stream_wrappers_alter().
+ */
+function scarecrow_stream_wrappers_alter (&$wrappers) {
+  if (isset($wrappers['private'])) {
+    // Gardens does not currently support private files.
+    $wrappers['private']['type'] = STREAM_WRAPPERS_HIDDEN;
+  }
+}
+
+/**
+ * Implement hook_form_FORM_ID_alter().
+ */
+function scarecrow_form_field_ui_field_settings_form_alter(&$form, &$form_state) {
+  if (!empty($form['field']['type']['#value']) && ($form['field']['type']['#value'] == 'file')) {
+    $form['field']['settings']['uri_scheme']['#access'] = FALSE;
+  }
+}
+
+/**
+ * Implement hook_form_FORM_ID_alter().
+ */
+function scarecrow_form_field_ui_field_edit_form_alter(&$form, &$form_state) {
+  if (!empty($form['#field']['type']) && ($form['#field']['type'] == 'file')) {
+    $form['field']['settings']['uri_scheme']['#access'] = FALSE;
+  }
+
+  // Field permissions settings can be very misleading on field types with
+  // attached files (since Drupal Gardens does not supporting configuring the
+  // file system itself to be private), so disable them.
+  if (!empty($form['#field']['type']) && in_array($form['#field']['type'], array('file', 'image', 'media'))) {
+    $form['field']['field_permissions']['type']['#disabled'] = TRUE;
+    $form['field']['field_permissions']['type']['#description'] = t('This option is disabled for the %label field because !service_name_long does not support private files.', array('%label' => $form['#instance']['label'], '!service_name_long' => variable_get('gardens_service_name_long', 'Drupal Gardens')));
+  }
+}
+
+/**
+ * override theme function theme_user_admin_new_role()
+ */
+function scarecrow_admin_new_role($variables) {
+  $form = $variables['form'];
+
+  $header = array(t('Name'), array('data' => t('Operations'), 'colspan' => 2));
+  foreach (user_roles() as $rid => $name) {
+    $edit_permissions = l(t('edit permissions'), 'admin/people/permissions/' . $rid);
+    if (in_array($rid, array(DRUPAL_ANONYMOUS_RID, DRUPAL_AUTHENTICATED_RID))) {
+      $rows[] = array(t('!name %locked', array('!name' => $name, '%locked' => t('(locked)'))), '', $edit_permissions);
+    }
+    // Gardens-specific code here:
+    elseif ($rid == variable_get('gardens_site_owner_role', 0)) {
+      $rows[] = array(t('!name %locked', array('!name' => $name, '%locked' => t('(locked)'))), '', '');
+    }
+    else {
+      $rows[] = array($name, l(t('edit role'), 'admin/people/permissions/roles/edit/' . $rid), $edit_permissions);
+    }
+  }
+  $rows[] = array(array('data' => drupal_render($form['name']) . drupal_render($form['submit']), 'colspan' => 3, 'class' => 'edit-name'));
+
+  $output = drupal_render_children($form);
+  $output .= theme('table', array('header' => $header, 'rows' => $rows));
+
+  return $output;
+
+}
+
+/**
+ * Access callback for editing user accounts.
+ */
+function scarecrow_user_edit_access($account) {
+  // Don't let user 1 be edited except by user 1.
+  if ($account->uid == 1 && $GLOBALS['user']->uid > 1) {
+    return FALSE;
+  }
+  return user_edit_access($account);
+}
+
+/**
+ * Access callback for editing user profiles.
+ */
+function scarecrow_user_edit_profile_access($account) {
+  return scarecrow_user_edit_access($account) && edit_profile_user_edit_access($account);
+}
+
+/**
+ * Implement hook_system_info_alter().
+ */
+function scarecrow_system_info_alter(&$info, $file, $type) {
+  if (!scarecrow_is_enabled()) {
+    return;
+  }
+
+  // Prevent disallowed and required modules from ever being displayed. (The
+  // install profile is still responsible for making sure that these modules
+  // are correctly enabled or not enabled, as appropriate.)
+  if ($type == 'module') {
+    if (in_array($file->name, scarecrow_disallowed_modules())) {
+      $info['hidden'] = TRUE;
+    }
+    if (in_array($file->name, scarecrow_required_modules())) {
+      $info['required'] = TRUE;
+      if (!in_array($file->name, scarecrow_visible_required_modules())) {
+        $info['hidden'] = TRUE;
+      }
+    }
+  }
+
+  if ($file->name == 'views_bulk_operations') {
+    // Make actions permissions required for VBO on Gardens. This is a security
+    // safeguard compounded with disallowing the permission
+    // 'execute views_bulk_operations_script_action' to avoid exec() in Gardens.
+    $info['dependencies'][] = 'actions_permissions';
+  }
+  elseif ($file->name == 'mast') {
+    // We always want to use these in combination in Gardens.
+    $info['dependencies'][] = 'original_author';
+  }
+}
+
+/**
+ * Implements hook_simplified_modules_hidden_dependencies().
+ */
+function scarecrow_simplified_modules_hidden_dependencies() {
+  return array(
+    // Actions permissions is a required dependency for VBO in Gardens.
+    'actions_permissions',
+  );
+}
+
+/**
+ * Implements hook_block_view_MODULE_DELTA_alter().
+ */
+function scarecrow_block_view_system_help_alter(&$data, $block) {
+  if (!scarecrow_is_enabled()) {
+    return;
+  }
+
+  // Replace the system help text for the current page, if applicable.
+  $item = menu_get_item();
+  $help = scarecrow_help_text($item['path']);
+  // Allow for the empty string by checking if the return is set.
+  if (isset($help)) {
+    $data['content'] = $help;
+  }
+}
+
+/**
+ * Implement hook_page_alter().
+ */
+function scarecrow_page_alter(&$page) {
+  if (isset($page['page_top']['toolbar'])) {
+    $page['page_top']['toolbar']['#pre_render'][] = 'scarecrow_toolbar_add_links';
+  }
+  $current_path = current_path();
+  if (scarecrow_is_enabled() && $current_path == 'admin/config/content/mollom') {
+    $comment_moderation = _scarecrow_comments_protected_by_moderation();
+    $anon_post_comments = user_access('post comments', drupal_anonymous_user());
+
+    foreach ($page['content']['system_main']['forms']['#rows'] as &$row) {
+      if (isset($row[3]['data']['#href']) && preg_match('/\/unprotect\/(.*)$/', $row[3]['data']['#href'], $matches)) {
+        // Replace the "Unprotect" link next to each comment form with text
+        // that explains why it can't currently be unprotected. We are looking
+        // for links with URLs like the following:
+        // admin/config/content/mollom/unprotect/comment_node_blog_form
+        // This is fragile, but we have a test for it.
+        $form_id = $matches[1];
+        if (($anon_post_comments || !$comment_moderation) && preg_match('/^comment_node_[a-z0-9_]+_form$/', $form_id)) {
+          $row[3] = t('To disable mollom protection, go to <a href="!permissions">Permissions</a> and deselect “Post comments" and "Skip comment approval" for anonymous users.', array('!permissions' => url('admin/people/permissions')));
+        }
+        // Do something similar for webforms.
+        elseif (_scarecrow_webform_anonymous_access_allowed($form_id)) {
+          $row[3] = t("To unprotect, first remove the <em>anonymous user</em> role's access to this webform.");
+        }
+
+        // And for nodes that can be created by anonymous users.
+        $node_form = preg_match('/^([a-z0-9_]+)_node_form$/', $form_id, $matches) && !empty($matches[1]) && in_array($matches[1], node_permissions_get_configured_types());
+        if (!variable_get('gardens_client_name', '') && $node_form && user_access('create ' . $matches[1] . ' content', drupal_anonymous_user())) {
+          // The following function brings sanitized strings, so we need to use
+          // !permission to avoid double encoding.
+          $node_permissions = module_invoke('node', 'permission');
+          $row[3] = t('To unprotect, uncheck "!permission" !permission_link for anonymous users.', array(
+            '!permission' => $node_permissions['create ' . $matches[1] . ' content']['title'],
+            '!permission_link' => l(t('permission'), 'admin/people/permissions'),
+          ));
+        }
+      }
+    }
+  }
+  elseif ($current_path == 'admin/config/search/metatags') {
+    if (!empty($page['content']['system_main']['config_table'])) {
+      foreach ($page['content']['system_main']['config_table']['#rows'] as &$row) {
+        if (!empty($row['data']['operations']['data']['#links']['export'])) {
+          unset($row['data']['operations']['data']['#links']['export']);
+        }
+      }
+    }
+  }
+  // If we are on the Configuration page and the "One or more problems were
+  // detected with your Drupal installation" message is being displayed to a
+  // site admin only because of errors that they do not have the ability to do
+  // anything about (errors which we will also hide on the status report
+  // itself; see scarecrow_preprocess_status_report()), then this message
+  // should be removed from the page.
+  elseif ($current_path == 'admin/config' && !user_access('administer software updates')) {
+    $found_requirement_error_message = FALSE;
+    $error_messages = drupal_get_messages('error', FALSE);
+    if (!empty($error_messages)) {
+      // This is unfortunately fragile, but there's not much we can do about
+      // it.
+      $requirement_error_message = t('One or more problems were detected with your Drupal installation. Check the <a href="@status">status report</a> for more information.', array('@status' => url('admin/reports/status')));
+      foreach ($error_messages['error'] as $message) {
+        if ($message == $requirement_error_message) {
+          $found_requirement_error_message = TRUE;
+          break;
+        }
+      }
+    }
+    // If the error message is displayed, check all requirements and see if
+    // there is at least one requirement error that doesn't appear on our list
+    // of irrelevant requirement errors (that Gardens users aren't supposed to
+    // see). If there is, then leave the message in place. If not, then remove
+    // the message.
+    if ($found_requirement_error_message) {
+      $found_relevant_error = FALSE;
+      $requirements = module_invoke_all('requirements', 'runtime');
+      foreach ($requirements as $requirement) {
+        if (isset($requirement['severity']) && $requirement['severity'] == REQUIREMENT_ERROR && !in_array($requirement['title'], _scarecrow_irrelevant_requirement_titles())) {
+          $found_relevant_error = TRUE;
+          break;
+        }
+      }
+      if (!$found_relevant_error) {
+        // Call drupal_get_messages() without the second parameter to clear all
+        // existing error messages, then reset any that don't match the one we
+        // were trying to remove.
+        $messages = drupal_get_messages('error');
+        foreach ($messages['error'] as $message) {
+          if ($message != $requirement_error_message) {
+            drupal_set_message($message, 'error');
+          }
+        }
+      }
+    }
+  }
+}
+
+/**
+ * Implement hook_node_validate().
+ */
+function scarecrow_node_validate($node, $form) {
+  // The Acquia back-door account cannot be a content author.
+  if (user_access('administer nodes')) {
+    $account = user_load_by_name($node->name);
+    if ($account->uid == 1) {
+      form_set_error('name', t('%name cannot be a content author.', array('%name' => $node->name)));
+    }
+  }
+}
+
+/**
+ * @} End of "defgroup scarecrow_hooks".
+ */
+
+/**
+ * Allow developers to disable the effect of the Scarecrow module by defining
+ * a variable in settings.php.
+ *
+ * TODO: In the future, we might also provide another mechanism to disable the
+ * effects of this module (for example, if Acquia employees need to log on to
+ * an actual Gardens site and have full administrator capabilities).
+ */
+function scarecrow_is_enabled() {
+  return !variable_get('acquia_gardens_developer_mode', FALSE);
+}
+
+/**
+ * Determines if the site is required to use OpenID logins for all users.
+ */
+function scarecrow_force_openid() {
+  return scarecrow_is_enabled() && !variable_get('acquia_gardens_local_user_accounts', FALSE);
+}
+
+/**
+ * Configures a site to allow local user logins (i.e., makes OpenID optional).
+ */
+function scarecrow_allow_local_user_logins() {
+  // Force email verification for all new user accounts, for spam protection.
+  variable_set('user_email_verification', TRUE);
+
+  // Reset any user mail texts that the administrator hasn't overridden from
+  // their Drupal Gardens defaults, so that they automatically fall back on the
+  // Drupal core defaults instead. (The Drupal Gardens defaults are specific to
+  // the OpenID login process and therefore not appropriate once the site has
+  // switched to allowing local user accounts.)
+  module_load_install('gardens');
+  $gardens_mail_variables = gardens_setup_user_mail_variables();
+  foreach (gardens_misc_get_unchanged_variables($gardens_mail_variables) as $variable) {
+    variable_del($variable);
+  }
+
+  // Delete the mail texts for admin-created user accounts no matter what (even
+  // if they were overridden). For sites with required OpenID logins, these
+  // variables were used to construct e-mails to invite users to join the site,
+  // rather than for admin-created accounts, so there is no way they can still
+  // be relevant.
+  foreach (array('user_mail_register_admin_created_subject', 'user_mail_register_admin_created_body') as $variable) {
+    $current_value = variable_get($variable);
+    if (isset($current_value)) {
+      variable_del($variable);
+    }
+  }
+
+  // Finally, enable the local user accounts setting. This affects menu paths,
+  // so we also need to rebuild the menu for it to take effect (unless we're in
+  // the middle of installing Drupal, since the menu will be rebuilt at the end
+  // of that anyway).
+  variable_set('acquia_gardens_local_user_accounts', TRUE);
+  if (!drupal_installation_attempted()) {
+    menu_rebuild();
+  }
+}
+
+/**
+ * Pre-render function which dynamically adds links to the toolbar that
+ * shouldn't be accessible via the menu system.
+ */
+function scarecrow_toolbar_add_links($toolbar) {
+  // Warn users when they are viewing the site in developer mode (without any
+  // access restrictions).
+  if (!scarecrow_is_enabled()) {
+    $toolbar['toolbar_menu']['#links']['scarecrow_developer_mode'] = array(
+      'href' => '',
+      'title' => t('SITE IS IN DEVELOPER MODE'),
+      'attributes' => array('style' => 'background-color: red; font-weight: bold;'),
+    );
+  }
+
+  return $toolbar;
+}
+
+/**
+ * Returns our best guess at the URL of the Gardener corresponding to this
+ * Gardens site.
+ *
+ * @param $base_root
+ *   (Optional) The base root of the URL of the Gardens site. Defaults to the
+ *   global $base_root variable populated by Drupal.
+ * @return
+ *   Either the full URL of the Gardener, or an empty string if there is no
+ *   Gardener associated with this site.
+ */
+function scarecrow_get_gardener_url($base_root = NULL) {
+  // If the URL is already set in the database or settings.php, return that.
+  $gardener_url = variable_get('acquia_gardens_gardener_url');
+  if (isset($gardener_url)) {
+    return $gardener_url;
+  }
+
+  // Otherwise, try to determine a URL automatically. Note that since the
+  // installer saves the above variable to the database, this code is only
+  // expected to run during installation (i.e., it is essentially just used to
+  // determine a default value for the textfield in the installer's site
+  // configuration form). Furthermore, it is usually unnecessary even then,
+  // since the Gardens auto-installation obtains the correct URL to use during
+  // installation by making an XML-RPC request to the Gardener to query for it.
+  // But it doesn't hurt to keep it around.
+  $hostname = parse_url(isset($base_root) ? $base_root : $GLOBALS['base_root'], PHP_URL_HOST);
+  $components = explode('.', $hostname);
+  // For URLs like mysite.drupalgardens.com or mysite.preview.drupalgardens.com
+  // the Gardener URL comes from taking off the "mysite" prefix.
+  if (preg_match('/\.drupalgardens.com$/', $hostname)) {
+    array_shift($components);
+    $gardener_hostname = implode('.', $components);
+  }
+  // Development hosting servers have a special, ugly-looking Gardener URL.
+  elseif (preg_match('/\.acquia-sites\.com$/', $hostname)) {
+    // Our testing with Jenkins launches a server instance with a .acquia-sites url
+    // pattern. In this case, we actually don't have a real domain to redirect to
+    // so we want to return an emtpy string as if no URL existed at all.
+    // @see https://backlog.acquia.com/browse/AN-24210
+    if (variable_get('acquia_gardens_local_user_accounts')) {
+      return '';
+    }
+    array_shift($components);
+    $gardener_hostname = 'gardener.' . implode('.', $components);
+  }
+  // If we reach this, we are presumably on a local development machine, so
+  // there is no reasonable default value for the Gardener.
+  else {
+    return '';
+  }
+  return "https://$gardener_hostname";
+}
+
+/**
+ * Returns an array of modules that users should never be able to enable.
+ *
+ * In order to work correctly, the install profile must also make sure never to
+ * enable any of these modules by default.
+ */
+function scarecrow_disallowed_modules() {
+  $disallowed_modules = array(
+    'gardens_preproduction',
+    'color',
+    'gardens_duplication',
+    'jsunit',
+    'jsunit_example',
+    'themebuilder_development_ui',
+    'themebuilder_test',
+    'php',
+    'simpletest',
+    'comment_goodness',
+    // @todo Delete the Styles project from the Gardens code-base.
+    'styles',
+    'file_styles',
+    'styles_ui',
+    'thumbgen',
+    'update',
+    // This module is part of Views but is not meant to be part of the Gardens
+    // experience (we let people export views via the normal procedure, but
+    // don't want to expose the bulk export interface to them).
+    'views_export',
+    // These are part of ctools, which is required for Media and Views, but are
+    // not meant to be part of the Gardens experience.
+    'stylizer',
+    'bulk_export',
+    'ctools_ajax_sample',
+    'ctools_plugin_example',
+    'ctools_custom_content',
+    'page_manager',
+    'views_content',
+    'ctools_access_ruleset',
+    // These are part of Form Builder, which we are using for Webform, but are
+    // not meant to be available in Gardens at this time.
+    'form_builder_examples',
+    'form_builder_node',
+    // These are included as a good-bye present for now when exporting the site.
+    'acquia_agent',
+    'acquia_spi',
+    'acquia_search',
+    // No i18n so far for Drupal 7.
+    'xmlsitemap_i18n',
+    'xmlsitemap_custom',
+    'xmlsitemap_modal',
+    'xmlsitemap_user',
+    // This one comes for free with the Token module (which we need), but we
+    // haven't tested this submodule at all so there is no reason to expose it
+    // to Gardens users.
+    'token_actions',
+    // These two modules got added with a metatag update but we have not tested
+    // these modules so far so they are not to be enabled for the time being.
+    'metatag_context',
+    'metatag_dc',
+    // These modules are included with Dialog API.
+    'dialog_example',
+    'dialog_comment',
+    'dialog_contextual',
+    // Modules included with oEmbed that aren't needed for Media integration.
+    'oembed',
+    'oembedfield',
+    'oembedprovider',
+    // Typekit is no longer used in Gardens and can be removed from the
+    // filesystem after the 1.03 release.
+    'typekit',
+    // These modules are included with Date but not part of Gardens.
+    'date_migrate',
+    'date_migrate_example',
+    'date_tools',
+    'date_context',
+    // Customer-specific modules.
+    'florida_hospital_misc',
+    'warner_misc',
+    'emphaticrock',
+    // Services-based API for managing users, not available in SMB.
+    'member_api',
+    // Services, oAuth, etc. may only be enabled as part of the member API or
+    // MASt modules - not available on their own.
+    'services',
+    'services_oauth',
+    'services_test_resource',
+    'xmlrpc_server',
+    'rest_server',
+    'roleresource',
+    'xcal_format',
+    'oauth_common',
+    'oauth_common_providerui',
+    // COPPA Enforcement - new users must provide date-of-birth on registration,
+    // registration fails if too young.  Not available in SMB.
+    'coppa_lite',
+    // Bulk email password reset. Not available in SMB
+    'bulk_email',
+    // Needed for the Enterprise Mailhandler implementation.  Release plan to SMB
+    // not yet known.
+    'feeds',
+    'feeds_import',
+    'feeds_news',
+    'feeds_ui',
+    // Needed for the Enterprise Mailhandler implementation.  Release plan to SMB
+    // not yet known.
+    'mailhandler',
+    'mailhandler_default',
+    'mailhandler_php_imap',
+    'mailhandler_tokenauth', // Cannot be removed from disallowed - unmet dependency
+    'mailhandler_medialink',
+    'mailhandler_sendto_auth',
+    'mailhandler_singlemailbox',
+    'mail_media',
+    'gardens_mail_media',
+    // Feeds dependency:
+    'job_scheduler',
+    // SSL support. Not available in SMB since we don't support https there.
+    'securepages',
+    'webform_ssl',
+    // Gardens Media module - Currently not feature complete for SMB
+    'gardens_media',
+    'gardens_statsd',
+    'akamai',
+    // Moderation and site variables only allowed for Warner, see
+    // warner_misc_disallowed_modules_alter()
+    'gardens_moderation',
+    'gardens_site_variables',
+    // Independent submodule of entity (API) module. Not allowed.
+    'entity_token',
+    'agrcache',
+    // This is an API-type module for use with MASt. Should not be visible.
+    'original_author',
+    // Bunchball is unavailable in SMB. Including all bunchball modules here in
+    // case users disable simplified_modules.
+    'bunchball',
+    'bunchball_entities',
+    'bunchball_fivestar',
+    'bunchball_groups',
+    'bunchball_nitro',
+    'bunchball_poll',
+    'bunchball_user_interaction',
+    'bunchball_user_roles',
+    'bunchball_webform',
+    'bunchball_queue',
+    // We don't need the module enabled; instead modify the settings.php to
+    // include the memcache.inc file
+    'memcache',
+    'memcache_admin',
+    // We enable imagemagick by default, this one comes with it.
+    'imagemagick_advanced',
+    // Enabling for Enterprise customers only
+    'janrain_client',
+    'janrain_login',
+    'janrain_capture',
+    'janrain_capture_ui',
+    'janrain_capture_mapping',
+    'comment_on_anything',
+    // Required primarily for bunchball - fairly harmless but no need to show it.
+    'request_queue',
+    // Node import/export-related modules: scarecrowed for all except Pfizer initially
+    'node_export_dependency',
+    'node_export_features',
+    'node_export_feeds',
+    'node_export_relation',
+    'node_export',
+    'uuid',
+    'uuid_services',
+    'uuid_services_example',
+    'flag_friend',
+    'flag_friend_access',
+    // Currently only available for Pfizer
+    'gardens_pdf_rendition',
+    'gardens_pdf_rendition_sitemap',
+    // Currently only for Warner until a solution is figured out for SMB/gardener data.
+    'views_data_export',
+    // May only be enabled or disabled via the Site Guard module's UI.
+    'shield',
+    // Site Guard module is currently only available for Enterprise customers.
+    'site_guard',
+    // Only enabled for Warner
+    'views_rss',
+    'views_rss_core',
+    'views_rss_dc',
+    'views_rss_itunes',
+    'getid3',
+  );
+
+  // In development and staging environments, let users enable modules that
+  // are still being developed. There are two configuration variables:
+  // - scarecrow_show_unreleased_modules can only be set via direct database
+  //   access or settings.php. If TRUE, in-development modules can be enabled
+  //   even in the production environment, so use with extreme caution.
+  // - scarecrow_show_unreleased_modules_on_gsteamer can be set via the UI by
+  //   the Gardens admin user on admin/config/system/scarecrow. If TRUE,
+  //   in-development modules can be enabled in a development environment only.
+  //   This is a useful setting to enable on sites used for mid-sprint review
+  //   demonstrations.
+  if (!scarecrow_is_enabled() || variable_get('scarecrow_show_unreleased_modules', FALSE) || (variable_get('scarecrow_show_unreleased_modules_on_gsteamer', FALSE) && isset($_ENV['AH_SITE_ENVIRONMENT']) && ($_ENV['AH_SITE_ENVIRONMENT'] === 'development'))) {
+    $in_development = array();
+  }
+  else {
+    $in_development = array(
+      'toolbar_prototype',
+      'xhprof',
+      'xhprof_mongodb',
+      // Support for WordPress and Drupal migrations, not ready for prime-time.
+      'migrate',
+      'migrate_ui',
+      'migrate_example',
+      'migrate_example_baseball',
+      'migrate_example_oracle',
+      'migrate_extras_date',
+      'migrate_extras_media',
+      'migrate_extras_pathauto',
+      'migrate_extras_profile2',
+      'migrate_extras',
+      'migrate_onesite',
+      'migrate_d2d',
+      'migrate_d2d_ui',
+      'migrate_warner',
+      'migrate_diggy',
+      'streetteam_migrate',
+      'gardens_migrate',
+      'migrate_ning',
+      'migrate_ning_warner',
+      'migrate_aa',
+      'migrate_googoo',
+      // Contrib SMTP module for our migration password-reset mails.  Technically
+      // not still in-devlopment, but it is only required during migration.
+      'smtp',
+      // This module will eventually be incorporated into themebuilder_layout.
+      // Right now only WMG should have this enabled.
+      'themebuilder_advanced_layout',
+      // Virus scanning potentially available for all clusters at some level, but
+      // as yet not available.
+      'antivirus',
+      'antivirus_iecontentanalyzer',
+    );
+    $disallowed_modules = array_merge($disallowed_modules, $in_development);
+  }
+
+  if (module_exists('webform_alt_ui')) {
+    // Do not allow disabling 'Webforms' once it was enabled because we only
+    // want to provide access to webform related features via our own
+    // interface. Unfortunately system_modules() does not consider dependency
+    // against hidden modules, so to not let disable modules which 'Webforms'
+    // needs, we have to hide the dependant modules as well.
+    $disallowed_modules[] = 'form_builder';
+    $disallowed_modules[] = 'form_builder_webform';
+    $disallowed_modules[] = 'options_element';
+    $disallowed_modules[] = 'ux_elements';
+    $disallowed_modules[] = 'webform';
+    $disallowed_modules[] = 'webform_alt_ui';
+  }
+  elseif (!module_exists('webform')) {
+    // Do not let the 'webform' module get enabled without 'Webforms'.
+    $disallowed_modules[] = 'webform';
+  }
+
+  // Audit trail module may be only enabled / disabled by uid 1.
+  if ($GLOBALS['user']->uid != 1) {
+    $disallowed_modules[] = 'audit_trail';
+  }
+
+  drupal_alter('disallowed_modules', $disallowed_modules);
+
+  return $disallowed_modules;
+}
+
+/**
+ * Returns an array of modules that users should never be able to turn off.
+ *
+ * In order to work correctly, the install profile should also make sure to
+ * enable these modules by default. (Usually that is not necessary for required
+ * modules, but here it probably is because we are not setting them required
+ * until the Scarecrow module itself is installed.)
+ *
+ * @see scarecrow_visible_required_modules()
+ */
+function scarecrow_required_modules() {
+  $required_modules = array(
+    'backports',
+    'block',
+    'block_everything',
+    'blog_template',
+    'campaign_template',
+    'ctools',
+    'date',
+    'date_repeat',
+    'date_repeat_field',
+    'date_all_day',
+    'dialog',
+    'dialog_user',
+    'dblog_disable',
+    'entitycache',
+    'image',
+    'field_permissions',
+    'file',
+    'file_entity',
+    'filter_tips_dialog',
+    'gardens_broadcasting_client',
+    'gardens_broadcasting_client_notifications',
+    'gardens_client',
+    'gardens_cron',
+    'gardens_features_required',
+    'gardens_health',
+    'gardens_help',
+    'gardens_link_ui',
+    'gardens_misc',
+    'gardens_limits',
+    'htmlpurifier',
+    'imagemagick',
+    'improved_text_trim',
+    'libraries',
+    'link',
+    'logintoboggan_email_login',
+    'media',
+    'media_browser_plus',
+    'media_internet',
+    'media_oembed',
+    'media_oembed_thumbnail_style',
+    'media_youtube',
+    'mollom',
+    'multiform',
+    'node_reference',
+    'oembedcore',
+    'oembedembedly',
+    'openid',
+    'overlay',
+    'plupload',
+    'product_template',
+    'references',
+    'remote_stream_wrapper',
+    'scarecrow',
+    'simpleviews',
+    'siteinfo',
+    'site_export',
+    'site_template',
+    'site_theme_settings',
+    'sqbs',
+    'syslog',
+    'statsd',
+    'user_reference',
+    'taxonomy',
+    'themebuilder_log',
+    'themebuilder_advanced',
+    'themebuilder_bar',
+    'themebuilder_blocks',
+    'themebuilder_brand',
+    'themebuilder_compiler',
+    'themebuilder_layout',
+    'themebuilder_marketplace',
+    'themebuilder_metatag',
+    'themebuilder_monotype',
+    'themebuilder_resources',
+    'themebuilder_screenshot',
+    'themebuilder_styleedit',
+    'themebuilder_themes',
+    'themebuilder_typekit',
+    'timeago',
+    'token',
+    'token_filter',
+    'toolbar',
+  );
+
+  drupal_alter('required_modules', $required_modules);
+
+  return $required_modules;
+}
+
+/**
+ * Returns an array of modules that are required, but should still be visible
+ * on the modules page (e.g., so their configuration and permission links will
+ * appear).
+ *
+ * In order to work correctly, all modules listed here must also appear in
+ * scarecrow_required_modules().
+ */
+function scarecrow_visible_required_modules() {
+  $visible_modules = array(
+    'taxonomy',
+  );
+
+  drupal_alter('visible_required_modules', $visible_modules);
+
+  return $visible_modules;
+}
+
+/**
+ * Implements hook_disallowed_modules_alter().
+ *
+ * The main purpose of this function is to add modules to the list of
+ * disallowed modules appropriate to a site owner's level of subscription.
+ *
+ * @param &$modules
+ *   The default list of disallowed modules.
+ */
+function scarecrow_disallowed_modules_alter(&$modules) {
+  if (variable_get('gardens_subscriber_modules_enable', TRUE) && function_exists('gardens_client_data_get')) {
+    $gardener_data = gardens_client_data_get('acquia_zuora', 'subscription_disallowed_modules');
+    if (!empty($gardener_data) && is_array($gardener_data)) {
+      $modules = array_merge($modules, $gardener_data);
+    }
+  }
+}
+
+/**
+ * Disable modules that a site is not entitled to enable determined by subscription level.
+ *
+ * If a site's subscription lapses, and it is an active site, this will happen
+ * once on the next page load.
+ */
+function _scarecrow_disable_unsubscribed_modules() {
+  if (variable_get('gardens_subscriber_modules_enable', TRUE) && function_exists('gardens_client_data_get')) {
+    $gardener_data = gardens_client_data_get('acquia_zuora', 'subscription_disallowed_modules');
+    if(!empty($gardener_data) && is_array($gardener_data)) {
+      $to_disable = array();
+      foreach ($gardener_data as $module) {
+        if (module_exists($module)) {
+          $to_disable[] = $module;
+        }
+      }
+      if (!empty($to_disable)) {
+        module_disable($to_disable);
+      }
+    }
+  }
+}
+
+/**
+ * Implements hook_cron().
+ *
+ * Uninstall disabled modules, as they may break updates if not.
+ */
+function scarecrow_cron() {
+  // Default interval set to 1 day.
+  $interval = variable_get('scarecrow_cron_interval', 60*60*24);
+
+  // We don't want to act every time cron runs, keep a time for the next run
+  // in a variable.
+  if (time() >= variable_get('scarecrow_cron_next_execution', 0)) {
+    // Get a list of disabled modules.
+    $all_modules = system_rebuild_module_data();
+    $disabled_modules = array();
+    $modules_to_uninstall = array();
+
+    foreach ($all_modules as $name => $module) {
+      if (empty($module->status) && $module->schema_version > SCHEMA_UNINSTALLED) {
+        $disabled_modules[] = $module->name;
+      }
+    }
+
+    // Get a list of disallowed modules based on subscription plan, and compare
+    // with disabled modules.
+    if (variable_get('gardens_subscriber_modules_enable', TRUE) && function_exists('gardens_client_data_get')) {
+      $gardener_data = gardens_client_data_get('acquia_zuora', 'subscription_disallowed_modules');
+      if (!empty($gardener_data) && is_array($gardener_data)) {
+        $modules_to_uninstall = array_intersect($disabled_modules, $gardener_data);
+      }
+    }
+
+    // Uninstall common items.
+    drupal_uninstall_modules($modules_to_uninstall);
+
+    variable_set('scarecrow_cron_next_execution', time() + $interval);
+  }
+}
+
+/**
+ * Returns an array of permissions that Gardens users should never have.
+ *
+ * The Scarecrow module treats these permissions in the following way:
+ * - They will be hidden on the permissions page.
+ * - The Gardens installation profile will disallow them.
+ * - They will be removed if another module tries to assign them when the
+ *   module that defines the permission is enabled.
+ * - Any menu callback that uses any of them as its access check in hook_menu()
+ *   will have its access check set to FALSE instead.
+ *
+ * It is important to note that in the case of user/1, the *only* way in which
+ * these permissions are automatically disallowed is the last point above
+ * (i.e., if they are used as the access check in hook_menu). If there are
+ * other ways in which a permission is used, it is necessary to deny access to
+ * them separately. You should search for any such situations when adding a new
+ * permission to this list.
+ */
+function scarecrow_forbidden_permissions() {
+  $default_forbidden_permissions = array(
+    'access site information',
+    // Drupal Gardens is not yet using the Remote Stream Wrapper module's media
+    // browser plugin (see
+    // gardens_features_required_media_browser_plugins_alter()), so remove the
+    // permission too.
+    'add media from remote urls',
+    'administer oembed presets',
+    'administer openid client ax',
+    'administer software updates',
+    'block IP addresses',
+    'import media',
+    // This is here for a minor usability tweak, rather than security. We can
+    // remove it if http://drupal.org/node/1236216 is fixed, but that is not
+    // likely to happen until the 7.x-3.x branch of the module is released.
+    'view date repeats',
+    // Disallow PHP execution via VBO.
+    'execute views_bulk_operations_script_action',
+    // Disallow audit trail configuration.
+    'administer audit trail',
+  );
+  return variable_get('scarecrow_forbidden_permissions', $default_forbidden_permissions);
+}
+
+/**
+ * Returns an array of permissions that are required for Gardens site admins.
+ *
+ * These are permissions for required modules which we need Gardens site owners
+ * to have, because if they don't have them, they will either be locked out of
+ * their site or have a difficult time getting back in.
+ *
+ * Consequently, these permissions are hidden on the permissions page (and we
+ * rely on the fact that the Gardens install profile will assign them to site
+ * administrators by default).
+ *
+ * TODO: The way we currently implement this, no other role besides the site
+ * administrator will be allowed to get these permissions either (because they
+ * do not show up on the permission page). We may need to rethink this.
+ */
+function scarecrow_administrator_permissions() {
+  // TODO: Empty for now. If we continue allowing Gardens site owners access to
+  // user/1, we can leave it empty or eventually delete it. If instead we deny
+  // access to user/1, permissions that we might want to include in this array
+  // include 'access administration pages' and 'administer permissions'.
+  $default_administrator_permissions = array();
+  return variable_get('scarecrow_administrator_permissions', $default_administrator_permissions);
+}
+
+/**
+ * Returns an array of permissions that should not be displayed on the
+ * permissions page.
+ */
+function scarecrow_hidden_permissions() {
+  return array_merge(scarecrow_forbidden_permissions(), scarecrow_administrator_permissions(), array('use parature support'));
+}
+
+/**
+ * Form #after_build function to disable access to permission checkboxes.
+ */
+function _scarecrow_disable_hidden_permission_checkboxes($element, &$form_state) {
+  foreach (scarecrow_hidden_permissions() as $permission) {
+    // Actually unset the element rather than setting #access to FALSE, to
+    // preserve the theming of the permissions table.
+    unset($element[$permission]);
+  }
+  return $element;
+}
+
+/**
+ * Custom validation handler for the user permissions page.
+ *
+ * Make sure that hidden permissions remain correctly assigned.
+ */
+function _scarecrow_permissions_validate($form, &$form_state) {
+  $roles = user_roles();
+  $current_role_permissions = user_role_permissions($roles);
+  foreach (array_keys($roles) as $rid) {
+    $new_permissions = &$form_state['values'][$rid];
+    foreach (scarecrow_hidden_permissions() as $permission) {
+      if (isset($new_permissions[$permission])) {
+        // The $form_state['values'] array has each permission set to the
+        // permission name when it is assigned, and to 0 when it is not
+        // assigned, so we mimic that structure here.
+        $new_permissions[$permission] = !empty($current_role_permissions[$rid][$permission]) ? $permission : 0;
+      }
+    }
+  }
+  if (!_scarecrow_comments_protected_by_mollom() && ($form_state['values'][DRUPAL_ANONYMOUS_RID]['skip comment approval'] || $form_state['values'][DRUPAL_ANONYMOUS_RID]['post comments'])) {
+    form_set_error(DRUPAL_ANONYMOUS_RID . '][skip comment approval', t('To enable "Post Comments" or "Skip comment approval" for anonymous users, configure <a href="!mollom">Mollom content protection</a> on the comment form for all content types.', array('!mollom' => url('admin/config/content/mollom'))));
+  }
+  // Safety check - certain permissions would give too much power to anonymous
+  // users.
+  $dangerous_permissions = array(
+    'administer nodes',
+    'bypass node access',
+    'bypass mollom protection',
+  );
+  // Nodes that can be created by anonymous users need to be protected by Mollom
+  // with a CAPTCHA on SMB.
+  if (!variable_get('gardens_client_name', '')) {
+    foreach (node_permissions_get_configured_types() as $node_type) {
+      if (!empty($form_state['values'][DRUPAL_ANONYMOUS_RID]['create ' . $node_type . ' content']) && !_scarecrow_node_protected_by_mollom($node_type)) {
+        form_set_error(DRUPAL_ANONYMOUS_RID . '][create ' . $node_type . ' content', t('To enable "!permission" for anonymous users, configure <a href="!mollom">Mollom content protection</a>.', array(
+          '!permission' => $form['permission']['create ' . $node_type . ' content']['#markup'],
+          '!mollom' => url('admin/config/content/mollom'),
+        )));
+      }
+      $dangerous_permissions[] = 'edit any ' . $node_type . ' content';
+      $dangerous_permissions[] = 'delete any ' . $node_type . ' content';
+    }
+  }
+  foreach ($dangerous_permissions as $permission) {
+    if (!empty($form_state['values'][DRUPAL_ANONYMOUS_RID][$permission])) {
+      form_set_error(DRUPAL_ANONYMOUS_RID . '][' . $permission, t('You cannot grant "!permission" to anonymous users for security reasons.', array(
+        '!permission' => $form['permission'][$permission]['#markup'],
+      )));
+    }
+  }
+}
+
+/**
+ * Change the access callback for an array of paths and all items underneath it or derived from it.
+ *
+ * @param $items
+ *   An array of menu items, as returned from hook_menu().
+ * @param $access callbacks
+ *   An array with Drupal paths as the keys and access callback function names
+ *   as the values. The access callbacks are changed for the provided paths and
+ *   all paths underneath them or derived from them (i.e., including
+ *   'admin/path' => 'some_function' in this array means that "admin/path/xyz"
+ *   and "admin/path-xyz" will have their access callbacks changed to
+ *   "some_function" as well). Note that the second part of that behavior may
+ *   actually be a bug, but it's a risky one to fix :)
+ */
+function _scarecrow_alter_menu_tree_access_callbacks(&$items, $access_callbacks) {
+  // Sort the callbacks so that more specific paths will get processed after
+  // their parents, and therefore take precedence over them.
+  ksort($access_callbacks);
+  // Now go through each item and change any access callbacks where the path
+  // matches.
+  foreach ($items as $path => &$item) {
+    foreach ($access_callbacks as $path_to_change => $callback) {
+      if (strpos($path, $path_to_change) === 0) {
+        $item['access callback'] = $callback;
+      }
+    }
+  }
+}
+
+/**
+ * Menu access callback; limit access to account cancellation pages.
+ */
+function scarecrow_user_cancel_access($account) {
+  // Use the standard Drupal access callback, but additionally prevent the
+  // first user account and the last site owner from being canceled.
+  if ($account->uid <= 1) {
+    return FALSE;
+  }
+  $owner_uids = scarecrow_list_site_owner_uids();
+  if ((count($owner_uids) < 2) && isset($owner_uids[$account->uid])) {
+    return FALSE;
+  }
+  return user_cancel_access($account);
+}
+
+/**
+ * Returns the system help replacement text for a given path, if applicable.
+ */
+function scarecrow_help_text($path) {
+  switch ($path) {
+    case 'admin/help':
+      $output = '<h2>' . t('Drupal Gardens help') . '</h2>';
+      $output .= '<p>' . t('Use the <a href="@url">Drupal Gardens help resources</a> for overall help with your site, or the individual topics below for help with more specific areas.', array('@url' => 'http://www.drupalgardens.com/drupalgardens-help')) . '</p>';
+      return $output;
+    case 'admin/modules':
+      $output = '<p>' . t("Modules are plugins that extend Drupal's core functionality. They can be enabled or disabled from this page.") . '</p>';
+      return $output;
+    case 'admin/appearance':
+    case 'admin/appearance/list':
+    case 'admin/appearance/settings':
+      return '';
+    case 'admin/config/search/domain_301_redirect':
+    case 'admin/help#domain_301_redirect':
+      return t('Use the 301 Redirect module to redirect your Drupal Gardens domain to the domain specified below. This informs web traffic, such as search engines, not to store your Drupal Gardens domain, which helps search engine optimization. <a href="@url">Read more.</a>', array('@url' => 'http://www.drupalgardens.com/documentation/seo/redirect'));
+  }
+}
+
+/**
+ * Implement hook_user_cancel_methods_alter()
+ */
+function scarecrow_user_cancel_methods_alter(&$methods) {
+  // Say we remove the account not delete it. For now we only say this if the
+  // site requires all users to log in via OpenID. (In theory for sites where
+  // OpenID is optional we should make this change contextually, since some
+  // user accounts will still have an OpenID account on the Gardener. However,
+  // there doesn't seem to be any good way to get this contextual information;
+  // plus, we can reasonably assume that people who are using OpenID accounts
+  // on these sites are advanced users such as administrators and therefore
+  // already understand what's going on.)
+  if (scarecrow_force_openid()) {
+    $methods['user_cancel_delete']['title'] = t("Remove account and the account's content from this site.");
+    $methods['user_cancel_delete']['description'] = t('Your account will be removed from this site and all account information deleted. All of your content on this site will also be deleted. The account is not removed from @service_domain or any other !service_name_long sites.', array(
+      '!service_name_long' => variable_get('gardens_service_name_long', 'Drupal Gardens'),
+      '@service_domain' => str_replace(array('http://', 'https://'), '', variable_get('acquia_gardens_gardener_url', 'http://drupalgardens.com')),
+    ));
+    $methods['user_cancel_reassign']['title'] = t("Remove account from this site. The account's content will be owned by the <em class=\"placeholder\">Anonymous</em> user.");
+    $methods['user_cancel_reassign']['description'] = t('Your account will be removed from this site and all account information deleted. All of your content on this site will be assigned to the <em class="placeholder">Anonymous</em> user. The account is not removed from @service_domain or any other !service_name_long sites.', array(
+      '!service_name_long' => variable_get('gardens_service_name_long', 'Drupal Gardens'),
+      '@service_domain' => str_replace(array('http://', 'https://'), '', variable_get('acquia_gardens_gardener_url', 'http://drupalgardens.com')),
+    ));
+  }
+  // If the site does allow local user logins, at least change the text to say
+  // "from this site" to reduce some of the above confusion.
+  else {
+    $methods['user_cancel_delete']['title'] = t("Delete the account and its content from this site.");
+    $methods['user_cancel_reassign']['title'] = t('Delete the account from this site and make its content belong to the %anonymous-name user.', array('%anonymous-name' => variable_get('anonymous', t('Anonymous'))));
+  }
+}
+
+/**
+ * Implement hook_form_FORM_ID_alter().
+ */
+function scarecrow_form_user_cancel_confirm_form_alter(&$form, &$form_state) {
+  global $user;
+
+  // confirm_form() set the page title which we need to modify to make it clear
+  // that the account is only to be removed on this site. (Note: Strictly
+  // speaking we don't need this for accounts that are local only, if the site
+  // is configured to allow them, but the text here is sufficiently generic
+  // that it works in that case also.)
+  if ($form['_account']['#value']->uid == $user->uid) {
+    $question = t('Are you sure you want to cancel your account on this site?');
+  }
+  else {
+    $question = t('Are you sure you want to cancel the account %name on this site?', array('%name' => $form['_account']['#value']->name));
+  }
+  drupal_set_title($question, PASS_THROUGH);
+}
+
+/**
+ * Implement hook_user_cancel()
+ */
+function scarecrow_user_cancel($edit, $account, $method) {
+  // @todo Should be able to remove this as Drupal core now prevents this.
+  if ($account->uid == 1) {
+    throw new Exception("You are not permitted to cancel or delete the user #1 account.");
+  }
+
+  // Prevent the last maintainer account from being canceled.
+  $uids = scarecrow_list_site_owner_uids();
+  if (isset($uids[$account->uid]) && count($uids) < 2) {
+    throw new Exception("You are not permitted to cancel the last active site maintainer account.");
+  }
+}
+
+/**
+ * Implement hook_user_presave()
+ */
+function scarecrow_user_presave(&$edit, $account, $category) {
+  if ($account->is_new) {
+    return;
+  }
+  $owner_uids = scarecrow_list_site_owner_uids();
+  if (isset($edit['status']) && empty($edit['status'])) {
+    if ($account->uid == 1) {
+      $edit['status'] = 1;
+      drupal_set_message(t("You are not permitted to block the user #1 account."), 'error');
+      return;
+    }
+    // Prevent the last maintainer account from being blocked.
+    if (isset($owner_uids[$account->uid]) && count($owner_uids) < 2) {
+      $edit['status'] = 1;
+      drupal_set_message(t("You are not permitted to block the last active site maintainer account."), 'error');
+    }
+  }
+
+  if (isset($owner_uids[$account->uid]) && isset($edit['roles']) && count($owner_uids) < 2) {
+    $owner_rid = variable_get('gardens_site_owner_role', 0);
+    if (empty($edit['roles'][$owner_rid])) {
+      drupal_set_message(t("You are not permitted to remove the site maintainer role from the last site maintainer."), 'error');
+      $edit['roles'][$owner_rid] = $owner_rid;
+    }
+  }
+
+}
+
+/**
+ * Preprocess function for theme_status_report.
+ *
+ * Removes irrelevant nags (but still displays them to Gardens admins, who can
+ * do something about them).
+ */
+function scarecrow_preprocess_status_report(&$variables) {
+  if (!user_access('administer software updates')) {
+    foreach ($variables['requirements'] as $key => $requirement) {
+      if (in_array($requirement['title'], _scarecrow_irrelevant_requirement_titles())) {
+        unset($variables['requirements'][$key]);
+      }
+    }
+  }
+}
+
+/**
+ * Returns an array of status report requirement titles that are irrelevant for
+ * regular Gardens site owners.
+ */
+function _scarecrow_irrelevant_requirement_titles() {
+  return array(
+    t('Update notifications'),
+    t('Database updates'),
+    t('Access to update.php'),
+    t('HTML Purifier library'),
+    t('HTML Purifier Library'),
+    // Flag module displays an error about Translation Helpers module being
+    // missing if Content Translation is enabled.
+    t('Flag'),
+  );
+}
+
+/**
+ * Implements hook_gardens_features_add_dialog_user_enhancements_alter().
+ */
+function scarecrow_gardens_features_add_dialog_user_enhancements_alter(&$add_enhancements) {
+  // Never add the enhancements if Open ID logins are required, since Scarecrow
+  // forces user/* links to go to the Gardener login overlay in that case, so
+  // we don't want Dialog User behavior to interfere. This applies, for
+  // example, if a site owner places a hardcoded link to a user/* path in the
+  // HTML, in which case scarecrow_url_outbound_alter() won't run on it.
+  if (scarecrow_force_openid()) {
+    $add_enhancements = FALSE;
+  }
+}
+
+/**
+ * Implement hook_url_outbound_alter().
+ */
+function scarecrow_url_outbound_alter(&$path, $options, $original_path) {
+  // Alter user login, register and password links to go directly to
+  // gardener/login or gardener/register, thus eliminating an unneeded user
+  // interaction. Don't do this for user/register when a Gardens OpenID user
+  // registration is in process, though (since OpenID needs to redirect to the
+  // actual user registration page if there are profile fields that need to be
+  // filled out).
+  if (scarecrow_force_openid()) {
+    // @todo: It's not clear where user/password should actually redirect, so
+    //   for now just use gardener/login for that too.
+    if ($path == 'user/login' || $path == 'user/password') {
+      $path = 'gardener/login';
+    }
+    elseif ($path == 'user/register' && !gardens_client_user_registration_openid_response()) {
+      $path = 'gardener/register';
+    }
+  }
+}
+
+/**
+ * Implements hook_file_download().
+ */
+function scarecrow_file_download($uri) {
+  $schema = file_uri_scheme($uri);
+  // See theme_scarecrow_media_gallery_download_link for documentation.
+  if ($schema == 'oembed') {
+    // Access denied.
+    return -1;
+  }
+}
+
+/**
+ * Themes a link to download the original version of a gallery image.
+ *
+ * When the visitor browses a gallery it might allow downloading the original
+ * version of the images via a menu callback (see the media_download() function
+ * handling media/%file/download path). Currently the oembed downloading times
+ * out plus it is trying to transfer the image from the 3rd party site to the
+ * visitor which is a potential risk to system health. Since there's no
+ * interaction point to overwrite the link (apart from hook_url_outbound_alter
+ * which could be a performance hit) we're going to show a link to the image's
+ * source page where the it can be downloaded.
+ *
+ * @see theme_media_gallery_download_link()
+ */
+function theme_scarecrow_media_gallery_download_link($variables) {
+  $schema = file_uri_scheme($variables['file']->uri);
+  if ($schema == 'oembed') {
+    if (!isset($variables['text'])) {
+      $variables['text'] = t('Download original image');
+    }
+    $variables['options']['attributes']['class'] = 'gallery-download';
+    $variables['options']['attributes']['target'] = '_blank';
+    return l($variables['text'], file_create_url($variables['file']->uri), $variables['options']);
+  }
+  else {
+    return theme_media_gallery_download_link($variables);
+  }
+}
+
+/**
+ * Implements hook_form_FORM_ID_alter().
+ */
+function scarecrow_form_domain_301_redirect_admin_form_alter(&$form, $form_state) {
+  if (!variable_get('gardens_client_name', '')) {
+    // On SMB do not allow disabling the domain check.
+    unset($form['domain_301_redirect_check_period']['#options'][0]);
+  }
+  unset($form['domain_301_redirect_enabled']['#description']);
+  $form['domain_301_redirect_domain']['#description'] = t('Enter the domain that you want to redirect your site to. E.g., http://www.example.com.');
+  $form['domain_301_redirect_check_period']['#title'] = t('Domain validation interval');
+  $form['domain_301_redirect_check_period']['#description'] = t('Select the interval between domain validation checks. If the domain no longer validates, redirection will be disabled.');
+}

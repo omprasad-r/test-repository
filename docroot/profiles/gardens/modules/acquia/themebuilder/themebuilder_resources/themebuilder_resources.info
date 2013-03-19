@@ -1,0 +1,7 @@
+name = Themebuilder resources
+description = Contains resources available to all Themebuilder themes.
+core = 7.x
+package = Themebuilder
+files[] = themebuilder_resources.module
+files[] = Resource.inc
+hidden = TRUE

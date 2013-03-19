@@ -1,0 +1,3526 @@
+<?php
+// $Id:$
+define('THEME_BUILDER_DRAFT_SUFFIX', '_session');
+define('THEME_BUILDER_THEME_SEMAPHORE', themebuilder_compiler_get_semaphore_id());
+define('THEME_BUILDER_SEMAPHORE_NAME', 'themebuilder_semaphore');
+define('THEME_BUILDER_THEMENAME_NAMESPACE', 'acq_');
+define('THEME_BUILDER_EDIT_DIRECTORY', '/mnt/tmp/%sitename%/%base_uri%/%theme_name%');
+define('THEMEBUILDER_REDIRECT_TIMEOUT', 45);
+define('THEMEBUILDER_REDIRECT_DELAY', 5);
+
+/**
+ * This is the version of the ThemeBuilder client (JavaScript).  This
+ * version string is compared to the version string in the JavaScript
+ * code (specifically ThemeBuilder.Application.version), and any
+ * difference will cause the client to request a cache clear to get
+ * the versions in sync.  Note that in the workspace the versions must
+ * match.
+ */
+define('THEME_BUILDER_JAVASCRIPT_VERSION', '1.00.9');
+
+/**
+ * The update level is a mechanism that prevents the user from entering or
+ * using the themebuilder between a code update and a database update that
+ * would impact themebuilder use.  If you rev this value, don't forget to
+ * create an update function that sets the new level into the variables table
+ * by calling themebuilder_compiler_reset_update_level
+ */
+function themebuilder_compiler_get_update_level() {
+  return 1;
+}
+
+/**
+ * Resets the update level in the database to match the current update level
+ * so the themebuilder will work.  If the update levels don't match, the
+ * themebuilder will not open, and will be closed on the next request.
+ */
+function themebuilder_compiler_reset_update_level() {
+  variable_set('themebuilder_update_level', themebuilder_compiler_get_update_level());
+}
+
+/**
+ * Indicates whether the themebuilder can be used in the current Drupal session.
+ *
+ * @see themebuilder_compiler_get_access_mode for information on how
+ * to control themebuilder access.
+ *
+ * @return
+ *   TRUE if the themebuilder can be used; FALSE otherwise.
+ */
+function themebuilder_compiler_can_use() {
+  $result = FALSE;
+  if (themebuilder_compiler_update_level_ok()) {
+    $mode = themebuilder_compiler_get_access_mode();
+    if ($mode === 'full') {
+      $result = TRUE;
+    }
+    if (themebuilder_compiler_in_edit_mode() &&
+      $mode === 'locked') {
+      $result = TRUE;
+    }
+  }
+  return $result;
+}
+
+/**
+ * Indicates whether the themebuilder must forcibly exit as a result
+ * of the access mode.
+ *
+ * @see themebuilder_compiler_get_access_mode for information on how
+ * to control themebuilder access.
+ *
+ * @return
+ *   TRUE if the themebuilder must forcibly exit; FALSE otherwise.
+ */
+function themebuilder_compiler_must_exit() {
+  $result = TRUE;
+  if (themebuilder_compiler_update_level_ok()) {
+    $mode = themebuilder_compiler_get_access_mode();
+    if ($mode !== 'none') {
+      $result = FALSE;
+    }
+  }
+  return $result;
+}
+
+/**
+ * Indicates whether the code and database agree on the update level.  If they
+ * do not agree, the themebuilder should not be used.
+ *
+ * @return
+ *   TRUE if the code and database agree on the update level; FALSE otherwise.
+ *   This value indicates whether the themebuilder should be used.
+ */
+function themebuilder_compiler_update_level_ok() {
+  // Commented out log trace function due to fatal errors.
+  // themebuilder_log_trace_enter(__FUNCTION__);
+  $db_update_level = variable_get('themebuilder_update_level', 0);
+  $code_update_level = themebuilder_compiler_get_update_level();
+  // themebuilder_log_trace_exit(__FUNCTION__);
+  return $db_update_level == $code_update_level;
+}
+
+/**
+ * Returns true if we are currently running in development mode.
+ *
+ * In development mode we might run additional code to make error
+ * conditions more prominent, but this would not be appropriate for
+ * production mode.
+ *
+ * @return {boolean}
+ *   TRUE if development mode is on; FALSE otherwise.
+ */
+function themebuilder_compiler_is_devel_mode() {
+  $devel_mode = variable_get('acquia_gardens_developer_mode', FALSE) || variable_get('gardens_devel', FALSE);
+  return $devel_mode;
+}
+
+/**
+ * Detects and reads the ThemeBuilderMode files that control which
+ * themebuilder sessions are allowed to run.  The ThemeBuilderMode
+ * file can be placed in the following locations:
+ *
+ * DRUPAL_ROOT/../ - control behavior for an entire tangle
+ * DRUPAL_ROOT/sites/<mysite>/ - control behavior for a single site
+ *
+ * The single site configuration takes precedence over the tangle
+ * configuration.  You can have the entire tangle enabled for
+ * themebuilder use and a single site disabled or in maintenance mode,
+ * or you can have the entire tangle disabled for themebuilder use
+ * with a single site able to continue using the themebuilder.
+ *
+ * The contents of the file control whether the themebuilder can be
+ * opened or not.  Valid values are:
+ *
+ * full - Themebuilder can be opened and used
+ *
+ * locked - Themebuilder cannot be opened, but can be used.
+ *
+ * none (or empty file) - Themebuilder cannot be opened or used.  Subsequent
+ * themebuilder requests will cause the themebuilder session to close.
+ *
+ * @return
+ *   A string that indicates the current access mode for the
+ *   themebuilder session.
+ */
+function themebuilder_compiler_get_access_mode() {
+  $mode = &drupal_static(__FUNCTION__);
+  if (!isset($mode)) {
+    $site_file = DRUPAL_ROOT . '/' . conf_path() . '/ThemeBuilderMode';
+    $system_file = DRUPAL_ROOT . '/../ThemeBuilderMode';
+    $contents = '';
+    if (file_exists($site_file)) {
+      $contents = file_get_contents($site_file);
+    }
+    elseif (file_exists($system_file)) {
+      $contents = file_get_contents($system_file);
+    }
+    else {
+      $contents = 'full';
+    }
+    $contents = strtolower(trim($contents));
+    // Sanity check the string.
+    switch ($contents) {
+    case 'full':
+    case 'locked':
+      // The string matches a known state identifier.  Keep it.
+      break;
+
+    default:
+      // The default action is to shut down the themebuilder.
+      $contents = 'none';
+    }
+    $mode['value'] = $contents;
+  }
+  return $mode['value'];
+}
+
+/**
+ * Implementation of hook_menu().
+ */
+function themebuilder_compiler_menu() {
+  $items = array();
+
+  // Commits a modification to the server.
+  $items['themebuilder-compiler-commit'] = array(
+    'title' => t('Commits a modification'),
+    'page callback' => 'themebuilder_bar_ajax_request',
+    'page arguments' => array('themebuilder_compiler_commit'),
+    'type' => MENU_CALLBACK,
+  );
+
+  // Clears the undo and redo stacks
+  $items['themebuilder-compiler-clear-modification-stacks'] = array(
+    'title' => t('Clears the undo and redo stacks.'),
+    'page callback' => 'themebuilder_compiler_clear_modification_stacks_ajax',
+    'type' => MENU_CALLBACK,
+  );
+
+  $items['themebuilder-init-data'] = array(
+    'title' => t('Get themebuilder initial data.'),
+    'page callback' => 'themebuilder_bar_ajax_request',
+    'page arguments' => array('themebuilder_compiler_get_initial_data_json'),
+    'access arguments' => array('administer themes'),
+    'type' => MENU_CALLBACK,
+  );
+
+  $items['themebuilder-phone-home'] = array(
+    'title' => 'Allows the client-side code to contact the server and check for updates',
+    'page callback' => 'themebuilder_bar_ajax_request',
+    'page arguments' => array('themebuilder_compiler_process_phone_home_request'),
+    'access arguments' => array('administer themes'),
+    'type' => MENU_CALLBACK,
+  );
+
+  $items['themebuilder-save-settings'] = array(
+    'title' => t('Saves the themebuilder settings.'),
+    'page callback' => 'themebuilder_bar_ajax_request',
+    'page arguments' => array('themebuilder_compiler_save_themebuilder_settings'),
+    'access arguments' => array('administer themes'),
+    'type' => MENU_CALLBACK,
+  );
+
+  $items['themebuilder-clear-cache'] = array(
+    'title' => t('Clears the JavaScript and CSS cache.'),
+    'page callback' => 'themebuilder_compiler_clear_cache_ajax',
+    'access arguments' => array('administer themes'),
+    'type' => MENU_CALLBACK,
+  );
+
+  $items['themebuilder-delete-theme'] = array(
+    'title' => t('Deletes a theme.'),
+    'page callback' => 'themebuilder_bar_ajax_request',
+    'page arguments' => array('themebuilder_compiler_delete_theme_ajax'),
+    'access arguments' => array('administer themes'),
+    'type' => MENU_CALLBACK,
+  );
+
+  $items['themebuilder-publish-theme'] = array(
+    'title' => t('Publishes a theme.'),
+    'page callback' => 'themebuilder_bar_ajax_request',
+    'page arguments' => array('themebuilder_compiler_publish_theme_ajax'),
+    'access arguments' => array('administer themes'),
+    'type' => MENU_CALLBACK,
+  );
+
+  $items['themebuilder-copy-theme'] = array(
+    'title' => t('Copies a theme.'),
+    'page callback' => 'themebuilder_bar_ajax_request',
+    'page arguments' => array('themebuilder_compiler_copy_theme_ajax'),
+    'access arguments' => array('administer themes'),
+    'type' => MENU_CALLBACK,
+  );
+
+  foreach ($items as $path => &$item) {
+    $item['access callback'] = 'themebuilder_compiler_access';
+    $item['access arguments'] = array($path);
+  }
+
+  $items['themebuilder-export-download'] = array(
+    'title' => t('Export Download'),
+    'page callback' => 'themebuilder_compiler_download_exported_file',
+    'access arguments' => array('administer themes'),
+    'type' => MENU_CALLBACK,
+  );
+  return $items;
+}
+
+function themebuilder_compiler_themebuilder_bar_header() {
+  $path = drupal_get_path('module', 'themebuilder_compiler');
+  return array(array(
+    'js'  => array($path . "/js/ba-debug.js",
+                   $path . "/js/core.js",
+                   $path . "/js/coreUtil.js",
+                   $path . "/js/Application.js",
+                   $path . "/js/InteractionController.js",
+                   $path . "/js/Settings.js"),
+    'group' => JS_LIBRARY
+  ));
+}
+
+function themebuilder_compiler_themebuilder_bar_editor() {
+  $path = drupal_get_path('module', 'themebuilder_compiler');
+  return array(array(
+    'js'  => array($path . "/js/Modification.js",
+                   $path . "/js/Theme.js",
+                   $path . "/js/PaletteModification.js",
+                   $path . "/js/json2.js"),
+    'group' => JS_LIBRARY
+  ));
+}
+
+/**
+ * Implementation of hook_requirements().
+ * Make sure the sysvsem PHP module is installed or the themebuilder isn't
+ * going to work.
+ */
+function themebuilder_compiler_requirements($phase) {
+  $requirements = array();
+  if ($phase == 'runtime' && !function_exists('sem_get')) {
+    $requirements['sem_get'] = array(
+      'title' => t('PHP sysvsem module'),
+      'value' => t('Not installed'),
+      'description' => t('The PHP sysvsem module is required for correct themebuilder behavior.'),
+      'severity' => REQUIREMENT_WARNING,
+    );
+  }
+  return $requirements;
+}
+
+/**
+ * Includes the class files needed in order to invoke the theme compiler.
+ */
+function themebuilder_compiler_includes() {
+  $path = drupal_get_path('module', 'themebuilder_compiler');
+  $path = DRUPAL_ROOT .'/' .$path .'/';
+  require_once $path .'Theme.inc';
+  require_once $path .'ThemeBuilderConfiguration.php';
+}
+
+/**
+ * Implementation of hook_init().
+ */
+function themebuilder_compiler_init() {
+  // TODO: AN-15249 - Remove this when themebuilder_log is its own module.
+  // Not doing that for a hotfix, but would be the right solution going
+  // forward.
+  global $previous_exception_handler, $theme_key, $user;
+
+  // If the user is assigned a themebuilder draft theme but the themebuilder is
+  // not open, that probably means someone logged in as them has it open in
+  // another web browser. (This could happen if they left themselves logged in
+  // to another computer by mistake, or they might be doing it deliberately
+  // with two browsers on the same computer, in order to perform cross-browser
+  // testing of the theme they are developing.)  To support that use case, we
+  // want them to continue seeing the draft theme, but we must force them to be
+  // on the same webnode that the draft theme is actually stored on.
+  if (!empty($user->theme) && themebuilder_compiler_theme_is_draft($user->theme)) {
+    // If the user does not have permission to use the themebuilder any more,
+    // unassign the draft theme and reload the page so they go back to normal
+    // browsing.
+    if (!user_access('administer themes')) {
+      themebuilder_compiler_set_user_theme();
+      unset($_GET['destination']);
+      drupal_goto(current_path(), array('query' => drupal_get_query_parameters()));
+    }
+    else {
+      // Otherwise, try to verify that the user is on the correct web node
+      // already.
+      $server = new AffinityServer();
+      try {
+        $server->verify(FALSE);
+      }
+      // The user is not on the correct web node, so reload the page and try
+      // again. $server->verify() should already have set new cookies or
+      // cleared out-of-date ones as necessary.
+      //
+      // In the case where a webnode goes down, and the site is accessed with a new
+      // session, this can cause a redirect loop.  To avoid this, we redirect
+      // with a timestamp the first time.  Every subsequent redirect incurrs
+      // a small nap between requests until THEMEBUILDER_REDIRECT_TIMEOUT is
+      // reached.  Since most browsers bail after 20 redirects, and our webnodes
+      // take about 30 seconds to be re-acknoledged by nginx, this allows us a
+      // safety net.
+      //
+      catch (ThemeBuilderWrongWebnodeException $e) {
+        unset($_GET['destination']);
+        $query_params = drupal_get_query_parameters();
+        if (isset($query_params['retry_time'])) {
+          if ((time() - $query_params['retry_time']) > THEMEBUILDER_REDIRECT_TIMEOUT) {
+            // Note that all themebuilder sessions for this site are
+            // on the same webnode, and the webnode is not available.
+            // If we don't clear all of the themebuilder sessions for
+            // this site, the user will not be able to enter the
+            // themebuilder again because it will continue to lock
+            // them to the webnode that cannot be accessed.
+            db_query('DELETE FROM themebuilder_session');
+            unset($_COOKIE['ah_app_server']);
+            db_update('users')
+              ->fields(array('theme' => ''))
+              ->execute();
+            ThemeBuilderLog()->gardensWarning("AN-23207: Deleted session themes because tb session webnode appears to be offline");
+            unset($user->theme);
+            unset($theme_key);
+
+            if (isset($query_params['retry_time'])) {
+              unset($query_params['retry_time']);
+            }
+            $error_message = 'Your ThemeBuilder session has automatically closed due to an internal error.  Any unsaved changes may have been lost.  To continue styling your site, click Appearance.';
+            watchdog('themebuilder', $error_message, array(), WATCHDOG_WARNING);
+            drupal_set_message(t($error_message), 'warning');
+
+            // Refresh the page so the user doesn't see a WSOD.
+            drupal_goto(current_path(), array('query' => $query_params));
+            return;
+          }
+        }
+        else {
+          $query_params['retry_time'] = time();
+        }
+        // Sleeping for a few seconds allows us to retry several times and not hit the
+        // 20 redirect limit.
+        sleep(THEMEBUILDER_REDIRECT_DELAY);
+        drupal_goto(current_path(), array('query' => $query_params));
+      }
+    }
+  }
+
+  if ($theme_key == variable_get('admin_theme', FALSE)) {
+    return;
+  }
+
+  if (!user_access('administer themes')) {
+    return;
+  }
+
+  $previous_exception_handler = set_exception_handler('themebuilder_compiler_exception_handler');
+
+  drupal_add_js(
+    array(
+      'callbacks' => _themebuilder_compiler_get_callbacks(),
+    ),
+    array('type' => 'setting')
+  );
+
+  themebuilder_compiler_theme_sanity_check();
+  // Everything above this line is required whether the themebuilder is open
+  // or not.
+  if (!themebuilder_compiler_in_edit_mode()) {
+    // No need to perform additional initialization.
+    return;
+  }
+  themebuilder_compiler_includes();
+  $current_js = drupal_add_js(
+    array(
+      'themebuilderJavaScriptVersion' => THEME_BUILDER_JAVASCRIPT_VERSION,
+      'themebuilderCurrentThemePath' => path_to_theme(),
+      'themebuilderCommitPath'    => 'themebuilder-compiler-commit',
+      'themebuilderUndoStackPath' => 'themebuilder-compiler-get-undo-stack',
+      'themebuilderClearModificationStacks' => 'themebuilder-compiler-clear-modification-stacks',
+      'themebuilderInitDataPath' => 'themebuilder-init-data',
+      'themebuilderClearCachePath' => 'themebuilder-clear-cache',
+      'themebuilderSaveSettings' => 'themebuilder-save-settings',
+      'themebuilderDeleteTheme' => 'themebuilder-delete-theme',
+      'themebuilderPublishTheme' => 'themebuilder-publish-theme',
+      'themebuilderCopyTheme' => 'themebuilder-copy-theme',
+      'themebuilderWritable' => is_writable(themebuilder_compiler_get_custom_theme_folder()),
+    ),
+    array('type' => 'setting')
+  );
+
+  // Disable CSS aggregation whenever the themebuilder is active.
+  if (themebuilder_compiler_in_edit_mode() && variable_get('themebuilder_disable_css_aggregation', FALSE)) {
+    global $conf;
+    $conf['preprocess_css'] = 0;
+  }
+}
+
+/**
+ * Implementation of hook_jsunit_initialize().
+ */
+function themebuilder_compiler_jsunit_initialize(&$jsunit, $test_name) {
+  include_once('jsunit_tests.inc');
+  switch ($test_name) {
+    case 'util':
+      themebuilder_compiler_jsunit_core_util($jsunit);
+      break;
+  }
+}
+
+/**
+ * Implementation of hook_jsunit_suite();
+ */
+function themebuilder_compiler_jsunit_suite() {
+  return array('util');
+}
+
+function _themebuilder_compiler_get_callbacks() {
+  $callbacks = array();
+  foreach (module_list() as $module) {
+    if (strpos($module,'themebuilder') === 0) {
+      $items = module_invoke($module, 'menu');
+      if (!empty($items)) {
+        foreach($items as $path => $item) {
+          if (isset($item['access callback']) &&  $item['access callback'] == 'themebuilder_compiler_access') {
+            //Assume it is a JS callback
+            $callbacks[$path] = new StdClass();
+            $callbacks[$path]->url = url($path);
+            $callbacks[$path]->token = drupal_get_token($path);
+          }
+        }
+      }
+    }
+  }
+  return $callbacks;
+}
+
+function themebuild_compiler_initialize_default_config() {
+  $config = ThemeBuilderConfig::get();
+  $config->customThemeFolder = themebuilder_compiler_get_custom_theme_folder();
+  $config->uploadImagePath = themebuilder_compiler_get_upload_image_path();
+}
+
+/**
+ * Implementation of hook_preprocess_html().
+ *
+ * This hook sets a body class that indicates the user is in edit mode.
+ */
+function themebuilder_compiler_preprocess_html(&$vars) {
+  global $theme, $user;
+  // We never want to show the TB if it is an admin theme.
+  if ($theme == variable_get('admin_theme', '')) {
+    $vars['classes_array'][] = 'themebuilder-disabled';
+    return;
+  }
+
+  if (themebuilder_compiler_in_edit_mode()) {
+    $vars['classes_array'][] = 'themebuilder';
+  }
+
+  // Turn off CSS aggregation for themebuilder themes that are in the process
+  // of being edited. (We do this for anyone who is viewing the theme, because
+  // the same user might be logged in to two different browsers to view the
+  // edits in progress, but only one of them will have the themebuilder open.)
+  if (!empty($user->theme) && themebuilder_compiler_theme_is_draft($user->theme)) {
+    $css = drupal_add_css();
+    foreach ($css as $name => $data) {
+      if (strpos($name, '/mythemes/') !== FALSE) {
+        $data['preprocess'] = FALSE;
+        drupal_add_css($name, $data);
+      }
+    }
+  }
+}
+
+/**
+ * Implement hook_stream_wrappers().
+ */
+function themebuilder_compiler_stream_wrappers() {
+  return array(
+    'customthemes' => array(
+      'name' => t('Custom themes'),
+      'class' => 'ThemebuilderCompilerCustomThemesStreamWrapper',
+      'description' => t('Files located within the custom themes directory used by the themebuilder.'),
+      'type' => STREAM_WRAPPERS_HIDDEN,
+    ),
+  );
+}
+
+/**
+ * Custom themes (customthemes://) stream wrapper class.
+ *
+ * Provides support for saving files within the custom themes directory used by
+ * the themebuilder.
+ */
+class ThemebuilderCompilerCustomThemesStreamWrapper extends DrupalPublicStreamWrapper {
+  /**
+   * Implements abstract public function getDirectoryPath()
+   */
+  public function getDirectoryPath() {
+    return themebuilder_compiler_get_custom_theme_folder();
+  }
+
+  /**
+   * Mostly from DrupalLocalStreamWrapper::getLocalPath.
+   */
+  protected function getLocalPath($uri = NULL) {
+    if (!isset($uri)) {
+      $uri = $this->uri;
+    }
+    $path = $this->getDirectoryPath() . '/' . file_uri_target($uri);
+    $realpath = realpath($path);
+    if (!$realpath) {
+      // This file does not yet exist.
+      $realpath = realpath(dirname($path)) . '/' . basename($path);
+    }
+    $directory = realpath($this->getDirectoryPath());
+    // The version from DrupalLocalStreamWrapper includes a comparison of
+    // the realpath and directory strings. We don't include that here because
+    // one may be a symlink and the other not.
+    if (!$realpath || !$directory) {
+      return FALSE;
+    }
+    return $realpath;
+  }
+}
+
+/**
+ * Performs a theme sanity check that prevents us from rendering a WSOD if the files associated with the theme being edited have been lost.
+ *
+ * The edit session theme files will be lost if the webnode they were
+ * written to is restarted.  After this happens, the user that was
+ * editing their theme is now associated with a theme that no longer
+ * exists, and the user has no way to fix the problem themselves.
+ *
+ * If the request is being serviced on the webnode that should contain
+ * the theme and the currently selected theme is an edit session
+ * rather than a saved theme and the theme no longer exists, this
+ * function will kill the theme edit session and thereby allow the
+ * user to view the site rather than a WSOD.
+ */
+function themebuilder_compiler_theme_sanity_check() {
+  if (isset($_COOKIE['ah_app_server'])) {
+    // We do not want to do this for a user that doesn't have the
+    // affinity cookie set because our test would almost certainly
+    // fail because the theme being edited is only on one webnode and
+    // the chances that the user happened to get the same webnode are
+    // very low.
+    $server = new AffinityServer();
+    $webnode = $server->getHostname();
+    $expected_webnode = $server->getWebnode();
+    if ($webnode == $_COOKIE['ah_app_server'] && $webnode == $expected_webnode['webnode']) {
+      // The cookie matches the server, and that matches the server
+      // that the themebuilder is supposed to be on.  If the theme
+      // dosen't exist on this server, bad things have happened.
+      global $theme_key, $user;
+
+      // The request is being served on the same webnode that the
+      // theme should be on.
+      $edit_suffix = 'session';
+      $suffix_len = strlen($edit_suffix);
+      if (substr_compare($theme_key, $edit_suffix, -$suffix_len, $suffix_len) === 0) {
+        // The current theme is an edit session.
+
+        // This performs a rough check for the theme files.  The rough
+        // check does not involve getting the semaphore, so the files
+        // may not be present due to another request doing some
+        // operation on the files.  In the vast majority of cases the
+        // rough check is all we need, and much more efficient than
+        // doing the check the right way.  Given that this code runs
+        // on virtually every request for a user with an active
+        // themebuilder session, it is important that we keep this
+        // efficient if possible.
+        if (themebuilder_compiler_find_theme($theme_key) === FALSE) {
+          // The theme does not exist.  Revert the session and retry the request.
+          $is_ajax = FALSE;
+          if (themebuilder_compiler_in_edit_mode()) {
+            if (isset($_SERVER['HTTP_X_REQUESTED_WITH']) && 'XMLHttpRequest' == $_SERVER['HTTP_X_REQUESTED_WITH']) {
+              $is_ajax = TRUE;
+            }
+          }
+          try {
+            $existing_session = db_select('themebuilder_session', 'ts')
+              ->fields('ts', array('session'))
+              ->condition('uid', $user->uid)
+              ->execute()
+              ->fetchField();
+            if (!empty($existing_session)) {
+              // At this point it appears that we have an active
+              // themebuilder session and the theme files are missing.
+              // Enough of the rough check - don't do anything before
+              // we find out for sure that the files are missing.  Up
+              // to this point we haven't acquired the semaphore.  It
+              // is possible that another request has removed the
+              // themebuilder files and is about to write them back
+              // and this request determined that at some point the
+              // files were not there.  The only way to know for sure
+              // is to acquire the semaphore and check for the
+              // existence of the files again.
+              $semaphore = themebuilder_compiler_get_semaphore();
+              clearstatcache();
+              $theme_exists = themebuilder_compiler_find_theme($theme_key);
+              themebuilder_compiler_remove_semaphore($semaphore);
+              if ($theme_exists !== FALSE) {
+                // Crisis averted!  The theme files are present and we
+                // can continue processing our request.
+                return;
+              }
+
+              // The theme files are really missing.  Take action to
+              // make sure the user can continue using gardens without
+              // interacting with support.  We do this by terminating
+              // their themebuilder session.
+              ThemeBuilderLog()->gardensWarning('The theme no longer exists on the webnode.', "Theme $theme_key, Webnode: $webnode.  Terminating the themebuilder session for user " . $user->uid);
+              themebuilder_compiler_revert_session(unserialize($existing_session));
+
+              // Respond to the problem differently if it is an ajax
+              // request or a page load.
+              if ($is_ajax) {
+                // This is an ajax request with the user currently in
+                // the themebuilder; throw an exception to inform the
+                // user.
+                throw new ThemeBuilderException("Drupal Gardens encountered a problem with your recent ThemeBuilder session.  Click OK to revert to your published theme.", THEMEBUILDER_ERROR_RECOVERABLE, array(ThemeBuilderException::HANDLER_ALERT_AND_CLOSE));
+              }
+              else {
+                // This is a page load, just make the change.
+                $path = isset($_SERVER['REDIRECT_URL']) ? $_SERVER['REDIRECT_URL'] : '';
+                drupal_goto($path);
+              }
+            }
+          }
+          catch (ThemeBuilderException $tb) {
+            throw $tb;
+          }
+          catch (Exception $e) {
+            ThemeBuilderLog()->gardensError('The theme being edited no longer exists on the webnode.', "Theme: $theme_key; Webnode $webnode.  Unable to revert the themebuilder session for user " . $user->uid);
+          }
+        }
+      }
+    }
+  }
+}
+
+/**
+ * Returns the path to the custom theme folder.  This folder will contain all
+ * of the themes created by privileged users.
+ *
+ * @param $create
+ *   TRUE to create the directory if it does not exist. Defaults to TRUE.
+ *
+ * @return string
+ *   The path.
+ */
+function themebuilder_compiler_get_custom_theme_folder($create = TRUE) {
+  $path_info = &drupal_static(__FUNCTION__);
+  if (!$path_info) {
+    $path = conf_path() . '/themes/mythemes';
+    $full_path = DRUPAL_ROOT . "/${path}";
+    // Return early if we're not creating the path, so as not to set the static
+    // cache.  Setting the static cache would bypass the create-if-doesn't-exist
+    // logic every time.
+    if (!$create) {
+      return $path;
+    }
+    if (!is_writable($full_path)) {
+      $success = mkdir($full_path, 0755, TRUE);
+      if (!$success) {
+        ThemeBuilderLog()->gardensError('Unable to create a directory', "Directory: ${full_path}");
+      }
+    }
+    $path_info['path'] = $path;
+  }
+  return $path_info['path'];
+}
+
+/**
+ * Indicates whether a directory local to the webnode should be used for edit
+ * sessions, or if it should go in the normal place.  This is an optimization
+ * that reduces commit times and save times and reduces load on glusterfs.
+ */
+function themebuilder_compiler_use_local_directory() {
+  return TRUE;
+}
+
+/**
+ * Creates the edit session directory, if needed.  Note that on production we
+ * would prefer to create the edit session directory locally because the theme
+ * being edited is not required on multiple webnodes and this strategy can
+ * remove some load from glusterfs.
+ *
+ * @param {String} $session_name
+ *   The name of the theme directory to be created.  This is the same as the
+ *   theme name.
+ * @return
+ *   A string containing the path to the directory.
+ */
+function themebuilder_compiler_create_edit_session_directory($session_name) {
+  $base = $GLOBALS['base_url'];
+  $matches = array();
+  preg_match('/^https?:\/\/([^\/]*)/', $base, $matches);
+  $dir = str_replace('%base_uri%', $matches[1], THEME_BUILDER_EDIT_DIRECTORY);
+  $tangle_name = themebuilder_compiler_get_tangle_name();
+  if (!$tangle_name) {
+    $tangle_name = 'unknown';
+  }
+  $dir = str_replace('%sitename%', $tangle_name, $dir);
+  $dir = str_replace('%theme_name%', $session_name, $dir);
+  $local_link_status = false;
+  // Remove the directory, if it exists.
+  @exec('rm -rf ' . escapeshellarg($dir));
+  if (mkdir($dir, 0755, true)) {
+    $link_path = DRUPAL_ROOT . '/' . themebuilder_compiler_get_custom_theme_folder() . '/' . $session_name;
+    @unlink($link_path);
+    if (symlink($dir, $link_path)) {
+      $local_link_status = true;
+    }
+    else {
+      ThemeBuilderLog()->gardensError('Unable to create a symlink for the edit session theme.', "Tried to create a link from $link_path to the local directory $dir");
+      @rmdir($dir);
+    }
+  }
+  else {
+    ThemeBuilderLog()->gardensError('Unable to create a local directory for the edit session theme.', "Directory $dir for theme $session_name");
+  }
+  if (!$local_link_status) {
+    // The local link failed.  This may be because the webnode is
+    // misconfigured or because we are running on a development machine that
+    // is not configured to support this.
+    $dir = themebuilder_compiler_get_custom_theme_folder() . "/$session_name";
+  }
+  return $dir;
+}
+
+/**
+ * Returns the tangle name.  This is calculated based on the directory
+ * hierarchy, which on gardens production is something like
+ * /mnt/www/html/tangle001/docroot
+ *
+ * In this example, the tangle name is tangle001.
+ *
+ * @return
+ *   The tangle name.
+ */
+function themebuilder_compiler_get_tangle_name() {
+  $path = $_SERVER['DOCUMENT_ROOT'];
+  $dir = dirname($path);
+  $name = basename($dir);
+
+  // Gardens tangle names (by convention) never use _.  So an _ is
+  // a separator used only for a staging tangle.
+  $pos = strrpos($name, '_');
+  if ($pos !== FALSE && $pos > 0) {
+    $name = substr($name, 0, $pos);
+  }
+
+  return $name;
+}
+
+/**
+ * Returns the path from the theme to the custom images directory.
+ *
+ * @return string
+ *   The path.
+ */
+function themebuilder_compiler_get_upload_image_path() {
+  return 'images/uploads';
+}
+
+/**
+ * Gets the current theme being edited from the session
+ * OR
+ * if there is no session, will return the current theme being viewed
+ *
+ * @throws ThemeBuilderEditInProgressException
+ */
+function themebuilder_compiler_get_current_theme() {
+  themebuilder_log_trace_enter(__FUNCTION__);
+  if ($current = themebuilder_compiler_retrieve_session()) {
+    themebuilder_log_trace_exit(__FUNCTION__);
+    return $current;
+  }
+  else {
+    $current = &drupal_static(__FUNCTION__);
+    $theme_name = themebuilder_compiler_get_current_theme_name();
+    if ($current && $current->getName() == $theme_name) {
+      themebuilder_log_trace_exit(__FUNCTION__);
+      return $current;
+    }
+    $current = themebuilder_compiler_get_theme_by_name($theme_name);
+    themebuilder_log_trace_exit(__FUNCTION__);
+    return $current;
+  }
+}
+
+/**
+ * Returns a Theme instance representing the theme associated with the
+ * specified theme name.
+ *
+ * @param $theme_name
+ *   The name of the theme for which a Theme instance should be returned.
+ *
+ * @return
+ *   An instance of Theme representing the theme of the specified name.
+ */
+function themebuilder_compiler_get_theme_by_name($theme_name) {
+  themebuilder_log_trace_enter(__FUNCTION__);
+  $result = Theme::factory($theme_name, themebuilder_compiler_find_theme($theme_name));
+  themebuilder_log_trace_exit(__FUNCTION__);
+  return $result;
+}
+
+/**
+ * Returns a Theme instance representing the base theme of the specified theme
+ * instance.
+ *
+ * @param $theme
+ *   The theme.
+ *
+ * @return
+ *   A Theme instance representing the base theme of the specified theme.
+ */
+function themebuilder_compiler_get_base_theme($theme) {
+  $base_theme = themebuilder_compiler_get_theme_by_name($theme->getBaseThemeName());
+  return $base_theme;
+}
+
+/**
+ * Return the name of the currently published theme.
+ *
+ * @return
+ *   The name of the published theme.
+ */
+function themebuilder_compiler_get_published_theme_name() {
+  $current_theme = variable_get('theme_default','none');
+  return $current_theme;
+}
+
+/**
+ * Returns true if the specified theme name represents a draft theme.
+ *
+ * @param String $theme_name
+ *   The name of the theme.
+ * @return boolean
+ *   TRUE if the theme is a draft; FALSE otherwise.
+ */
+function themebuilder_compiler_theme_is_draft($theme_name) {
+  return preg_match('/.*' .THEME_BUILDER_DRAFT_SUFFIX .'$/', $theme_name) === 1;
+}
+
+/**
+ * Finds where a theme is located.
+ *
+ * @return FALSE if not found, else the path to the theme.
+ */
+function themebuilder_compiler_find_theme($theme_name) {
+  $path = drupal_get_path('theme', $theme_name);
+  if (empty($path)) {
+    $path = themebuilder_compiler_get_custom_theme_folder() . "/$theme_name";
+  }
+  $info_path = "${path}/${theme_name}.info";
+  if (file_exists($path) && file_exists($info_path)) {
+    return $path;
+  }
+  return FALSE;
+}
+
+/**
+ * Returns the current theme name.  This function uses a variety of strategies
+ * to determine the theme name.
+ *
+ * @global string $theme_key
+ * @return string
+ *   The name of the theme currently being used.
+ */
+function themebuilder_compiler_get_current_theme_name() {
+  // This static variable is here to allow calling code to simulate the current
+  // theme outside of an active themebuilder session. It can be edited by
+  // calling &drupal_static('themebuilder_compiler_get_current_theme_name') and
+  // reset with drupal_static_reset('themebuilder_compiler_get_current_theme_name').
+  // (In most cases this won't need to be used. In the future, it would be nice
+  // to refactor the themebuilder API so the dependence on the "current theme"
+  // isn't necessary.)
+  $current_theme_name = &drupal_static(__FUNCTION__);
+  if (isset($current_theme_name)) {
+    return $current_theme_name;
+  }
+  // If the static variable wasn't set, fall back on finding the current theme
+  // the normal way.
+  global $theme_key;
+  if (!empty($theme_key)) {
+    return $theme_key;
+  }
+  // The theme is not set; use the default theme.
+  return variable_get('theme_default', '');
+}
+
+/**
+ * Get a list of all session themes.
+ */
+function themebuilder_compiler_list_session_themes() {
+  $themes = list_themes();
+  $pattern = '/(^' . THEME_BUILDER_THEMENAME_NAMESPACE . ')?(' . THEME_BUILDER_DRAFT_SUFFIX . '$)/';
+  foreach ($themes AS $index => $theme) {
+    if (!preg_match($pattern, $index)) {
+      unset($themes[$index]);
+    }
+  }
+  return $themes;
+}
+
+/**
+ * Enter the themebuilder mode by creating a clone of the specified theme.
+ * The clone should not already exist.  The clone is removed when exiting edit
+ * mode.
+ *
+ * @param string $theme_name
+ *   The name of the theme to edit.  The current theme will be edited if the
+ *   theme_name is not specified.
+ * @param boolean $take_over_session
+ *  If set to true will take control over editing the theme in progress.
+ *
+ * @throws ThemeBuilderEditInProgressException
+ */
+function themebuilder_compiler_edit($theme_name = NULL, $take_over_session = FALSE) {
+  themebuilder_log_trace_enter(__FUNCTION__);
+  /**
+   * If there isn't a draft in progress, we should make one.
+   * If a theme_name is provided, we will make one based on that, else based on the current theme
+   **/
+
+  try {
+    if (!empty($theme_name)) {
+      $current_theme = Theme::factory($theme_name, themebuilder_compiler_find_theme($theme_name));
+    } else {
+      // If the theme is being edited, this will throw ThemeBuilderEditInProgressException;
+      $current_theme = themebuilder_compiler_get_current_theme();
+    }
+  } catch (ThemeBuilderEditInProgressException $e) {
+    if ($take_over_session) {
+      // We don't want to throw this, we want to set the sid so that we own it.
+      // This will change the themebuilder_session table, overriding the old sid.
+
+      themebuilder_compiler_take_over_session();
+      $current_theme = themebuilder_compiler_get_current_theme();
+    } else {
+      themebuilder_log_trace_exit(__FUNCTION__);
+      throw($e);
+    }
+  }
+
+  // This is the temporary name for the theme being edited.
+  // It is typically $user_session.
+  timer_start(__FUNCTION__ . '_session_name');
+  $session_name = themebuilder_compiler_get_session_name();
+  themebuilder_log_code_time(__FUNCTION__, __LINE__, timer_stop(__FUNCTION__ . '_session_name'));
+  timer_start(__FUNCTION__ . '_new_location');
+  $new_location = themebuilder_compiler_find_theme($session_name) ? themebuilder_compiler_find_theme($session_name) : themebuilder_compiler_get_custom_theme_folder() . "/$session_name";
+  themebuilder_log_code_time(__FUNCTION__, __LINE__, timer_stop(__FUNCTION__ . '_new_location'));
+
+  if ($current_theme->isDraft()) {
+    $draft = $current_theme;
+  } else {
+    // Create a new draft.
+    $semaphore = themebuilder_compiler_get_semaphore();
+    $draft = $current_theme->cloneTheme($session_name, $new_location);
+    $draft->isDraft = TRUE;
+
+    // If it isn't a base theme, save the name for use later when saving.
+    if (!$current_theme->isBaseTheme()) {
+      $draft->lastSavedName = $current_theme->getName();
+      $draft->lastSavedLabel = $current_theme->getLabel();
+    }
+
+    // Copy the files from the currently saved theme to the new location.
+    try {
+      $current_theme->copyTheme($new_location);
+    }
+    catch (Exception $e) {
+      ThemeBuilderLog()->error('Error encountered copying a theme in themebuilder_compiler_edit.', $e->getMessage() . "\n$e\n");
+    }
+    $draft->dist();
+    themebuilder_compiler_release_semaphore($semaphore);
+  }
+
+  // Determine if there is an update.
+  $draft_version = $draft->getVersion();
+  $base_version = themebuilder_compiler_get_theme_version($draft->getBaseThemeName());
+  $_SESSION['theme_update_available'] = (themebuilder_compiler_compare_versions($draft_version, $base_version) < 0);
+
+  // Check the session of see if there are any interaction states that need to be persisted
+  $session = themebuilder_compiler_retrieve_session();
+  // Save the draft theme to the database.
+  themebuilder_compiler_save_session($draft);
+  // Set the current user's theme to the $draft theme based on $theme_name's
+  // (or the live theme's) block configuration.
+  themebuilder_compiler_set_user_theme(NULL, $draft->getName(), $theme_name);
+  if ($current_theme->getName() != $draft->getName()) {
+    module_invoke_all('themebuilder_load_theme', $draft, $current_theme->getName());
+  }
+  $result = $draft->getName();
+  themebuilder_log_trace_exit(__FUNCTION__);
+  return $result;
+}
+
+/**
+ * Save the theme object for the current session to the database.
+ *
+ * @param {Theme} $theme
+ *   A Theme object to save to the database.
+ *
+ * @param string $sid
+ *  A session ID, if not provided, uses the result of session_id().
+ */
+function themebuilder_compiler_save_session($theme, $sid = NULL) {
+  themebuilder_log_trace_enter(__FUNCTION__);
+  if (!$sid) {
+    $sid = session_id();
+  }
+  global $user;
+  $server = new AffinityServer();
+  $preferred = $server->getWebnode();
+
+  $result = db_merge('themebuilder_session')
+    ->key(array('uid' => $user->uid))
+    ->fields(array('sid' => $sid, 'session' => serialize($theme), 'webnode' => $preferred['webnode']))
+    ->execute();
+  themebuilder_log_trace_exit(__FUNCTION__);
+  return $result;
+}
+
+/**
+ * Assigns all sessions under the a given user to $sid
+ *
+ * @param string $sid
+ *  Session ID to set all themebuilder sessions to. Defaults to session_id()
+ * @param int $uid
+ *  Optional, if not provided, the uid of the logged in user.
+ *
+ * @return integer
+ */
+function themebuilder_compiler_take_over_session($sid = NULL, $uid = NULL) {
+  if (!$uid) {
+    global $user;
+    $uid = $user->uid;
+  }
+
+  $sid = is_null($sid) ? session_id() : $sid;
+
+  return db_update('themebuilder_session')
+    ->condition('uid', $user->uid)
+    ->fields(array('sid' => $sid))
+    ->execute();
+}
+
+/**
+ * Retrieve the theme object for the current session from the database.
+ *
+ * @return {Theme}
+ *   The Theme object.
+ *
+ * @throws ThemeBuilderEditInProgressException
+ */
+function themebuilder_compiler_retrieve_session() {
+  $session = &drupal_static(__FUNCTION__);
+  if (!isset($session)) {
+    global $user;
+
+    $row = db_select('themebuilder_session', 'ts')
+      ->fields('ts')
+      ->condition('uid', $user->uid)
+      ->execute()
+      ->fetch();
+    if (isset($row) && isset($row->session) && !empty($row->session)) {
+      if ($row->sid == session_id()) {
+        $session = unserialize($row->session);
+      }
+      else {
+        // The themebuilder edit session is not associated with this session.
+        // Make sure the associated session is still valid before throwing an
+        // exception.
+        $existing_session = db_select('sessions', 's')
+          ->fields('s')
+          ->condition('sid', $row->sid)
+          ->execute()
+          ->fetch();
+        if (!$existing_session || (time() - $existing_session->timestamp) > intval(ini_get('session.gc_maxlifetime'))) {
+          // The session is no longer valid.
+          themebuilder_compiler_revert_session(unserialize($row->session));
+        }
+        else {
+          // The session is still valid.
+          throw new ThemeBuilderEditInProgressException("It appears you are already editing your theme in another browser.  You cannot edit in two browsers simultaneously and ThemeBuilder will now close.  If you want to start editing again and lose your progress in the other browser, click OK, and then select Appearance again.", THEMEBUILDER_ERROR_RECOVERABLE, array(ThemeBuilderException::HANDLER_ALERT_AND_CLOSE));
+        }
+      }
+    }
+  }
+  return $session;
+}
+
+/**
+ * Implementation of hook_user_logout().
+ *
+ * When the user logs out, close any associated themebuilder session.
+ */
+function themebuilder_compiler_user_logout() {
+  try {
+    $session = themebuilder_compiler_retrieve_session();
+    if (isset($session)) {
+      themebuilder_compiler_revert_session();
+    }
+  }
+  catch (Exception $e) {
+  }
+}
+
+/**
+ * Delete the theme object for the current session from the database.
+ */
+function themebuilder_compiler_delete_session() {
+  global $user;
+  $result = db_delete('themebuilder_session')->condition('uid', $user->uid)->execute();
+  drupal_static_reset('themebuilder_compiler_retrieve_session');
+  return $result;
+}
+
+/**
+ * Reverts the current themebuilder session.  The session changes will be lost
+ * as a result.  The current user's theme will be reverted to the way it was
+ * before the edit session.
+ *
+ * @param $themebuilder_session
+ *   Optional - indicates which session to revert.  If not provided the
+ *   current themebuilder session is reverted.
+ */
+function themebuilder_compiler_revert_session($themebuilder_session = NULL) {
+  themebuilder_log_trace_enter(__FUNCTION__);
+  $semaphore = themebuilder_compiler_get_semaphore();
+  $current = $themebuilder_session;
+  if (!isset($current)) {
+    $current =& themebuilder_compiler_get_current_theme();
+  }
+  themebuilder_compiler_set_user_theme();
+  themebuilder_compiler_clear_modification_stacks($current->theme_name);
+  themebuilder_compiler_delete_session();
+  // Delete the theme itself as the last stage in the process (right before
+  // releasing the semaphore). This ensures that if an error occurs while
+  // trying to delete the theme from the filesystem, at least the broken theme
+  // will no longer be assigned to the user or otherwise recorded in the
+  // database.
+  if ($current->isDraft()) {
+    $current->deleteTheme();
+  }
+  themebuilder_compiler_remove_semaphore($semaphore);
+  themebuilder_log_trace_exit(__FUNCTION__);
+}
+
+/**
+ * This saves the draft.  In order to use this function, the origin of the theme
+ * must be specified in the themebuilder_themes table, and must not be a default
+ * theme.  The existing draft will be deleted as a result of calling this function.
+ *
+ * @param {boolean} $publish
+ *   TRUE if the theme should be published after save.
+ * @return string
+ *   The name of the saved theme.
+ */
+function themebuilder_compiler_save($publish = FALSE) {
+  $start_time = microtime(TRUE);
+  themebuilder_log_trace_enter(__FUNCTION__);
+  timer_start(__FUNCTION__ . '_getTheme');
+  $theme = themebuilder_compiler_get_current_theme();
+  themebuilder_log_code_time(__FUNCTION__, __LINE__, timer_stop(__FUNCTION__ . '_getTheme'));
+
+  if ($theme->isBaseTheme()) {
+    throw new Exception("Cannot save to a base theme.  Use themebuilder_compiler_save_as() instead.");
+  }
+  if (!$theme->isDraft()) {
+    throw new Exception("themebuilder_compiler_save expects the current theme to be a draft.");
+  }
+
+  /**
+   * I suppose passing a new theme (or old theme) to clone theme may be required somehow when doing a save (not save as)
+   **/
+  if (!$theme->lastSavedName) {
+    throw new Exception('Cannot save, unknown error, missing save name');
+  }
+
+  $semaphore = themebuilder_compiler_get_semaphore();
+  timer_start(__FUNCTION__ . '_factory');
+  $old_theme = Theme::factory($theme->lastSavedName, themebuilder_compiler_find_theme($theme->lastSavedName));
+  themebuilder_log_code_time(__FUNCTION__, __LINE__, timer_stop(__FUNCTION__ . '_factory'));
+  timer_start(__FUNCTION__ . '_load');
+  $old_theme->load();
+  themebuilder_log_code_time(__FUNCTION__, __LINE__, timer_stop(__FUNCTION__ . '_load'));
+  $name = $old_theme->getName();
+
+  $label = $old_theme->getLabel();
+
+  // Should get the draft.
+  $draft_theme = themebuilder_compiler_get_current_theme();
+  $src = realpath($draft_theme->getPath());
+  if (empty($src) || !is_dir($src)) {
+    // Log the error and abort the operation.
+    // This means that the source we will be copying from is a symlink
+    // which doesn't point to anything.  This bug is caused by a load balancing
+    // issue where the "sticky" session cookie (ah_app_server) is removed or wrong.
+    $draft_theme->symlinkBugThrowException($src);
+  }
+
+  $theme_system_name = _themebuilder_compiler_save_as($label, $name, $publish, FALSE, $semaphore);
+  themebuilder_compiler_release_semaphore($semaphore);
+  $end_time = microtime(TRUE);
+  $statsd_path = 'themebuilder.save';
+  gardens_statsd_send($statsd_path, 1, GARDENS_STATSD_COUNTER, 1);
+  gardens_statsd_send($statsd_path, round(($end_time - $start_time) * 1000), GARDENS_STATSD_TIMER, 1);
+  themebuilder_log_trace_exit(__FUNCTION__);
+  return $theme_system_name;
+}
+
+/**
+ * Saves the current theme as the specified theme name.  The current theme must be
+ * a draft in order for this to work.  The existing draft is deleted as a result
+ * of calling this function.
+ *
+ * @param $label
+ *   The human-readable label for the new theme.
+ * @param $system_name
+ *   An optional machine-readable name for the new theme. If set, this will be
+ *   validated before saving the theme with this name; if not set, an
+ *   appropriate machine-readable name will be derived from the human-readable
+ *   name.
+ * @param {boolean} $publish
+ *   TRUE if the theme should be published after save.
+ * @param $overwrite
+ *   Indicates whether or not to overwrite an existing theme of the same name.
+ * @param $name_is_new
+ *   Indicates whether the label and system name are new.  This field affects the
+ *   return value, which will indicate whether this was a Save as call or a
+ *   Save call.
+ * @return
+ *   The machine-readable name that was actually used to save the theme.
+ */
+function themebuilder_compiler_save_as($label, $system_name = NULL, $publish = FALSE, $overwrite = FALSE, $name_is_new = TRUE) {
+  themebuilder_log_trace_enter(__FUNCTION__);
+  $start_time = microtime(TRUE);
+  // Let's limit the available characters for the name.
+  $label = preg_replace("/[^a-zA-Z0-9_-\s']+/", '', $label);
+  $label = empty($label) ? 'Untitled' : $label;
+
+  $sys_name = themebuilder_compiler_human_to_machine_name($label);
+  if ($overwrite) {
+  // If an overwrite was requested, and the existing theme by that name is live,
+  // make sure the user has permission to overwrite the live theme.
+    if ((themebuilder_compiler_get_published_theme_name() == $sys_name) && !user_access('publish theme')) {
+      themebuilder_log_trace_exit(__FUNCTION__);
+      return array(
+        'overwriteDisallowed' => TRUE,
+        'themeName' => $label,
+      );
+    }
+  }
+  // Don't allow accidental overwrites.
+  else {
+    if (themebuilder_compiler_find_theme($sys_name)) {
+      themebuilder_log_trace_exit(__FUNCTION__);
+      return array(
+        'themeExists' => TRUE,
+        'themeName' => $label,
+        'publish' => $publish,
+      );
+    }
+  }
+  $semaphore = themebuilder_compiler_get_semaphore();
+  $theme_system_name = _themebuilder_compiler_save_as($label, $system_name, $publish, $name_is_new, $semaphore);
+  themebuilder_compiler_release_semaphore($semaphore);
+  cache_clear_all();
+
+  $end_time = microtime(TRUE);
+  $statsd_path = 'themebuilder.save_as';
+  gardens_statsd_send($statsd_path, 1, GARDENS_STATSD_COUNTER, 1);
+  gardens_statsd_send($statsd_path, round(($end_time - $start_time) * 1000), GARDENS_STATSD_TIMER, 1);
+
+  themebuilder_log_trace_exit(__FUNCTION__);
+  return $theme_system_name;
+}
+
+/**
+ * This is the internal function that does the actual work of saving a theme.
+ * The theme semaphore must be acquired before entering this function.
+ *
+ * @param $label
+ *   The human-readable label for the new theme.
+ * @param $system_name
+ *   An optional machine-readable name for the new theme. If set, this will be
+ *   validated before saving the theme with this name; if not set, an
+ *   appropriate machine-readable name will be derived from the human-readable
+ *   name.
+ * @param {boolean} $publish
+ *   TRUE if the theme should be published after save.
+ * @param $name_is_new
+ *   Indicates whether the label and system name are new. This field affects the
+ *   return value, which will indicate whether this was a 'Save as' call or a
+ *   'Save' call.
+ * @param $semaphore
+ *   Used only for verification that the theme semaphore has been acquired by
+ *   the calling function.
+ *
+ * @return
+ *   An array containing information about the saved theme. This includes the
+ *   machine-readable name that was actually used to save the theme.
+ */
+function _themebuilder_compiler_save_as($label, $system_name, $publish, $name_is_new, $semaphore) {
+  themebuilder_log_trace_enter(__FUNCTION__);
+
+  $error_message = t('Failed to save the theme due to a server error.  Please try again later.');
+  _themebuilder_compiler_verify_semaphore($semaphore);
+  $system_name = _themebuilder_compiler_verify_system_name($label, $system_name);
+  $current_theme = themebuilder_compiler_get_current_theme();
+
+  if (!$current_theme->isDraft()) {
+    throw new Exception("themebuilder_compiler_save_as expects the current theme to be a draft.");
+  }
+  $theme_path = themebuilder_compiler_find_theme($system_name);
+  $destination_path =  $theme_path ? $theme_path : themebuilder_compiler_get_custom_theme_folder() . "/$system_name";
+  $destination_path = DRUPAL_ROOT . '/' . $destination_path;
+  if ($theme_path !== FALSE) {
+    // A theme with this name already exists.  Make a backup copy just in case
+    // the theme save fails so we don't totally destroy the theme.
+    $backup_source = new Theme($system_name, $destination_path);
+    $success = $backup_source->moveToBackup();
+    if (!$success) {
+      throw new ThemeBuilderException($error_message, THEMEBUILDER_ERROR_RECOVERABLE, array(ThemeBuilderException::HANDLER_ALERT));
+    }
+  }
+
+  $current_theme->modified = FALSE;
+  try {
+    $new_theme = $current_theme->cloneTheme($system_name, $destination_path);
+    $new_theme->setLabel($label);
+    $new_theme->isDraft = FALSE;
+
+    // It is singularly ugly that we have to have this level of knowledge
+    // outside the Theme class.  Good refactoring opportunity.
+    $current_theme->copyTheme($destination_path);
+    $new_theme->save();
+    $new_theme->dist();
+  }
+  catch (Exception $e) {
+    // The session theme did not get saved.
+    $current_theme->modified = TRUE;
+    ThemeBuilderLog()->gardensError('AN-22645 - Failed to save a theme.', "Theme: $system_name; Message: " . $e->getMessage());
+    if (isset($backup_source)) {
+      $restored = $backup_source->restore();
+      if (!$restored) {
+        // Do not delete the backup theme; we may need to manually fix the
+        // site by copying the theme in place.
+        $backup_path = $backup_source->backupDir;
+        ThemeBuilderLog()->gardensError('Failed to restore a theme after save failed.', "Needs manual intervention to restore the theme and delete the theme backup.Theme: $system_name (backup theme is $backup_path)");
+      }
+    }
+    ThemeBuilderLog()->error('Failed to copy a theme in themebuilder_compiler_save_as.', "Error: $e");
+    throw new ThemeBuilderException($error_message, THEMEBUILDER_ERROR_RECOVERABLE, array(ThemeBuilderException::HANDLER_ALERT));
+  }
+  if (isset($backup_source)) {
+    $backup_source->deleteBackup();
+  }
+
+  // This is so the save handler will work.
+  $current_theme->lastSavedName = $system_name;
+  $current_theme->lastSavedLabel = $label;
+  $current_theme->lastSavedTime = time();
+  $previous_origin = $current_theme->origin;
+  $current_theme->origin = $system_name;
+
+  _themebuilder_compiler_reset_theme_cache();
+  themebuilder_compiler_theme_changed($system_name, array('name' => $label, 'author' => $current_theme->getAuthorInfo()));
+  // Copy over the source theme's blocks if there are any. If the two themes
+  // are the one and same (both the 'save as' and 'save' operations end up in
+  // this function) then nothing will be done. The $current_theme however is a
+  // draft/session theme and not the original theme the user clicked on, so to
+  // pick up the right block config we'll have to use the draft theme's origin.
+  themebuilder_compiler_blocks_setup($new_theme->getName(), $previous_origin, FALSE);
+  // Ensure that the block configuration links are up to date.
+  menu_rebuild();
+  // Force browsers to download a new version of the theme's css files, whether
+  // caching is on or not.
+  drupal_clear_css_cache();
+  _drupal_flush_css_js();
+
+  themebuilder_compiler_save_session($current_theme);
+
+  if (TRUE === $publish) {
+    themebuilder_compiler_publish($system_name);
+  }
+
+  // @todo: Is this if() statement necessary? Since $current_theme is the
+  //   session theme, it seems like these will never have the same name.
+  if ($current_theme->getName() != $new_theme->getName()) {
+    $extra_data = module_invoke_all('themebuilder_save_theme', $current_theme, $new_theme->getName());
+  }
+
+  themebuilder_log_trace_exit(__FUNCTION__);
+  if ($current_theme->modified) {
+    // Warn the user that is was not saved.
+    // @todo - we don't necessarily need to close themebuilder.
+    throw new ThemeBuilderException($error_message, THEMEBUILDER_ERROR_RECOVERABLE, array(ThemeBuilderException::HANDLER_ALERT));
+  }
+
+  // Return an array of data about the saved theme, including any data provided
+  // by modules which implemented hook_themebuilder_save_theme().
+  $return_data = array(
+    'system_name' => $current_theme->lastSavedName,
+    'name' => $current_theme->lastSavedLabel,
+    'time' => themebuilder_compiler_format_date($current_theme->lastSavedTime),
+    'save_as' => $name_is_new,
+    'publish' => $publish,
+  );
+  if (!empty($extra_data)) {
+    $return_data += $extra_data;
+  }
+  return $return_data;
+}
+
+/**
+ * Verifies the specified semaphore is present.  If the semaphore is not
+ * present, an exception is thrown.
+ *
+ * @param {Semaphore} $semaphore
+ *   The semaphore object.
+ */
+function _themebuilder_compiler_verify_semaphore($semaphore) {
+  if (!$semaphore || $semaphore->status !== TRUE) {
+    throw new ThemeBuilderException("Must have the theme semaphore before calling _themebuilder_compiler_save_as.");
+  }
+}
+
+/**
+ * Verifies the system_name.  If the system_name argument is not a legal
+ * system_name, the system_name is derived from the specified human readable
+ * label.  If the system_name cannot be derived, an exception is thrown.
+ *
+ * @param {String} label
+ *   The human readable name of the theme.
+ * @param {String} system_name
+ *   The system_name of the theme.
+ * @return
+ *   The system name.
+ */
+function _themebuilder_compiler_verify_system_name($label, $system_name) {
+  $system_name = themebuilder_compiler_human_to_machine_name(empty($system_name) ? $label : $system_name);
+  if (!themebuilder_compiler_is_valid_theme_name($system_name)) {
+    throw new ThemebuilderException('The name %system_name is not a valid theme name', array('system_name' => $system_name));
+  }
+  return $system_name;
+}
+
+/**
+ * Ensure that a new theme in the filesystem will appear in the database.
+ */
+function _themebuilder_compiler_reset_theme_cache() {
+  themebuilder_log_trace_enter(__FUNCTION__);
+  clearstatcache();
+  timer_start(__FUNCTION__ . '_rebuild');
+  _themebuilder_compiler_rebuild_theme_data();
+  themebuilder_log_code_time(__FUNCTION__, __LINE__, timer_stop(__FUNCTION__ . '_rebuild'));
+  timer_start(__FUNCTION__ . '_list');
+  list_themes(TRUE);
+  themebuilder_log_code_time(__FUNCTION__, __LINE__, timer_stop(__FUNCTION__ . '_list'));
+  themebuilder_log_trace_exit(__FUNCTION__);
+}
+
+/**
+ * Causes the theme info in the system table to be rebuilt.
+ */
+function _themebuilder_compiler_rebuild_theme_data() {
+  drupal_static_reset('_system_rebuild_theme_data');
+  $themes = &drupal_static('themebuilder_compiler_get_theme_data');
+  $themes = system_rebuild_theme_data();
+}
+
+/**
+ * Gets the theme data.  This function causes the theme data to be gathered
+ * only once per request.
+ *
+ * @return
+ *   An array containing theme info for all of the themes.
+ */
+function themebuilder_compiler_get_theme_data() {
+  $themes = &drupal_static(__FUNCTION__);
+  if (!isset($themes)) {
+    themebuilder_log_trace_enter(__FUNCTION__);
+    $themes = _system_rebuild_theme_data();
+    themebuilder_log_trace_exit(__FUNCTION__);
+  }
+  return $themes;
+}
+
+/**
+ * Formats the timestamp for display within the themebuilder.  This is used to
+ * indicate the last time a theme was saved.
+ *
+ * @param int $timestamp
+ *   The Unix timestamp to format.
+ * @return String
+ *   The formatted time string.
+ */
+function themebuilder_compiler_format_date($timestamp) {
+  return format_date($timestamp, 'custom', 'F jS, g:ia');
+}
+
+/**
+ * Returns a unique temp directory name.
+ *
+ * Create a directory name like acq_1234567.1234abc123 (namespace followed by microtime()).
+ * This ensures it will be unique, and the name space means wiping it out later is easy.
+ */
+function _themebuilder_compiler_get_temp_dir() {
+  $path = file_stream_wrapper_get_instance_by_scheme('temporary')->getDirectoryPath();
+  return rtrim($path, '/') . '/' . THEME_BUILDER_THEMENAME_NAMESPACE . microtime(TRUE) . md5($GLOBALS['base_url']);
+}
+
+/**
+ * Exports the current theme.  The current theme must be
+ * a draft in order for this to work.  The existing draft is deleted as a result
+ * of calling this function.
+ *
+ * @param $label
+ *   The human-readable name with which the new theme will be exported.
+ * @param $system_name
+ *   An optional machine-readable name for the exported theme. If set, this
+ *   will be validated before exporting the theme with this name; if not set,
+ *   an appropriate machine-readable name will be derived from the human-readable
+ *   name.
+ * @return
+ *   The location of the tarball containing the theme.
+ */
+function themebuilder_compiler_export($label, $system_name = NULL) {
+  $system_name = themebuilder_compiler_human_to_machine_name(empty($system_name) ? $label : $system_name);
+  $theme = themebuilder_compiler_get_current_theme();
+  if (!$theme->isDraft()) {
+    // Save the draft so we can delete it.
+    throw new Exception("themebuilder_compiler_export expects the current theme to be a draft.");
+  }
+
+  $semaphore = themebuilder_compiler_get_semaphore();
+
+  $export_container_directory = _themebuilder_compiler_get_temp_dir();
+  mkdir($export_container_directory);
+
+  $export_location = $export_container_directory . '/' . $system_name;
+  $new_theme = $theme->cloneTheme($system_name, $export_location);
+
+  $new_theme->setLabel($label);
+  $new_theme->isDraft = FALSE;
+  try {
+    $theme->copyTheme($export_location);
+  }
+  catch (Exception $e) {
+    ThemeBuilderLog()->error('Failed to copy a theme in themebuilder_compiler_export.', $e->getMessage() . "\n$e\n");
+  }
+  $new_theme->dist();
+  $new_theme->export();
+
+  // Remove the layout images from exports.
+  $files = glob($export_location . "/images/fixed-*");
+  $files = array_merge($files, glob($export_location . "/images/fluid-*"));
+  foreach($files AS $file) {
+    unlink($file);
+  }
+
+  //generates a 12char random string
+  $temp_name = THEME_BUILDER_THEMENAME_NAMESPACE . preg_replace('/([ ])/e', 'chr(rand(97,122))', '            ');
+  $temporary_path = file_stream_wrapper_get_instance_by_scheme('temporary')->getDirectoryPath();
+  $output_tarball = $temporary_path . '/' . $temp_name . '.tar.gz';
+
+  $archive_tar = new Archive_Tar($output_tarball, 'gz');
+  $archive_tar->createModify($export_location, NULL, $export_container_directory . '/');
+  themebuilder_compiler_release_semaphore($semaphore);
+  return $output_tarball;
+}
+
+/**
+ * Imports a theme from the filesystem.
+ *
+ * This function takes a theme which lives in the filesystem (but not yet in
+ * the database), loads information about it, and saves it to the database so
+ * that it can be used just like any other themebuilder theme.
+ *
+ * Note: *No* check is performed to ensure that this theme does not already
+ * exist elsewhere on the site. If a theme with the same name already does
+ * exist in the database, its database record will (probably?) just be
+ * overwritten.
+ *
+ * @param $name
+ *   The machine-readable name of the theme.
+ * @param $location
+ *   (optional) The path to the directory in which the theme lives. If not
+ *   provided, the function will default to checking a directory with the same
+ *   name as the theme itself, inside the site's custom themes ('mysites')
+ *   directory.
+ */
+function themebuilder_compiler_import($name, $location = NULL) {
+  if (!isset($location)) {
+    $location = themebuilder_compiler_get_custom_theme_folder() . '/' . $name;
+  }
+
+  // Clear caches to make sure any new themes that were recently added to the
+  // filesystem are recognized. (It's theoretically better for calling
+  // functions to do this, but in practice it's simpler to consolidate it
+  // here.)
+  system_rebuild_theme_data();
+  themebuilder_compiler_clear_theme_list();
+
+  // Import the theme and save it.
+  $semaphore = themebuilder_compiler_get_semaphore();
+  $theme = Theme::factoryImport($name, $location);
+  $theme->save();
+  themebuilder_compiler_release_semaphore($semaphore);
+}
+
+/**
+ * Copy the specified theme.
+ *
+ * Unlike themebuilder_compiler_copy_theme_ajax(), which is tied to running
+ * inside a themebuilder session, this function can be used to copy an
+ * arbitrary themebuilder theme, even outside of the themebuilder.
+ *
+ * TODO: Reduce code duplication between themebuilder_compiler_copy_theme_ajax()
+ * and this function.
+ *
+ * @param $source_theme_name
+ *   The machine-readable name of the theme to copy.
+ * @param $dest_theme_label
+ *   The human-readable name of the new theme.
+ * @param $dest_theme_name
+ *   (optional) The machine-readable name for the exported theme. If set, this
+ *   will be validated before copying the theme to this name; if not set, an
+ *   appropriate machine-readable name will be derived from the human-readable
+ *   name.
+ * @param $dest_theme_path
+ *   (optional) The path where the theme should be copied to. If not provided,
+ *   the function will default to using a directory with the same name as the
+ *   theme itself, inside the site's custom themes ('mysites') directory.
+ *
+ * @return
+ *   The machine-readable name of the new theme that was copied.
+ */
+function themebuilder_compiler_copy_theme($source_theme_name, $dest_theme_label, $dest_theme_name = NULL, $dest_theme_path = NULL) {
+  $dest_theme_name = themebuilder_compiler_human_to_machine_name(isset($dest_theme_name) ? $dest_theme_name : $dest_theme_label);
+  $source_theme = themebuilder_compiler_get_theme_by_name($source_theme_name);
+
+  // The theme copy process relies on calling a function which assumes the
+  // theme being worked on is the current site theme. Since this is an API
+  // function, that assumption might not be true when this is called. So we
+  // modify the internal static variable to point the current theme to this one
+  // while the theme is being copied, and change it back again afterwards.
+  $current_theme_name = &drupal_static('themebuilder_compiler_get_current_theme_name');
+  $current_theme_name = $source_theme_name;
+
+  if (!isset($dest_theme_path)) {
+    $dest_theme_path = DRUPAL_ROOT . '/' . themebuilder_compiler_get_custom_theme_folder() . '/' . $dest_theme_name;
+  }
+  $semaphore = themebuilder_compiler_get_semaphore();
+  $new_theme = $source_theme->cloneTheme($dest_theme_name, $dest_theme_path);
+  $new_theme->setLabel($dest_theme_label);
+  $source_theme->copyTheme($dest_theme_path);
+  $new_theme->save();
+  $new_theme->dist();
+  _themebuilder_compiler_reset_theme_cache();
+  themebuilder_compiler_clear_theme_list();
+  // Ensure that the block configuration links are up to date.
+  menu_rebuild();
+
+  // Reset the static variable that was modified above.
+  drupal_static_reset('themebuilder_compiler_get_current_theme_name');
+
+  themebuilder_compiler_release_semaphore($semaphore);
+  return $dest_theme_name;
+}
+
+/**
+ * Publishes the current draft.  The name of the theme to save as is optional.
+ * The existing draft is deleted as a result of calling this function, and the
+ * default theme is changed to the newly saved theme.
+ *
+ * @param $system_name
+ *   The machine-readable name for the theme to publish.
+ */
+function themebuilder_compiler_publish($system_name) {
+  $start_time = microtime(TRUE);
+  themebuilder_log_trace_enter(__FUNCTION__);
+  // Figure out if this theme is already published.  If so, we can
+  // save a lot of time by not doing the full publish.
+  $published_theme = variable_get('theme_default', '');
+  $theme = db_query('SELECT name, status FROM {system} WHERE name = :theme_name AND type = :theme LIMIT 1', array(':theme_name' => $system_name, ':theme' => 'theme'))
+    ->fetchObject();
+  if ($published_theme === $system_name && isset($theme) && isset($theme->name) && isset($theme->status) && $theme->status === '1') {
+    // The theme is already published, nothing to do.
+  }
+  else {
+    // We have to do the full publish.
+    themebuilder_compiler_set_site_theme($system_name);
+  }
+
+  $end_time = microtime(TRUE);
+  $statsd_path = 'themebuilder.publish';
+  gardens_statsd_send($statsd_path, 1, GARDENS_STATSD_COUNTER, 1);
+  gardens_statsd_send($statsd_path, round(($end_time - $start_time) * 1000), GARDENS_STATSD_TIMER, 1);
+
+  themebuilder_log_trace_exit(__FUNCTION__);
+}
+
+/**
+ * Sets the theme for the user associated with the specified uid.
+ *
+ * This is useful when creating a draft theme for that user to edit. This
+ * function can be called with no arguments to reset the theme used by the
+ * current user.
+ *
+ * @global object $user
+ * @param int $uid
+ *   If specified, identifies the user for which the theme should be changed.
+ * @param string $theme_name
+ *   Identifies the theme name to set for the specified user. Use '' to indicate
+ *   the user should use the default theme.
+ * @param string $source_theme_name
+ *   When setting a draft theme for the user the block configuration could be
+ *   copied from the $source_theme_name if it had the blocks set.
+ */
+function themebuilder_compiler_set_user_theme($uid = NULL, $theme_name = '', $source_theme_name = NULL) {
+  themebuilder_log_trace_enter(__FUNCTION__);
+  if (!isset($uid)) {
+    global $user;
+    $uid = $user->uid;
+  }
+  _themebuilder_compiler_reset_theme_cache();
+  if (!empty($theme_name)) {
+    $result = db_update('system')
+      ->fields(array('status' => 1))
+      ->condition('type', 'theme')
+      ->condition('name', $theme_name)
+      ->execute();
+
+    // Set up blocks for the draft theme either taking the live theme's blocks
+    // ($source_theme_name is empty) or a custom theme's blocks.
+    timer_start(__FUNCTION__ . '_init');
+    themebuilder_compiler_blocks_setup($theme_name, $source_theme_name);
+    themebuilder_log_code_time(__FUNCTION__, __LINE__, timer_stop(__FUNCTION__ . '_init'));
+  }
+
+  $r = db_update('users')
+    ->fields(array('theme' => $theme_name))
+    ->condition('uid', $uid)
+    ->execute();
+
+  // Clear caches. Drupal core currently does a menu_rebuild() in this
+  // situation also, but that's only so that the newly-enabled theme can be
+  // used to generate menu items (such as on the appearance page and blocks
+  // administration pages). However, we don't want those menu items anyway
+  // since this is draft theme, so skipping the menu_rebuild() both improves
+  // performance and fixes a couple bugs.
+  timer_start(__FUNCTION__ . '_list');
+  list_themes(TRUE);
+  themebuilder_log_code_time(__FUNCTION__, __LINE__, timer_stop(__FUNCTION__ . '_list'));
+  timer_start(__FUNCTION__ . '_rebuild');
+  drupal_theme_rebuild();
+  themebuilder_log_code_time(__FUNCTION__, __LINE__, timer_stop(__FUNCTION__ . '_rebuild'));
+  if (isset($result) && !empty($theme_name)) {
+    timer_start(__FUNCTION__ . '_hook_themes_enabled');
+    module_invoke_all('themes_enabled', array($theme_name));
+    themebuilder_log_code_time(__FUNCTION__, __LINE__, timer_stop(__FUNCTION__ . '_hook_themes_enabled'));
+  }
+  themebuilder_log_trace_exit(__FUNCTION__);
+}
+
+/**
+ * Sets up a theme's block configuration.
+ *
+ * By default this function copies over the live theme's block configuration to
+ * the target theme. To change which theme should provide the blocks set the
+ * $source_theme_name variable but if it does not have any blocks set up the
+ * function will fall back to the live theme. If the fallback is not desired
+ * then set the $fallback_to_live_theme variable to FALSE.
+ *
+ * @see block_theme_initialize
+ *
+ * @param string $theme_name
+ *   The theme that needs its block configuration set up.
+ * @param string $source_theme_name
+ *   Optional variable to specify which theme's block configuration needs to be
+ *   copied over. Defaults to the live theme.
+ * @param bool $fallback_to_live_theme
+ *   Optional variable. Set to FALSE if the live theme's block configuraton is
+ *   not needed.
+ */
+function themebuilder_compiler_blocks_setup($theme_name, $source_theme_name = NULL, $fallback_to_live_theme = TRUE) {
+  // No point working on the blocks when the source and the destination themes
+  // are the same.
+  if ((isset($source_theme_name) && $theme_name !== $source_theme_name) || (!isset($source_theme_name) && $theme_name !== variable_get('theme_default', 'bartik'))) {
+    $source_theme_has_blocks = $source_theme_name ? db_query_range('SELECT 1 FROM {block} WHERE theme = :theme', 0, 1, array(':theme' => $source_theme_name))->fetchField() : FALSE;
+    // No point setting up the blocks again if the destination theme is the live
+    // theme and the source theme does not have any blocks configured.
+    if ($source_theme_has_blocks || $theme_name !== variable_get('theme_default', 'bartik')) {
+      // The block configuration is copied in place by block_theme_initialize(),
+      // but only if the blocks have not already been established for the theme.
+      db_delete('block')
+        ->condition('theme', $theme_name)
+        ->execute();
+      // The function takes the default theme as a source to copy from, so when
+      // there is a need to copy a non live theme's blocks then we have to
+      // overwrite the default_theme variable's value temporarily.
+      if ($source_theme_has_blocks) {
+        $default_theme = $GLOBALS['conf']['theme_default'];
+        $GLOBALS['conf']['theme_default'] = $source_theme_name;
+      }
+      if ($source_theme_has_blocks || $fallback_to_live_theme) {
+        block_theme_initialize($theme_name);
+      }
+      if ($source_theme_has_blocks) {
+        $GLOBALS['conf']['theme_default'] = $default_theme;
+      }
+    }
+  }
+}
+
+/**
+ * Sets the default theme for the site.
+ *
+ * @param string $theme_name
+ *   The name of the theme that should be set as the site default.
+ */
+function themebuilder_compiler_set_site_theme($theme_name) {
+  themebuilder_log_trace_enter(__FUNCTION__);
+  timer_start(__FUNCTION__ . '_reset');
+  _themebuilder_compiler_reset_theme_cache();
+  themebuilder_log_code_time(__FUNCTION__, __LINE__, timer_stop(__FUNCTION__ . '_reset'));
+
+  if (!empty($theme_name)) {
+    if (is_dir(themebuilder_compiler_find_theme($theme_name))) {
+      // Force browsers to download a new version of the theme's css files,
+      // whether caching is on or not.
+      drupal_clear_css_cache();
+      _drupal_flush_css_js();
+      // Clear page cache, so anonymous users see the new theme correctly.
+      cache_clear_all();
+      // Disable the previous theme.
+      db_update('system')
+        ->fields(array('status' => 0))
+        ->condition('type', 'theme')
+        ->condition('name', variable_get('theme_default', ''))
+        ->execute();
+      // Enable the new theme.
+      db_update('system')
+        ->fields(array('status' => 1))
+        ->condition('type', 'theme')
+        ->condition('name', $theme_name)
+        ->execute();
+      timer_start(__FUNCTION__ . '_init1');
+      block_theme_initialize($theme_name);
+      themebuilder_log_code_time(__FUNCTION__, __LINE__, timer_stop(__FUNCTION__ . '_init1'));
+      variable_set('theme_default', $theme_name);
+      timer_start(__FUNCTION__ . '_init2');
+      list_themes(TRUE);
+      themebuilder_log_code_time(__FUNCTION__, __LINE__, timer_stop(__FUNCTION__ . '_init2'));
+      timer_start(__FUNCTION__ . '_init3');
+      menu_rebuild();
+      themebuilder_log_code_time(__FUNCTION__, __LINE__, timer_stop(__FUNCTION__ . '_init3'));
+      timer_start(__FUNCTION__ . '_init4');
+      drupal_theme_rebuild();
+      themebuilder_log_code_time(__FUNCTION__, __LINE__, timer_stop(__FUNCTION__ . '_init4'));
+      timer_start(__FUNCTION__ . '_init5');
+      module_invoke_all('themes_enabled', array($theme_name));
+      themebuilder_log_code_time(__FUNCTION__, __LINE__, timer_stop(__FUNCTION__ . '_init5'));
+    }
+  }
+  themebuilder_log_trace_exit(__FUNCTION__);
+}
+
+/**
+ * Saves a theme selection.
+ *
+ * The selection can be a CSS modification, a layout, or a template selection.
+ *
+ * @param string $type
+ *   The type of property to modify.  One of 'style', 'layout'
+ * @param string $selector
+ *   The selector of the property to modify.  For css, this would be the selector.
+ * @param string $property_name
+ *   The name of the property to set.
+ * @param string $value
+ *   The value.
+ */
+function themebuilder_compiler_save_property($type, $selector, $property_name, $value) {
+  $modified = FALSE;
+  $theme = themebuilder_compiler_get_current_theme();
+
+  $semaphore = themebuilder_compiler_get_semaphore();
+  switch ($type) {
+    case 'style':
+      $theme->setCSSProperty($selector, $property_name, $value);
+      $theme->modify();
+      $theme->dist();
+      break;
+    case 'layout':
+      // Selector is the layout string.49
+      $original_layout = $theme->getLayout();
+      $layout = $selector;
+      if ('unknown' != $layout && substr($layout, 0, strlen('body-layout')) != 'body-layout') {
+        $layout = 'body-layout-' .$layout;
+      }
+      if ($original_layout == $layout) {
+        break;
+      }
+      $theme->setLayout($layout);
+      $theme->modify();
+      $theme->dist();
+      _themebuilder_compiler_rebuild_theme_data();
+      break;
+  }
+  themebuilder_compiler_save_session($theme);
+  themebuilder_compiler_release_semaphore($semaphore);
+}
+
+/**
+ * Changes the theme with the specified modification.  This is the guts of the
+ * themebuilder_compiler_apply_modification, themebuilder_compiler_undo_modification,
+ * and themebuilder_compiler_redo_modification functions.
+ *
+ * @param string $modification
+ *   The modification to make to the theme.
+ * @param object $state // TODO
+ *   The state to which the property should be changed.
+ */
+function _themebuilder_compiler_modify($modification, $forward = TRUE) {
+  $modified = FALSE;
+  $theme = themebuilder_compiler_get_current_theme();
+  $state = $forward === TRUE ? $modification->newState : $modification->priorState;
+
+  if (!empty($state->resources) && $forward === TRUE) {
+    themebuilder_resources_add_resources($state->resources);
+  }
+
+  //@TODO: This should be abstracted out to implementing classes, not centralized here.
+  switch ($modification->type) {
+    case 'css':
+      if (empty($state->value)) {
+        $theme->removeCSSProperty($modification->selector, $state->property, $state->value);
+      }
+      else {
+        $theme->setCSSProperty($modification->selector, $state->property, $state->value);
+      }
+      $theme->modify();
+      $theme->dist();
+      break;
+    case 'layout':
+      $theme->setLayout($state->layout, empty($modification->selector) ? null : $modification->selector);
+      $theme->modify();
+      $theme->dist();
+      _themebuilder_compiler_rebuild_theme_data();
+      break;
+    case 'palette':
+      $theme->setPalette($state->paletteId);
+      $theme->modify();
+      $theme->dist();
+      break;
+    case 'swatch':
+      $theme->setColor($modification->selector, $state);
+      $theme->modify();
+      $theme->dist();
+      break;
+    case 'themeSetting':
+      // Handle viewport differently to other theme settings in that viewport is
+      // an object of values whereas others are simple values.
+      if ($modification->selector === 'viewport') {
+        foreach ($state as $setting_name => $setting_value) {
+          // Avoid saving items that are not theme settings.
+          if ($setting_name == 'type' || $setting_name == 'selector') {
+            continue;
+          }
+          $theme->setThemeSetting($setting_name, $setting_value);
+        }
+      }
+      else {
+        $theme->setThemeSetting($modification->selector, $state->value);
+      }
+      $theme->modify();
+      $theme->dist();
+      // Force the theme settings to load from the .info file on the next
+      // request.
+      _themebuilder_compiler_rebuild_theme_data();
+      list_themes(TRUE);
+      drupal_static_reset('theme_get_setting');
+      break;
+    case 'grouped':
+      $children = $modification->children;
+      foreach ($children as $name => $child) {
+        _themebuilder_compiler_modify($child, $forward);
+      }
+      break;
+    case 'code':
+      if ($modification->selector == 'css') {
+        $theme->setAdvancedCss($state->code);
+      }
+      elseif($modification->selector == 'js') {
+        $theme->setAdvancedJs($state->code);
+      }
+      $theme->modify();
+      $theme->dist();
+      break;
+  }
+  themebuilder_compiler_save_session($theme);
+}
+
+/**
+ * Applies the specified modification.  Applying the modifications entails
+ * changing any property values associated with the modification's new state
+ * and putting the modification instance on the undo stack.  Additionally, the
+ * redo stack should be cleared as a result of applying the modification.
+ *
+ * @param object $modification
+ *   The modification to apply.
+ */
+function themebuilder_compiler_apply_modification($modification) {
+  $theme = themebuilder_compiler_get_current_theme();
+  $semaphore = themebuilder_compiler_get_semaphore();
+  _themebuilder_compiler_modify($modification);
+
+  // Add the modification to the undo stack.
+  db_insert('themebuilder_undo')
+    ->fields(array(
+      'theme_name' => $theme->theme_name,
+      'direction' => 0,
+      'selector' => $modification->selector,
+      'prior_state' => serialize($modification->priorState),
+      'new_state' => serialize($modification->newState),
+      'children' => (empty($modification->children) ? serialize(NULL) : serialize($modification->children)),
+      'type' => $modification->type,
+      ))
+    ->execute();
+  // When a new modification is applied, the redo stack is wiped out.  This is
+  // generally the case whenever one modification is dependent on previous
+  // modifications.  Not sure that is the case here, but is seems a reasonable
+  // policy unless this causes unexpected behavior.
+  themebuilder_compiler_clear_redo_stack();
+  themebuilder_compiler_release_semaphore($semaphore);
+}
+
+/**
+ * Reverts the specified modification.  Note that only the modification at the
+ * top of the undo stack can be reverted.  Reverting the modification entails
+ * changing any property values associated with the modification's prior state,
+ * removing the modification from the undo stack, and adding the modification
+ * to the redo stack.
+ *
+ * @param object $modification
+ *   The modification to undo.
+ */
+function themebuilder_compiler_undo_modification($modification) {
+  $semaphore = themebuilder_compiler_get_semaphore();
+  $undo = themebuilder_compiler_get_undo_modification();
+  if (_themebuilder_compiler_modifications_equal($modification, $undo)) {
+    // Put the modification onto the redo stack.
+    $result = db_update('themebuilder_undo')
+      ->fields(array('direction' => 1))
+      ->condition('mid', $undo->mid)
+      ->execute();
+    _themebuilder_compiler_modify($modification, FALSE);
+    themebuilder_compiler_release_semaphore($semaphore);
+  }
+  else {
+    // We just horked.  The client is no longer in sync with the server, and the
+    // client has undone a change.  TODO: Propagate the hork to the client so a
+    // full refresh can be forced.  This should never ever happen.  That said,
+    // it just happened.  Any chance that two browsers are being used with the
+    // same session to edit a theme?  Try to refrain.
+    themebuilder_compiler_release_semaphore($semaphore);
+    throw new ThemeBuilderException('You just horked');
+  }
+}
+
+/**
+ * Reapplies the specified modification.  Note that only the modification at the
+ * top of the redo stack can be reapplied.  Reapplying the modification entails
+ * changing any property values associated with the modification's new state,
+ * removing the modification from the redo stack, and adding the modification to
+ * the undo stack.
+ *
+ * @param object $modification
+ *   The modification to redo.
+ */
+function themebuilder_compiler_redo_modification($modification) {
+  $semaphore = themebuilder_compiler_get_semaphore();
+  $redo = themebuilder_compiler_get_redo_modification();
+  if (_themebuilder_compiler_modifications_equal($modification, $redo)) {
+    // Put the modification onto the undo stack.
+    $result = db_update('themebuilder_undo')
+      ->fields(array('direction' => 0))
+      ->condition('mid', $redo->mid)
+      ->execute();
+    _themebuilder_compiler_modify($modification);
+    themebuilder_compiler_release_semaphore($semaphore);
+  }
+  else {
+    // We just horked.  The client is no longer in sync with the server, and the
+    // client has undone a change.  TODO: Propagate the hork to the client so a
+    // full refresh can be forced.  This should never ever happen.  That said,
+    // it just happened.  Any chance that two browsers are being used with the
+    // same session to edit a theme?  Try to refrain.
+    themebuilder_compiler_release_semaphore($semaphore);
+    throw new ThemeBuilderException('You just horked');
+  }
+}
+
+/**
+ * Returns the modification from the top of the undo stack.
+ *
+ * @return object
+ *   The modification from the top of the undo stack.
+ */
+function themebuilder_compiler_get_undo_modification() {
+  $theme = themebuilder_compiler_get_current_theme();
+  $last_modification_query = 'SELECT * from {themebuilder_undo} WHERE theme_name = :theme_name AND direction = :direction ORDER BY mid DESC LIMIT 1';
+
+  $undo = db_query($last_modification_query, array(
+    ':theme_name' => $theme->theme_name,
+    ':direction' => 0,
+  ))
+  ->fetchObject();
+  $undo->priorState = unserialize($undo->prior_state);
+  $undo->newState = unserialize($undo->new_state);
+  $undo->children = unserialize($undo->children);
+  return $undo;
+}
+
+/**
+ *Returns the operation on the top of the redo stack.
+ *
+ * @return object
+ *   The modification from the top of the redo stack.
+ */
+function themebuilder_compiler_get_redo_modification() {
+  $theme = themebuilder_compiler_get_current_theme();
+  $last_modification_query = 'SELECT * from {themebuilder_undo} WHERE theme_name = :theme_name AND direction = :direction ORDER BY mid LIMIT 1';
+
+  $redo = db_query($last_modification_query, array(
+    ':theme_name' => $theme->theme_name,
+    ':direction' => 1,
+  ))
+  ->fetchObject();
+  $redo->priorState = unserialize($redo->prior_state);
+  $redo->newState = unserialize($redo->new_state);
+  $redo->children = unserialize($redo->children);
+  return $redo;
+}
+
+function _themebuilder_compiler_modifications_equal($clientMod, $serverMod) {
+  $same = ($clientMod->type == $serverMod->type &&
+    $clientMod->selector == $serverMod->selector &&
+    serialize($clientMod->priorState) == serialize($serverMod->priorState) &&
+    serialize($clientMod->newState) == serialize($serverMod->newState) &&
+    (isset($clientMod->children) === isset($serverMod->children)) &&
+    (!isset($clientMod->children) || serialize($clientMod->children) == serialize($serverMod->children)));
+
+  return $same;
+}
+
+/**
+ * Indicates whether we are in theme edit mode.
+ *
+ * @return boolean
+ *   Returns TRUE if in edit mode, FALSE otherwise.
+ */
+function themebuilder_compiler_in_edit_mode() {
+  global $user;
+  $session_exists = &drupal_static(__FUNCTION__);
+
+  if (!isset($session_exists)) {
+    if (!user_access('administer themes')) {
+      $session_exists = FALSE;
+    }
+    else {
+      try {
+        $session_exists = db_select('themebuilder_session', 'ts')
+          ->fields('ts', array('uid'))
+          ->condition('sid', session_id())
+          ->execute()
+          ->fetchField();
+      }
+      catch (Exception $e) {
+        // Table is missing, or something failed.
+        $session_exists = FALSE;
+      }
+      $session_exists = $session_exists ? TRUE : FALSE;
+      if ($session_exists && themebuilder_compiler_must_exit()) {
+        // Code was updated, waiting for the database to update.  Do not allow
+        // the themebuilder to be used.
+        themebuilder_compiler_revert_session();
+        $session_exists = FALSE;
+      }
+    }
+  }
+  return $session_exists;
+}
+
+/**
+ * Returns the custom CSS properties that have been set into this theme so far.
+ * @return array
+ *   An array containing the properties.  The key contains the selector, the value
+ *   is an array containing property names and values.
+ */
+function themebuilder_compiler_get_custom_css() {
+  $theme = themebuilder_compiler_get_current_theme();
+  return $theme->getCustomCSSProperties();
+}
+
+/**
+ * Returns the name of the layout used by the specified theme.  This only works
+ * for layouts based on the builderbase theme.
+ * @param <type> $theme_name
+ * @return <type>
+ */
+function themebuilder_compiler_get_layout($theme_name = NULL) {
+  $theme = themebuilder_compiler_get_current_theme();
+  return $theme->layout;
+}
+
+/**
+ * Returns the palette object of the current theme.
+ */
+function themebuilder_compiler_get_color_manager() {
+  $theme = themebuilder_compiler_get_current_theme();
+  return $theme->getColorManager();
+}
+
+/**
+ * Sets the palette object of the current theme and returns the new palette.
+ * Replaced by the PaletteModification object.
+ */
+/*
+function themebuilder_compiler_set_palette($palette_id) {
+  $theme = themebuilder_compiler_get_current_theme();
+  $new_palette = $theme->setPalette($palette_id);
+  $theme->modify();
+  $theme->dist();
+  return $new_palette;
+}
+*/
+
+/**
+ * Returns a list of all currently available palettes.
+ */
+function themebuilder_compiler_get_palettes() {
+  $palettes = Palette::getAvailablePalettes();
+  return $palettes;
+}
+
+/**
+ * Collects and returns information about all palettes in the system.
+ *
+ * @return array
+ *   An associative array of palette data, keyed by palette name.
+ */
+function themebuilder_compiler_get_palette_info() {
+  $palettes = themebuilder_invoke_all('themebuilder_palettes');
+  drupal_alter('themebuilder_palettes', $palettes);
+  return $palettes;
+}
+
+/**
+ * Returns an array that contains a list of available themes.
+ *
+ * @return array
+ *   An array containing the theme list. Session (draft) themes are not listed,
+ *   but all other themes are. The array has two elements:
+ *   - 'gardens': An array of base Gardens themes that can be used and are
+ *     compatible with the theme builder.
+ *   - 'mythemes': An array of themes that have been created and saved using
+ *     the theme builder.
+ *   Each theme array contains the following metadata:
+ *   - name: The human-readable name of the theme.
+ *   - author: An array containing the following keys:
+ *     - name: The theme author's username.
+ *     - uid: The theme author's user id on the Gardens site.
+ */
+function themebuilder_compiler_get_theme_list() {
+  themebuilder_log_trace_enter(__FUNCTION__);
+  $cache_id = 'themebuilder_theme_list';
+  $result = cache_get($cache_id);
+  if (isset($result->data)) {
+    $result = $result->data;
+  }
+  else {
+    $themes = system_rebuild_theme_data();
+    $result = array('gardens' => array(), 'mythemes' => array());
+    foreach ($themes as $theme) {
+      if (strpos($theme->filename, 'themes/acquia') === 0) {
+        // Do not return base themes.
+        continue;
+      }
+      if (strpos($theme->filename, conf_path() . '/themes') === 0) {
+        // Do not return any draft themes (this includes the current session
+        // theme that is being edited).
+        if (themebuilder_compiler_theme_is_draft($theme->name)) {
+          continue;
+        }
+        $result['mythemes'][$theme->name] = array('name' => $theme->info['name'], 'meta' => t('@author', array('@author' => $theme->info['author']['name'])));
+        continue;
+      }
+    }
+    cache_set($cache_id, $result);
+  }
+  themebuilder_log_trace_exit(__FUNCTION__);
+  return $result;
+}
+
+/**
+ * Clears the list of themes from the cache so the information will be regenerated.
+ */
+function themebuilder_compiler_clear_theme_list() {
+ $cache_id = 'themebuilder_theme_list';
+ cache_clear_all($cache_id, 'cache');
+}
+
+/**
+ * Adds or changes theme summary information.
+ *
+ * The theme summary includes only the system name and the human
+ * readable label.  This function adds or updates theme information so
+ * the theme will appear in the themes tab in the themebuilder.  Doing
+ * this manipulation to the cache avoids a very long call that would
+ * otherwise be done to gather the theme information for each theme.
+ *
+ * @param {String} $system_name
+ *   The system name of the theme.
+ * @param {Array} $data
+ *   An array containing the following data:
+ *   - name: The human readable name of the theme.
+ *   - author: An array containing the following keys:
+ *     - name: The theme author's username.
+ *     - uid: The theme author's user id on the Gardens site.
+ */
+function themebuilder_compiler_theme_changed($system_name, $data) {
+  $cache_id = 'themebuilder_theme_list';
+  $themes = cache_get($cache_id);
+  if ($themes !== FALSE && isset($themes->data)) {
+    $themes->data['mythemes'][$system_name] = $data;
+    cache_set($cache_id, $themes->data);
+  }
+}
+
+/**
+ * Returns a session name for the current user.  This session name will be used
+ * as the theme name for a theme that is edited by the user.
+ *
+ * @global object $user
+ * @return string
+ *   The name of the edit session theme for the current user.
+ */
+function themebuilder_compiler_get_session_name() {
+  global $user;
+  $machine_name = themebuilder_compiler_human_to_machine_name($user->name);
+  return $machine_name . THEME_BUILDER_DRAFT_SUFFIX;
+}
+
+/**
+ * Generates a machine-friendly name from a human-friendly name.
+ *
+ * The machine name should be suitable for use both as a filename and as a PHP
+ * function name.
+ *
+ * Note that this function should be kept roughly in sync with the toSystemName
+ * function in themebuilder_bar.js.
+ */
+function themebuilder_compiler_human_to_machine_name($human_name) {
+  // Perform basic filtering to limit to letters, numbers, and underscores.
+  $separator = '_';
+  $machine_name = preg_replace('/[^a-z0-9_]+/', $separator, strtolower($human_name));
+  // Do not start the name with a number, since PHP function names don't allow
+  // that.
+  if (is_numeric(substr($machine_name, 0, 1))) {
+    $machine_name = $separator . $machine_name;
+  }
+  // Deal with names that don't exist.
+  if (strlen($machine_name) == 0) {
+    $machine_name = 'untitled';
+  }
+  // Deal with names that are too long.
+  if (strlen($machine_name) > 100) {
+    $machine_name = substr($machine_name, 0, 100);
+  }
+  $suffix = 0;
+
+  if (strpos($machine_name, THEME_BUILDER_THEMENAME_NAMESPACE) !== 0) {
+    $machine_name = THEME_BUILDER_THEMENAME_NAMESPACE . $machine_name;
+  }
+
+  // Do not allow the user to save over a draft theme.
+  if (themebuilder_compiler_theme_is_draft($machine_name)) {
+    $machine_name .= '_';
+  }
+
+  while (FALSE /*!empty(drupal_get_path('theme', $name))/*|| module_exists($name) */) {
+    $suffix++;
+    $name = $machine_name . '_' .$suffix;
+  }
+  return $machine_name;
+}
+
+/**
+ * Commits the specified modification.
+ */
+function themebuilder_compiler_commit() {
+  $ret = array();
+  $ret['error'] = '';
+  if (!empty($_POST['modification']) && isset($_POST['operation'])) {
+    $operation = check_plain($_POST['operation']);
+    $modification = json_decode($_POST['modification']);
+    switch ($operation) {
+      case 'apply':
+        themebuilder_compiler_apply_modification($modification);
+        break;
+      case 'undo' :
+        themebuilder_compiler_undo_modification($modification);
+        break;
+      case 'redo' :
+        themebuilder_compiler_redo_modification($modification);
+        break;
+    }
+    $ret['error'] = '';
+  }
+  else {
+    $ret['error'] = 'Wrong Arguments';
+  }
+  themebuilder_compiler_json_output($ret);
+}
+
+/**
+ * Reads the undo or redo modifications from the database.  The flag indicates
+ * whether to get undo or redo information.
+ *
+ * @param boolean $undo
+ *   If true, undo modifications are retrieved; otherwise redo.
+ *
+ * @return array
+ *   An array of modifications in the specified stack.
+ */
+function _themebuilder_compiler_read_undo_stack($undo = TRUE) {
+  $result = array();
+  $theme = themebuilder_compiler_get_current_theme();
+  $direction = $undo === TRUE ? 0 : 1;
+  $query_result = db_query('SELECT selector, type, prior_state, new_state, children FROM {themebuilder_undo} WHERE theme_name = :theme_name AND direction = :direction ORDER BY mid',
+    array(':theme_name' => $theme->theme_name, ':direction' => $direction));
+  foreach ($query_result as $modification) {
+    $modification->priorState = unserialize($modification->prior_state);
+    unset($modification->prior_state);
+    $modification->newState = unserialize($modification->new_state);
+    unset($modification->new_state);
+    $modification->children = unserialize($modification->children);
+    $result[] = $modification;
+  }
+  return $result;
+}
+
+/**
+ * AJAX callback that retrieves the undo and redo stack.  The data is encoded
+ * in JSON format.
+ */
+function themebuilder_compiler_get_undo_stack() {
+
+  $ret = array();
+  $ret['error'] = '';
+  $ret['undo'] = _themebuilder_compiler_read_undo_stack();
+  $ret['redo'] = _themebuilder_compiler_read_undo_stack(FALSE);
+
+  themebuilder_compiler_json_output($ret);
+}
+
+function themebuilder_compiler_download_exported_file($filename, $export_name = "export") {
+  $export_uri = 'temporary://' . $filename;
+  $headers = array(
+    'Content-type' =>  'application/tar/gz',
+    'Content-Disposition' => 'attachment; filename="' . $export_name . '.tar.gz"',
+  );
+  if (file_exists(drupal_realpath($export_uri))) {
+    file_transfer($export_uri, $headers);
+    return $filename;
+  }
+}
+
+/**
+ * Returns themebuilder initialization data required by the client. In order
+ * to reduce the number of requests required to get the application
+ * initialized, it would be beneficial to consolidate the data from multiple
+ * requests into a single request.  We shouldn't do this with data that is
+ * potentially large (for example the undo/redo stack information), but rather
+ * for other data without which the JavaScript client simply cannot initialize.
+ *
+ * @return
+ *   The initialization data.
+ */
+function themebuilder_compiler_get_initial_data() {
+  $init_data = module_invoke_all('themebuilder_init_data');
+  drupal_alter('themebuilder_init_data', $init_data);
+  return $init_data;
+}
+
+/**
+ * Page callback; outputs initialization data in JSON format.
+ */
+function themebuilder_compiler_get_initial_data_json() {
+  $init_data = themebuilder_compiler_get_initial_data();
+  $settings = new stdClass();
+  foreach ($init_data as $name => $value) {
+    $settings->$name = $value;
+  }
+  themebuilder_compiler_json_output($settings);
+}
+
+/**
+ * Menu callback; processes a request from the client to phone home for updates.
+ *
+ * Modules should implement hook_themebuilder_phone_home() to respond to these
+ * requests, and then implement hook_themebuilder_update_data() if they need to
+ * send any data back to the client as a result.
+ */
+function themebuilder_compiler_process_phone_home_request() {
+  // Allow modules to respond to the request from the client.
+  module_invoke_all('themebuilder_phone_home');
+
+  // Call themebuilder_compiler_json_output() with an array, so that modules
+  // can add any data to it in hook_themebuilder_update_data().
+  themebuilder_compiler_json_output(array());
+}
+
+/**
+ * Saves the themebuilder settings.  This is called from the javascript
+ * client, with the settings specified in the $_REQUEST.  The settings will be
+ * saved to the variable table.
+ */
+function themebuilder_compiler_save_themebuilder_settings() {
+  $settings = $_REQUEST['settings'];
+  if (isset($settings)) {
+    $white_list = array('powerTheme' => 'bool', 'naturalLanguage' => 'bool');
+    $clean_settings = array();
+    foreach ($white_list as $key => $type) {
+      if (isset($settings[$key])) {
+        $value = $settings[$key];
+        switch ($type) {
+          case 'bool':
+            $value = (strtolower($value) === 'true');
+            break;
+          default:
+            unset($value);
+        }
+      }
+      if (isset($value)) {
+        $clean_settings[$key] = $value;
+      }
+    }
+    if (count($clean_settings) > 0) {
+      global $user;
+      $account = user_load($user->uid);
+      user_save($account, array('data' => array('themebuilder_settings' => $clean_settings)));
+    }
+  }
+}
+
+/**
+ * Returns the current themebuilder settings.
+ *
+ * @return
+ *   An array that indicates the current themebuilder settings.  If the
+ *   settings are not found, a reasonable default is returned instead.
+ */
+function themebuilder_compiler_get_themebuilder_settings() {
+  global $user;
+  $defaults = array('powerTheme' => FALSE, 'naturalLanguage' => TRUE);
+  if (isset($user->data) && isset($user->data['themebuilder_settings'])) {
+    $result = $user->data['themebuilder_settings'];
+  }
+  else {
+    $result = variable_get('themebuilder_settings', $defaults);
+  }
+  foreach ($defaults as $key => $value) {
+    if (!isset($result[$key])) {
+      $result[$key] = $value;
+    }
+  }
+  return $result;
+}
+
+/**
+ * Implementation of hook_themebuilder_init_data().
+ */
+function themebuilder_compiler_themebuilder_init_data() {
+  themebuilder_log_trace_enter(__FUNCTION__);
+  $result = array();
+  $theme = themebuilder_compiler_get_current_theme();
+  $result['published_theme'] = themebuilder_compiler_get_published_theme_name();
+  $result['base_theme'] = $theme->getBaseThemeName();
+  $result['initMessage'] = @$_SESSION['init_message'];
+  unset($_SESSION['init_message']);
+  $result['initAlert'] = @$_SESSION['init_alert'];
+  unset($_SESSION['init_alert']);
+  $result['undo'] = _themebuilder_compiler_read_undo_stack();
+  $result['redo'] = _themebuilder_compiler_read_undo_stack(FALSE);
+  $update_available = @$_SESSION['theme_update_available'];
+  $result['theme_update_available'] = ($update_available == TRUE);
+  $result['app_settings'] = themebuilder_compiler_get_themebuilder_settings();
+  $result['user_permissions']['publish_theme'] = user_access('publish theme');
+  if (!isset($_SESSION['maintenance_mode'])) {
+    // We assume that we are not in maintenance mode and rely on
+    // application data updates that are sent to the client to change
+    // the value in the session.  This way we can easily show a
+    // message to the user that they need to exit soon.
+    $_SESSION['maintenance_mode'] = FALSE;
+  }
+  $result['maintenance_mode'] = $_SESSION['maintenance_mode'];
+
+  themebuilder_log_trace_exit(__FUNCTION__);
+  return $result;
+}
+
+/**
+ * Implementation of hook_themebuilder_update_data().
+ *
+ * This method is called on ajax requests and is an opportunity to
+ * detect and pass application settings back to the client.
+ *
+ * @return
+ *   An array containing application data that has been modified.
+ */
+function themebuilder_compiler_themebuilder_update_data() {
+  $result = array();
+  $mode = themebuilder_compiler_get_access_mode();
+  $in_maintenance = $mode === 'locked';
+  if (isset($_SESSION['maintenance_mode']) && $_SESSION['maintenance_mode'] !== $in_maintenance) {
+    // Only add information that represents a change to the state of
+    // the application.
+    $result['maintenance_mode'] = $in_maintenance;
+    $_SESSION['maintenance_mode'] = $in_maintenance;
+  }
+  return $result;
+}
+
+/**
+ * Implementation of hook_themebuilder_opened().
+ */
+function themebuilder_compiler_themebuilder_opened() {
+  if (count(_themebuilder_compiler_get_duplicate_themes()) > 0) {
+    $themeCorrector = new ThemeCorrector(DRUPAL_ROOT . '/' . themebuilder_compiler_get_custom_theme_folder(), array('MultipleThemeInstancesInDBThemeElf', 'MultipleWebnodeSessionElf'));
+    $themeCorrector->fix();
+
+    // Make sure this fixed the problem.
+    $duplicate_themes = _themebuilder_compiler_get_duplicate_themes();
+    if (count($duplicate_themes) > 0) {
+      // After clearing out all duplication, the db still has
+      // duplicate entries.  This occurs when a theme was saved and no
+      // longer has a .info file (the theme elves are run against each
+      // theme, and the theme is identified via its .info file).
+      ThemeBuilderLog()->gardensError('AN-24218 - Failed to clear duplicate theme entries in the database', 'These themes are likely missing the .info file: ' . implode(',', $duplicate_themes));
+    }
+  }
+  else {
+    $themeCorrector = new ThemeCorrector(DRUPAL_ROOT . '/' . themebuilder_compiler_get_custom_theme_folder(), array('MultipleWebnodeSessionElf'));
+    $themeCorrector->fix();
+  }
+}
+
+/**
+ * Looks in the database to see if there is duplication in the themebuilder tables.
+ * @return {array}
+ *   An array containing the system theme name for each theme that has
+ *   multiple entries in the themebuilder_themes table.
+ */
+function _themebuilder_compiler_get_duplicate_themes() {
+  $duplicate_themes = db_query('SELECT theme_name FROM {themebuilder_themes} GROUP BY theme_name HAVING (COUNT(theme_name) > 1)')
+    ->fetchCol();
+  return $duplicate_themes;
+}
+
+/**
+ * This is the function used through AJAX to allow the client to clear both
+ * modification stacks on the server.  The client code is responsible for clearing
+ * the client-side stacks.
+ *
+ * The theme name must be passed in via a parameter named 'theme'.
+ */
+function themebuilder_compiler_clear_modification_stacks_ajax() {
+  $result = array();
+  $result['error'] = '';
+  if (isset($_POST['theme'])) {
+    $theme_name = check_plain($_POST['theme']);
+    themebuilder_compiler_clear_modification_stacks($theme_name);
+    $result['message'] = 'Cleared modification stacks for theme ' . $theme_name;
+    themebuilder_compiler_json_output($result);
+  }
+  else {
+    throw new ThemeBuilderException('Theme name was not specified.');
+  }
+}
+
+/**
+ * This is the function used to allow the client to clear both
+ * modification stacks on the server.  The client code is responsible
+ * for clearing the client-side stacks.
+ *
+ * @param $theme_name
+ *   Optional parameter that identifies the name of the theme for which the
+ *   stacks should be cleared.  If not provided the current theme will be used
+ *   instead.
+ */
+function themebuilder_compiler_clear_modification_stacks($theme_name = NULL) {
+  themebuilder_log_trace_enter(__FUNCTION__);
+  themebuilder_compiler_clear_undo_stack($theme_name);
+  themebuilder_compiler_clear_redo_stack($theme_name);
+  themebuilder_log_trace_exit(__FUNCTION__);
+}
+
+/**
+ * Clears the undo stack for the currently selected theme.
+ *
+ * @param $theme_name
+ *   Optional parameter that identifies the name of the theme for which the
+ *   stack should be cleared.  If not provided the current theme will be used
+ *   instead.
+ */
+function themebuilder_compiler_clear_undo_stack($theme_name = NULL) {
+  if (!isset($theme_name)) {
+    $theme =& themebuilder_compiler_get_current_theme();
+    $theme_name = $theme->theme_name;
+  }
+
+  db_delete('themebuilder_undo')
+    ->condition('theme_name', $theme_name)
+    ->condition('direction', 0)
+    ->execute();
+}
+
+/**
+ * Clears the redo stack for the currently selected theme.
+ *
+ * @param $theme_name
+ *   Optional parameter that identifies the name of the theme for which the
+ *   stack should be cleared.  If not provided the current theme will be used
+ *   instead.
+ */
+function themebuilder_compiler_clear_redo_stack($theme_name = NULL) {
+  if (!isset($theme_name)) {
+    $theme =& themebuilder_compiler_get_current_theme();
+    $theme_name = $theme->theme_name;
+  }
+
+  db_delete('themebuilder_undo')
+    ->condition('theme_name', $theme_name)
+    ->condition('direction', 1)
+    ->execute();
+}
+
+/**
+ * Clears the JavaScript and CSS cache.
+ *
+ * This function is called when the JavaScript client is out of sync
+ * with the server.  This is determined by comparing the client
+ * version string (ThemeBuilder.Application.version to the
+ * THEME_BUILDER_JAVASCRIPT_VERSION define.
+ */
+function themebuilder_compiler_clear_cache_ajax() {
+  if(isset($_POST['version'])) {
+    $client_version = check_plain($_POST['version']);
+    $server_version = THEME_BUILDER_JAVASCRIPT_VERSION;
+    ThemeBuilderLog()->gardensWarning('The ThemeBuilder client and server are not in sync.  Clearing the cache.', "client version: $client_version; server version: $server_version");
+
+    // We probably only need to flush the JavaScript and CSS caches.
+    // Note that this will not fix an issue in which a new menu item
+    // has been created - for that we should probably call
+    // drupal_flush_all_caches(), which uses significantly more resources.
+    _drupal_flush_css_js();
+    registry_rebuild();
+    drupal_clear_css_cache();
+    drupal_clear_js_cache();
+  }
+}
+
+/**
+ * Causes all files and database entries for the specified theme to be completely removed.
+ *
+ */
+function themebuilder_compiler_delete_theme_ajax() {
+  $ret = array();
+  $ret['error'] = '';
+  if (isset($_POST['theme_name'])) {
+    $theme_name = check_plain($_POST['theme_name']);
+    $theme = themebuilder_compiler_get_theme_by_name($theme_name);
+    $semaphore = themebuilder_compiler_get_semaphore();
+    try {
+      $theme->deleteTheme();
+      $theme->deleteAllBackups();
+      db_delete('block')
+        ->condition('theme', $theme_name)
+        ->execute();
+      themebuilder_compiler_clear_theme_list();
+      themebuilder_compiler_get_theme_list();
+      // Make sure the theme related block management page gets removed as well.
+      menu_rebuild();
+    }
+    catch (Exception $e) {
+      themebuilder_compiler_release_semaphore($semaphore);
+      throw new ThemeBuilderException("Failed to delete theme $theme_name.", THEMEBUILDER_ERROR_RECOVERABLE, array(ThemeBuilderException::HANDLER_ALERT_AND_CLOSE));
+    }
+    themebuilder_compiler_release_semaphore($semaphore);
+  }
+  themebuilder_compiler_json_output($ret);
+}
+
+/**
+ * Causes the specified theme to be published.
+ */
+function themebuilder_compiler_publish_theme_ajax() {
+  if (!user_access('publish theme')) {
+    throw new ThemebuilderException('Publish theme access denied.');
+  }
+  $ret = array();
+  $ret['error'] = '';
+  if (isset($_POST['theme_name'])) {
+    $theme_name = check_plain($_POST['theme_name']);
+    $theme = themebuilder_compiler_get_theme_by_name($theme_name);
+    if ($theme) {
+      try {
+        themebuilder_compiler_publish($theme_name);
+      }
+      catch (Exception $e) {
+        throw new ThemeBuilderException("Failed to publish theme $theme_name.", THEMEBUILDER_ERROR_RECOVERABLE, array(ThemeBuilderException::HANDLER_ALERT_AND_CLOSE));
+      }
+    }
+  }
+  themebuilder_compiler_json_output($ret);
+}
+
+/**
+ * Causes the specified theme to be copied.
+ */
+function themebuilder_compiler_copy_theme_ajax() {
+  $ret = array();
+  $ret['error'] = '';
+  if (!empty($_POST['theme_name']) &&
+    !empty($_POST['new_theme_label']) &&
+    !empty($_POST['new_theme_name'])) {
+    $theme_name = check_plain($_POST['theme_name']);
+    $new_theme_label = check_plain($_POST['new_theme_label']);
+    $new_theme_name = check_plain($_POST['new_theme_name']);
+    $theme = themebuilder_compiler_get_theme_by_name($theme_name);
+    if ($theme) {
+      $semaphore = themebuilder_compiler_get_semaphore();
+      try {
+        // Copy the theme
+        $path = themebuilder_compiler_find_theme($new_theme_name);
+        if (!$path) {
+          $path = DRUPAL_ROOT . '/' . themebuilder_compiler_get_custom_theme_folder() . "/${new_theme_name}";
+        }
+        $theme = themebuilder_compiler_get_theme_by_name($theme_name);
+        $new_theme = $theme->cloneTheme($new_theme_name, $path);
+        $new_theme->setLabel($new_theme_label);
+        $theme->copyTheme($path);
+        $new_theme->save();
+        $new_theme->dist();
+        themebuilder_compiler_release_semaphore($semaphore);
+
+        // Add the theme to the appropriate tables and caches.
+        _themebuilder_compiler_reset_theme_cache();
+        themebuilder_compiler_theme_changed($new_theme_name, array('name' => $new_theme_label, 'author' => $new_theme->getAuthorInfo()));
+        // Copy over the source theme's blocks if there are any.
+        themebuilder_compiler_blocks_setup($new_theme_name, $theme_name, FALSE);
+        // Ensure that the block configuration links are up to date.
+        menu_rebuild();
+
+        // Pass the new theme information back so the theme can be added in
+        // the client without a page refresh.
+        $author_info = $new_theme->getAuthorInfo();
+        $theme_info = array(
+          'name' => $new_theme_label,
+          'system_name' => $new_theme_name,
+          'type' => 'mythemes',
+          'isBase' => FALSE,
+          'dom_id' => themebuilder_themes_get_tile_id($new_theme_name),
+          'screenshot_url' => '/' . themebuilder_compiler_get_custom_theme_folder() . "/${new_theme_name}/screenshot_lg.png",
+          'meta' => t('@author', array('@author' => $author_info['name'])),
+        );
+        $ret['theme_info'] = $theme_info;
+      }
+      catch (Exception $e) {
+        themebuilder_compiler_release_semaphore($semaphore);
+        throw new ThemeBuilderException("Failed to duplicate theme $theme_name.", THEMEBUILDER_ERROR_RECOVERABLE, array(ThemeBuilderException::HANDLER_ALERT_AND_CLOSE));
+      }
+    }
+  }
+  themebuilder_compiler_json_output($ret);
+}
+
+/**
+ * In the original release of Gardens, we did not have the base_theme property
+ * in the .info file.  This is the only way we know the origin of the theme
+ * after it has been saved.  This simple scheme relies on the fact that
+ * originally we did not replace the thumbnail images for the theme
+ * (screenshot_lg.png), so it is possible to look at the thumbnail for these
+ * older themes and determine the base theme from there.  Eventually this will
+ * be dead code because all of the themes should be converted over time.
+ *
+ * @param $theme
+ *   Either the theme object or the theme name.
+ */
+function themebuilder_compiler_get_base_theme_name_from_screenshot($theme) {
+  $map = array(
+    '92bdf6d0f4d916981ffd03e7d819faa7' => 'broadway',
+    '87ce6808dd821638aa4e10076290af15' => 'builderbase',
+    'd71e2135c1f58c77bda84e318f0def7e' => 'campaign',
+    '0f7cfc45ea93e61090c719fd498d07d1' => 'kenwood',
+    '5d6e1abd629a5774d851d28c0fa3e19c' => 'sonoma',
+    '1818a2557c35553c444d7c72c8ea740b' => 'sparks',
+  );
+  if (is_string($theme)) {
+    // Passed in the theme name.
+    $name = $theme;
+  }
+  else {
+    $path = $theme->getPath();
+    $name = $theme->getName();
+  }
+  if (empty($path)) {
+    $path = drupal_get_path('theme', $name);
+  }
+  $screenshot_path = $path . '/screenshot_lg.png';
+  $contents = file_get_contents($screenshot_path);
+  $md5 = md5($contents);
+  return $map[$md5];
+}
+
+/**
+ * Retrieves the version of the theme identified by the specified theme name.
+ * This is accomplished by reading the theme's .info file, so can only be done
+ * if the theme actually exists on the filesystem.  Note, to get the version
+ * of the current theme, use $theme->getVersion(), which is more efficient
+ * because the .info file has already been read and parsed.
+ *
+ * @param $theme_name
+ *   A string representing the system name of the theme to retrieve the
+ *   version string for.
+ *
+ * @return
+ *   A string representation of the version string, or "-1" if the version
+ *   could not be read.
+ */
+function themebuilder_compiler_get_theme_version($theme_name) {
+  $version = '-1';
+  $theme_info = themebuilder_compiler_load_theme_info($theme_name);
+  if ($theme_info) {
+    $version = $theme_info['version'];
+  }
+  return $version;
+}
+
+/**
+ * Loads the theme info file for the specified theme.
+ *
+ * @param {String} $theme_name
+ *   The name of the theme.
+ * @return
+ *   The theme info contents.
+ */
+function themebuilder_compiler_load_theme_info($theme_name) {
+  $theme_info = &drupal_static(__FUNCTION__);
+  if (!isset($theme_info)) {
+    $theme_info = array();
+  }
+  if (!isset($theme_info[$theme_name])) {
+    $path = drupal_get_path('theme', $theme_name);
+    $info_filename = DRUPAL_ROOT . "/$path/$theme_name.info";
+    if (file_exists($info_filename)) {
+      $theme_info[$theme_name] = drupal_parse_info_file($info_filename);
+    }
+  }
+  return $theme_info[$theme_name];
+}
+
+/**
+ * Compares two version strings.  Similar output to strcmp.
+ *
+ * @todo: Determine if this function is actually necessary, or if we can use
+ *   PHP's standard version_compare() function instead.
+ *
+ * @param $ver1
+ *   The string representing the first version number to compare.
+ * @param $ver2
+ *   The string representing the second version number to compare.
+ *
+ * @return
+ *   Integer that is < 0 if $ver1 is less than $ver2; 0 if $ver1 is equal to
+ *   $ver2, and > 0 if $ver1 is greater than $ver2.
+ */
+function themebuilder_compiler_compare_versions($ver1, $ver2) {
+  // Note that this algorithm is more complex than a string compare because
+  // 10.3 should be considered greater than 9.03.  You cannot use alphabetical
+  // comparisons for version strings.
+  $version1 = explode('.', $ver1);
+  $version2 = explode('.', $ver2);
+  $version1_length = count($version1);
+  $version2_length = count($version2);
+  for ($index = 0; $index < $version1_length && $index < $version2_length; $index++) {
+    $compare = intval($version1[$index]) - intval($version2[$index]);
+    if ($compare != 0) {
+      return $compare;
+    }
+  }
+  // If the common parts of the version are equal, the greater version number
+  // is the one with the most sections.
+  return $version1_length - $version2_length;
+}
+
+/**
+ * Causes the current theme to be updated.  This function only does the update
+ * if the version of the current theme is less than that of its base theme.
+ */
+function themebuilder_compiler_update_theme() {
+  $theme = themebuilder_compiler_get_current_theme();
+  $base_theme = themebuilder_compiler_get_base_theme($theme);
+  if ($base_theme) {
+    // Verify that an upgrade exists.
+    if (themebuilder_compiler_compare_versions($theme->getVersion(), $base_theme->getVersion()) < 0) {
+      $semaphore = themebuilder_compiler_get_semaphore();
+      $theme->update($base_theme);
+      module_invoke_all('themes_enabled', array($theme->getName()));
+      // The update is complete, make sure we don't still show the update link
+      // to the user.
+      $_SESSION['theme_update_available'] = false;
+      // Set up a user message that will be displayed when the page refreshes.
+      $_SESSION['init_alert'] = t("You are previewing the update. To retain a backup of your previous theme, click \"Save As.\" When you're ready for others to see this, click Publish.\n\nFor details, see our community forums.");
+      themebuilder_compiler_save_session($theme);
+      themebuilder_compiler_release_semaphore($semaphore);
+    }
+  }
+}
+
+/**
+ * Verifies the token for this request.
+ */
+function themebuilder_compiler_access($callback) {
+  if (!variable_get('tb_access_check', TRUE)) {
+    return TRUE;
+  }
+  if (!user_access('administer themes')) {
+    return FALSE;
+  }
+  return !empty($_REQUEST['form_token']) && drupal_valid_token($_REQUEST['form_token'], $callback);
+}
+
+/**
+ * Generate a relatively site-unique integer for the key used in the sem_get
+ * call.  If it isn't site-unique, the requests to save information in the
+ * themebuilder will be serialized.  If it is too unique, we will end up with
+ * corrupt themes.  This one is based on the base url
+ *
+ * @return
+ *   A relatively site-specific unique id used for requesting the semaphore.
+ */
+function themebuilder_compiler_get_semaphore_id() {
+  $md5_base_url =  md5($GLOBALS['base_url']);
+  $result = intval(fmod(hexdec($md5_base_url), 2147483647)); // Maximum 32 bit integer
+  return $result;
+}
+
+function themebuilder_compiler_get_semaphore_value() {
+  $variable = db_query('SELECT name, value FROM {variable} WHERE name = :name',
+    array(':name' => THEME_BUILDER_SEMAPHORE_NAME))->fetchObject();
+  if (!$variable) {
+    return $variable;
+  }
+  return unserialize($variable->value);
+}
+
+function themebuilder_compiler_set_semaphore_value($value) {
+  themebuilder_compiler_delete_semaphore_value();
+  db_insert('variable')
+    ->fields(array(
+      'name' => THEME_BUILDER_SEMAPHORE_NAME,
+      'value' => serialize($value),
+    ))
+  ->execute();
+}
+
+function themebuilder_compiler_delete_semaphore_value() {
+  $name = THEME_BUILDER_SEMAPHORE_NAME;
+  db_delete('variable')
+    ->condition('name', THEME_BUILDER_SEMAPHORE_NAME)
+    ->execute();
+}
+
+/**
+ * Gets the semaphore needed for modifying theme files.  Any code that modifies theme
+ * files must first get the semaphore to avoid the possibility of multiple simultaneous
+ * requests from corrupting the theme contents.
+ *
+ * @return StdObj
+ *   An object representing the semaphore.
+ */
+function themebuilder_compiler_get_semaphore() {
+  ignore_user_abort(TRUE);
+  $semaphore = new StdClass();
+
+  // This is a relatively unique id that can be used for debugging purposes to
+  // differentiate between two semaphore instances.
+  $semaphore->id = rand();
+  $semaphore->strategy = function_exists('sem_get') ? 'sysvsem' : 'lock';
+
+  if ($semaphore->strategy === 'sysvsem') {
+    require_once DRUPAL_ROOT . '/' . drupal_get_path('module', 'themebuilder_compiler') . '/SemaphoreManager.inc';
+    $sm = new SemaphoreManager();
+    try {
+      $semaphore->resource = $sm->acquire(THEME_BUILDER_THEME_SEMAPHORE);
+      // The acquire method returns if it is successful; otherwise the request fails.
+      $semaphore->status = TRUE;
+    }
+    catch (ThemeBuilderException $e) {
+      // Failed to get the semaphore.  Fail the request; the client may try again.
+      ThemeBuilderLog()->gardensError('Failed to get the semaphore.', $e->getMessage() . ' ' . $semaphore->id);
+      themebuilder_compiler_internal_error();
+    }
+  }
+  else {
+    // TODO: atomic semaphore strategy appropriate for multiple webnodes.
+    // Right now we are using core's locking framework.  however, this is NOT
+    // assured to give us the right behavior.  We really need a semaphore system
+    // not a simple lock so that each request will be allowed to proceed in the
+    // order that it arrived.  With core locks, we have no assurance about which
+    // thread will get the lock next.
+    //
+    // A possibly more correct approach:  Each thread that wants a lock does an
+    // insert into a table with a serial int field and get's back the generated int
+    // ID the process holds the lock when the selecting the minimum ID from the
+    // table returns a value that matches the ID received after the insert.
+    // Also, since we are not running PHP ever on windows or < 5.0, we should use
+    // usleep() so we can sleep less than 1 sec.
+    $attempts = 0;
+    $failed = TRUE;
+    do {
+      if (lock_acquire(THEME_BUILDER_SEMAPHORE_NAME)) {
+        $failed = FALSE;
+      }
+      else {
+        // Block up to 30 seconds until the lock may be available.
+        lock_wait(THEME_BUILDER_SEMAPHORE_NAME);
+      }
+      // Slight hack here - but this should fail gracefully.
+      $id = drupal_static('_lock_id');
+      $attempts++;
+    } while ($failed && $attempts < 10);
+
+    if ($failed) {
+      $error_text = "Failed to acquire lock $id";
+      ThemeBuilderLog()->error('Failed to acquire a lock.', "Note that we should be using a semaphore instead of a DB-based locking strategy until we have an implementation that respects the order of the requests.  Lock id is $id");
+      throw new ThemeBuilderException($error_text);
+    }
+    else {
+      ThemeBuilderLog()->info('Acquired lock', "Lock id is $id");
+      $semaphore->status = TRUE;
+    }
+  }
+  return $semaphore;
+}
+
+/**
+ * Releases the specified semaphore.
+ *
+ * @param StdObj $semaphore
+ *   The object representing the semaphore to release.
+ */
+function themebuilder_compiler_release_semaphore($semaphore) {
+  if ($semaphore->strategy === "sysvsem") {
+    if ($semaphore->status === TRUE) {
+      ThemeBuilderLog()->info('Releasing semaphore', "semaphore id: $semaphore->id");
+      $sm = new SemaphoreManager();
+      $semaphore->status = !$sm->release($semaphore->resource);
+      if ($semaphore->status === TRUE) {
+        ThemeBuilderLog()->error('Failed to release the semaphore.', 'Semaphore: ' . $semaphore->id);
+        throw new ThemeBuilderException($error_text);
+      }
+    }
+  }
+  else {
+    // multinode strategy
+    lock_release(THEME_BUILDER_SEMAPHORE_NAME);
+  }
+}
+
+/**
+ * Removes the semaphore for the associated site.  This is a necessary step
+ * that clears the semaphore resource, thus allowing other users to acquire
+ * it.  If this is not done, eventually the system will not be able to create
+ * a new semaphore, and the themebuilder will fail to function.
+ */
+function themebuilder_compiler_remove_semaphore($semaphore) {
+  if ($semaphore->strategy === 'sysvsem') {
+    // Must have acquired the semaphore to remove it.
+    if ($semaphore->status === TRUE && function_exists('sem_get')) {
+      $sm = new SemaphoreManager();
+      $sm->remove(THEME_BUILDER_THEME_SEMAPHORE, $semaphore->resource);
+    }
+  }
+}
+
+/**
+ * If the theme does not begin with out choosen namespace for themes, will return false.
+ *
+ * @note: How do we deal with changing the namespace, does it matter?
+ * @param string $name
+ * @return boolean
+ */
+function themebuilder_compiler_is_valid_theme_name($name) {
+  if (strpos($name, THEME_BUILDER_THEMENAME_NAMESPACE) !== 0) {
+    return FALSE;
+  }
+  return TRUE;
+}
+
+/**
+ * Implements hook_themebuilder_palettes().
+ */
+function themebuilder_compiler_themebuilder_palettes() {
+  $file = drupal_get_path('module', 'themebuilder_compiler') . '/palette.list';
+  $info = drupal_parse_info_file($file);
+  $palettes = $info['palette'];
+  return $palettes;
+}
+
+/**
+ * Custom version of module_invoke_all() that uses
+ * drupal_array_merge_recursive_array(). Can and should be removed if
+ * http://drupal.org/node/791860 or something like it gets into core.
+ */
+function themebuilder_invoke_all() {
+  $args = func_get_args();
+  $hook = $args[0];
+  unset($args[0]);
+  $return = array();
+  foreach (module_implements($hook) as $module) {
+    $function = $module . '_' . $hook;
+    if (function_exists($function)) {
+      $result = call_user_func_array($function, $args);
+      if (isset($result)) {
+        $return[] = is_array($result) ? $result : array($result);
+      }
+    }
+  }
+  $return = drupal_array_merge_recursive_array($return);
+
+  return $return;
+}
+
+/**
+ * Merges multiple arrays, recursively, and returns the merged array.
+ *
+ * This is taken from http://drupal.org/node/791860#comment-2954880 and can (and
+ * should) be removed when some version of it goes into core.
+ */
+function drupal_array_merge_recursive_array($arrays) {
+  $result = array();
+
+  foreach ($arrays as $array) {
+    foreach ($array as $key => $value) {
+      // Renumber integer keys as array_merge_recursive() does. Note that PHP
+      // automatically converts array keys that are integer strings (e.g., '1')
+      // to integers.
+      if (is_integer($key)) {
+        $result[] = $value;
+      }
+      // Recurse when both values are arrays.
+      elseif (isset($result[$key]) && is_array($result[$key]) && is_array($value)) {
+        $result[$key] = drupal_array_merge_recursive_array(array($result[$key], $value));
+      }
+      // Otherwise, use the latter value, overriding any previous value.
+      else {
+        $result[$key] = $value;
+      }
+    }
+  }
+
+  return $result;
+}
+
+/**
+ * This function is a wrapper for the drupal_json_output function, and
+ * should be used instead of drupal_json_output for every themebuilder
+ * ajax request.
+ *
+ * This wrapper can pass application state changes back to the client
+ * without each ajax request being aware of such state changes.  This
+ * is similar in concept to comet, though it does not require a
+ * dedicated long running request for change detection and it does not
+ * notify the client of state changes instantly - the client is
+ * notified on the next ajax request.
+ *
+ *
+ * @param {Array} $var
+ *   (Optional) If set, the variable will be converted to JSON and output.
+ */
+function themebuilder_compiler_json_output($var) {
+  if (is_array($var)) {
+    $update_data = module_invoke_all('themebuilder_update_data');
+    if (count($update_data)) {
+      $var['app_data'] = $update_data;
+    }
+  }
+  drupal_json_output($var);
+}
+
+/**
+ * Inspects the themes and attempts to make corrections if any issues are found.
+ *
+ * This method is called if the JavaScript code encounters an error
+ * when trying to enter the themebuilder.  The theme elves in
+ * .../themebuilder_compiler/theme_elves are classes, each of which is
+ * able to detect and correct a particular known problem we have
+ * encountered with themes.  Each class is instantiated and given an
+ * opportunity to address a theme issue.
+ *
+ * The number of actual fixes is returned so the client can determine
+ * whether to attempt to enter the themebuilder mode again.
+ *
+ * @return {int}
+ *   The number of theme issues resolved as a result of this call.
+ */
+function themebuilder_compiler_fix_themes() {
+  $result = FALSE;
+  $semaphore = themebuilder_compiler_get_semaphore();
+  $corrector = new ThemeCorrector(DRUPAL_ROOT . '/' . themebuilder_compiler_get_custom_theme_folder());
+  $fixCount = $corrector->fix();
+
+  // We should try again if we know that a fix was made.
+  $result = $fixCount > 0;
+
+  themebuilder_compiler_release_semaphore($semaphore);
+  return $result;
+}
+
+/**
+ * Exits the request due to an internal error.  If this is an ajax
+ * request, this will cause the javascript to retry the request
+ * several times before giving up.
+ */
+function themebuilder_compiler_internal_error() {
+  header('HTTP/1.0 503 Internal error', TRUE, 503);
+  exit();
+}
+
+/******************
+ * @group: ExceptionHandling
+ *
+ * This section is for ThemeBuilder exception handling.  Since ThemeBuilder is a
+ * JavaScript based application, errors thrown on the PHP side via AJAX calls
+ * need to be propogated up to the display layer. This exception handler
+ * provides different means to do this.  Here are some examples:
+ *
+ * @example:
+ *
+ * <code>
+ * throw new ThemeBuilderException('Something screwed up and I don't want to tell the client');
+ * // This will cause a log entry to appear in firebug, but the user will see nothing.
+ *
+ * throw new ThemeBuilderException('Something screwed up and I want to tell the client and close themebuilder', THEMEBUILDER_ERROR_RECOVERABLE, array(ThemeBuilderException::HANDLER_ALERT_AND_CLOSE);
+ * // 1st param is the message
+ * // 2nd param (THEMEBUILDER_ERROR_RECOVERABLE)
+ * //   A constant which means that we want the client to handle this error
+ * //   instead of just logging it.
+ * // 3rd param is an array of fallback handlers on the client side.
+ * //   If the calling code decides to handle it itself, these will not be used.
+ * //   But if it does not, these constants are function names which will be
+ * //   called ont he client side.
+ *
+ * // Result: In this case, the user will get a dialog with the message and then
+ * // Themebuilder will exit.
+ *
+ * </code>
+ *
+ ******************/
+
+/**
+ * Custom exception handler to provide nice errors
+ * and logging
+ */
+function themebuilder_compiler_exception_handler($e) {
+  global $previous_exception_handler;
+  if (!is_a($e, 'ThemeBuilderException')) {
+    $previous_exception_handler($e);
+    return;
+  }
+
+  if ($e->getCode() <= THEMEBUILDER_ERROR_FATAL) {
+    header("HTTP/1.0 500 Application error");
+    print $e->getMessage();
+    die();
+  }
+
+  if ($e->getCode() >= THEMEBUILDER_ERROR_RECOVERABLE) {
+    $ret = array(
+      'exception' => TRUE,
+      'code' => $e->getCode(),
+      'type' => get_class($e),
+      'message' => $e->getMessage(),
+      'handlers' => $e->getHandlers(),
+    );
+    print drupal_json_encode($ret);
+    die();
+  }
+
+  // If it is something we've never heard of, just use the default Drupal handler.
+  $previous_exception_handler($e);
+}
+
+/**
+ * Base Themebuilder Exception class.
+ *
+ */
+class ThemeBuilderException extends Exception {
+  const HANDLER_ALERT_AND_CLOSE = 'alertAndClose';
+  const HANDLER_LOG = 'logSilently';
+  const HANDLER_ALERT = 'alert';
+  var $handlers = array();
+
+  /**
+   *
+   * @param $message
+   *  @see parent::__construct()
+   * @param $code
+   *  @see parent::__construct()
+   * @param array $handlers
+   *  An array of handlers to fire if no other error callback is provided on the
+   *  client side.
+   *
+   *  The values here must exist as ThemeBuidler.errorHandlers.{$handler[key]}.
+   *  These functions are called if an error_callback is not specified in the
+   *  order provided here.
+   *
+   * @return unknown_type
+   */
+  function __construct($message, $code = THEMEBUILDER_ERROR_FATAL, $handlers = array(ThemeBuilderException::HANDLER_LOG)) {
+    parent::__construct($message, $code);
+    $this->handlers = $handlers;
+  }
+
+  public function getHandlers() {
+    return $this->handlers;
+  }
+}
+
+/**
+ * Thrown when a user tried to edit a theme which is already being edited in another browser.
+ */
+class ThemeBuilderEditInProgressException extends ThemeBuilderException {
+}
+
+/**
+ * Thrown when a user is on the wrong webnode for the themebuilder draft theme
+ * they are currently using.
+ */
+class ThemeBuilderWrongWebnodeException extends ThemeBuilderException {
+}
+
+/** Do not add new code here, put it above the exception handling section **/

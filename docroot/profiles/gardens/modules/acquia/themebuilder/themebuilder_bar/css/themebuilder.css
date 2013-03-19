@@ -1,0 +1,569 @@
+/* --------------------------------------------
+
+themebuilder.css
+
+Project:     Acquia ThemeBuilder
+Version:     1.0
+Author:      Acquia Engineering Team
+URL:         http://
+Copyright:   Acquia, Inc.
+License:             
+  
+----------------------------------------------- */
+
+/* @group Insulation/Reset 
+----------------------------------------------- */
+
+html body .tb *:not(select) {
+  /* IE8 is the only browser we support that can't handle the :not 
+   * pseudo-selector, so it gets its own reset. @see themebuilder-lte-ie-8.css 
+   *
+   * The select element completely blows up if its properties are reset.
+   */
+  background-attachment: scroll;
+  background-color: transparent;
+  background-image: none;
+  background-position: 0% 0%;
+  background-repeat: no-repeat;
+  border: none;
+  -moz-box-shadow: none;
+  box-shadow: none;
+  bottom: auto;
+  color: white;
+  content: normal;
+  counter-increment: none;
+  counter-reset: none;
+  cursor: auto;
+  direction: ltr;
+  float: none;
+  font-family: "Lucida Grande", Lucida, Verdana, sans-serif;
+  font-style: normal;
+  font-size: 13px;
+  font-weight: normal;
+  height: auto;
+  left: auto;
+  letter-spacing: normal;
+  line-height: normal;
+  list-style: none;
+  margin: 0;
+  max-height: none;
+  max-width: none;
+  min-height: 0;
+  min-width: 0;
+  orphans: 2;
+  outline: none;
+  outline-color: invert;
+  outline-style: none;
+  outline-width: medium;
+  overflow: visible;
+  padding: 0;
+  page-break-after: auto;
+  page-break-before: auto;
+  page-break-inside: auto;
+  position: static;
+  right: auto;
+  table-layout: auto;
+  text-align: left;
+  text-decoration: none;
+  text-indent: 0;
+  text-transform: none;
+  top: auto;
+  vertical-align: baseline;
+  visibility: visible;
+  widows: 2;
+  z-index: auto;
+  unicode-bidi: normal;
+  white-space: normal;
+  width: auto;
+  word-spacing: normal;
+}
+
+html body .tb select,
+html body .tb optgroup,
+html body .tb option,
+html body .tb button {
+  color: black;
+}
+
+html body .tb select {
+  background-image: none;
+  border-radius: none;
+  box-shadow: none;
+  font-weight: normal;
+  margin: 0;
+  padding: 0;
+  vertical-align: baseline;
+}
+
+/* Make select boxes look pretty in webkit */
+html body .tb :-webkit-any(select) {
+  -webkit-appearance: menulist-button;
+  background-color: lightgray;
+}
+
+/* Make select boxes look pretty in Gecko */
+html body.mac .tb select {
+  -moz-appearance: menulist-textfield;
+  appearance: menulist-textfield;
+  height: 2em;
+  padding: 2px 1em 0 0;
+}
+
+/* tables still need 'cellspacing="0"' in the markup */
+html body .tb table {
+  border-collapse: collapse;
+  border-spacing: 0;
+}
+
+html body .tb caption,
+html body .tb th,
+html body .tb td {
+  text-align: left;
+  font-weight: normal;
+}
+
+html body .tb blockquote:before,
+html body .tb blockquote:after,
+html body .tb q:before,
+html body .tb q:after {
+  content: "";
+}
+
+html body .tb blockquote, .tb q {
+  quotes: "" "";
+}
+
+/* @end */
+
+/* @group Form Controls 
+----------------------------------------------- */
+
+html body .tb input,
+html body .tb select,
+html body .tb textarea {
+  font-size: 13px;
+  font-family: "Lucida Grande", Lucida, Verdana, sans-serif;
+}
+
+html body .tb select div {
+  display: none;
+}
+
+html body .tb button {
+  border-color: #CCCCCC;
+  -moz-border-radius: 0;
+  -webkit-border-radius: 0;
+  border-radius: 0;
+  color: black;
+  cursor: pointer;
+  font-family: Segoe UI,Arial,sans-serif;
+  font-size: 1em;
+  text-align: center;
+}
+
+html body .tb .form-item [type="text"] {
+  background-color: white;
+  -moz-box-shadow: 0 0 3px 0 black inset;
+  box-shadow: 0 0 3px 0 black inset;
+  -moz-box-sizing: border-box;
+  box-sizing: border-box;
+  color: black;
+  margin-top: 0.25em;
+  padding: 4px 5px;
+  max-width: 550px;
+  width: 100%;
+}
+
+html body .tb .form-item [type="text"] ~ .description {
+  margin-top: 0.25em;
+}
+html body .tb .form-item [type="text"] ~ .description * {
+  color: #7f7f7f;
+  font-size: 1em;
+}
+
+/* @end */
+
+/* @group Inflections 
+----------------------------------------------- */
+
+/* @group Horizontal
+----------------------------------------------- */
+
+.tb .horizontal > * {
+  display: inline-block;
+}
+
+.tb .horizontal > * + * {
+  margin-left: 2px;
+  padding-left: 2px;
+}
+
+/* @end */
+
+/* @group Punch out 
+----------------------------------------------- */
+
+.tb .carousel-wrap.punch-out {
+  padding-bottom: 12px;
+  padding-top: 12px;
+}
+
+.tb #themebuilder-themes > *, .tb #themebuilder-layout > * {
+  margin-left: 27px;
+  margin-right: 27px;
+}
+
+.tb .punch-out {
+  background-color: #282828;
+  border-color: #222;
+  -moz-border-radius: 15px;
+  -o-border-radius: 15px;
+  -webkit-border-radius: 15px;
+  border-radius: 15px;
+  border-style: solid;
+  border-width: thin;
+  -moz-box-shadow: 0 0 24px rgba(0, 0, 0, 0.8) inset, 0 0 7px rgba(0, 0, 0, 0.8) inset, 3px 3px 13px rgba(215, 215, 215, 0.4) inset;
+  -o-box-shadow: 0 0 24px rgba(0, 0, 0, 0.8) inset, 0 0 7px rgba(0, 0, 0, 0.8) inset, 3px 3px 13px rgba(215, 215, 215, 0.4) inset;
+  -webkit-box-shadow: 0 0 24px rgba(0, 0, 0, 0.8) inset, 0 0 7px rgba(0, 0, 0, 0.8) inset, 3px 3px 13px rgba(215, 215, 215, 0.4) inset;
+  box-shadow: 0 0 18px rgba(0, 0, 0, 0.5) inset, 0 0 7px rgba(0, 0, 0, 0.8) inset, -2px -2px 8px rgba(215, 215, 215, 0.4) inset;
+}
+
+/* @end */
+
+/* @group Flyout list 
+----------------------------------------------- */
+
+.tb .flyout-list {
+  background-color: #666666;
+  -moz-border-radius: 0 5px 5px 0;
+  -o-border-radius: 0 5px 5px 0;
+  -webkit-border-radius: 0 5px 5px 0;
+  border-radius: 0 5px 5px 0;
+  -moz-box-shadow: 4px 2px 4px rgba(0, 0, 0, 0.25);
+  -o-box-shadow: 4px 2px 4px rgba(0, 0, 0, 0.25);
+  -webkit-box-shadow: 4px 2px 4px rgba(0, 0, 0, 0.25);
+  box-shadow: 4px 2px 4px rgba(0, 0, 0, 0.25);
+  padding: 8px 12px;
+}
+
+.tb .flyout-list-outline {
+  border-color: #666666;
+  border-style: dashed;
+  border-width: 0;
+}
+
+.tb .flyout-list-outline.top,
+.tb .flyout-list-outline.bottom {
+  border-top-width: 1px;
+}
+
+.tb .flyout-list-outline.left,
+.tb .flyout-list-outline.right {
+  border-left-width: 1px;
+}
+
+.tb .flyout-list li {
+  margin-top: 8px;
+}
+
+.tb .flyout-list li:first-child {
+  margin-top: 0;
+}
+
+.tb .flyout-list a:hover {
+  cursor: pointer;
+  text-decoration: underline;
+}
+
+.tb .flyout-list .disabled {
+  color: #9d9d9d;
+}
+
+.tb .flyout-list .disabled:hover {
+  cursor: default;
+  text-decoration: none;
+}
+
+/* @end */
+
+/* @end */
+
+/* @group Components 
+----------------------------------------------- */
+
+.tb .tabdiv > .secondary-actions {
+  left: 4px;
+  position: absolute;
+  top: 9px;
+}
+/* @group jQuery Tabs (Content) 
+----------------------------------------------- */
+
+.tb .contents {
+  margin: 10px 0 0 200px; /* Account for tab nav. */
+}
+
+.tb .tabs {
+  position: absolute;
+  left: 0;
+  margin: 10px 0 0 0;
+  padding: 0 13px 0 10px;
+  background-image: url("../images/sepratr-vert.png");
+  background-repeat: repeat-y;
+  background-position: center right;
+  height: 216px;
+}
+
+.tb .panel-separator {
+  background-image: url("../images/sepratr-vert.png");
+  background-repeat: repeat-y;
+  background-position: center right;
+}
+
+#themebuilder-style .tabs {
+  height: 188px; /* The Styles tab has the selector above the tabs */
+}
+
+.tb .ui-tabs-nav li {
+  margin: 0 0.2em 0 0;
+  height: 36px;
+  position: relative;
+  top: 1px;
+}
+.tb .tb-tabs-vert .ui-tabs-nav li {
+  float: none;
+}
+
+.tb .tb-tabs-vert .ui-tabs-nav li.ui-tabs-selected {
+  margin-bottom: 6px;
+}
+
+.tb .tb-tabs-vert li,
+.tb .tb-tabs-vert a {
+  display: block;
+}
+
+.tb .tabs li {
+  width: 161px;
+  height: 37px;
+  margin: 0 0 6px;
+  font-size: 12px;
+}
+
+.tb .tabs a {
+  width: 141px;
+}
+
+.tb .tabs .ui-state-default {
+  background: none;
+}
+
+.tb .tabs .ui-tabs-selected a {
+  background: url("../images/tb-subtab-sprite.png") 0 0 !important;
+  cursor: default;
+}
+
+.tb .tabs .ui-state-hover a {
+  background: url("../images/tb-subtab-sprite.png") 0 52px;
+}
+
+.tb .tabs a {
+  min-width:141px;
+}
+
+/* @end */
+
+/* @group jCarousel 
+----------------------------------------------- */
+
+.tb .jcarousel-clip,
+.tb .jcarousel-list {
+  position: relative;
+  z-index: 2;
+  overflow: hidden;
+}
+
+.tb .jcarousel-list {
+  z-index: 1;
+}
+
+.tb .jcarousel-clip {
+  z-index: 2
+}
+
+.tb .jcarousel-item {
+  float: left; 
+  position: relative;
+  margin-left: 21px;
+}
+
+/* @end */
+
+/* @group jQuery UI overrides 
+----------------------------------------------- */
+
+#export-dialog, #ui-dialog-title-export-dialog {
+  padding-left: 10px;
+}
+
+.tb .ui-slider-horizontal .ui-slider-handle {
+  background-image: url("../images/tb-slider-curser.png");
+}
+
+.tb .ui-tabs .ui-tabs-hide {
+   display: none;
+}
+
+.tb .ui-state-disabled a {
+  cursor: default;
+}
+
+.tb .fg-buttonset-single .fg-button, 
+.tb .fg-buttonset-multi .fg-button {
+  /* Used to be -4px... why did it change? */
+  margin-right: -5px;
+}
+
+/* @end */
+
+/* @end */
+
+/* @group Secondary actions
+----------------------------------------------- */
+
+.tb .secondary-actions .header + .actions {
+  margin-left: 18px;
+}
+.tb .secondary-actions .actions a,
+.tb .secondary-actions .actions a span {
+  color: #00A5FF
+}
+
+.tb .secondary-actions .actions a:hover,
+.tb .secondary-actions .actions a span:hover {
+  cursor: pointer;
+}
+
+/* @group Slider 
+----------------------------------------------- */
+
+/* This section looks like it needs some cleanup still. */
+
+.tb div.slider-container {
+  display: none;
+  position: absolute;
+  z-index: 101;
+  padding: 20px;
+  background: #000;
+  cursor: pointer;
+  -moz-border-radius: 10px;
+  -webkit-border-radius: 10px;
+  width: 209px;
+}
+
+.tb .slider-container .slider.ui-slider-horizontal {
+  min-width: 209px;
+  height: 4px;
+  margin: 0px !important;
+  border: none !important;
+  background-image: none !important;
+  background-color: #fff;
+  cursor: pointer;
+  position: absolute;
+  -moz-border-radius: 2px;
+  -webkit-border-radius: 2px;
+}
+
+.tb .slider-container .slider.ui-slider-horizontal .ui-slider-handle {
+  width: 18px;
+  height: 22px;
+  top: -8px;
+  margin-left: -9px;
+  border: none !important;
+  background: transparent url("../images/ui-thumb-n.gif") no-repeat scroll 0 0 !important;
+  display: block;
+  position: absolute;
+}
+
+/* Are these two declarations really global? */
+#themebuilder-style .ui-slider-horizontal {
+  height: .8em;
+  min-width: 209px;
+  margin: 0px 20px !important;
+  background-image: none !important;
+  background-color: white;
+  border: none!important;
+}
+
+#themebuilder-style .ui-slider-horizontal .ui-slider-handle {
+  top: -.3em;
+  margin-left: -.6em;
+  border:none !important;
+}
+
+/* @end */
+
+/* @group Color Selector 
+----------------------------------------------- */
+
+.tb div.colorSelector {
+  display: block;
+  background-color: black;
+  background-image: url("../images/color-selector-bkg.png");
+  background-repeat: no-repeat;
+  padding: 16px;
+  height: 0;
+  width: 0;
+  cursor:pointer;
+}
+
+.tb div.colorSelector.transparent {
+  background-image: url("../images/color-selector-bkg-transparent.png");
+}
+
+.tb #themebuilder-style-options div#style-border-options.colorSelector {
+  display: block;
+  background-color: black;
+  border: 2px solid #ccc;
+  height: 0px;
+  /* margin: 2px; */
+  padding: 10px;
+  width: 0px;
+  cursor:pointer;
+}
+
+/* @end */
+
+/* @group Palette Picker 
+----------------------------------------------- */
+
+.tb .PalettePickerMain a {
+  color: white !important;
+}
+
+.tb .PalettePickerMain a:hover {
+  color: white !important;
+  text-decoration: underline !important;
+}
+
+/* @end */
+
+/* @group Contextual links 
+----------------------------------------------- */
+
+body.themebuilder .contextual-links-wrapper {
+  display: none !important;
+}
+
+body.themebuilder .contextual-links-region {
+  outline: none !important;
+}
+
+body.webkit #themebuilder-style .tb-tabs-vert {
+  position: absolute;
+}
+
+/* @end */
+
+/* @end */

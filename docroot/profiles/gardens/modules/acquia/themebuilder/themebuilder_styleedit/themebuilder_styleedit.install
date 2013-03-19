@@ -1,0 +1,10 @@
+<?php
+// $Id:$
+
+/**
+ * Since we moved to a flat file, these tables are no longer used.
+ */
+function themebuilder_styleedit_update_7000() {
+  db_drop_table('themebuilder_palettes');
+  db_drop_table('themebuilder_palette_colors');
+}

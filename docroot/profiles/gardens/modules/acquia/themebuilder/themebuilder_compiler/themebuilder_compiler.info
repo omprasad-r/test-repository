@@ -1,0 +1,26 @@
+; $Id:$
+
+name = Themebuilder compiler
+description = Compiles a theme configuration into a theme.
+core = 7.x
+package = Themebuilder
+files[] = asset.inc
+files[] = editable.inc
+files[] = files.php
+files[] = palette.inc
+files[] = themebuilder_compiler.module
+files[] = themebuilder_compiler.install
+files[] = ThemeBuilderConfiguration.php
+files[] = Theme.inc
+files[] = ThemeCorrector.inc
+files[] = assets/advanced.inc
+files[] = assets/code.inc
+files[] = assets/css.inc
+files[] = assets/functions.inc
+files[] = assets/info.inc
+files[] = assets/templates.inc
+files[] = inc/colormanager.inc
+files[] = inc/colorset.inc
+files[] = inc/customcolorset.inc
+
+hidden = TRUE

@@ -1,0 +1,2441 @@
+<?php
+// $Id$
+
+/**
+ * @file
+ * Manages site templates and features on Gardens sites.
+ */
+
+/**
+ * Indicates that the feature must always be installed with the site template.
+ */
+define('SITE_TEMPLATE_FEATURE_REQUIRED', 'required');
+
+/**
+ * Indicates that the feature is part of the standard installation for the site
+ * template. (This is the default behavior.)
+ */
+define('SITE_TEMPLATE_FEATURE_STANDARD', 'standard');
+
+/**
+ * Indicates that the feature is allowed to be installed with the site
+ * template, but is not turned on by default.
+ */
+define('SITE_TEMPLATE_FEATURE_EXTRA', 'extra');
+
+/**
+ * Implements hook_menu().
+ */
+function site_template_menu() {
+  $items = array();
+  $items['admin/structure/templates'] = array(
+    'title' => 'Site template debug',
+    'page callback' => 'drupal_get_form',
+    'page arguments' => array('site_template_debug_form'),
+    'access arguments' => array('access devel information'),
+  );
+  return $items;
+}
+
+/**
+ * Implements hook_site_template_info().
+ */
+function site_template_site_template_info() {
+  // Template for a standard Gardens installation.
+  $templates['drupal'] = array(
+    'name' => t('Do it yourself'),
+    'description' => t("Ideal for Drupal experts. Start from scratch. Build everything yourself. All we've done is enable the most common suite of modules."),
+    'features' => array(
+      'site_template_sample_article' => array('type' => SITE_TEMPLATE_FEATURE_REQUIRED),
+      'site_template_comment_feature' => array('type' => SITE_TEMPLATE_FEATURE_EXTRA),
+      'site_template_comment_notify_feature' => array('type' => SITE_TEMPLATE_FEATURE_EXTRA),
+      'site_template_follow_us_feature' => array('type' => SITE_TEMPLATE_FEATURE_EXTRA),
+      'site_template_share_this_feature' => array('type' => SITE_TEMPLATE_FEATURE_EXTRA),
+      'site_template_about_page' => array('type' => SITE_TEMPLATE_FEATURE_EXTRA),
+      'site_template_blog_feature' => array('type' => SITE_TEMPLATE_FEATURE_EXTRA),
+      'site_template_contact_feature' => array('type' => SITE_TEMPLATE_FEATURE_EXTRA),
+      'site_template_mailing_list_feature' => array('type' => SITE_TEMPLATE_FEATURE_EXTRA),
+      'site_template_forum_feature' => array('type' => SITE_TEMPLATE_FEATURE_EXTRA),
+      'site_template_news_page' => array('type' => SITE_TEMPLATE_FEATURE_EXTRA),
+      'site_template_rotating_banner_feature' => array('type' => SITE_TEMPLATE_FEATURE_EXTRA),
+      'site_template_faq_feature' => array('type' => SITE_TEMPLATE_FEATURE_EXTRA),
+      'site_template_twitter_feature' => array('type' => SITE_TEMPLATE_FEATURE_EXTRA),
+      'site_template_feedback_feature' => array('type' => SITE_TEMPLATE_FEATURE_EXTRA),
+      'site_template_gallery_feature' => array('type' => SITE_TEMPLATE_FEATURE_EXTRA),
+      'site_template_webforms_feature' => array('type' => SITE_TEMPLATE_FEATURE_EXTRA),
+      // Features that must run at the end, to do things that require, e.g.,
+      // all the template's content types to have been created or modules to
+      // have been installed.
+      'site_template_add_content_manager_role' => array('type' => SITE_TEMPLATE_FEATURE_REQUIRED),
+      'site_template_update_node_types' => array('type' => SITE_TEMPLATE_FEATURE_REQUIRED),
+    ),
+    'editable variables' => array('theme_default'),
+  );
+  return $templates;
+}
+
+/**
+ * @defgroup site_template_api API functions for managing site templates.
+ * @{
+ */
+
+/**
+ * Returns an array of site templates, keyed by the template name.
+ */
+function site_template_get_all_templates() {
+  $info = module_invoke_all('site_template_info');
+
+  // Make sure each feature has a type ("standard" features are the default if
+  // no type was specified).
+  foreach ($info as &$template_info) {
+    if (!empty($template_info['features'])) {
+      foreach ($template_info['features'] as &$feature) {
+        if (!isset($feature['type'])) {
+          $feature['type'] = SITE_TEMPLATE_FEATURE_STANDARD;
+        }
+      }
+    }
+  }
+
+  return $info;
+}
+
+/**
+ * Returns the machine-readable name of the current template in use on the site.
+ */
+function site_template_current_template() {
+  return variable_get('site_template_current_template', 'drupal');
+}
+
+/**
+ * Get a new instance of a class associated with a site template.
+ *
+ * @param $template
+ *   The name of the template.
+ *
+ * @return
+ *   An new instance of the class associated with that template.
+ */
+function site_template_get_instance($template) {
+  $prefix = ucfirst($template);
+  $class = "{$prefix}SiteTemplate";
+  $instance = new $class;
+  return $instance;
+}
+
+/**
+ * Returns the human-readable name of the provided site template.
+ */
+function site_template_human_readable_name($template) {
+  $templates = site_template_get_all_templates();
+  return $templates[$template]['name'];
+}
+
+/**
+ * Finalize the choice of site templates.
+ */
+function site_template_finalize_template_selection() {
+  // Delete all module variables except 'site_template_current_template' (which
+  // preserves a record of the final site template that was chosen).
+  variable_del('site_template_saved_variable_states');
+  variable_del('site_template_rollback_data');
+  variable_del('site_template_extra_rollback_data');
+}
+
+/**
+ * Install features belonging to a given site template.
+ *
+ * @param $template
+ *   The name of the template.
+ * @param $requested_features
+ *   (optional) An array of features to be enabled for this site template. If
+ *   provided, only these features (plus any other features specifically
+ *   required by the template) will be enabled. If not provided, all features
+ *   defined by the template will be enabled.
+ */
+function site_template_install_features($template, $requested_features = NULL) {
+  $templates = site_template_get_all_templates();
+
+  // If no features were explicitly requested, we use all the normal ones that
+  // this template provides (everything that is not an "extra" feature).
+  if (!isset($requested_features)) {
+    $requested_features = !empty($templates[$template]['features']) ? $templates[$template]['features'] : array();
+    foreach ($requested_features as $name => $feature) {
+      if ($feature['type'] == SITE_TEMPLATE_FEATURE_EXTRA) {
+        unset($requested_features[$name]);
+      }
+    }
+  }
+  else {
+    $requested_features = array_flip($requested_features);
+  }
+
+  // Go through each feature and include it if it was requested or if it is
+  // required. Note that this method guarantees the features will be installed
+  // in the order the template defines them (rather than the order which they
+  // are passed in to this function), which is what we want.
+  $features = array();
+  if (!empty($templates[$template]['features'])) {
+    foreach ($templates[$template]['features'] as $feature => $info) {
+      if (isset($requested_features[$feature]) || $info['type'] == SITE_TEMPLATE_FEATURE_REQUIRED) {
+        $features[] = $feature;
+        unset($requested_features[$feature]);
+      }
+    }
+  }
+
+  // Warn about any requested features that the template didn't list; these
+  // will not be installed.
+  if (!empty($requested_features)) {
+    foreach (array_keys($requested_features) as $feature) {
+      watchdog('site_template', 'The @feature feature could not be installed because the @template template does not include it in its list of allowed features.', array('@feature' => $feature, '@template' => $template), WATCHDOG_ERROR);
+    }
+  }
+
+  // Initialize an instance of the template class.
+  $template_instance = site_template_get_instance($template);
+
+  // Execute the callback function for each feature, and store any data needed
+  // to roll the feature back.
+  $rollback_data = variable_get('site_template_rollback_data', array());
+  $rollback_data[$template] = array();
+  foreach ($features as $feature) {
+    $install_callback = "{$feature}_install";
+    if (is_callable(array($template_instance, $install_callback))) {
+      $rollback_data[$template][$feature] = array();
+      $prepare_callback = "{$feature}_install_prepare";
+      if (is_callable(array($template_instance, $prepare_callback))) {
+        $template_instance->{$prepare_callback}($rollback_data[$template][$feature], $features);
+      }
+      $template_instance->{$install_callback}($rollback_data[$template][$feature], $features);
+    }
+    else {
+      watchdog('site_template', 'The @feature feature could not be installed because the function it corresponds to does not exist in the @template template.', array('@feature' => $feature, '@template' => $template), WATCHDOG_ERROR);
+    }
+  }
+
+// TODO: Removed this for now to save time, since the $rollback_data array is
+// large and we aren't using it now anyway. Add it back when we start allowing
+// features/templates to be installed/uninstalled after the initial site
+// creation.
+/**
+  // Add additional rollback data that allows us to properly deal with
+  // variables that we are going to allow people to edit while this template is
+  // being sampled.
+  $extra_rollback_data = variable_get('site_template_extra_rollback_data', array());
+  // First make sure we save the current status of these variables (at the end
+  // of the template installation), so we will be able to roll back to that
+  // state.
+  $extra_rollback_data[$template] = array(site_template_get_variable_states($templates[$template]['editable variables']));
+  // Next, if the user edited any of these variables the last time they used
+  // this template, restore them to that value here, and save that status so it
+  // can be rolled back as well.
+  $previous_saved_variable_states = variable_get('site_template_saved_variable_states', array());
+  if (isset($previous_saved_variable_states[$template])) {
+    site_template_restore_variables_from_state($previous_saved_variable_states[$template]);
+    $extra_rollback_data[$template][] = site_template_get_variable_states(array_keys($previous_saved_variable_states[$template]));
+    // Remove the previous saved variable states for this template, since we do
+    // not need them anymore.
+    unset($previous_saved_variable_states[$template]);
+    variable_set('site_template_saved_variable_states', $previous_saved_variable_states);
+  }
+
+  // Reverse the order of the features before saving the rollback data, so that
+  // we roll back the features in the opposite order they were saved in.
+  $rollback_data[$template] = array_reverse($rollback_data[$template]);
+  $extra_rollback_data[$template] = array_reverse($extra_rollback_data[$template]);
+  variable_set('site_template_rollback_data', $rollback_data);
+  variable_set('site_template_extra_rollback_data', $extra_rollback_data);
+**/
+
+  // Store the name of the template that was installed.
+  variable_set('site_template_current_template', $template);
+
+  // Because we may have enabled modules while installing site features, we
+  // need to clear caches.
+  drupal_flush_all_caches();
+}
+
+/**
+ * Uninstall features belonging to a given site template.
+ *
+ * @param $template
+ *   The name of a site template. All the features that were previously
+ *   installed for it will be uninstalled, in the reverse order in which they
+ *   were installed.
+ */
+function site_template_uninstall_features($template) {
+  // Before uninstalling the template, first save any variables that the user
+  // was allowed to edit while they were using it. These will be used if the
+  // template is later reinstalled.
+  $templates = site_template_get_all_templates();
+  $current_saved_variable_states = variable_get('site_template_saved_variable_states', array());
+  $current_saved_variable_states[$template] = site_template_get_variable_states($templates[$template]['editable variables']);
+  variable_set('site_template_saved_variable_states', $current_saved_variable_states);
+
+  // Next, roll back any special data associated with these variables.
+  $extra_rollback_data = variable_get('site_template_extra_rollback_data', array());
+  if (isset($extra_rollback_data[$template])) {
+    foreach ($extra_rollback_data[$template] as $variable_states) {
+      site_template_restore_variables_from_state($variable_states);
+    }
+  }
+
+  // Initialize an instance of the template class.
+  $template_instance = site_template_get_instance($template);
+
+  // Finally, roll back the normal template features.
+  $rollback_data = variable_get('site_template_rollback_data', array());
+  if (isset($rollback_data[$template])) {
+    foreach ($rollback_data[$template] as $feature => $rollback_arguments) {
+      $rollback_callback = "{$feature}_rollback";
+      if (is_callable(array($template_instance, $rollback_callback))) {
+        $rollback_prepare_callback = "{$feature}_rollback_prepare";
+        if (is_callable(array($template_instance, $rollback_prepare_callback))) {
+          $template_instance->{$rollback_prepare_callback}($rollback_arguments);
+        }
+        $template_instance->{$rollback_callback}($rollback_arguments);
+      }
+    }
+  }
+}
+
+/**
+ * @} End of "defgroup site_template_api".
+ */
+
+/**
+ * @defgroup site_template_features_api API used by site template features.
+ * @{
+ */
+
+/**
+ * Given a list of variables, returns an array representing their current state.
+ *
+ * @param $variable_names
+ *   An array containing variable names.
+ *
+ * @return
+ *   An associative array whose keys are variable names and whose values are
+ *   either an empty array (if the variable in question is not currently
+ *   defined) or an array with a single key 'value' set to the current stored
+ *   value for that variable.
+ */
+function site_template_get_variable_states($variable_names) {
+  global $conf;
+  $variable_states = array();
+  foreach ($variable_names as $name) {
+    // Use array_key_exists() here to properly handle variables that are set to
+    // NULL.
+    if (array_key_exists($name, $conf)) {
+      $variable_states[$name]['value'] = $conf[$name];
+    }
+    else {
+      $variable_states[$name] = array();
+    }
+  }
+  return $variable_states;
+}
+
+/**
+ * Restore a list of variables to the state that is passed in.
+ *
+ * @param $variable_states
+ *   An array of the form returned by site_template_get_variable_states().
+ *   Each variable in this list will be restored to its previous stored state.
+ *
+ * @see site_template_get_variable_states()
+ */
+function site_template_restore_variables_from_state($variable_states) {
+  foreach ($variable_states as $name => $state) {
+    // Use array_key_exists() here to properly handle variables that are set to
+    // NULL.
+    if (array_key_exists('value', $state)) {
+      variable_set($name, $state['value']);
+    }
+    else {
+      variable_del($name);
+    }
+  }
+}
+
+/**
+ * Given a list of permissions, returns an array representing their current state.
+ *
+ * @param $permission_names
+ *   An array containing permission names.
+ *
+ * @return
+ *   An associative array whose keys are permission names and whose values are
+ *   themselves an array, with each role ID as key, and FALSE as the value if
+ *   the role does not have the permission or TRUE as the value if it does.
+ *
+ * @see site_template_restore_permissions_from_state()
+ */
+function site_template_get_permission_states($permission_names) {
+  $permission_states = array();
+  $roles = array_keys(user_roles());
+  foreach ($permission_names as $permission) {
+    $permission_roles = array_keys(user_roles(FALSE, $permission));
+    foreach ($roles as $role) {
+      $permission_states[$permission][$role] = in_array($role, $permission_roles);
+    }
+  }
+  return $permission_states;
+}
+
+/**
+ * Restore a list of permissions to the state that is passed in.
+ *
+ * @param $variable_states
+ *   An array of the form returned by site_template_get_permission_states().
+ *   Each permission in this list will be restored to its previous stored state.
+ *
+ * @see site_template_get_permission_states()
+ */
+function site_template_restore_permissions_from_state($permission_states) {
+  foreach ($permission_states as $permission => $role_states) {
+    foreach ($role_states as $role => $state) {
+      user_role_change_permissions($role, array($permission => $state));
+    }
+  }
+}
+
+/**
+ * Get a site owner uid for content.
+ */
+function site_template_get_uid() {
+  $owner_uids = scarecrow_list_site_owner_uids();
+  $uid = end($owner_uids);
+  return $uid;
+}
+
+/**
+ * Returns an array of Gardens prefooter regions, ordered left to right.
+ *
+ * Useful for passing in to site_template_enable_block() in the 'region' key,
+ * since this will trigger it to put the block in the first available prefooter
+ * region.
+ */
+function site_template_prefooter_regions() {
+  return array(
+    'prefooter_first',
+    'prefooter_second',
+    'prefooter_third',
+  );
+}
+
+/**
+ * Adds a basic node to the site, good old-D6 style.
+ *
+ * @param $data
+ *   An array of data about the node, with the following keys:
+ *   - title: The title of the node. Also used for a menu link when applicable
+ *     (when 'menu_link' is set below but its 'link_title' key is not).
+ *   - body: The text of the node body.
+ *   - fields: (Optional) An array of field API definitions for field data to
+ *     save with the node.
+ *   - format: (Optional) The text format of the node body. Defaults to using
+ *     the Gardens Safe HTML format.
+ *   - type: (Optional) The node type. Defaults to 'page'.
+ *   - promote: (Optional) Set to NODE_PROMOTED or NODE_NOT_PROMOTED to force a
+ *     certain behavior.
+ *   - uid: (Optional) The ID of the user who will be the owner of the node.
+ *     Defaults to a Gardens site owner uid.
+ *   - alias: (Optional) A URL alias for the node.
+ *   - comment: (Optional) Comment settings for the node. If not set, the
+ *     default setting for that content type is used.
+ *   - menu_link: (Optional) An array to be used as $node->menu; i.e., for
+ *     menu_link_save(). The 'link_title' key will default to the node title
+ *     (provided above) if not set. The 'menu_name' key must be set.
+ * @return
+ *   An object representing the node that was created.
+ */
+function site_template_add_basic_node($data) {
+  // Since we are often creating nodes in rapid-fire succession, they would
+  // sometimes get the same timestamp by default (which could mess up their
+  // order in node listings). Here, we always make sure that the timestamps
+  // match the order in which they were created.
+  $created_time = &drupal_static(__FUNCTION__);
+  if (empty($created_time)) {
+    $created_time = REQUEST_TIME;
+  }
+  else {
+    // Use the correct time if we can; otherwise, increment by one second.
+    $time = REQUEST_TIME;
+    if ($time > $created_time) {
+      $created_time = $time;
+    }
+    else {
+      $created_time += 1;
+    }
+  }
+
+  $node = new stdClass();
+  $node->created = $created_time;
+  $node->type = isset($data['type']) ? $data['type'] : 'page';
+  $node->title = $data['title'];
+
+  if (!empty($data['body'])) {
+    $format = !empty($data['format']) ? $data['format'] : variable_get('gardens_safe_html_format');
+    $node->body = array(LANGUAGE_NONE => array(array(
+      'summary' => '',
+      'value' => $data['body'],
+      'format' => $format,
+      'value_format' => $format,
+    )));
+  }
+
+  $node->uid = isset($data['uid']) ? $data['uid'] : site_template_get_uid();
+  $node->language = LANGUAGE_NONE;
+  $node->status = NODE_PUBLISHED;
+
+  if (isset($data['promote'])) {
+    $node->promote = $data['promote'];
+  }
+
+  if (isset($data['alias'])) {
+    $node->path = array(
+      'alias' => $data['alias'],
+      'pathauto_perform_alias' => FALSE,
+    );
+  }
+
+  $node->comment = isset($data['comment']) ? $data['comment'] : variable_get("comment_{$node->type}", COMMENT_NODE_OPEN);
+
+  if (isset($data['menu_link']['menu_name'])) {
+    $node->menu = array(
+      'link_title' => isset($data['menu_link']['link_title']) ? $data['menu_link']['link_title'] : $data['title'],
+      'menu_name' => $data['menu_link']['menu_name'],
+      'enabled' => TRUE,
+      // Put the item last in the menu by default.
+      'weight' => isset($data['menu_link']['weight']) ? $data['menu_link']['weight'] : (db_query("SELECT MAX(weight) FROM {menu_links} WHERE menu_name = :menu_name", array(':menu_name' => $data['menu']))->fetchField() + 1),
+      // @todo Allow caller to specify a non-empty description.
+      'description' => '',
+    );
+  }
+
+  // Add any fields.
+  if (isset($data['fields'])) {
+    foreach ($data['fields'] as $field_name => $field_data) {
+      $node->{$field_name}[LANGUAGE_NONE] = $field_data;
+    }
+  }
+
+  // A PHP notice is triggered by forum_node_presave() if nid is undefined.
+  if (!isset($node->nid)) {
+    $node->nid = NULL;
+  }
+
+  // As a workaround for the issue discussed at http://drupal.org/node/682552,
+  // we need to rebuild the node types during installation before trying to
+  // save a new node (otherwise node types defined by modules which were just
+  // enabled earlier in the installation might not have their fields saved
+  // correctly). Note that even after the patch in the above issue is
+  // committed, we probably still need to continue doing this, since the real
+  // bug here is essentially http://drupal.org/node/651086.
+  node_types_rebuild();
+
+  node_save($node);
+  return $node;
+}
+
+/**
+ * Returns a standard instance definition for our Gardens image field.
+ *
+ * Based partially on the standard install profile.
+ *
+ * @param $type
+ *   The node type which the image will be attached to.
+ */
+function site_template_standard_image_instance($type) {
+  $instance = array(
+    'field_name' => 'field_image',
+    'entity_type' => 'node',
+    'label' => 'Image',
+    'bundle' => $type,
+    'description' => '',
+    'required' => FALSE,
+    'settings' => array(
+      'file_directory' => 'field/image',
+      'file_extensions' => 'png gif jpg jpeg',
+      'max_filesize' => '',
+      'max_resolution' => '',
+      'min_resolution' => '',
+      'alt_field' => TRUE,
+      'title_field' => '',
+    ),
+    'widget' => array(
+      'type' => 'image_image',
+      'settings' => array(
+        'progress_indicator' => 'throbber',
+        'preview_image_style' => 'thumbnail',
+      ),
+      'weight' => -1,
+    ),
+    'display' => array(
+      'default' => array(
+        'label' => 'hidden',
+        'type' => 'image',
+        'settings' => array('image_style' => 'large', 'image_link' => ''),
+        'weight' => -1,
+      ),
+      'teaser' => array(
+        'label' => 'hidden',
+        'type' => 'image',
+        'settings' => array('image_style' => 'large', 'image_link' => ''),
+        'weight' => -1,
+      ),
+      'rss' => array(
+        'label' => 'hidden',
+        'type' => 'image',
+        'settings' => array('image_style' => 'large', 'image_link' => ''),
+        'weight' => -1,
+      ),
+      'search_index' => array(
+        'label' => 'hidden',
+        'type' => 'image',
+        'settings' => array('image_style' => 'large', 'image_link' => ''),
+        'weight' => -1,
+      ),
+      'search_results' => array(
+        'label' => 'hidden',
+        'type' => 'image',
+        'settings' => array('image_style' => 'large', 'image_link' => ''),
+        'weight' => -1,
+      ),
+    ),
+  );
+  return $instance;
+}
+
+/**
+ * Copies a site template file asset to the public files directory.
+ *
+ * If the file is already there, it is left alone. If it's not already there,
+ * it is copied and recorded as a managed file.
+ *
+ * @param $feature_folder
+ *   The folder within 'site_template/assets' that the original asset lives in,
+ *   corresponding to the feature the asset is associated with.
+ * @param $filename
+ *   The name of the file within that folder. It will have the same name when
+ *   copied to the public files directory.
+ * @param $public_subdir
+ *   (optional) The subdirectory within the public folder where this will be
+ *   stored.
+ *
+ * @return
+ *   The file object.
+ */
+function site_template_copy_asset($feature_folder, $filename, $public_subdir = NULL) {
+  // This file probably doesn't exist already, but checking for it makes
+  // testing easier and couldn't hurt.
+  $file_uri = isset($public_subdir) ? "public://$public_subdir/$filename" : "public://$filename";
+  $files = file_load_multiple(array(), array('uri' => $file_uri));
+  if ($files) {
+    $file = array_shift($files);
+  }
+  else {
+    if (isset($public_subdir)) {
+      // Make sure the subdirectory exists and is set up correctly.
+      $public_subdir_uri = "public://$public_subdir";
+      file_prepare_directory($public_subdir_uri, FILE_CREATE_DIRECTORY);
+    }
+    copy(drupal_get_path('module', 'site_template')  . "/assets/$feature_folder/$filename", $file_uri);
+    $file = file_uri_to_object($file_uri);
+    file_save($file);
+  }
+  return $file;
+}
+
+/**
+ * Prepares a basic comment by an anonymous user, with given subject and body.
+ */
+function site_template_prepare_basic_comment($subject, $body) {
+  // Use the default text format for anonymous users.
+  $formats = filter_get_formats_by_role(DRUPAL_ANONYMOUS_RID);
+  $format = reset($formats);
+  $format = $format->format;
+  $time = time();
+  $comment = (object) array(
+    'subject' => $subject,
+    'uid' => 0,
+    'language' => LANGUAGE_NONE,
+    'comment_body' => array(
+      LANGUAGE_NONE => array(
+        0 => array(
+          'value' => $body,
+          'format' => $format,
+        ),
+      ),
+    ),
+    'created' => $time,
+    'changed' => $time,
+    'status' => COMMENT_PUBLISHED,
+  );
+  return $comment;
+}
+
+/**
+ * Adds a node type.
+ *
+ * @param $type_data
+ *   An array of data about the node type. Common options are:
+ *   - 'type': The machine-readable name of the node type.
+ *   - 'name': The human-readable name of the node type.
+ *   - 'description': A description of the node type.
+ *   - 'title_label': A label for the title field.
+ *   - 'body_label': A label for the body field. If provided, a standard body
+ *     field with this label will be added and attached to this node type. If
+ *     not provided, the node type will not get a body field at all.
+ * @param $save_variables
+ *   Whether to save a common set of variables for comments, published status,
+ *   etc.
+ */
+function site_template_add_node_type($type_data, $save_variables = TRUE) {
+  // Create the content type and save its associated RDF mapping.
+  $type_data += array(
+    'base' => 'node_content',
+    'custom' => 1,
+    'modified' => 1,
+    'locked' => 0,
+  );
+  if (isset($type_data['rdf_mapping'])) {
+    $rdf_mapping = $type_data['rdf_mapping'];
+    unset($type_data['rdf_mapping']);
+  }
+  else {
+    // This is what the standard install profile does for page nodes, so we
+    // should probably do it here too :)
+    $rdf_mapping = array(
+      'mapping' => array(
+        'rdftype' => array('foaf:Document'),
+      ),
+    );
+  }
+  $rdf_mapping += array(
+    'type' => 'node',
+    'bundle' => $type_data['type'],
+  );
+  if (isset($type_data['body_label'])) {
+    $body_label = $type_data['body_label'];
+    unset($type_data['body_label']);
+  }
+  $type = node_type_set_defaults($type_data);
+  node_type_save($type);
+  rdf_mapping_save($rdf_mapping);
+  if (isset($body_label)) {
+    $types = node_type_get_types();
+    node_add_body_field($types[$type_data['type']], $body_label);
+  }
+
+  if ($save_variables) {
+    // Configure the content type in a similar way as the standard install
+    // profile does for page nodes.
+    $node_type = $type_data['type'];
+    variable_set("node_options_{$node_type}", array('status'));
+    variable_set("comment_{$node_type}", COMMENT_NODE_HIDDEN);
+    variable_set("node_submitted_{$node_type}", FALSE);
+  }
+}
+
+/**
+ * Enable a block.
+ *
+ * @param $block
+ *   An array representing the block, with the following keys.
+ *   - module: The name of the module defining the block.
+ *   - delta: The delta of the block within that module.
+ *   - region: The region of the page in which the block should be placed.
+ *     If an array of regions is provided, the first one that is currently
+ *     empty of blocks will be substituted (and if none are empty, the last
+ *     will be used).
+ *   - title: (Optional) The title of the block.
+ *   - weight: (Optional) The weight of the block within that region. Defaults
+ *     to inserting the block as the last one in the region.
+ *   - theme: (Optional) The theme in which the block should be enabled.
+ *     Defaults to the main site theme.
+ *   - pages: (Optional) An array containing paths or expressions for
+ *     drupal_match_path(), representing the pages that the block will be
+ *     restricted to. Defaults to showing the block on all pages.
+ *
+ * @return
+ *   TRUE if the block was newly-enabled, FALSE otherwise.
+ */
+function site_template_enable_block(&$block) {
+  // If the block does not specify a theme, use the main site theme.
+  if (!isset($block['theme'])) {
+    $block['theme'] = variable_get('theme_default', 'bartik');
+  }
+
+  // We require that a region be specified.
+  if (!isset($block['region'])) {
+    return FALSE;
+  }
+
+  // If an array of regions is given, choose the first empty one (or the last
+  // one if none are empty).
+  if (is_array($block['region'])) {
+    foreach ($block['region'] as $region) {
+      $populated = db_query("SELECT 1 FROM {block} WHERE region = :region AND theme = :theme AND status = 1", array(':region' => $region, ':theme' => $block['theme']))->fetchField();
+      if (!$populated) {
+        break;
+      }
+    }
+    $block['region'] = $region;
+  }
+
+  // Do not try to enable a block if the requested region does not exist in the
+  // theme.
+  $theme_regions = array_keys(system_region_list($block['theme']));
+  if (!in_array($block['region'], $theme_regions)) {
+    return FALSE;
+  }
+
+  // Determine the status of each block in this theme, and store the highest
+  // weight of any block in the requested theme region.
+  $theme_blocks = _block_rehash($block['theme']);
+  $block_status = array();
+  $max_weight = 0;
+  foreach ($theme_blocks as $theme_block) {
+    $block_status[$theme_block['module']][$theme_block['delta']] = $theme_block['status'];
+    if ($theme_block['region'] == $block['region']) {
+      $max_weight = max($max_weight, $theme_block['weight']);
+    }
+  }
+
+  // Only install the requested block if it exists.
+  if (!isset($block_status[$block['module']][$block['delta']])) {
+    return FALSE;
+  }
+
+  // Enable the block for the specified region. If it's already enabled, don't
+  // change the existing weight and title unless they were explicitly provided.
+  $already_enabled = !empty($block_status[$block['module']][$block['delta']]);
+  $fields = array(
+    'status' => 1,
+    'region' => $block['region'],
+  );
+  if (isset($block['weight']) || !$already_enabled) {
+    // Blocks that do not have specific weights default to appearing at the end
+    // of the list for this page region.
+    $fields['weight'] = isset($block['weight']) ? $block['weight'] : $max_weight + 1;
+  }
+  if (isset($block['title']) || !$already_enabled) {
+    $fields['title'] = isset($block['title']) ? $block['title'] : '';
+  }
+
+  $updated = db_update('block')
+    ->fields($fields)
+    ->condition('module', $block['module'])
+    ->condition('delta', $block['delta'])
+    ->condition('theme', $block['theme'])
+    ->execute();
+
+  // Optionally restrict the block to certain pages.
+  if (isset($block['pages'])) {
+    site_template_restrict_block_to_pages($block['module'], $block['delta'], $block['pages']);
+  }
+
+  return (bool) $updated;
+}
+
+/**
+ * Disable a block.
+ *
+ * @param $block
+ *   An array representing the block, containing at least the keys 'module',
+ *   'delta', and 'theme'.
+ */
+function site_template_disable_block($block) {
+  db_update('block')
+    ->fields(array(
+      'status' => 0,
+      'region' => '',
+    ))
+    ->condition('module', $block['module'])
+    ->condition('delta', $block['delta'])
+    ->condition('theme', $block['theme'])
+    ->execute();
+}
+
+/**
+ * Restricts an existing block to certain pages.
+ *
+ * @param $module
+ *   The name of the module defining the block.
+ * @param $delta
+ *   The delta of the block within that module.
+ * @param $pages
+ *   An array containing paths or expressions for drupal_match_path(),
+ *   representing the pages that the block will be restricted to.
+ */
+function site_template_restrict_block_to_pages($module, $delta, $pages) {
+  $pages = implode("\r\n", $pages);
+  db_update('block')
+    ->fields(array(
+      'visibility' => 1,
+      'pages' => $pages,
+    ))
+    ->condition('module', $module)
+    ->condition('delta', $delta)
+    ->execute();
+}
+
+/**
+ * Saves a menu link while installing a site template.
+ *
+ * This function allows us work around Drupal cache clearing bugs that would
+ * otherwise require us to call menu_rebuild() every time we wanted to save a
+ * menu link for a module that we just enabled in a site template feature. The
+ * function behaves exactly like menu_link_save(), but checks afterwards to
+ * make sure the item has a router path, and if not, forces the router path to
+ * be equal to the link path. If we didn't do this, then the next call to
+ * menu_rebuild() would result in the link being deleted.
+ *
+ * Note that this function should *not* be called for paths that we do not
+ * expect to have an associated router path - for example, <front>. In those
+ * cases, use menu_link_save() directly instead.
+ *
+ * @param $item
+ *   An array representing a menu link item, for passing to menu_link_save().
+ *
+ * @return
+ *   The mlid of the saved menu link, or FALSE if the menu link could not be
+ *   saved.
+ */
+function site_template_menu_link_save(&$item) {
+  $mlid = menu_link_save($item);
+  if (!$mlid) {
+    return FALSE;
+  }
+  $router_path = db_query("SELECT router_path FROM {menu_links} WHERE mlid = :mlid", array(':mlid' => $mlid))->fetchField();
+  if (empty($router_path)) {
+    db_query("UPDATE {menu_links} SET router_path = link_path WHERE mlid = :mlid", array(':mlid' => $mlid));
+  }
+  return $mlid;
+}
+
+/**
+ * Creates a basic role.
+ *
+ * @param $name
+ *   The name of the role.
+ * @param $permissions
+ *   An array of permissions to assign the role. Only those permissions which
+ *   actually exist are granted, since currently, user_role_grant_permissions()
+ *   does not handle non-existent permissions well; see, for example,
+ *   http://drupal.org/node/737816).
+ *
+ * @return
+ *   The role ID of the new role.
+ */
+function site_template_add_basic_role($name, $permissions) {
+  $role = new stdClass();
+  $role->name = $name;
+  // As long as the role name comes after "A" in the alphabet, setting a weight
+  // of 1 tends to put it by default between the low level (anonymous and
+  // authenticated) and high level (administrator and site maintainer) roles,
+  // which is where we usually want it.
+  $role->weight = 1;
+  user_role_save($role);
+  // Only grant permissions that exist.
+  $permissions = array_intersect($permissions, array_keys(module_invoke_all('permission')));
+  user_role_grant_permissions($role->rid, $permissions);
+  return $role->rid;
+}
+
+/**
+ * Creates a complete SimpleView and associated storage data.
+ *
+ * @param $simpleview_data
+ *   An array representing data for the SimpleView and its backend storage
+ *   mechanism. Keys can be anything that appears in the database tables
+ *   {simpleviews} and {simpleviews_sqbs}; typical ones are 'path', 'title'
+ *   'filter', 'block', 'page_items', 'block_items', etc.  In addition,
+ *   'menu_link' can be set to a menu link that will be associated with
+ *   the SimpleView. The link path and link title are obtained from the main
+ *   SimpleView 'path' and 'title' if not specified explicitly.
+ *
+ * @return
+ *   An array containing the following keys:
+ *   - simpleview_id: The ID of the new SimpleView in the {simpleviews} table
+ *   - sqbs_id: The ID of the new SimpleView in the {simpleviews_sqbs} table
+ *   - mlid: The ID of the associated menu link (only if one was created)
+ */
+function site_template_create_simpleview($simpleview_data) {
+  // Save the simpleview and sqbs backend data.
+  $simpleview = simpleviews_item_save($simpleview_data);
+  $return_data['simpleview_id'] = $simpleview['svid'];
+  unset($simpleview['svid']);
+  $return_data['sqbs_id'] = sqbs_simpleviews_save($simpleview);
+  // Optionally add a menu link.
+  if (isset($simpleview_data['menu_link'])) {
+    $menu_link = $simpleview_data['menu_link'];
+    if (isset($simpleview_data['path'])) {
+      $menu_link += array('link_path' => $simpleview_data['path']);
+    }
+    if (isset($simpleview_data['title'])) {
+      $menu_link += array('link_title' => $simpleview_data['title']);
+    }
+    if ($mlid = site_template_menu_link_save($menu_link)) {
+      $return_data['mlid'] = $mlid;
+    }
+  }
+  return $return_data;
+}
+
+/**
+ * Deletes a complete SimpleView and its associated storage data.
+ *
+ * @param $simpleview_data
+ *   An array containing keys 'simpleview_id', 'sqbs_id', and, optionally,
+ *   'mlid', as returned from site_template_create_simpleview().
+ *
+ * @see site_template_create_simpleview()
+ */
+function site_template_delete_simpleview($simpleview_data) {
+  simpleviews_item_delete($simpleview_data['simpleview_id']);
+  sqbs_simpleviews_delete($simpleview_data['sqbs_id']);
+  if (isset($simpleview_data['mlid'])) {
+    menu_link_delete($simpleview_data['mlid']);
+  }
+}
+
+/**
+ * Force anonymous users to provide their contact info on all or some node types.
+ *
+ * @param $node_types
+ *   An optional array of node types. If not provided, all current node types
+ *   on the site will have this value set.
+ *
+ * @return
+ *   An array of the previous variables storing the anonymous user comment
+ *   settings, before the changes made here. This array is in the format
+ *   returned by site_template_get_variable_states().
+ */
+function site_template_force_anonymous_contact($node_types = NULL) {
+  if (!isset($node_types)) {
+    $node_types = array_keys(node_type_get_types());
+  }
+  $variables = array();
+  foreach ($node_types as $type) {
+    $variables[] = 'comment_anonymous_' . $type;
+  }
+  $variable_states = site_template_get_variable_states($variables);
+  foreach ($variables as $variable) {
+    if (variable_get($variable) !== COMMENT_ANONYMOUS_MUST_CONTACT) {
+      variable_set($variable, COMMENT_ANONYMOUS_MUST_CONTACT);
+    }
+  }
+  return $variable_states;
+}
+
+/**
+ * Enable comment notification on all or some node types.
+ *
+ * @param $node_types
+ *   An optional array of node types. If not provided, all current node types
+ *   on the site will have this value set.
+ *
+ * @return
+ *   An array of the previous variables storing the comment notification
+ *   settings, before the changes made here. This array is in the format
+ *   returned by site_template_get_variable_states().
+ */
+function site_template_enable_comment_notification($node_types = NULL) {
+  if (!isset($node_types)) {
+    $node_types = array_keys(node_type_get_types());
+  }
+  $variables = array('comment_notify_node_types');
+  $variable_states = site_template_get_variable_states($variables);
+  $comment_notify_node_types = variable_get('comment_notify_node_types', array());
+  $comment_notify_node_types += drupal_map_assoc($node_types);
+  variable_set('comment_notify_node_types', $comment_notify_node_types);
+  return $variable_states;
+}
+
+/**
+ * @} End of "defgroup site_template_features_api".
+ */
+
+/**
+ * @defgroup site_template_devel Developer features for site templates.
+ * @{
+ */
+
+/**
+ * Menu callback for developers to test switching between site templates.
+ */
+function site_template_debug_form($form, &$form_state) {
+  $templates = site_template_get_all_templates();
+  $options = array();
+  foreach ($templates as $key => $info) {
+    $options[$key] = $info['name'];
+  }
+
+  $form['template'] = array(
+    '#type' => 'radios',
+    '#title' => 'Template',
+    '#options' => $options,
+    '#default_value' => site_template_current_template(),
+    '#weight' => -5,
+  );
+
+  $form['submit'] = array(
+    '#type' => 'submit',
+    '#value' => 'Submit'
+  );
+
+  return $form;
+}
+
+function site_template_debug_form_submit(&$form, &$form_state) {
+  $template_chosen = $form_state['values']['template'];
+  site_template_uninstall_features(site_template_current_template());
+  site_template_install_features($template_chosen);
+}
+
+/**
+ * Implements hook_siteinfo();
+ */
+function site_template_siteinfo() {
+  return array('template' => variable_get('site_template_current_template'));
+}
+
+/**
+ * @} End of "defgroup site_template_devel".
+ */
+
+/**
+ * @defgroup site_template_features Base set of features for site templates.
+ * @{
+ */
+
+class DrupalSiteTemplate {
+  /**
+   * Site template callback for updating node types at the end of the install.
+   */
+  public function site_template_update_node_types_install(&$data, $features) {
+    // If the comment feature is being used, make sure to force anonymous users
+    // to provide contact info on all newly-added node types.
+    if (in_array('site_template_comment_feature', $features)) {
+      site_template_force_anonymous_contact();
+    }
+
+    // If the comment notify feature is being used, make sure to enable comment
+    // notification on all newly-added node types.
+    if (in_array('site_template_comment_notify_feature', $features)) {
+      site_template_enable_comment_notification();
+    }
+  }
+
+  /**
+   * Site template preparation callback for adding a blogger role.
+   */
+  public function site_template_add_blogger_role_install_prepare(&$data, $features) {
+    $data['role_name'] = 'blogger';
+    // Bloggers can create and edit/delete their own blog posts and polls.
+    $permissions = array();
+    foreach (array('blog', 'poll') as $type) {
+      $permissions[] = "create $type content";
+      $permissions[] = "edit own $type content";
+      $permissions[] = "delete own $type content";
+    }
+    $data['role_permissions'] = array_merge($this->baseContentCreatorPermissions(), $permissions);
+  }
+
+  /**
+   * Site template callback for adding a blogger role.
+   */
+  public function site_template_add_blogger_role_install(&$data, $features) {
+    // Only add the role if the blog feature is enabled.
+    if (in_array('site_template_blog_feature', $features)) {
+      site_template_add_basic_role($data['role_name'], $data['role_permissions']);
+    }
+  }
+
+  /**
+   * Site template preparation callback for adding an editor role.
+   */
+  public function site_template_add_editor_role_install_prepare(&$data, $features) {
+    $data['role_name'] = 'editor';
+    // Editors can create, edit and delete all content types.
+    $permissions = array();
+    foreach (array_keys(node_type_get_types()) as $type) {
+      $permissions = array_merge($permissions, array_keys(node_list_permissions($type)));
+    }
+    $data['role_permissions'] = array_merge($this->baseContentCreatorPermissions(), $permissions);
+  }
+
+  /**
+   * Site template callback for adding an editor role.
+   */
+  public function site_template_add_editor_role_install(&$data, $features) {
+    site_template_add_basic_role($data['role_name'], $data['role_permissions']);
+  }
+
+  /**
+   * Site template preparation callback for adding a sample article.
+   */
+  public function site_template_sample_article_install_prepare(&$data, $features) {
+    // Prepare a sample article.
+    $data['article'] = array(
+      'type' => 'article',
+      'title' => 'This is a sample news item',
+      'body' => "<p>News items are intended for content such as announcements, press releases and other time-specific information. News items are one of many content types you can display on your site. This news item is promoted to the front page.</p><p>To change your site's front page, click Configuration > Site Information.<br />To add another News item, click Add content > News item.</p><a href='http://www.drupalgardens.com/learnmore/news' target='_blank'>Learn more</a>",
+      'promote' => NODE_PROMOTED,
+    );
+  }
+  
+  /**
+   * Site template preparation callback for adding an content manager role.
+   */
+  public function site_template_add_content_manager_role_install_prepare(&$data, $features) {
+    $data['role_name'] = 'content manager';
+    // Editors can create, edit and delete all content types.
+    $node_permissions = array();
+    foreach (array_keys(node_type_get_types()) as $type) {
+      $node_permissions = array_merge($node_permissions, array_keys(node_list_permissions($type)));
+    }
+    $content_creator_permissions = $this->baseContentCreatorPermissions();
+    $designer_permissions = $this->baseSiteDesignerPermissions();
+    $data['role_permissions'] = array_unique(array_merge($node_permissions, $content_creator_permissions, $designer_permissions));
+  }
+  
+  /**
+   * Site template callback for adding a content manager role.
+   */
+  public function site_template_add_content_manager_role_install(&$data, $features) {
+    site_template_add_basic_role($data['role_name'], $data['role_permissions']);
+  }
+
+  /**
+   * Site template callback for adding a sample article.
+   */
+  public function site_template_sample_article_install(&$data, $features) {
+    site_template_add_basic_node($data['article']);
+  }
+
+  /**
+   * Rollback function for the feature that adds a sample article.
+   */
+  public function site_template_sample_article_rollback($data) {
+    // TODO.
+  }
+
+  /**
+   * Site template preparation callback for disabling the navigation block.
+   */
+  public function site_template_disable_navigation_block_install_prepare(&$data, $features) {
+    // Store information about the navigation block which will be disabled.
+    $theme = variable_get('theme_default', 'bartik');
+    $data['navigation_block'] = array(
+      'module' => 'system',
+      'delta' => 'navigation',
+      'theme' => $theme,
+    );
+
+    // Store the navigation block's current status now in case it will need to
+    // be reenabled on rollback.
+    $data['blocks_to_reenable'] = array();
+    $original_navigation_block = db_query("SELECT * FROM {block} WHERE module = :module AND delta = :delta AND theme = :theme", array(':module' => 'system', ':delta' => 'navigation', ':theme' => $theme))->fetchAssoc();
+    if (!empty($original_navigation_block['status'])) {
+      $data['blocks_to_reenable'][] = $original_navigation_block;
+    }
+  }
+
+  /**
+   * Site template callback for disabling the navigation block.
+   */
+  public function site_template_disable_navigation_block_install(&$data, $features) {
+    site_template_disable_block($data['navigation_block']);
+  }
+
+  /**
+   * Rollback function for the feature that disables the navigation block.
+   */
+  public function site_template_disable_navigation_block_rollback($data) {
+    foreach ($data['blocks_to_reenable'] as $block) {
+      site_template_enable_block($block);
+    }
+  }
+
+  /**
+   * Site template preparation callback for adding a "Home" link.
+   */
+  public function site_template_add_home_link_install_prepare(&$data, $features) {
+    $data['menu_link'] = array(
+      'link_path' => '<front>',
+      'link_title' => 'Home',
+      'menu_name' => 'main-menu',
+      'weight' => -28,
+    );
+  }
+
+  /**
+   * Site template callback for adding a "Home" link.
+   */
+  public function site_template_add_home_link_install(&$data, $features) {
+    // Note: We are not using site_template_menu_link_save() here because the
+    // Home link points to <front>, which does not have a router path.
+    if (!empty($data['menu_link']) && ($mlid = menu_link_save($data['menu_link']))) {
+      $data['mlid'] = $mlid;
+    }
+  }
+
+  /**
+   * Rollback function for the feature that adds a "Home" link.
+   */
+  public function site_template_add_home_link_rollback($data) {
+    if (isset($data['mlid'])) {
+      menu_link_delete($data['mlid']);
+    }
+  }
+
+  /**
+   * Site template preparation callback for the "Comment" feature.
+   */
+  public function site_template_comment_feature_install_prepare(&$data, $features) {
+    // Define a block showing recent comments.
+    $data['block_data'] = array(
+      'module' => 'comment',
+      'delta' => 'recent',
+      'region' => 'sidebar_a',
+      'title' => 'Comments',
+    );
+  }
+
+  /**
+   * Site template callback for the "Comment" feature.
+   */
+  public function site_template_comment_feature_install(&$data, $features) {
+    // Allow users to post comments.
+    $anonymous_permissions = array('access comments');
+    $authenticated_permissions = array('access comments', 'post comments', 'skip comment approval');
+    $data['permission_states'] = site_template_get_permission_states(array_unique(array_merge($anonymous_permissions, $authenticated_permissions)));
+    user_role_grant_permissions(DRUPAL_ANONYMOUS_RID, $anonymous_permissions);
+    user_role_grant_permissions(DRUPAL_AUTHENTICATED_RID, $authenticated_permissions);
+
+    // Force anonymous users to provide their contact info. This is repeated
+    // for new node types in site_template_update_node_types().
+    $data['variable_states'] = site_template_force_anonymous_contact();
+
+    // Enable the block that was prepared.
+    $block = $data['block_data'];
+    if (site_template_enable_block($block)) {
+      $data['block'] = $block;
+    }
+  }
+
+  /**
+   * Rollback function for the "Comment" feature.
+   */
+  public function site_template_comment_feature_rollback($data) {
+    site_template_restore_permissions_from_state($data['permission_states']);
+    site_template_restore_variables_from_state($data['variable_states']);
+    if (isset($data['block'])) {
+      site_template_disable_block($data['block']);
+    }
+  }
+
+  /**
+   * Site template callback for the "Comment notify" feature.
+   */
+  public function site_template_comment_notify_feature_install(&$data, $features) {
+    // Enable the module.
+    module_enable(array('comment_notify'), FALSE);
+
+    // Enable comment notification on all node types. This is repeated for new
+    // node types in site_template_update_node_types().
+    $data['variable_states'] = site_template_enable_comment_notification();
+
+    // Allow anonymous and authenticated users to subscribe to comments.
+    $permissions = array('subscribe to comments');
+    $data['permission_states'] = site_template_get_permission_states($permissions);
+    user_role_grant_permissions(DRUPAL_ANONYMOUS_RID, $permissions);
+    user_role_grant_permissions(DRUPAL_AUTHENTICATED_RID, $permissions);
+  }
+
+  /**
+   * Rollback function for the "Comment notify" feature.
+   */
+  public function site_template_comment_notify_feature_rollback($data) {
+    site_template_restore_permissions_from_state($data['permission_states']);
+    site_template_restore_variables_from_state($data['variable_states']);
+    module_disable(array('comment_notify'), FALSE);
+  }
+
+  /**
+   * Site template preparation callback for the "Follow us" feature.
+   */
+  public function site_template_follow_us_feature_install_prepare(&$data, $features) {
+    // Define a block.
+    $data['block_data'] = array(
+      'module' => 'follow',
+      'delta' => 'site',
+      'region' => site_template_prefooter_regions(),
+      'title' => 'Stay connected',
+    );
+
+    // Define links for the block.
+    $link = new stdClass();
+    $link->name = 'facebook';
+    $link->url = 'http://www.facebook.com/pages/Drupal-Gardens/187669600960';
+    $link->weight = -2;
+    $data['links_to_save']['facebook'] = $link;
+    $link = new stdClass();
+    $link->name = 'twitter';
+    $link->url = 'http://twitter.com/drupalgardens';
+    $link->weight = -1;
+    $data['links_to_save']['twitter'] = $link;
+  }
+
+  /**
+   * Site template callback for the "Follow us" feature.
+   */
+  public function site_template_follow_us_feature_install(&$data, $features) {
+    module_enable(array('follow'), FALSE);
+    $block = $data['block_data'];
+    if (site_template_enable_block($block)) {
+      $data['block'] = $block;
+    }
+    $data['link_ids'] = array();
+    foreach ($data['links_to_save'] as $link) {
+      follow_link_save($link);
+      $data['link_ids'][] = $link->lid;
+    }
+  }
+
+  /**
+   * Rollback function for the "Follow us" feature.
+   */
+  public function site_template_follow_us_feature_rollback($data) {
+    if (isset($data['block'])) {
+      site_template_disable_block($data['block']);
+    }
+    foreach ($data['link_ids'] as $link_id) {
+      follow_link_delete($link_id);
+    }
+    module_disable(array('follow'), FALSE);
+  }
+
+  /**
+   * Site template callback for the "Share this" feature.
+   */
+  public function site_template_share_this_feature_install(&$data, $features) {
+    // Enable the addthis module.
+    module_enable(array('addthis'), FALSE);
+
+    // Rebuild the theme registry, because without this the "Share This" link
+    // does not show up on sites where this is the only feature selected.
+    // TODO: Figure out what horrible Drupal cache clearing bug makes this
+    // necessary, solve that bug, and then remove this code.
+    drupal_theme_rebuild();
+
+    // Enable the "Share this" links.
+    $variables = array('addthis_display_in_links', 'addthis_options');
+    $data['variable_states'] = site_template_get_variable_states($variables);
+    variable_set('addthis_display_in_links', TRUE);
+    variable_set('addthis_options', 'twitter, facebook, favorites, email, digg, delicious, google, live, more');
+
+    // Do not show the "Share this" link on pages by default, since that
+    // usually gets in the way.
+    variable_set('addthis_nodetype_page', 0);
+
+    // Enable anonymous and authenticated users to view the "Share this" links.
+    $permissions = array('view addthis');
+    $data['permission_states'] = site_template_get_permission_states($permissions);
+    user_role_grant_permissions(DRUPAL_ANONYMOUS_RID, $permissions);
+    user_role_grant_permissions(DRUPAL_AUTHENTICATED_RID, $permissions);
+  }
+
+  /**
+   * Rollback function for the "Share this" feature.
+   */
+  public function site_template_share_this_feature_rollback($data) {
+    site_template_restore_permissions_from_state($data['permission_states']);
+    site_template_restore_variables_from_state($data['variable_states']);
+    module_disable(array('addthis'), FALSE);
+  }
+
+  /**
+   * Site template preparation callback for the "Blog" feature.
+   */
+  public function site_template_blog_feature_install_prepare(&$data, $features) {
+    // Prepare a couple of blog posts.
+    $blog_post = array(
+      'type' => 'blog',
+      // We display blog posts from newest to oldest, so this is actually the
+      // second post, not the first; hence the "another" in the title.
+      'title' => 'This is another sample blog post',
+      'body' => '<p>A blog post is a way to communicate your thoughts and ideas with associated images or videos. It is also a great way to engage your site visitors by allowing comments on your posts. Note that besides personal blogs, a single Drupal Gardens site can also host multiple blogs, each authored by a different user, which is a great way to give organizations a voice.</p><p>To add another Blog post, click Add content > Blog post.</p><p><a href="http://www.drupalgardens.com/learnmore/blog" target="_blank">Learn more</a></p>',
+    );
+    $data['blog_posts'][] = $blog_post;
+    $blog_post['title'] = 'This is a sample blog post';
+    $data['blog_posts'][] = $blog_post;
+
+    // Prepare a comment to add to the last blog post.
+    $data['comment'] = site_template_prepare_basic_comment('Sample comment', '<p>By default, comments are shown on blog posts, in a conversation thread. Anonymous or logged in visitors can post comments, and that can be configured.  Comments are protected from spam by the Mollom spam protection service.</p><p><a href="http://www.drupalgardens.com/learnmore/comments" target="_blank">Learn more</a></p>');
+
+    // Prepare the recent comments block.
+    $data['block_data'] = array(
+      'module' => 'blog',
+      'delta' => 'recent',
+      'region' => 'sidebar_a',
+      'title' => 'Blog posts',
+    );
+
+    // Prepare a menu item for the blog page.
+    $data['menu_link'] = array(
+      'link_path' => 'blog',
+      'link_title' => 'Blog',
+      'menu_name' => 'main-menu',
+      'weight' => -20,
+    );
+  }
+
+  /**
+   * Site template callback for the "Blog" feature.
+   */
+  public function site_template_blog_feature_install(&$data, $features) {
+    // Enable the modules.
+    module_enable(array('blog', 'flexible_blogs'), FALSE);
+
+    // Add our standard "Tags" vocabulary.
+    gardens_misc_add_tags_field_instance('blog');
+
+    // Do not promote blog posts to the front page by default.
+    variable_set('node_options_blog', array('status'));
+
+    // Show only the five newest blog posts in the blog block by default.
+    variable_set('blog_block_count', 5);
+
+    // Include blog posts in the XML Sitemap, but only if the menu that the
+    // Blog link is in is also XML Sitemap enabled, or if a preparation step
+    // explicitly set the 'include_blog_posts_in_xmlsitemap' variable to force
+    // it to behave that way (e.g., the blog template does this).
+    // @see gardens_setup_xmlsitemap()
+    if (!empty($data['menu_link'])) {
+      $menu_name = isset($data['menu_link']['menu_name']) ? $data['menu_link']['menu_name'] : 'navigation';
+      $current_settings = variable_get("xmlsitemap_settings_menu_link_$menu_name", array());
+      if (!empty($current_settings['status'])) {
+        $data['include_blog_posts_in_xmlsitemap'] = TRUE;
+      }
+    }
+    if (!empty($data['include_blog_posts_in_xmlsitemap'])) {
+      variable_set('xmlsitemap_settings_node_blog', array('status' => '1', 'priority' => '0.5'));
+    }
+
+    // Create the blog post.
+    $data['nids'] = array();
+    foreach ($data['blog_posts'] as $blog_post) {
+      $node = site_template_add_basic_node($blog_post);
+      $data['nids'][] = $node->nid;
+    }
+
+    // Add the comment to the last one.
+    if (!empty($data['comment']) && !empty($data['nids'])) {
+      $comment_nid = end($data['nids']);
+      $data['comment']->nid = $comment_nid;
+      if (!isset($data['comment']->cid)) {
+        $data['comment']->cid = NULL;
+      }
+      if (!isset($data['comment']->pid)) {
+        $data['comment']->pid = NULL;
+      }
+      comment_save($data['comment']);
+    }
+
+    // Enable the block.
+    if (!empty($data['block_data'])) {
+      $block = $data['block_data'];
+      if (site_template_enable_block($block)) {
+        $data['block'] = $block;
+      }
+    }
+
+    // Add the menu item.
+    if (!empty($data['menu_link']) && ($mlid = site_template_menu_link_save($data['menu_link']))) {
+      $data['mlid'] = $mlid;
+    }
+  }
+
+  /**
+   * Rollback function for the "Blog" feature.
+   */
+  public function site_template_blog_feature_rollback($data) {
+    if (isset($data['mlid'])) {
+      menu_link_delete($data['mlid']);
+    }
+    if (isset($data['block'])) {
+      site_template_disable_block($data['block']);
+    }
+    foreach ($data['nids'] as $nid) {
+      node_delete($nid);
+    }
+    module_disable(array('flexible_blogs', 'blog'), FALSE);
+  }
+
+  /**
+   * Site template preparation callback for the "Contact" feature.
+   */
+  public function site_template_contact_feature_install_prepare(&$data, $features) {
+    $data['contact_form_category'] = 'General feedback';
+    $data['menu_link'] = array(
+      'link_path' => 'contact',
+      'link_title' => 'Contact',
+      'menu_name' => 'main-menu',
+      'weight' => -12,
+    );
+  }
+
+  /**
+   * Site template callback for the "Contact" feature.
+   */
+  public function site_template_contact_feature_install(&$data, $features) {
+    $this->installBaseContactFeature($data, $features);
+
+    // Add the menu item if it exists.
+    if (!empty($data['menu_link']) && ($mlid = site_template_menu_link_save($data['menu_link']))) {
+      $data['mlid'] = $mlid;
+    }
+  }
+
+  /**
+   * Rollback function for the "Contact" feature.
+   */
+  public function site_template_contact_feature_rollback($data) {
+    site_template_restore_permissions_from_state($data['permission_states']);
+    drupal_write_record('contact', $data['contact_form'], array('cid'));
+    if (isset($data['mlid'])) {
+      menu_link_delete($data['mlid']);
+    }
+    module_disable(array('contact'), FALSE);
+  }
+
+  /**
+   * Site template preparation callback for the "Forum" feature.
+   */
+  public function site_template_forum_feature_install_prepare(&$data, $features) {
+    // Define a menu link.
+    $data['menu_link'] = array(
+      'link_path' => 'forum',
+      'link_title' => 'Forum',
+      'menu_name' => 'main-menu',
+      'weight' => -16,
+    );
+
+    // Define an initial forum.
+    $forum = (object) array(
+      'name' => 'This is a forum',
+      'description' => '<p>A forum is used to group related discussion topics. Sample container names could be Announcements, or Q&A. Administrators could post important topics to the Announcements container and site visitors could post questions to the Q&A container, where other members would reply with answers.<br />To add or manage Forums, click Structure > Forums.</p><a href="http://www.drupalgardens.com/documentation/forums" target="_blank">Learn more</a>',
+      'weight' => -2,
+    );
+    $data['forums']['discussion_forum']['forum'] = $forum;
+
+    // Define an initial forum topic.
+    $forum_topic = array(
+      'type' => 'forum',
+      'title' => "This is a sample forum topic",
+      'body' => '<p>A forum topic is a new discussion thread. Most forum topics are either questions or announcements. Site visitors or administrators can add comments in response to the forum topic if it allows comments. Forum topics are placed into forums, and can be moved by administrators to another forum to keep discussions organized.</p><p>To add Forum Topics, click Add content  > Forum Topic.</p><p><a href="http://www.drupalgardens.com/documentation/forums" target="_blank">Learn more</a></p>',
+    );
+    $data['forums']['discussion_forum']['forum_topic'] = $forum_topic;
+
+    // Define an initial comment on the forum topic.
+    $data['forums']['discussion_forum']['comments'][] = site_template_prepare_basic_comment('This is a sample comment', '<p>Comments are posted by site visitors in response to forum topics.</p><p><a href="http://www.drupalgardens.com/documentation/forums" target="_blank">Learn more</a></p>');
+  }
+
+  /**
+   * Site template callback for the "Forum" feature.
+   */
+  public function site_template_forum_feature_install(&$data, $features) {
+    // Enable the module.
+    module_enable(array('forum'), FALSE);
+
+    // Add our standard "Tags" vocabulary.
+    gardens_misc_add_tags_field_instance('forum');
+
+    // Save the menu link.
+    if ($mlid = site_template_menu_link_save($data['menu_link'])) {
+      $data['mlid'] = $mlid;
+    }
+
+    // Add the initial forums, topics and comments.
+    $forum_vocab = variable_get('forum_nav_vocabulary', '');
+    $data['tids'] = array();
+    $data['nids'] = array();
+
+
+    // Remove the forum that comes with d.o.
+    foreach (taxonomy_get_term_by_name('General discussion') as $term) {
+      if ($term->vid == $forum_vocab) {
+        taxonomy_term_delete($term->tid);
+        break;
+      }
+    }
+
+    foreach ($data['forums'] as $forum_data) {
+      $forum_data['forum']->vid = $forum_vocab;
+      taxonomy_term_save($forum_data['forum']);
+      // Unfortunately, taxonomy_term_save() does not tell us the newly-saved
+      // term IDs, so we need to grab it via a bad hack.
+      $tid = db_query("SELECT MAX(tid) FROM {taxonomy_term_data}")->fetchField();
+      $data['tids'][] = $tid;
+      $forum_data['forum_topic']['fields'] = array(
+        'taxonomy_forums' => array(
+          array('tid' => $tid),
+        ),
+      );
+      $node = site_template_add_basic_node($forum_data['forum_topic']);
+      $data['nids'][] = $node->nid;
+      foreach ($forum_data['comments'] as $comment) {
+        $comment->nid = $node->nid;
+        if (!isset($comment->cid)) {
+          $comment->cid = NULL;
+        }
+        if (!isset($comment->pid)) {
+          $comment->pid = NULL;
+        }
+        comment_save($comment);
+      }
+    }
+  }
+
+  /**
+   * Rollback function for the "Forum" feature.
+   */
+  public function site_template_forum_feature_rollback($data) {
+    foreach ($data['nids'] as $nid) {
+      node_delete($nid);
+    }
+    foreach ($data['tids'] as $tid) {
+      taxonomy_term_delete($tid);
+    }
+    if (!empty($data['mlid'])) {
+      menu_link_delete($data['mlid']);
+    }
+    module_disable(array('forum'), FALSE);
+  }
+
+  /**
+   * Site template preparation callback for the "About" page.
+   */
+  public function site_template_about_page_install_prepare(&$data, $features) {
+    // Prepare a page with an embedded Google map.
+    $default_map_link = 'http://maps.google.com/maps?q=map+Hilda+Ramstraat+39+2600+Berchem+Belgium'
+      . '&amp;oe=utf-8&amp;ie=UTF8&amp;hq=&amp;hnear=Hilda+Ramstraat+39,+Berchem+2600+Antwerp,+Flemish+Region,+Belgium'
+      . '&amp;gl=us&amp;ei=1XfHS4O5LsGBlAeQwLzFAQ&amp;ved=0CAoQ8gEwAA&amp;ll=51.188752,4.421507&amp;spn=0.002122,0.005423'
+      . '&amp;t=h&amp;z=18&amp;source=embed';
+    $google_map = '<iframe width="100%" height="350" frameborder="0" scrolling="no" marginheight="0" marginwidth="0" '
+      . 'src="http://maps.google.com/maps?q=map+Hilda+Ramstraat+39+2600+Berchem+Belgium&amp;oe=utf-8'
+      . '&amp;ie=UTF8&amp;hq=&amp;hnear=Hilda+Ramstraat+39,+Berchem+2600+Antwerp,+Flemish+Region,+Belgium'
+      . '&amp;gl=us&amp;ei=1XfHS4O5LsGBlAeQwLzFAQ&amp;ved=0CAoQ8gEwAA&amp;ll=51.188752,4.421507'
+      . '&amp;spn=0.002122,0.005423&amp;t=h&amp;z=18&amp;output=embed"></iframe><br /><small>'
+      . '<a href="' . $default_map_link . '">View Larger Map</a></small>';
+    $text = "<p>The About page is a Basic page customized to provide information about you or your organization. This basic page contains an embedded Google map and has a link to the About menu. You can edit this page to suit your needs, including changing the map location to your location.</p><p>To change the embedded map location:</p><ul><li>Open a new browser window and find a replacement location on http://maps.google.com.</li><li>When you have found a map, select \"Link\" at the top of the map, and follow the provided instructions.</li><li>On this page, click the Edit tab.</li><li>Click the HTML tab and paste the map copied from Google into the page body, replacing the old map.</li></ul><p>To add another Basic page, click Add content > Basic page.</p><p><a href='http://www.drupalgardens.com/learnmore/aboutus' target='_blank'>Learn more</a></p>$google_map";
+
+    // Prepare the "About" page as a full HTML node.
+    $full_html = db_query("SELECT format FROM {filter_format} WHERE name = 'Full HTML'")->fetchField();
+    $data['page'] = array(
+      'title' => 'About us',
+      'body' => $text,
+      'format' => $full_html,
+      'menu_link' => array(
+        'menu_name' => 'main-menu',
+        'link_title' => 'About',
+        'weight' => -24,
+      ),
+      'alias' => 'about-us',
+    );
+  }
+
+  /**
+   * Site template callback for the "About" page.
+   */
+  public function site_template_about_page_install(&$data, $features) {
+    // Save the page.
+    $data['nid'] = site_template_add_basic_node($data['page']);
+  }
+
+  /**
+   * Rollback function for the "About" page.
+   */
+  public function site_template_about_page_rollback($data) {
+    node_delete($data['nid']);
+  }
+
+  /**
+   * Site template preparation callback for the "News" page.
+   */
+  public function site_template_news_page_install_prepare(&$data, $features) {
+    // Prepare a listing page.
+    $simpleview = array(
+      'path' => 'news',
+      'title' => 'News',
+      'filter' => 'node:article',
+      'style' => 'teasers',
+      'sort' => 'newest',
+      'rss' => 1,
+      'page_items' => 10,
+      'block_items' => 0,
+      'block_style' => 'titles',
+      'menu_link' => array(
+        'menu_name' => 'main-menu',
+        'weight' => -18,
+      ),
+    );
+    $data['simpleview_to_create'] = $simpleview;
+
+    // Prepare content for the listing page. The numbering depends on whether
+    // we're installing the sample article feature also, since that creates a
+    // news item too.
+    $article_label = array('sample', 'second', 'third');
+    if (in_array('site_template_sample_article', $features)) {
+      array_shift($article_label);
+    }
+    $article = array(
+      'type' => 'article',
+      'title' => "This is a {$article_label[0]} news item",
+      'body' => "<p>News items are intended for content such as announcements, press releases and other time-specific information. News items are one of many content types you can display on your site.</p><p>To change your site's front page, click Configuration > Site Information.<br />To add another News item, click Add content > News item.</p><a href='http://www.drupalgardens.com/learnmore/news' target='_blank'>Learn more</a>",
+    );
+    $data['articles'][] = $article;
+    $article['title'] = "This is a {$article_label[1]} news item";
+    $data['articles'][] = $article;
+  }
+
+  /**
+   * Site template callback for the "News" page.
+   */
+  public function site_template_news_page_install(&$data, $features) {
+    // Rename the core article content type to "News item".
+    $type = node_type_load('article');
+    $type->name = 'News item';
+    $type->description = 'Use <em>news items</em> for time-specific content like press releases or announcements.';
+    node_type_save($type);
+
+    // Create the listing page.
+    $data['simpleview'] = site_template_create_simpleview($data['simpleview_to_create']);
+
+    // Create the articles.
+    $data['nids'] = array();
+    foreach ($data['articles'] as $article) {
+      $node = site_template_add_basic_node($article);
+      $data['nids'][] = $node->nid;
+    }
+  }
+
+  /**
+   * Rollback function for the "News" page.
+   */
+  public function site_template_news_page_rollback($data) {
+    site_template_delete_simpleview($data['simpleview']);
+    foreach ($data['nids'] as $nid) {
+      node_delete($nid);
+    }
+  }
+
+  /**
+   * Site template preparation callback for the "Mailing list" feature.
+   */
+  public function site_template_mailing_list_feature_install_prepare(&$data, $features) {
+    // Prepare a mailing list.
+    $default_list_name = variable_get('site_template_mailing_list_feature_default_name', 'Join our mailing list');
+    $list = new StdClass();
+    $list->name = $default_list_name;
+    $data['list_to_create'] = $list;
+
+    // Prepare the mailing list block in a default location.
+    $data['block_data'] = array(
+      'module' => 'mailing_list',
+      'region' => 'sidebar_a',
+      'title' => 'Join our mailing list',
+    );
+  }
+
+  /**
+   * Site template callback for the "Mailing list" feature.
+   */
+  public function site_template_mailing_list_feature_install(&$data, $features) {
+    // Enable the module.
+    module_enable(array('mailing_list'), FALSE);
+
+    // Save some variables.
+    $variables = array('mailing_list_subscription_message');
+    $data['variable_states'] = site_template_get_variable_states($variables);
+    variable_set('mailing_list_subscription_message', 'Thank you for you interest, "%name <%mail> has been subscribed.');
+
+    // Create the mailing list.
+    mailing_list_save($data['list_to_create']);
+    if (empty($data['list_to_create']->mlid)) {
+      watchdog('site_template', 'Unable to create mailing list, not configuring block', 'error');
+      return;
+    }
+    $data['mailing_list_id'] = $data['list_to_create']->mlid;
+
+    // Enable the block.
+    $block = $data['block_data'];
+    $block['delta'] = $data['mailing_list_id'];
+    if (site_template_enable_block($block)) {
+      $data['block'] = $block;
+    }
+  }
+
+  /**
+   * Rollback function for the "Mailing list" feature.
+   */
+  public function site_template_mailing_list_feature_rollback($data) {
+    if (isset($data['block'])) {
+      site_template_disable_block($data['block']);
+    }
+    // TODO: Figure out if we should really delete the mailing list here (which
+    // deletes all emails), and if we should uninstall all modules (which
+    // deletes all subscriptions), etc.
+    mailing_list_delete($data['mailing_list_id']);
+    site_template_restore_variables_from_state($data['variable_states']);
+    module_disable(array('mailing_list'), FALSE);
+  }
+
+  /**
+   * Site template callback for the "Rotating banner" feature.
+   */
+  public function site_template_rotating_banner_feature_install(&$data, $features) {
+    // Enable the module.
+    module_enable(array('rotating_banner'), FALSE);
+
+    // Add the default images to their files table... (should we even be storing FID?  perhaps just the url is better...).
+    // But then, it won't show up in the media browser, which for consistancy, I suppose it should... tough call.
+    $first_default_image = site_template_copy_asset('rotating_banner', 'sample-banner.png');
+    $second_default_image = site_template_copy_asset('rotating_banner', 'sample-banner-2.png');
+    variable_set('rotating_banner_default_slide_fid', $first_default_image->fid);
+
+    // Now create the banner.
+    $rb = RotatingBanner::create('Main banner');
+    $configure_link = 'admin/structure/block/manage/rotating_banner/' . $rb->rbid . '/configure';
+
+    // Create a slide.
+    $slide = RotatingBannerSlide::create($rb->rbid);
+
+    $slide->textboxes[0]['content'] = t('This is a Rotating Banner');
+    $slide->textboxes[1]['content'] = t("Rotating Banners display one or more images with overlaid text. You can customize how they rotate, their buttons, and where they are placed.<br />To add another Rotating banner, click Structure > Blocks > Add a rotating banner.<br />Click to learn more.");
+    $slide->link = 'http://www.drupalgardens.com/learnmore/rotatingbanner';
+    $slide->fid = $first_default_image->fid;
+    $slide->save();
+
+    // Create a slide.
+    $slide = RotatingBannerSlide::create($rb->rbid);
+
+    $slide->textboxes[0]['content'] = t('This is another Rotating Banner');
+    $slide->textboxes[1]['content'] = t("Rotating Banners display one or more images with overlaid text. You can customize how they rotate, their buttons, and where they are placed.<br />To add another Rotating banner, click Structure > Blocks > Add a rotating banner.<br />Click to learn more.");
+    $slide->link = 'http://www.drupalgardens.com/learnmore/rotatingbanner';
+    $slide->fid = $second_default_image->fid;
+    $slide->save();
+
+    $block_vars = array(
+      'module' => 'rotating_banner',
+      'delta' => $rb->rbid,
+      'region' => 'banner',
+      'pages' => array('<front>'),
+    );
+    // Place it in the correct position
+    site_template_enable_block($block_vars);
+  }
+
+  /**
+   * Rollback function the "Rotating banner" feature.
+   */
+  public function site_template_rotating_banner_feature_rollback($data) {
+    // I guess we don't really want to rollback the sample-image because it might
+    // be in use.
+    module_disable(array('rotating_banner'), FALSE);
+  }
+
+  /**
+   * Site template preparation callback for the "FAQ" feature.
+   */
+  public function site_template_faq_feature_install_prepare(&$data, $features) {
+    // Prepare the FAQ item content type.
+    $data['node_type_data'] = array(
+      'type' => 'faq_item',
+      'name' => 'FAQ item',
+      'description' => 'Use a <em>FAQ item</em> to provide a question and answer about your site.',
+      'title_label' => 'Question',
+      'body_label' => 'Answer',
+    );
+
+    // Prepare some initial FAQ items.
+    $post = array(
+      'type' => 'faq_item',
+      'title' => 'This is a sample FAQ. What does a FAQ do?',
+      'body' => 'FAQs (or Frequently Asked Questions) display a list of common questions for your site visitors. Clicking any question reveals the answer. FAQs allow site visitors to quickly find answers to their questions without consuming your time. FAQs are a custom content type created by the FAQ feature.</p><p>To add FAQs, click Add content > FAQ.</p><p><a href="http://www.drupalgardens.com/learnmore/samplefaq" target="_blank">Learn more</a>',
+    );
+    $data['faq_items'][] = $post;
+    $post['title'] = 'This is a sample FAQ. What does a FAQ do?';
+    $data['faq_items'][] = $post;
+
+    // Prepare a listing page for it, with a menu item.
+    $simpleview = array(
+      'path' => 'faq',
+      'title' => 'Frequently asked questions',
+      'filter' => 'node:faq_item',
+      'style' => 'title_reveals_full',
+      'sort' => 'newest',
+      'rss' => 1,
+      'page_items' => 10,
+      'block_items' => 0,
+      'block_style' => 'titles',
+      'menu_link' => array(
+        'link_title' => 'FAQ',
+        'menu_name' => 'main-menu',
+        'weight' => -14,
+      ),
+    );
+    $data['simpleview_to_create'] = $simpleview;
+  }
+
+  /**
+   * Site template callback for the "FAQ" feature.
+   */
+  public function site_template_faq_feature_install(&$data, $features) {
+    // Save the content type.
+    site_template_add_node_type($data['node_type_data']);
+
+    // Do not show the "Share this" links on it. This is just a small variable,
+    // so it's worth doing even if the "Share this" feature wasn't installed
+    // (since someone might install it later and we want to give them reasonable
+    // default behavior).
+    variable_set('addthis_nodetype_' . $data['node_type_data']['type'], 0);
+
+    // Save the initial FAQ items.
+    $data['nids'] = array();
+    foreach ($data['faq_items'] as $faq_item) {
+      $node = site_template_add_basic_node($faq_item);
+      $data['nids'][] = $node->nid;
+    }
+
+    // Save the listing page.
+    $data['simpleview'] = site_template_create_simpleview($data['simpleview_to_create']);
+  }
+
+  /**
+   * Rollback function for the "FAQ" feature.
+   */
+  public function site_template_faq_feature_rollback($data) {
+    // TODO: Delete the content type also?
+    site_template_delete_simpleview($data['simpleview']);
+    foreach ($data['nids'] as $nid) {
+      node_delete($nid);
+    }
+  }
+
+  /**
+   * Site template preparation callback for the Twitter feature.
+   */
+  public function site_template_twitter_feature_install_prepare(&$data, $features) {
+    // Prepare the Twitter feed.
+    $data['feed'] = array(
+      'title' => 'Overheard on Twitter',
+      'url' => 'http://twitter.com/statuses/user_timeline/132262589.rss',
+      'refresh' => 3600,
+      'block' => 5,
+    );
+
+    // Prepare the block.
+    $data['block_data'] = array(
+      'module' => 'aggregator',
+      'region' => 'sidebar_b',
+    );
+  }
+
+  /**
+   * Site template callback for the Twitter feature.
+   */
+  public function site_template_twitter_feature_install(&$data, $features) {
+    // Enable the aggregator module.
+    module_enable(array('aggregator'), FALSE);
+
+    // Set the aggregator to never clear entries so this block will stick around.
+    variable_set('aggregator_clear', AGGREGATOR_CLEAR_NEVER);
+
+    // Save the feed.
+    aggregator_save_feed($data['feed']);
+    $data['fid'] = db_query("SELECT MAX(fid) FROM {aggregator_feed}")->fetchField();
+
+    // Refresh the feed so that it starts off with items in it immediately
+    // after this template is installed (rather than, e.g., waiting for cron).
+    aggregator_refresh(aggregator_feed_load($data['fid']));
+
+    // Save the block.
+    $block = $data['block_data'];
+    $block['delta'] = 'feed-' . $data['fid'];
+    if (site_template_enable_block($block)) {
+      $data['block'] = $block;
+    }
+  }
+
+  /**
+   * Rollback function the Twitter feature.
+   */
+  public function site_template_twitter_feature_rollback($data) {
+    // Delete the block.
+    if (isset($data['block'])) {
+      site_template_disable_block($data['block']);
+    }
+
+    // Delete the feed.
+    aggregator_save_feed(array('fid' => $data['fid']));
+
+    // Disable the module.
+    module_disable(array('aggregator'), FALSE);
+  }
+
+  /**
+   * Site template callback for the "Webforms" feature.
+   */
+  public function site_template_webforms_feature_install(&$data, $features) {
+    // Enable the appropriate modules, ordered according to dependencies.
+    $modules = array(
+      'webform',
+      'ux_elements',
+      'options_element',
+      'form_builder',
+      'form_builder_webform',
+      'webform_alt_ui',
+    );
+    module_enable($modules, FALSE);
+  }
+
+  /**
+   * Rollback function for the "Webforms" feature.
+   */
+  public function site_template_webforms_feature_rollback($data) {
+    // TODO.
+  }
+
+  /**
+   * Site template preparation callback for the "Feedback" feature.
+   */
+  public function site_template_feedback_feature_install_prepare(&$data, $features) {
+    $data['block_data'] = array(
+      'module' => 'feedback',
+      'delta' => 'feedback',
+      'region' => 'content',
+    );
+  }
+
+  /**
+   * Site template callback for the "Feedback" feature.
+   */
+  public function site_template_feedback_feature_install(&$data, $features) {
+    $this->installBaseContactFeature($data, $features);
+    module_enable(array('feedback'), FALSE);
+    $block = $data['block_data'];
+    if (site_template_enable_block($block)) {
+      $data['block'] = $block;
+    }
+  }
+
+  /**
+   * Rollback function for the "Feedback" feature.
+   */
+  public function site_template_feedback_feature_rollback($data) {
+    if (isset($data['block'])) {
+      site_template_disable_block($data['block']);
+    }
+    module_disable(array('feedback'), FALSE);
+    // TODO: Roll back the contact module also.
+  }
+
+  /**
+   * Site template preparation callback for the "Gallery" feature.
+   */
+  public function site_template_gallery_feature_install_prepare(&$data, $features) {
+    // Prepare a gallery node.
+    $data['galleries'][] = array(
+      'node' => array(
+        'type' => 'media_gallery',
+        'title' => 'Sample gallery',
+        'fields' => array(
+          'media_gallery_expose_block' => array(
+            array(
+              'value' => 1,
+            ),
+          ),
+          'media_gallery_description' => array(
+            array(
+              'value' => 'This is an individual Gallery that can contain images and videos.  It is configured by default to show 4 columns and 3 rows of images or video which are called media.  To increase or decrease the thumbnail size, edit the number of columns in the gallery.   You can organize media by dragging and dropping thumbnails.  To remove media, click the “Edit media” tab above.',
+              'format' => variable_get('gardens_safe_html_format'),
+            ),
+          ),
+        ),
+      ),
+      'images' => array(
+        array(
+          'folder' => 'media_gallery',
+          'filename' => 'gallery_sample_01.png',
+        ),
+        array(
+          'folder' => 'media_gallery',
+          'filename' => 'gallery_sample_02.png',
+        ),
+      ),
+      'videos' => array(
+/*
+
+// Commenting this out until we have an actual video we want to use.
+
+        array(
+          'url' => 'http://www.youtube.com/watch?v=fdbFVWupSsw',
+          'folder' => 'media_gallery',
+          'filename' => 'fdbFVWupSsw.jpg',
+          'public_subdir' => 'media-youtube',
+        ),
+        array(
+          'url' => 'http://www.youtube.com/watch?v=lZ-s3DRZJKY',
+          'folder' => 'media_gallery',
+          'filename' => 'lZ-s3DRZJKY.jpg',
+          'public_subdir' => 'media-youtube',
+        ),
+*/
+      ),
+    );
+
+    // Prepare the block that displays the gallery node.
+    $data['block_data'] = array(
+      'module' => 'media_gallery',
+      'region' => 'sidebar_b',
+    );
+  }
+
+  /**
+   * Site template callback for the "Gallery" feature.
+   */
+  public function site_template_gallery_feature_install(&$data, $features) {
+    // Enable the appropriate modules.
+    module_enable(array('media_gallery'), FALSE);
+
+    // Save the gallery nodes and any files associated with them.
+    $data['nids'] = array();
+    foreach ($data['galleries'] as &$gallery) {
+      $image_fids = array();
+      foreach ($gallery['images'] as $image) {
+        $file = site_template_copy_asset($image['folder'], $image['filename']);
+        $image_fids[] = $file->fid;
+        $gallery['node']['fields']['media_gallery_media'][] = array('fid' => $file->fid);
+        $this->preCreateImageDerivative('public://' . $image['filename']);
+      }
+      $this->addTitlesAndDescriptions($image_fids, 'image');
+      // Work around a static caching bug to make sure the videos are actually
+      // recognized.
+      drupal_static_reset('file_get_stream_wrappers');
+      $video_fids = array();
+      foreach ($gallery['videos'] as $video) {
+        $provider = media_internet_get_provider($video['url']);
+        $file = $provider->save();
+        $video_fids[] = $file->fid;
+        $gallery['node']['fields']['media_gallery_media'][] = array('fid' => $file->fid);
+        // Copy the screenshot to the files directory before creating
+        // derivatives.
+        $public_subdir_uri = 'public://' . $video['public_subdir'];
+        file_prepare_directory($public_subdir_uri, FILE_CREATE_DIRECTORY);
+        $screenshot_uri = $public_subdir_uri . '/' . $video['filename'];
+        copy(drupal_get_path('module', 'site_template')  . "/assets/{$video['folder']}/{$video['filename']}", $screenshot_uri);
+        $this->preCreateImageDerivative($screenshot_uri);
+      }
+      $this->addTitlesAndDescriptions($video_fids, 'video');
+      $node = site_template_add_basic_node($gallery['node']);
+      $data['nids'][] = $node->nid;
+    }
+
+    // Enable the block; display the first gallery node we saved above.
+    $block = $data['block_data'];
+    $block['delta'] = reset($data['nids']);
+    if (site_template_enable_block($block)) {
+      $data['block'] = $block;
+    }
+  }
+
+  /**
+   * Rollback function for the "Gallery" feature.
+   */
+  public function site_template_gallery_feature_rollback($data) {
+    // Disable the block.
+    if (isset($data['block'])) {
+      site_template_disable_block($data['block']);
+    }
+
+    // Delete any nodes that were created.
+    foreach ($data['nids'] as $nid) {
+      node_delete($nid);
+    }
+
+    // Disable the gallery module.
+    module_disable(array('media_gallery'), FALSE);
+  }
+
+  /**
+   * Pre-create image derivatives for a sample image (or video thumbnail).
+   *
+   * We've seen bugs where after initial site creation, the images don't all
+   * show up on the first page load, and it looks like it might be a race
+   * condition involving an attempt to create the style directory as the images
+   * are being generated. This race condition shouldn't happen, but
+   * pre-creating the image derivatives should speed up the initial page load
+   * after site creation anyway, so it's worth doing. For now, we only do this
+   * for the styles that the media gallery module itself provides (which is a
+   * thumbnail style), since that's what we need for the initial page load.
+   *
+   * @param $image_uri
+   *   Local URI where the original copy of the image is stored.
+   */
+  protected function preCreateImageDerivative($image_uri) {
+    $media_gallery_styles = module_invoke('media_gallery', 'image_default_styles');
+    if (!empty($media_gallery_styles)) {
+      foreach (array_keys($media_gallery_styles) as $style_name) {
+        $style_path = image_style_path($style_name, $image_uri);
+        if (!file_exists($style_path)) {
+          $style = image_style_load($style_name);
+          image_style_create_derivative($style, $image_uri, $style_path);
+        }
+      }
+    }
+  }
+
+  /**
+   * Adds sequentially numbered titles and descriptions to media items.
+   *
+   * @param $fids
+   *   An array of file IDs corresponding to the media entities to act on.
+   * @param $type
+   *   The type of file represented by the items in the list.
+   */
+  protected function addTitlesAndDescriptions($fids, $type) {
+    // Only put a number in the title if there is more than one item.
+    $count = count($fids) > 1 ? 0 : NULL;
+    foreach ($fids as $fid) {
+      $file = file_load($fid);
+      $title = "Sample $type";
+      if (isset($count)) {
+        $count++;
+        $title .= ' ' . $count;
+      }
+      $file->media_title[LANGUAGE_NONE][0]['value'] = $title;
+      $file->media_description[LANGUAGE_NONE][0]['value'] = "This sample $type is demonstrating the Gallery feature.";
+      file_save($file);
+    }
+  }
+
+  /**
+   * Helper function to install the basic "Contact" feature and ensure it does
+   * not happen more than once.
+   */
+  protected function installBaseContactFeature(&$data, $features) {
+    $installed = &drupal_static(__FUNCTION__, FALSE);
+    if (!$installed) {
+      // Enable the module.
+      module_enable(array('contact'), FALSE);
+
+      // Grant permission to view the contact form.
+      $contact_permissions = array('access site-wide contact form');
+      $data['permission_states'] = site_template_get_permission_states($contact_permissions);
+      user_role_grant_permissions(DRUPAL_ANONYMOUS_RID, $contact_permissions);
+      user_role_grant_permissions(DRUPAL_AUTHENTICATED_RID, $contact_permissions);
+
+      // Customize the contact form appropriately.
+      $contact_form = contact_load(1); // This was set up in contact.install
+      $data['contact_form'] = $contact_form;
+      $contact_form['category'] = $data['contact_form_category'];
+      $contact_form['recipients'] = variable_get('site_mail');
+      drupal_write_record('contact', $contact_form, array('cid'));
+
+      // Add a custom block with help text.
+      $custom_block = array(
+        'info' => 'Contact page help',
+        'body' => "This is a block placed on your site's contact form. You can edit this text and replace it with whatever you want people contacting you to see. To add contact categories and recipient e-mail addresses to your contact form, click Structure > Contact form.",
+        'format' => variable_get('gardens_safe_html_format'),
+      );
+      $block = array(
+        'module' => 'block',
+        'region' => 'help',
+        'pages' => array('contact'),
+      );
+      // Save the custom block and get its delta.
+      $delta = db_insert('block_custom')
+        ->fields(array(
+          'body' => $custom_block['body'],
+          'info' => $custom_block['info'],
+          'format' => $custom_block['format'],
+        ))
+        ->execute();
+      // Enable the block.
+      $block['delta'] = $delta;
+      site_template_enable_block($block);
+
+      // Mark this feature as installed.
+      $installed = TRUE;
+    }
+  }
+
+  /**
+   * Returns an array of basic permissions to give to "content creator" roles.
+   *
+   * This does not return permissions for any specific type of content; that
+   * is up to the calling function to merge in.
+   */
+  protected function baseContentCreatorPermissions() {
+    $permissions = array(
+      'edit own comments',
+      'edit own follow links',
+      'administer media',
+      'view media',
+      'edit media',
+      'access content overview',
+      'view own unpublished content',
+      'access overlay',
+      'administer url aliases',
+      'create url aliases',
+      'vote on polls',
+      'cancel own vote',
+      'inspect all votes',
+      'use advanced search',
+      'customize shortcut links',
+      'switch shortcut sets',
+      'access administration pages',
+      'view the administration theme',
+      'access toolbar',
+      'access user profiles',
+    );
+    if (module_exists('taxonomy')) {
+      foreach (taxonomy_get_vocabularies() as $vocabulary) {
+        $permissions[] = 'edit terms in ' . $vocabulary->vid;
+      }
+    }
+    $safe_html_format_id = variable_get('gardens_safe_html_format');
+    if (!empty($safe_html_format_id)) {
+      $permissions[] = filter_permission_name(filter_format_load($safe_html_format_id));
+    }
+    return $permissions;
+  }
+  /**
+   * Returns an array of basic permissions to give to "designer" roles.
+   */
+  protected function baseSiteDesignerPermissions() {
+    $permissions = array(
+      'administer themes',
+      'access themebuilder styles tab',
+      'access themebuilder brand tab',
+      'access themebuilder layout tab',
+      'access themebuilder advanced tab',
+      'access themebuilder theme tab',
+      'publish theme',
+      'administer views',
+      'administer media galleries',
+    );
+    return $permissions;
+  }
+}
+
+/**
+ * @} End of "defgroup site_template_features".
+ */

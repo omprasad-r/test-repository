@@ -1,0 +1,118 @@
+<?php
+
+/**
+ * Test to make sure the default text is in the subject and body
+ */
+class GardensMediaSuccessEmailForm extends DrupalWebTestCase {
+  public static function getInfo(){
+    return array(
+      'name' => t('Gardens Media Mail Form'),
+      'description' => t('Making sure the Media Mail Form in the admin section has and saves the proper data.'),
+      'group' => 'Media'
+    );
+  }
+  
+  function setUp() {
+    parent::setUp('gardens_mail_media');
+  }
+  
+  function testGardensMediaFormAccess() {
+    // anonymous users can't get to it
+    $this->drupalGet('admin/config/people/accounts/gardens_mail_media');
+    $this->assertResponse(403, t('Anonymous users can\'t access the form.'));
+    
+    // regular users can't get to it (no permissions)
+    $user = $this->drupalCreateUser(array());
+    $this->drupalLogin($user);
+    $this->drupalGet('admin/config/people/accounts/gardens_mail_media');
+    $this->assertResponse(403, t('Users without permissions can\'t access the form.'));
+    $this->drupalLogout();
+    
+    // users with proper permissions can get to it
+    $user2 = $this->drupalCreateUser(array('administer users'));
+    $this->drupalLogin($user2);
+    $this->drupalGet('admin/config/people/accounts/gardens_mail_media');
+    $this->assertResponse(200, t('Admin user with permissions can access the form.'));
+    $this->drupalLogout();
+
+  }
+  
+  function testGardensMediaFormSavesText() {
+    $user = $this->drupalCreateUser(array('administer users'));
+    $this->drupalLogin($user);
+    $this->drupalGet('admin/config/people/accounts/gardens_mail_media');
+    
+    // currently has default text
+    $this->assertFieldById('edit-gardens-media-subject', t('[node:content-type] upload successful - [site:url-brief]'), t('The subject field with default text is there.'));
+    
+    // change text and make sure the text comes up
+    $subject_text = "Here is a test subject for gardens media mail";
+    $edit = array();
+    $edit['gardens_mail_media_subject'] = $subject_text;
+    $this->drupalPost("admin/config/people/accounts/gardens_mail_media", $edit, t('Save settings'));
+    $this->assertFieldById('edit-gardens-media-subject', $subject_text, t('The subject field with changed text is there and successful.'));
+    
+    $this->drupalLogout();
+  }
+}
+
+/**
+ * Test to make sure the email gets sent out when the action is triggered.
+ * Only feasible if the action is triggered after the new node is saved.
+ */
+class GardensMediaSuccessEmailAction extends DrupalWebTestCase {
+  public static function getInfo(){
+    return array(
+      'name' => t('Gardens Media Mail Action'),
+      'description' => t('Send the e-mail and make sure it\'s actually sent.'),
+      'group' => 'Media'
+    );
+  }
+  
+  function setUp() {
+    parent::setUp('trigger', 'gardens_mail_media');
+  }
+  
+  function testGardensMediaMailAction() {
+    // change the subject to something I can read...
+    $user = $this->drupalCreateUser(array('administer users'));
+    $this->drupalLogin($user);
+    $subject_text = "Here is a test subject";
+    $edit = array();
+    $edit['gardens_mail_media_subject'] = $subject_text;
+    $this->drupalPost("admin/config/people/accounts/gardens_mail_media", $edit, t('Save settings'));
+    $this->drupalLogout();
+    
+    // create a user that has access to the actions
+    $user = $this->drupalCreateUser(array('administer actions'));
+    $this->drupalLogin($user);
+    
+    // Before we send the e-mail, drupalGetMails should return an empty array.
+    $captured_emails = $this->drupalGetMails();
+    $this->assertEqual(count($captured_emails), 0, 
+        t('The captured e-mails queue is empty.'), t('E-mail'));
+    
+    // whenever a new node is created, execute the action
+    $action_id = 'gardens_mail_media_send_email_action';
+    $hash = drupal_hash_base64($action_id);
+    $edit = array('aid' => $hash);
+    $this->drupalPost('admin/structure/trigger/node', $edit, t('Assign'), 
+        array(), array(), 'trigger-node-insert-assign-form');
+    $this->drupalLogout();
+    
+    // create a user that can create nodes
+    $user = $this->drupalCreateUser(array('access content','create article content'));
+    $this->drupalLogin($user);
+    
+    $node = $this->drupalCreateNode();
+    
+    // Ensure that there is one e-mail in the captured e-mails array.
+    $captured_emails = $this->drupalGetMails();
+    $this->assertEqual(count($captured_emails), 1, 
+        t('One e-mail was captured.'), t('E-mail'));
+    
+    $this->assertMail('subject', $subject_text, 
+        t('The email was sent to the user on node creation.'));
+    $this->drupalLogout();
+  }
+}

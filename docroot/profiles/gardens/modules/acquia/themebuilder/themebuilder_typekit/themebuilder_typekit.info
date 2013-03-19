@@ -1,0 +1,9 @@
+name = Themebuilder Typekit
+description = Integration for Themebuilder, the Typekit module, and the Typekit API.
+package = Themebuilder
+core = 7.x
+
+files[] = themebuilder_typekit.module
+files[] = TypekitFontStack.inc
+
+hidden = TRUE

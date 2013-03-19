@@ -1,0 +1,6 @@
+; $Id$
+name = jsUnit test framework
+description = jsUnit test framework
+core = 7.x
+package = jsUnit Tests
+files[] = jsunit.module

@@ -1,0 +1,5 @@
+name = Gardens Mail Media
+description = Stores new mail_media_import content as Photo and Video nodes.
+core = 7.x
+dependencies[] = mail_media
+dependencies[] = gardens_media

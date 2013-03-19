@@ -1,0 +1,1783 @@
+<?php
+// $Id$
+
+/**
+ * Implements hook_schema().
+ */
+function gardens_misc_schema() {
+  $schema['gardens_misc_invited_users'] = array(
+    'description' => 'Stores a list of e-mail addresses who were invited to join by site administrators but have not joined yet.',
+    'fields' => array(
+      'mail' => array(
+        'type' => 'varchar',
+        'length' => 254,
+        'not null' => TRUE,
+        'description' => 'E-mail address of the invitee.',
+      ),
+    ),
+    'primary key' => array('mail'),
+  );
+
+  return $schema;
+}
+
+/**
+ * Implements hook_requirements().
+ */
+function gardens_misc_requirements($phase) {
+  if ($phase == 'install') {
+    // This runs before HTML Purifier's hook_requirements() and allows it to
+    // find the HTML Purifier library in the sites/all/libraries location even
+    // before our install profile actually installs the Libraries API module.
+    drupal_load('module', 'libraries');
+  }
+  return array();
+}
+
+/**
+ * Implements hook_update_dependencies().
+ */
+function gardens_misc_update_dependencies() {
+  // Before changing permissions, we need to run the user.module update
+  // function which changes the schema of the {role_permission} table.
+  $dependencies['gardens_misc'][7005] = array(
+    'user' => 7006,
+  );
+  // If we haven't successfully run the Media module updates on this site yet,
+  // we need to make sure the File and Image modules are turned on first, since
+  // they are required for the Media update to work correctly.
+  $dependencies['media'][7002] = array(
+    'gardens_misc' => 7013,
+  );
+
+  $dependencies['gardens_misc'][7022] = array(
+    'user' => 7007,
+  );
+
+  $dependencies['gardens_misc'][7023] = array(
+    'user' => 7007,
+  );
+
+  $dependencies['gardens_misc'][7024] = array(
+    'user' => 7007,
+  );
+
+  $dependencies['gardens_misc'][7025] = array(
+    'user' => 7007,
+  );
+
+  $dependencies['media'][7006] = array(
+    'gardens_misc' => 10701,
+  );
+
+  // gardens_misc_update_10801() requires an up-to-date Mollom schema in order
+  // to succeed. However, it is not guaranteed that Mollom is even installed
+  // yet when that update function is run (the function takes care of enabling
+  // Mollom itself if it wasn't already). In that case we do not want to force
+  // the dependency, since a dependency on an uninstalled module would prevent
+  // the update from running at all.
+  if (drupal_get_installed_schema_version('mollom') != SCHEMA_UNINSTALLED) {
+    $dependencies['gardens_misc'][10801] = array(
+      'mollom' => 7003,
+    );
+  }
+
+  // With our scarecrow setup, all sites *think* they have media module
+  // enabled, and therefore try to run media module updates, but in practice
+  // somehow we ended up with sites where it is not enabled. gardens_misc_11000
+  // enables media on all sites, which allows media_7007 to run correctly.
+  $dependencies['media'][7007] = array(
+    'gardens_misc' => 11000,
+  );
+
+  // See head2head_895032(), which is called by gardens_misc_update_11300(),
+  // for an explanation of why we need this.
+  $dependencies['user'][7013] = array(
+    'gardens_misc' => 11300,
+  );
+  $dependencies['gardens_misc'][11300] = array(
+    'system' => 7059,
+  );
+
+  // gardens_misc_update_11906() deprecates use of Styles module and disables
+  // it. Ensure Media migration to file formatters happens first.
+  $dependencies['gardens_misc'][11906] = array(
+    'media' => 7017,
+  );
+  return $dependencies;
+}
+
+/**
+ * Make sure that all public files are stored permanently.
+ *
+ * This attempts to do our best to fix Gardens sites that are in the process of
+ * experiencing the bug at http://drupal.org/node/618654
+ */
+function gardens_misc_update_7001() {
+  db_query("UPDATE {file_managed} SET status = 1 WHERE uri LIKE 'public://%'");
+}
+
+/**
+ * Enable the media filter for Full HTML.
+ */
+function gardens_misc_update_7002() {
+  db_update('filter')
+    ->condition('format', 2)
+    ->condition('module', 'media')
+    ->condition('name', 'media_filter')
+    ->fields(array('weight' => 8, 'status' => 1))
+    ->execute();
+}
+
+/**
+ * Make sure that Gardens sites don't have extra themebuilder themes enabled.
+ */
+function gardens_misc_update_7003() {
+  // Only the main site theme and administrative theme should end up enabled.
+  $should_be_enabled = array(variable_get('theme_default'), variable_get('admin_theme'));
+  $themes_to_enable = array();
+  $themes_to_disable = array();
+  $return = array();
+  // Get all theme names and statuses. We can't use list_themes() for this
+  // because it doesn't work correctly in update.php.
+  $all_themes = db_query("SELECT name, status FROM {system} WHERE type = 'theme'")->fetchAll();
+  foreach ($all_themes as $theme) {
+    // If the theme is disabled but shouldn't be, enable it.
+    if (empty($theme->status) && in_array($theme->name, $should_be_enabled)) {
+      $themes_to_enable[] = $theme->name;
+    }
+    // If the theme is enabled but shouldn't be, disable it.
+    if (!empty($theme->status) && !in_array($theme->name, $should_be_enabled)) {
+      $themes_to_disable[] = $theme->name;
+    }
+  }
+  // Now enable or disable the themes that were found above.
+  if (!empty($themes_to_enable)) {
+    theme_enable($themes_to_enable);
+    $return[] = t('Enabled the following themes that were accidentally disabled: @themes.', array('@themes' => implode(', ', $themes_to_enable)));
+  }
+  if (!empty($themes_to_disable)) {
+    theme_disable($themes_to_disable);
+    $return[] = t('Disabled the following themes that should not have been enabled: @themes.', array('@themes' => implode(', ', $themes_to_disable)));
+  }
+  // If we did anything here, clear the cache and return a status message (the
+  // cache clear is to avoid any weird page caching bugs due to, e.g., issues
+  // discussed in http://drupal.org/node/276615).
+  if (!empty($return)) {
+    cache_clear_all();
+    return implode(' ', $return);
+  }
+}
+
+/**
+ * Fix the Gardener URL, which was incorrectly set to use "https" on some
+ * Gardens sites.
+ */
+function gardens_misc_update_7004() {
+  $url = variable_get('acquia_gardens_gardener_url');
+  if (strpos($url, 'https://') === 0) {
+    variable_set('acquia_gardens_gardener_url', gardens_client_swap_url_scheme($url));
+  }
+}
+
+/**
+ * Add 'change follow link titles' permission to the administrator and site owner roles.
+ */
+function gardens_misc_update_7005() {
+  // We need to force this function to run first, for sites that failed the
+  // first time this update was attempted.
+  $sandbox = array();
+  user_update_7006($sandbox);
+
+  // Use a custom method to grant the permissions since the Follow module might
+  // not be enabled on this site, and the Drupal API functions are a bit broken
+  // in that case.
+  foreach (array('administrator', 'site owner') as $role_text) {
+    $role = user_role_load($role_text);
+    db_merge('role_permission')
+      ->key(array(
+        'rid' => $role->rid,
+        'permission' => 'change follow link titles',
+        'module' => 'follow',
+      ))
+      ->execute();
+    drupal_static_reset('user_access');
+    drupal_static_reset('user_role_permissions');
+  }
+}
+
+/**
+ * Enable the site_theme_settings module, copy the default user picture, set
+ * the default user picture, enable pictures on posts and comments.
+ */
+function gardens_misc_update_7006() {
+  // Enable the site_theme_settings module.
+  $modules = array('site_theme_settings');
+  module_enable($modules);
+  registry_rebuild();
+  menu_rebuild();
+  cache_clear_all('schema', 'cache');
+
+  // Copy the default user picture into the public:// directory.
+  $path = drupal_get_path('module', 'gardens_misc') . '/AnonymousPicture.gif';
+  file_unmanaged_copy($path, NULL, FILE_EXISTS_REPLACE);
+  // Configure the default user picture.
+  variable_set('user_picture_default', 'public://AnonymousPicture.gif');
+
+  // Enable pictures by default
+  $theme_settings = variable_get('theme_settings', array());
+  $theme_settings['toggle_comment_user_picture'] = 1;
+  variable_set('theme_settings', $theme_settings);
+}
+
+/**
+ * Add an appropriate 'object_types' key to all field configurations.
+ */
+function gardens_misc_update_7007() {
+  $fields = array();
+
+  // Do this via a manual database query to be safe; the field update API seems
+  // to prevent changing this for fields that already exist.
+  $result = db_query("SELECT id, field_name, data FROM {field_config}");
+  foreach ($result as $record) {
+    $fields[] = $record->field_name;
+    $data = unserialize($record->data);
+    if ($record->field_name == 'body') {
+      $data['object_types'] = array('node');
+    }
+    elseif ($record->field_name == 'comment_body') {
+      $data['object_types'] = array('comment');
+    }
+    else {
+      $data['object_types'] = array();
+    }
+    db_query("UPDATE {field_config} SET data = :data WHERE id = :id", array(':data' => serialize($data), ':id' => $record->id));
+  }
+
+  return t("Set the 'object_types' data property on the following fields: @fields", array('@fields' => implode(', ', $fields)));
+}
+
+/**
+ * Change the size of the 'bundle' and 'type' columns in field storage tables.
+ */
+function gardens_misc_update_7008() {
+  $messages = array();
+
+  foreach (field_sql_storage_schema() as $table => $schema) {
+    // For some reason, certain field database tables don't exist even though
+    // the schema thinks they should. Those we should just skip.
+    if (!db_table_exists($table)) {
+      continue;
+    }
+
+    // There are changes to the 'type' column in the field SQL storage module's
+    // static table, and to the 'bundle' column in all dynamic tables.
+    $column = ($table == 'field_config_entity_type' ? 'type' : 'bundle');
+
+    // Modify the column to match the new schema definition, deleting and
+    // replacing any indexes that used it.
+    $indexes_to_replace = array();
+    $drop_functions = array(
+      'unique keys' => 'db_drop_unique_key',
+      'indexes' => 'db_drop_index',
+    );
+    foreach (array_keys($drop_functions) as $index_type) {
+      if (!empty($schema[$index_type])) {
+        foreach ($schema[$index_type] as $index_name => $index) {
+          if (in_array($column, $index)) {
+            $indexes_to_replace[$index_type][$index_name] = $index;
+            // Substitute for db_index_exists(), which doesn't work right yet.
+            $row = Database::getConnection('default')->query('SHOW INDEX FROM {' . $table . "} WHERE key_name = '$index_name'")->fetchAssoc();
+            if (isset($row['key_name'])) {
+              $drop_function = $drop_functions[$index_type];
+              $drop_function($table, $index_name);
+            }
+          }
+        }
+      }
+    }
+    db_change_field($table, $column, $column, $schema['fields'][$column], $indexes_to_replace);
+    $message = "Column $column on table $table";
+    if (!empty($indexes_to_replace)) {
+      foreach ($indexes_to_replace as $type => $indexes) {
+        $message .= " (replaced $type: " . implode(', ', array_keys($indexes)) . ")";
+      }
+    }
+    $messages[] = $message;
+  }
+
+  return "Changed the database schema for the following columns:\n\n" . implode("\n", $messages);
+}
+
+/**
+ * Cherry-pick the one available block module update we want to run.
+ *
+ * The others we will ignore by using Drush to set the schema_version, before
+ * we run this update. For example:
+ *
+ * drush sql-query "UPDATE {system} SET schema_version = 7004 WHERE name = 'block' AND type = 'module' AND schema_version != -1"
+ */
+function gardens_misc_update_7009() {
+  // It's unlikely, but someone could have uninstalled the block module on
+  // Gardens, so check for that before running the update function here.
+  if (drupal_get_installed_schema_version('block') != SCHEMA_UNINSTALLED) {
+    block_update_7003();
+  }
+}
+
+/**
+ * Remove the 'administer files' permission, since it doesn't exist anymore.
+ */
+function gardens_misc_update_7010() {
+  foreach (array_keys(user_roles()) as $rid) {
+    user_role_revoke_permissions($rid, array('administer files'));
+  }
+}
+
+/**
+ * Make sure the selected theme and the seven theme are enabled.
+ */
+function gardens_misc_update_7011() {
+  // This update apparently caused the status flag for all themes to be set to
+  // 0, causing layout issues until the theme is published.
+  $theme_name = variable_get('theme_default');
+  $fields = array(
+    'status' => 1
+  );
+  db_update('system')
+    ->fields($fields)
+    ->condition('name', $theme_name)
+    ->execute();
+  db_update('system')
+    ->fields($fields)
+    ->condition('name', 'seven')
+    ->execute();
+}
+
+/**
+ * Fix (again) sites with no themes enabled.
+ *
+ * We now have a permanent fix for this bug, but we need to run this update
+ * function to fix sites that broke in the interim.
+ */
+function gardens_misc_update_7012() {
+  gardens_misc_update_7011();
+}
+
+/**
+ * Since we have a dependency on file and image, it seems like a kinda
+ * good idea to enable the two of them...
+ */
+function gardens_misc_update_7013() {
+  $module_list = array('file', 'image');
+  module_enable($module_list, FALSE);
+}
+
+/**
+ * The Media module is required too, so make sure it's turned on.
+ */
+function gardens_misc_update_7014() {
+  module_enable(array('media'), FALSE);
+}
+
+/**
+ * Fix any permissions that have been messed up.
+ */
+function gardens_misc_update_7015() {
+  module_load_all();
+  scarecrow_modules_installed(module_list());
+}
+
+/**
+ * Allow all users to see aggregated feeds by default.
+ */
+function gardens_misc_update_7016() {
+  if (in_array('aggregator', module_list())) {
+    user_role_grant_permissions(DRUPAL_ANONYMOUS_RID, array('access news feeds'));
+    user_role_grant_permissions(DRUPAL_AUTHENTICATED_RID, array('access news feeds'));
+  }
+}
+
+/**
+ * Make the forum taxonomy dropdown on the forum node form a required field.
+ *
+ * For sites without existing forums, this is now done in forum_enable().
+ * @see http://drupal.org/node/652372#comment-2783962
+ */
+function gardens_misc_update_7017() {
+  $instance = field_info_instance('node', 'taxonomy_forums', 'forum');
+  if ($instance) {
+    $instance['required'] = TRUE;
+    field_update_instance($instance);
+  }
+}
+
+/**
+ * Fix path aliases that might not have a language.
+ */
+function gardens_misc_update_7018() {
+  $pids = db_query("SELECT pid FROM {url_alias}")->fetchCol();
+  foreach ($pids as $pid) {
+    $path = path_load($pid);
+    if (empty($path['language'])) {
+      $path['language'] = LANGUAGE_NONE;
+    }
+    path_save($path);
+  }
+}
+
+/**
+ * Fix nodes that might not have a language.
+ */
+function gardens_misc_update_7019() {
+  db_update('node')
+    ->fields(array('language' => LANGUAGE_NONE))
+    ->condition('language', '')
+    ->execute();
+}
+
+/**
+ * Make sure that Gardens sites don't have extra themes enabled due to faulty
+ * installations of the campaign template.
+ */
+function gardens_misc_update_7020() {
+  return gardens_misc_update_7003();
+}
+
+/**
+ * Remove references to non-existant fields.
+ */
+function gardens_misc_update_7021() {
+  $results = db_query("SELECT field_name, deleted, id FROM {field_config}");
+  foreach ($results AS $result) {
+    $field = array(
+      'field_name' => $result->field_name,
+      'deleted' => $result->deleted,
+      'id' => $result->id,
+    );
+
+    if (!db_table_exists(_field_sql_storage_tablename($field)) OR
+        !db_table_exists(_field_sql_storage_revision_tablename($field))) {
+      db_delete('field_config')
+        ->condition('id', $field['id'])
+        ->execute();
+    }
+  }
+}
+
+/**
+ * Enable the themebuilder_resources module to make open-source fonts available.
+ */
+function gardens_misc_update_7022() {
+  module_enable(array('themebuilder_resources'), FALSE);
+}
+
+/**
+ * The rotating banner module is required.
+ * @TODO: Write migration function for old banners, place in block, etc.
+ */
+function gardens_misc_update_7023() {
+  module_enable(array('rotating_banner'), FALSE);
+}
+
+/**
+ * Enable the typekit and themebuilder_typekit modules to make Typekit fonts
+ * available.
+ */
+function gardens_misc_update_7024() {
+  module_enable(array('themebuilder_typekit'), FALSE);
+}
+
+/**
+ * Enable the gardens_features module to make people's sites look good.
+ */
+function gardens_misc_update_7025() {
+  module_enable(array('gardens_features'), FALSE);
+}
+
+/**
+ * Enable the product_template module.
+ */
+function gardens_misc_update_7026() {
+  module_enable(array('product_template'), FALSE);
+}
+
+/**
+ * Update older campaign node templates because the node title variable
+ * changed in core.
+ */
+function gardens_misc_update_7027() {
+  _gardens_misc_update_campaign_node_template();
+}
+
+/**
+ * Updates the campaign node.tpl.php files.  $node_title was changed to
+ * $title, but it only affects campaign because that is the only theme that
+ * includes a node.tpl.php file.
+ *
+ * This function finds all themebuilder themes associated with this site and
+ * attempts to update the node.tpl.php file if the theme is based on campaign.
+ *
+ * A log entry will be written to syslog detailing which themes were updated,
+ * which were not, and any errors that were encountered along the way.
+ */
+function _gardens_misc_update_campaign_node_template() {
+  $report = array('updated' => array(), 'other' => array(), 'errors' => array());
+  require_once(drupal_get_path('module', 'themebuilder_compiler') . '/themebuilder_compiler.module');
+  $theme_folder = themebuilder_compiler_get_custom_theme_folder();
+  foreach (new DirectoryIterator(realpath($theme_folder)) as $info) {
+    if ($info->isDot()) {
+      continue;
+    }
+    try {
+      if ($info->isDir() || $info->isLink()) {
+        // Probably found a theme.  If it is based on campaign, update the node
+        // template.
+        try {
+          $updated = FALSE;
+          $path = realpath($info->getPathname());
+          $theme_name = $info->getFilename();
+          $info_file = $path . "/$theme_name.info";
+          if (!file_exists($info_file)) {
+            $report['errors'][] = "Missing info file for theme $theme_name";
+            continue;
+          }
+          $info_contents = drupal_parse_info_file($info_file);
+          $base_theme = $info_contents['base_theme'];
+          if (!$base_theme) {
+            $base_theme = themebuilder_compiler_get_base_theme_name_from_screenshot($theme_name);
+          }
+          if ($base_theme === 'campaign') {
+            $count = 0;
+            $file = $path . '/node.tpl.php';
+            if (file_exists($file)) {
+              // Not all versions of campaign have a node template.
+              $node_template = file_get_contents($file);
+              $node_template = str_replace('$node_title', '$title', $node_template, $count);
+              if ($count > 0) {
+                // Only write a new node template if changes were made.
+                if (!is_writable($file)) {
+                  chmod($file, 0660);
+                }
+                file_put_contents($file, $node_template);
+                $updated = TRUE;
+              }
+            }
+          }
+          // Indicate the results of upgrading this theme.
+          if ($updated == TRUE) {
+            $report['updated'][] = $theme_name;
+          }
+          else {
+            $report['other'][] = $theme_name;
+          }
+        }
+        catch (Exception $reportProblem) {
+          $report['errors'][] = 'Exception caught during upgrade of theme ' . $theme_name . ' --> ' + $reportProblem->getMessage();
+        }
+      }
+    }
+    catch (Exception $e) {
+    }
+  }
+
+  // Report the results.
+  $dir_info = pathinfo(conf_path());
+  $site_name = $dir_info['filename'];
+  $result = "Theme update for site $site_name - successful: "
+    . implode(',', $report['updated']) . '; themes not updated: '
+    . implode(',', $report['other']) . '; errors: '
+    . implode(',', $report['errors']);
+  syslog(LOG_INFO, $result);
+}
+
+/**
+ * Fix cron, which isn't running on many sites because of a bad default value.
+ */
+function gardens_misc_update_7028() {
+  $interval = variable_get('cron_safe_threshold', NULL);
+  switch ($interval) {
+    case '3600':
+    case '10800':
+    case '21600':
+    case '43200':
+    case '86400':
+    case '604800':
+      // The value is available on the site-information page, so leave it alone.
+      break;
+    default:
+      // The value is 0 (not good) or some other value which is not available
+      // in the site-information page.  Set it to a known value.
+      variable_set('cron_safe_threshold', '3600');
+  }
+}
+
+/**
+ * Updates after gardens-beta-7 start at 10700
+ */
+
+/**
+ * Allow everyone to use search.
+ */
+function gardens_misc_update_10700() {
+  if (module_exists('search')) {
+    foreach (array_keys(user_roles()) as $rid) {
+      user_role_grant_permissions($rid, array('search content'));
+    }
+  }
+}
+
+/**
+ * D7 core upgrades from April 8th -> April 28th: Renames file => file_managed.
+ */
+function gardens_misc_update_10701() {
+  module_enable(array('head2head'));
+  // Renames file => file_managed
+  if (db_table_exists('file')) {
+    head2head_741578();
+  }
+}
+
+/**
+ * D7 core upgrades from April 8th -> April 28th: Changes taxonomy_tags to field_tags
+ */
+function gardens_misc_update_10702() {
+  global $databases;
+  // Changes taxonomy_tags to field_tags
+  if (db_table_exists('field_data_taxonomy_tags')) {
+    try {
+      head2head_762404();
+    }
+    catch (Exception $e) {
+      syslog(LOG_ERR, "head2head_762404 failed for {$databases['default']['default']['database']} with message " . $e->getMessage());
+      return "head2head_762404 failed for {$databases['default']['default']['database']} with message " . $e->getMessage();
+    }
+  }
+}
+
+/**
+ * Enable XML Sitemap by default.  Users can turn it off later, if they
+ * so choose.
+ */
+function gardens_misc_update_10703() {
+  // This never ran on production since we delayed the rollout of XML Sitemap.
+  // It has been moved to gardens_misc_update_10804().
+}
+
+/**
+ * D7 core upgrades from April 28th -> May 10th: Block_node_type table moved from block module to node module.
+ */
+function gardens_misc_update_10704() {
+  // Field_config_instance.object_type becomes entity_type.
+  // Looks like Gardens already ran such an update.
+  // head2head_707724();
+  // Block_node_type table moved from block module to node module.
+  head2head_684774();
+}
+
+/**
+ * D7 core upgrades from April 28th -> May 10th: Update for changes due to new core hashing scheme..
+ */
+function gardens_misc_update_10705() {
+  // Update for changes due to new core hashing scheme.
+  head2head_723802();
+}
+
+/**
+ * Enable the themebuilder_log module.
+ */
+function gardens_misc_update_10706() {
+  module_enable(array('themebuilder_log'));
+}
+
+/**
+ * Enable the blog_template module.
+ */
+function gardens_misc_update_10707() {
+  module_enable(array('blog_template'), FALSE);
+}
+
+/**
+ * Modify default email templates to include site URL.
+ */
+function gardens_misc_update_10708() {
+  $gardener_url = scarecrow_get_gardener_url();
+  $gardener_account_url = ($gardener_url ? $gardener_url . '/user' : 'http://drupalgardens.com/user');
+
+  $replacements = array(
+    'user_mail_register_no_approval_required_body' => array(
+      "[user:name],\n\nThank you for registering at [site:name] with your Drupal Gardens account. You can change your password or edit your profile by visiting $gardener_account_url.\n\n-- [site:name] team\n",
+      "[user:name],\n\nThank you for registering at [site:name] with your Drupal Gardens account. You can change your password or edit your profile by visiting $gardener_account_url.\n\n-- [site:name] team\n[site:url]\n"
+    ),
+    'user_mail_register_pending_approval_body' => array(
+      "[user:name],\n\nThank you for registering at [site:name] with your Drupal Gardens account. Your application for membership on this site is currently pending approval. We will send another email to let you know when it has been approved.\n\n--  [site:name] team\n",
+      "[user:name],\n\nThank you for registering at [site:name] with your Drupal Gardens account. Your application for membership on this site is currently pending approval. We will send another email to let you know when it has been approved.\n\n-- [site:name] team\n[site:url]\n",
+    ),
+    'user_mail_status_activated_body' => array(
+      "[user:name],\n\nWelcome to [site:name]! Your membership has been activated. You may log in by visiting [site:name] and clicking on the \"Log in\" link. You can also visit $gardener_account_url to change your password or add profile information.\n\n-- [site:name] team\n",
+      "[user:name],\n\nWelcome to [site:name]! Your membership has been activated. You may log in by visiting [site:name] and clicking on the \"Log in\" link. You can also visit $gardener_account_url to change your password or add profile information.\n\n-- [site:name] team\n[site:url]\n",
+    ),
+    'user_mail_status_blocked_body' => array(
+      "[user:name],\n\nYour membership at [site:name] has been revoked.\n",
+      "[user:name],\n\nYour membership at [site:name] has been revoked.\n\n-- [site:name] team\n[site:url]\n",
+    ),
+  );
+
+  // Cycle through emails and add site URL if default template is used.
+  foreach ($replacements as $key => $values) {
+    $var_value = variable_get($key, $values[0]);
+    if ($var_value == $values[0]) {
+      variable_set($key, $values[1]);
+    }
+  }
+}
+
+/**
+ * Add some table tags to the Safe HTML format.
+ */
+function gardens_misc_update_10709() {
+  // We could theoretically use the filter APIs, but what we have for loading
+  // will not at all reproduce the layout that should be used for saving. Very
+  // ugly. Filter module itself does direct DB queries on settings page saves.
+  if ($format_number = db_query("SELECT format FROM {filter_format} WHERE name = 'Safe HTML'")->fetchField()) {
+    if ($settings = db_query("SELECT settings FROM {filter} WHERE format = :format_number AND module = 'filter' AND name = 'filter_html'", array(':format_number' => $format_number))->fetchField()) {
+      $settings = unserialize($settings);
+      if (isset($settings['allowed_html'])) {
+        $add_tags = array('<thead>', '<tfoot>', '<th>');
+        foreach ($add_tags as $tag) {
+          if (!strpos($settings['allowed_html'], $tag)) {
+            $settings['allowed_html'] .= ' ' . $tag;
+          }
+        }
+        db_query("UPDATE {filter} SET settings = :settings WHERE format = :format_number AND module = 'filter' AND name = 'filter_html'", array(':format_number' => $format_number, ':settings' => serialize($settings)));
+      }
+    }
+  }
+}
+
+/**
+ * ARGH!!! Update for node body API changes in core on May 5.
+ */
+function gardens_misc_update_10710() {
+  // Argh - for some reason this is not working when calling  head2head_553306();
+  // Get node type info, specifically the body field settings.
+  $result = db_select('node_type', 'node_type')
+    ->fields('node_type')
+    ->execute();
+
+  // Add body field instances for existing node types.
+  foreach ($result as $node_type) {
+    if (!empty($node_type->has_body)) {
+      node_add_body_field($node_type, $node_type->body_label);
+    }
+  }
+
+  try {
+    // Remove node_type properties related to the former 'body'.
+    db_drop_field('node_type', 'has_body');
+    db_drop_field('node_type', 'body_label');
+  }
+  catch (Exception $e) {
+    // Suppress errors if the fields don't exist.
+  }
+}
+
+/**
+ * Try to fix language fields for node bodies.
+ */
+function gardens_misc_update_10711() {
+  // Fix borked language values - MySQL only!
+  if (Database::getConnection()->driver() == 'mysql') {
+    db_query('TRUNCATE {cache_field}');
+    $vids = db_query('SELECT vid FROM {node} n LEFT JOIN {field_revision_body} frb ON n.vid = frb.revision_id AND n.language = frb.language WHERE frb.etid IS NULL')->fetchCol();
+    if ($vids) {
+      db_query('UPDATE {field_revision_body} frb JOIN {node} n ON n.vid = frb.revision_id SET frb.language = n.language WHERE n.vid IN (' . implode(',', $vids) . ')');
+    }
+
+    $vids = db_query('SELECT vid FROM {node} n LEFT JOIN {field_data_body} fdb ON n.vid = fdb.revision_id AND n.language = fdb.language WHERE fdb.etid IS NULL')->fetchCol();
+    if ($vids) {
+      db_query('UPDATE {field_data_body} fdb JOIN {node} n ON n.vid = fdb.revision_id SET fdb.language = n.language WHERE n.vid IN (' . implode(',', $vids) . ')');
+    }
+  }
+}
+
+/**
+ * Fix blocks which might have ended up in page_top.
+ */
+function gardens_misc_update_10712() {
+  if (db_table_exists('block')) {
+    // See also core bug at http://drupal.org/node/778608
+    db_query("UPDATE {block} SET region = 'sidebar_a' WHERE region = 'page_top'");
+  }
+}
+
+/**
+ * Updates after gardens-beta-8 start at 10800
+ */
+
+/**
+ * Require comment moderation for anonymous users unless Mollom is enabled and
+ * functioning appropriately. (This is an emergency fix.)
+ */
+function gardens_misc_update_10800() {
+  // If the Mollom module is enabled, successfully connected to the Mollom
+  // servers, and appropriately protecting the comment form, do nothing.
+  if (module_exists('mollom') && _mollom_status() === TRUE && ($comment_settings = mollom_form_load('comment_form')) && $comment_settings['mode'] != MOLLOM_MODE_DISABLED) {
+    return;
+  }
+  // For everyone else, do not allow anonymous users to post comments without
+  // approval.
+  elseif (user_access('post comments without approval', drupal_anonymous_user())) {
+    // Record the fact that this site wanted comment moderation off, so we can
+    // potentially turn it back off later when it's safe to do so.
+    variable_set('gardens_misc_anonymous_post_comments', TRUE);
+    user_role_revoke_permissions(DRUPAL_ANONYMOUS_RID, array('post comments without approval'));
+  }
+}
+
+/**
+ * Add Mollom keys and turn Mollom on if not configured.
+ */
+function gardens_misc_update_10801() {
+  global $databases;
+
+  // The key file must be manually written to disk prior to running the update.
+  $key_file = '/tmp/mollom_keys.txt';
+
+  if (!is_file($key_file)) {
+    throw new Exception("Missing key file $key_file");
+  }
+
+  $keys = file_get_contents($key_file);
+  $matches = array();
+  $name = $databases['default']['default']['database'];
+  $pattern = "/{$name}\s+([a-z0-9]+)\s+([a-z0-9]+)/";
+
+  if (!preg_match($pattern, $keys, $matches)) {
+    throw new Exception("No mollom keys found for $name in $key_file");
+  }
+
+  if (!module_exists('mollom')) {
+    module_enable(array('mollom'));
+  }
+
+  $configured_for_contact_form = (bool)db_select('mollom_form', 'mf')
+    ->condition('form_id', 'comment_form')
+    ->countQuery()->execute()->fetchField();
+
+  if (!$configured_for_contact_form) {
+    // Set up mollom to work with the comment form by default.
+    db_insert('mollom_form')->fields(
+      array(
+        'form_id' => 'comment_form',
+        'mode' => '2',
+        'enabled_fields' => serialize(array('subject', 'comment_body][und][0][value')),
+        'module' => 'comment',
+        'data' => serialize(array()),
+      )
+    )->execute();
+  }
+
+  variable_set('mollom_public_key', $matches[1]);
+  variable_set('mollom_private_key', $matches[2]);
+
+  if (variable_get('gardens_misc_anonymous_post_comments', FALSE) == TRUE) {
+    if (module_exists('comment')) {
+      user_role_grant_permissions(DRUPAL_ANONYMOUS_RID, array('post comments without approval'));
+    }
+    variable_del('gardens_misc_anonymous_post_comments');
+  }
+}
+
+/**
+ * Updates the custom_display bit for each view mode which has been configured
+ * to use a formatter.
+ */
+function gardens_misc_update_10802() {
+  head2head_553298();
+}
+
+/**
+ * Variables locale_language_providers_enabled_* not used anymore.
+ */
+function gardens_misc_update_10803() {
+  // Copy of variable_del() but we delete with a wildcard.
+  db_query("DELETE FROM {variable} WHERE name LIKE 'locale_language_providers_enabled_%'");
+  cache_clear_all('variables', 'cache_bootstrap');
+}
+
+/**
+ * Enable XML Sitemap by default.  Users can turn it off later, if they
+ * so choose.
+ */
+function gardens_misc_update_10804() {
+  // This never ran on production since we delayed the rollout of XML Sitemap
+  // (again). It has been moved to gardens_misc_update_10901().
+}
+
+/**
+ * Increase the size of the init field on users table to 254 characters.
+ */
+function gardens_misc_update_10805() {
+  head2head_809132();
+}
+
+/**
+ * gardens_misc_update_10702() did not run properly on all sites.
+ */
+function gardens_misc_update_10806() {
+  global $databases;
+
+  if (db_table_exists('field_data_taxonomy_tags')) {
+    $return = "{$databases['default']['default']['database']} still has the taxonomy_tags field. ";
+    $return .= gardens_misc_update_10702() .' ';
+    if (db_table_exists('field_data_taxonomy_tags')) {
+      syslog(LOG_ERR, "gardens_misc_update_10806() did not complete for {$databases['default']['default']['database']}.");
+      $return .= "gardens_misc_update_10806() did not complete for {$databases['default']['default']['database']}.";
+    }
+    return $return;
+  }
+}
+
+/**
+ * Numeric list fields should not be unsigned.
+ */
+function gardens_misc_update_10807() {
+  head2head_795198();
+}
+
+/**
+ * Ensure no users have set up Mollom to protect registration or password forms.
+ */
+function gardens_misc_update_10808() {
+  db_delete('mollom_form')
+    ->condition('form_id', array('user_pass', 'user_register_form'), 'IN')
+    ->execute();
+}
+
+/*
+ * Add Date formats as per designs and set them as the defaults.
+ */
+function gardens_misc_update_10809() {
+
+  $format['type'] = 'short';
+  $format['format'] = "m/d/Y \a\t g:i:s A";
+  $format['locked'] = 1;
+  $format['is_new'] = 1;
+  system_date_format_save($format);
+
+  $format['type'] = 'medium';
+  $format['format'] = "F jS\, Y \a\t g:i:s A";
+  $format['locked'] = 1;
+  $format['is_new'] = 1;
+  system_date_format_save($format);
+
+  $format['type'] = 'long';
+  $format['format'] = "l\, F jS\, Y \a\t g:i:s A";
+  $format['locked'] = 1;
+  $format['is_new'] = 1;
+  system_date_format_save($format);
+
+  variable_set('date_format_short', 'm/d/Y \a\t g:i:s A');
+  variable_set('date_format_medium', 'F jS\, Y \a\t g:i:s A');
+  variable_set('date_format_long', 'l\, F jS\, Y \a\t g:i:s A');
+}
+
+/**
+ * Updates after gardens-beta-9 start at 10900
+ */
+
+/**
+ * Adds new signature_format field to users table.
+ */
+function gardens_misc_update_10900() {
+  head2head_824932();
+}
+
+/**
+ * Enable XML Sitemap by default.  Users can turn it off later, if they
+ * so choose.
+ */
+function gardens_misc_update_10901() {
+  $module_list = array(
+    'xmlsitemap' => NULL,
+    'xmlsitemap_node' => 'node',
+    'xmlsitemap_menu' => 'menu',
+    'xmlsitemap_taxonomy' => 'taxonomy',
+    'xmlsitemap_engines' => NULL,
+    'site_verify' => NULL,
+  );
+
+  // Only enable modules that have their dependencies met.
+  $enable = array();
+  foreach ($module_list AS $module => $depends) {
+    if (empty($depends) || module_exists($depends)) {
+      $enable[] = $module;
+    }
+  }
+
+  // Enable and set up the modules.
+  module_enable($enable, FALSE);
+  module_load_include('install', 'gardens');
+  gardens_setup_xmlsitemap();
+
+  // Perform initial configuration of the sitemap.
+  gardens_rebuild_xmlsitemap(FALSE);
+}
+
+/**
+ * Adds secure session ID to sessions table.
+ */
+function gardens_misc_update_10902() {
+  // Only keep session data for this user to avoid index integrity issues.
+  db_query('DELETE FROM {sessions} WHERE sid != :sid ', array(':sid' => session_id()));
+  head2head_813492_33();
+}
+
+/**
+ * Enable HTML Purifier on existing sites.
+ */
+function gardens_misc_update_10904() {
+  module_enable(array('libraries', 'htmlpurifier'), FALSE);
+}
+
+/**
+ * Rerun the HEAD to HEAD function to update the taxonomy tags data (hopefully
+ * for the last time).
+ */
+function gardens_misc_update_10905() {
+  // Note that this is safe to run on all sites, since the function has an
+  // internal check to prevent it from running when it shouldn't.
+  head2head_762404();
+}
+
+/**
+ * Updates after gardens-beta-10 start at 11000
+ */
+
+/**
+ * Enable media module for sites that have it disabled.
+ */
+function gardens_misc_update_11000() {
+  if (!module_exists('media')) {
+    module_enable(array('media'));
+  }
+}
+
+/**
+ * Enable media filter for all input formats
+ */
+function gardens_misc_update_11001() {
+  // Enabled the media filter for all input formats
+  db_update('filter')
+    ->condition('module', 'media')
+    ->fields(array('status' => 1))
+    ->execute();
+}
+
+/**
+ * Fix tokens which have been renamed in pathauto.
+ */
+function gardens_misc_update_11002() {
+ $old_tokens = array(
+    '[node:uid]',
+    '[comment:uid]',
+    '[file:uid]',
+    '[term:vid]'
+  );
+  $new_tokens = array(
+    '[node:author:uid]',
+    '[comment:author:uid]',
+    '[file:author:uid]',
+    '[term:vocabulary:vid]'
+  );
+  $pathauto_vars = db_select('variable', 'v')
+    ->fields('v')
+    ->condition('name', "%pathauto_%_pattern", 'LIKE')
+    ->execute();
+
+  foreach ($pathauto_vars as $row) {
+    $value = $row->value;
+    $name = $row->name;
+    $pattern = unserialize($value);
+    $new_pattern = str_replace($old_tokens, $new_tokens, $pattern);
+    if ($pattern != $new_pattern) {
+      db_update('variable')
+        ->fields(array('value' => serialize($new_pattern)))
+        ->condition('name', $name)
+        ->execute();
+    }
+  }
+}
+
+/**
+ * head2head for session table field length.
+ */
+function gardens_misc_update_11003() {
+  head2head_837832();
+}
+
+/**
+ * head2head for registry file schema change.
+ */
+function gardens_misc_update_11004() {
+  head2head_819388();
+}
+
+// Hot fixes for gardens-beta-10 continue 110xx numbering.
+
+/**
+ * head2head for improper {url_alias} table structure.
+ */
+function gardens_misc_update_11005() {
+  head2head_818214();
+}
+
+/**
+ * Make sure mollom works by resetting it to force it to check keys.
+ */
+function gardens_misc_update_11006() {
+  if (module_exists('mollom')) {
+    _mollom_status(TRUE);
+  }
+}
+
+/**
+ * Updates on trunk after gardens-beta-11 start at 11100
+ */
+
+/**
+ * Stop using bit-wise operators for {file_managed}.status.
+ */
+function gardens_misc_update_11100() {
+  head2head_809600();
+}
+
+/**
+ * No index on {semaphore}.expire.
+ */
+function gardens_misc_update_11101() {
+  head2head_800432();
+}
+
+/**
+ * Updates on trunk after gardens-beta-12 start at 11200
+ */
+
+/**
+ * Change text fields to blob.
+ */
+function gardens_misc_update_11200() {
+  head2head_690746();
+}
+
+/**
+ * Enable the multiform module.
+ */
+function gardens_misc_update_11201() {
+  module_enable(array('multiform'));
+}
+
+/**
+ * Enable the plupload module.
+ */
+function gardens_misc_update_11202() {
+  module_enable(array('plupload'));
+}
+
+/**
+ * Updates on trunk after gardens-beta-13 start at 11300
+ */
+
+/**
+ * Create the {file_usage} table if it wasn't created already.
+ */
+function gardens_misc_update_11300() {
+  head2head_895032();
+}
+
+/**
+ * Set the 'trim_length' formatter setting for existing fields.
+ */
+function gardens_misc_update_11301() {
+  head2head_504564();
+}
+
+/**
+ * Update existing image field instances to use formatter settings.
+ */
+function gardens_misc_update_11302() {
+  head2head_812688();
+}
+
+/**
+ * Update type field on search tables to be NOT NULL.
+ */
+function gardens_misc_update_11303() {
+  head2head_853896();
+}
+
+/**
+ * Increase permission field length restriction from 64 to 128 characters.
+ */
+function gardens_misc_update_11304() {
+  head2head_894898();
+}
+
+/**
+ * Enable new media modules.
+ */
+function gardens_misc_update_11305() {
+  // Taxonomy is a dependency of media_browser_plus, and therefore, now a
+  // required module.
+  if (!module_exists('taxonomy')) {
+    module_enable(array('taxonomy'), FALSE);
+    drupal_flush_all_caches();
+  }
+  module_enable(array('media_browser_plus', 'media_internet', 'media_youtube'), FALSE);
+}
+
+/**
+ * Fix the schema versions for the comment and dblog modules.
+ */
+function gardens_misc_update_11306() {
+  head2head_909338(array('comment', 'dblog'));
+}
+
+/**
+ * Make mollom protect new comment forms (depends on patch http://drupal.org/node/913532#comment-3455562).
+ */
+function gardens_misc_update_11307() {
+  variable_set('mollom_protect_new_comment_types', 1);
+}
+
+/**
+ * Update existing image field instances to use formatter settings (again).
+ */
+function gardens_misc_update_11308() {
+  head2head_812688();
+}
+
+/**
+ * Updates on trunk after gardens-beta-14 start at 11400
+ */
+
+/**
+ * Add status column to {filter_format}.
+ */
+function gardens_misc_update_11400() {
+  head2head_914458();
+}
+
+/**
+ * Fix the labeling of the media WYSIWYG icon
+ */
+function gardens_misc_update_11401() {
+  media_variable_set('wysiwyg_title', 'Add media');
+  media_variable_set('wysiwyg_icon_title', 'Add media');
+}
+
+/**
+ * Fix the schema versions for the locale module.
+ */
+function gardens_misc_update_11402() {
+  head2head_909338(array('locale'));
+}
+
+/**
+ * Save variables for the e-mail message that is sent to admin-invited users.
+ */
+function gardens_misc_update_11403() {
+  // Removed - we will be adding this feature in a later sprint instead.
+}
+
+/**
+ * Update database columns that store text formats to default to NULL.
+ */
+function gardens_misc_update_11404() {
+  head2head_358437();
+  // Wysiwyg.module stores text formats, but has no associated text, so we
+  // don't need to update any of the values in the column. Changing the schema
+  // itself is enough.
+  if (db_table_exists('wysiwyg') && db_field_exists('wysiwyg', 'format')) {
+    db_change_field('wysiwyg', 'format', 'format', array(
+      'type' => 'int',
+      'unsigned' => TRUE,
+      'not null' => FALSE,
+    ));
+  }
+}
+
+/**
+ * Convert term reference field vids to vocabulary machine names references.
+ */
+function gardens_misc_update_11405() {
+  head2head_881530();
+}
+
+/**
+ * Update for system_update_7061() becoming system_update_7062().
+ */
+function gardens_misc_update_11406() {
+  head2head_895176();
+}
+
+/**
+ * Update for foreign key support added to field schema and core field modules.
+ */
+function gardens_misc_update_11407() {
+  head2head_915168();
+}
+
+/**
+ * Enable new media modules (again). Some sites apparently did not get this the
+ * first time.
+ */
+function gardens_misc_update_11408() {
+  gardens_misc_update_11305();
+}
+
+/**
+ * Updates on trunk after gardens-beta-15 start at 11500
+ */
+
+/**
+ * Adds module to node_type table.
+ */
+function gardens_misc_update_11500() {
+  head2head_895014();
+}
+
+/**
+ * Update to add WYSIWYG default profiles for all profiles except Plain Text
+ */
+function gardens_misc_update_11501() {
+  if (db_table_exists('wysiwyg')) {
+    gardens_misc_guarantee_wysiwyg();
+  }
+}
+
+/**
+ * Update for comment_notify's token support.
+ */
+function gardens_misc_update_11502() {
+  // Enable token, comment_notify's new dependency if comment_notify is enabled.
+  if (module_exists('comment_notify')) {
+    module_enable(array('token'), FALSE);
+  }
+
+  // Run replacements regardless of comment_notify enabled or not. If custom
+  // settings are set, then the module was enabled sometime earlier, and we
+  // need to fix it by the time the user enables the module again.
+
+  $mailtext = variable_get('comment_notify_node_notify_default_mailtext', AUTHOR_MAILTEXT);
+  if ($mailtext != AUTHOR_MAILTEXT) {
+    // Two tokens changed names, replace them in user setting.
+    $mailtext = str_replace(
+      array('[user:name]', '[user:edit-url]'),
+      array('[comment:node:author]', '[comment:node:author:edit-url]'),
+      $mailtext
+    );
+    variable_set('comment_notify_node_notify_default_mailtext', $mailtext);
+  }
+
+  $mailtext = variable_get('comment_notify_comment_notify_default_mailtext', DEFAULT_MAILTEXT);
+  if ($mailtext != DEFAULT_MAILTEXT) {
+    // Two tokens changed names, replace them in user setting.
+    $mailtext = str_replace(
+      array('[comment:unsubscribe_url]', '[site:url]/user/register'),
+      array('[comment:unsubscribe-url]', '[site:login-url]'),
+      $mailtext
+    );
+    variable_set('comment_notify_comment_notify_default_mailtext', $mailtext);
+  }
+}
+
+/**
+ * Allow site owners to view the dashboard.
+ */
+function gardens_misc_update_11503() {
+  if (in_array('dashboard', module_list()) && ($owner_rid = variable_get('gardens_site_owner_role', 0))) {
+    user_role_grant_permissions($owner_rid, array('access dashboard'));
+  }
+}
+
+/**
+ * Updates on trunk after gardens-beta-16 start at 11600
+ */
+
+/**
+ * Pathauto and comment_notify modules now require token module.
+ */
+function gardens_misc_update_11600() {
+  if (module_exists('pathauto') || module_exists('comment_notify')) {
+    module_enable(array('token'), FALSE);
+  }
+}
+
+/**
+ * Save variables for the e-mail message that is sent to admin-invited users.
+ */
+function gardens_misc_update_11601() {
+  // Include profile install file, so we can use gardens_setup_user_mail_variables().
+  require_once DRUPAL_ROOT . '/' . drupal_get_path('module', 'gardens') . '/gardens.install';
+
+  $default_gardens_variables = gardens_setup_user_mail_variables();
+  $variables = array(
+    'user_mail_register_admin_created_subject',
+    'user_mail_register_admin_created_body',
+  );
+  foreach ($variables as $variable) {
+    variable_set($variable, $default_gardens_variables[$variable]);
+  }
+}
+
+/**
+ * Add a table to store e-mail addresses of invited users.
+ */
+function gardens_misc_update_11602() {
+  $schema['gardens_misc_invited_users'] = array(
+    'description' => 'Stores a list of e-mail addresses who were invited to join by site administrators but have not joined yet.',
+    'fields' => array(
+      'mail' => array(
+        'type' => 'varchar',
+        'length' => 254,
+        'not null' => TRUE,
+        'description' => 'E-mail address of the invitee.',
+      ),
+    ),
+    'primary key' => array('mail'),
+  );
+
+  db_create_table('gardens_misc_invited_users', $schema['gardens_misc_invited_users']);
+}
+
+/**
+ * Enable the gardens_cron module.
+ */
+function gardens_misc_update_11603() {
+  // Enable the gardens_cron.
+  $modules = array('gardens_cron');
+  module_enable($modules, FALSE);
+}
+
+/**
+ * Disable the entiy module.
+ */
+function gardens_misc_update_11604() {
+  $modules = array('entity');
+  module_disable($modules);
+}
+
+/**
+ * Updates on trunk after gardens-beta-17 start at 11700
+ */
+
+/**
+ * Find and fix wysiwyg formats with faulty "add media" buttons.
+ */
+function gardens_misc_update_11700() {
+  // Bail out if the wysiwyg module isn't installed.
+  if (!db_table_exists('wysiwyg')) {
+    return;
+  }
+
+  $result = db_query("SELECT format, settings FROM {wysiwyg} WHERE editor = :editor;", array(':editor' => 'ckeditor'));
+  foreach ($result as $config) {
+    // The settings array is stored in serialized format.
+    $config->settings = unserialize($config->settings);
+    // Formats with the "add media" button should have
+    // settings['buttons']['drupal']['media'] = 1, but some formats were saved
+    // with settings['buttons']['media'] = 1 as well.
+    if (isset($config->settings['buttons']['media'])) {
+      // Unset the faulty format to prevent PHP notices.
+      unset($config->settings['buttons']['media']);
+      // Resave the settings array to the database.
+      db_update('wysiwyg')
+        ->fields(array(
+          'settings' => serialize($config->settings),
+        ))
+        ->condition('format', $config->format)
+        ->condition('editor', 'ckeditor')
+        ->execute();
+    }
+  }
+}
+
+/**
+ * Force Mollom to be enabled on all sites.
+ */
+function gardens_misc_update_11701() {
+  if (!module_exists('mollom')) {
+    // Enable the module.
+    module_enable(array('mollom'), FALSE);
+
+    // Configure it like we do in the install profile. But if the comment form
+    // is already protected by moderation, it's safe to skip this, and we do so
+    // in that case in order to make the minimum number of changes to a live
+    // site.
+    if (!_scarecrow_comments_protected_by_moderation()) {
+      $types = db_query('SELECT * FROM {node_type}');
+      foreach ($types as $type) {
+        $form_id = "comment_node_{$type->type}_form";
+        $current_form = (bool) mollom_form_load($form_id);
+        if (!$current_form) {
+          $mollom_form = mollom_form_new($form_id);
+          mollom_form_save($mollom_form);
+        }
+      }
+    }
+
+    // We always want to protect new forms.
+    variable_set('mollom_protect_new_comment_types', 1);
+  }
+}
+
+/**
+ * Force block_everything to be enabled on all sites.
+ */
+function gardens_misc_update_11703() {
+  // Enable the module.
+  module_enable(array('block_everything'), TRUE);
+}
+
+/**
+ * Fix the Gardener URL now that all should be https.
+ */
+function gardens_misc_update_11704() {
+  // Ensure we have HTTP *and* HTTPS URLs for all authmap items. If some had
+  // no HTTPS counterpart, the code below would otherwise loose us data.
+  $result = db_query("SELECT uid, count(*) num, authname FROM authmap GROUP BY uid HAVING num < 2");
+  foreach ($result as $account) {
+    if (strpos($account->authname, 'http://') !== FALSE) {
+      user_set_authmaps($account, array("authname_openid" => gardens_client_swap_url_scheme($account->authname)));
+    }
+  }
+
+  // Switch the Gardener URL to use HTTPS.
+  $url = variable_get('acquia_gardens_gardener_url');
+  if (strpos($url, 'http://') === 0) {
+    variable_set('acquia_gardens_gardener_url', gardens_client_swap_url_scheme($url));
+  }
+
+  // Finally remove all non-HTPS authmap items.
+  db_query("DELETE FROM {authmap} WHERE module = 'openid' AND authname LIKE 'http://%%'");
+}
+
+/**
+ * Sets the theme_settings keys for site_name and site_slogan based on the region
+ * of the blocks in the default theme.
+ */
+function gardens_misc_update_11705() {
+  $theme = variable_get('theme_default');
+  $settings = variable_get('theme_settings', array());
+
+  $block_ids = array(
+    'site_name' => 'toggle_name',
+    'site_slogan' => 'toggle_slogan',
+  );
+
+  foreach($block_ids as $delta => $key) {
+    $block = db_query('SELECT * FROM {block} WHERE module = :module AND delta = :delta AND theme = :theme',
+          array(':module' => 'block_everything', ':delta' => $delta, ':theme' => $theme))->fetchObject();
+    if ($block) {
+      $settings[$key] = ($block->region == BLOCK_REGION_NONE || $block->region == '') ? 0 : 1;
+    }
+  }
+
+  variable_set('theme_settings', $settings);
+}
+
+/**
+ * Sets the aggregator clear default to never.  Without this, the twitter block
+ * never showed up for most users.
+ */
+function gardens_misc_update_11706() {
+  if (!module_exists('aggregator')) {
+    return;
+  }
+  $aggregator_clear = variable_get('aggregator_clear', NULL);
+  if ($aggregator_clear == NULL) {
+    // They never set it, so let's set it for them
+    variable_set('aggregator_clear', AGGREGATOR_CLEAR_NEVER);
+    db_update('aggregator_feed')
+      ->fields(array('checked' => 0, 'hash' => '', 'etag' => '', 'modified' => 0))
+      ->execute();
+  }
+}
+
+/**
+ * Updates on trunk after gardens-beta-19 start at 11900
+ */
+
+/**
+ * Enables the new administration theme, Blossom, and sets its blocks
+ * to be the same as those associated with the Seven theme.
+ */
+function gardens_misc_update_11900() {
+  // Check to see if the Seven theme is enabled and set to default.
+  // Proceed if it is.
+  $default_theme = variable_get('admin_theme');
+  if ($default_theme === 'seven') {
+    // Designate the Blossom theme
+    $theme = 'blossom';
+
+    // Initialize blocks in the Blossom theme based on the Seven theme
+    $has_blocks = (bool) db_query_range('SELECT 1 FROM {block} WHERE theme = :theme', 0, 1, array(':theme' => $theme))->fetchField();
+    if (!$has_blocks) {
+      $regions = system_region_list($theme);
+      $result = db_query("SELECT * FROM {block} WHERE theme = :theme", array(':theme' => $default_theme), array('fetch' => PDO::FETCH_ASSOC));
+      foreach ($result as $block) {
+        // If the region isn't supported by the theme, assign the block to the theme's default region.
+        if ($block['status'] && !isset($regions[$block['region']])) {
+          $block['region'] = system_default_region($theme);
+        }
+        $block['theme'] = $theme;
+        unset($block['bid']);
+        drupal_write_record('block', $block);
+      }
+    }
+
+    // Enable the Blossom theme. Do a streamlined enable to avoid multiple menu
+    // rebuilds.
+    db_update('system')
+      ->fields(array('status' => 1))
+      ->condition('type', 'theme')
+      ->condition('name', $theme)
+      ->execute();
+    list_themes(TRUE);
+    drupal_theme_rebuild();
+    module_invoke_all('themes_enabled', array($theme));
+
+    // Set the Blossom them to the default admin theme
+    variable_set('admin_theme', 'blossom');
+
+    // Disable the Seven theme. Do a streamlined disable to avoid multiple menu
+    // rebuilds.
+    $theme = 'seven';
+    db_update('system')
+      ->fields(array('status' => 0))
+      ->condition('type', 'theme')
+      ->condition('name', $theme)
+      ->execute();
+    list_themes(TRUE);
+    drupal_theme_rebuild();
+    module_invoke_all('themes_disabled', array($theme));
+  }
+}
+
+/**
+ * Enable gardens_limits module.
+ */
+function gardens_misc_update_11901() {
+  module_enable(array('gardens_limits'), FALSE);
+}
+
+/**
+ * Install the keys for the themebuilder screenshot service.
+ */
+function gardens_misc_update_11902() {
+  gardens_misc_install_themebuilder_screenshot_keys();
+}
+
+/**
+ * Install the themebuilder screenshot module.
+ */
+function gardens_misc_update_11903() {
+  module_enable(array('themebuilder_screenshot'), FALSE);
+}
+
+/**
+ * Make any existing required user fields not required.
+ */
+function gardens_misc_update_11904() {
+  $return = '';
+  $user_fields = field_info_instances('user');
+  if (empty($user_fields['user'])) {
+    return;
+  }
+
+  foreach ($user_fields['user'] as $name => $instance) {
+    if ($instance['required'] == TRUE) {
+      $instance['required'] = FALSE;
+      field_update_instance($instance);
+      $return .= "Changed field {$name} to not be required\n";
+    }
+  }
+  return $return;
+}
+
+/**
+ * Rename "site owner" role to "site maintainer".
+ */
+function gardens_misc_update_11905() {
+  if ($rid = variable_get('gardens_site_owner_role', 0)) {
+    db_update('role')
+      ->fields(array('name' => 'site maintainer'))
+      ->condition('rid', $rid)
+      ->execute();
+  }
+}
+
+/**
+ * Deprecate the Styles module.
+ */
+function gardens_misc_update_11906() {
+  // Replace Styles based file display configurations with non-Styles
+  // equivalent.
+  $result = db_select('file_display', 'fd')->fields('fd', array('name', 'weight', 'status'))->execute();
+  foreach ($result as $display) {
+    list($file_type, $view_mode, $formatter_name) = explode('__', $display->name);
+    if (strpos($formatter_name, 'file_field_styles_file_') === 0) {
+      $style_name = substr($formatter_name, strlen('file_field_styles_file_'));
+      $replacement_displays = array();
+      if ($file_type == 'image') {
+        $replacement_displays[] = array(
+          'formatter_name' => 'file_image',
+          'settings' => array('image_style' => ($style_name == 'original' ? '' : $style_name)),
+        );
+      }
+      elseif ($file_type == 'video') {
+        if (in_array($style_name, array('large', 'original', 'media_gallery_large'))) {
+          $replacement_displays[] = array(
+            'formatter_name' => 'media_youtube_video',
+            'settings' => array(),
+          );
+        }
+        $replacement_displays[] = array(
+          'formatter_name' => 'media_youtube_image',
+          'settings' => array('image_style' => ($style_name == 'original' ? '' : $style_name)),
+        );
+      }
+      db_delete('file_display')->condition('name', $display->name)->execute();
+      foreach ($replacement_displays as $i => $replacement_display) {
+        db_merge('file_display')
+          ->key(array(
+            'name' => implode('__', array($file_type, $view_mode, $replacement_display['formatter_name'])),
+          ))
+          ->fields(array(
+            'status' => $display->status,
+            'weight' => $display->weight + $i,
+            'settings' => serialize($replacement_display['settings']),
+          ))
+          ->execute();
+      }
+    }
+  }
+
+  // @todo Create replacements for non-media file fields using Styles
+  //   formatters.
+
+  // Set a flag for gardens_features to wrap file formatters with the same
+  // markup previously output by Styles, to not break sites with themes
+  // targeting those CSS classes.
+  variable_set('gardens_features_styles_markup_compatibility', TRUE);
+
+  // Disable the Styles modules.
+  module_disable(array('file_styles', 'styles'), FALSE);
+}
+
+/**
+ * Due to a change in update numbering convention, write new update functions
+ * in scarecrow.install rather than in this module.
+ */

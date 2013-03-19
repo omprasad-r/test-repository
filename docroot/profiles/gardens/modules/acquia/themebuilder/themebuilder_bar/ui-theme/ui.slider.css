@@ -1,0 +1,59 @@
+.tb .ui-slider {
+  position:relative;
+  text-align:left;
+}
+.tb .ui-slider .ui-slider-handle {
+  cursor:default;
+  height:1.2em;
+  position:absolute;
+  width:1.2em;
+  z-index:2;
+}
+.tb .ui-slider .ui-slider-range {
+  border:0 none;
+  display:block;
+  font-size:0.7em;
+  position:absolute;
+  z-index:1;
+}
+.tb .ui-slider-horizontal {
+  background-color:white;
+  background-image:none;
+  height: 4px; 
+  min-width:209px;
+}
+.tb .ui-slider-horizontal .ui-slider-handle {
+  background:transparent url(images/ui-thumb-n.gif) no-repeat scroll 0 0 !important;
+  border:medium none !important;
+  margin-left:-0.6em;
+  top:-0.3em;
+}
+.tb .ui-slider-horizontal .ui-slider-range {
+  height:100%;
+  top:0;
+}
+.tb .ui-slider-horizontal .ui-slider-range-min {
+  left:0;
+}
+.tb .ui-slider-horizontal .ui-slider-range-max {
+  right:0;
+}
+.tb .ui-slider-vertical {
+  height:100px;
+  width:0.8em;
+}
+.tb .ui-slider-vertical .ui-slider-handle {
+  left:-0.3em;
+  margin-bottom:-0.6em;
+  margin-left:0;
+}
+.tb .ui-slider-vertical .ui-slider-range {
+  left:0;
+  width:100%;
+}
+.tb .ui-slider-vertical .ui-slider-range-min {
+  bottom:0;
+}
+.tb .ui-slider-vertical .ui-slider-range-max {
+  top:0;
+}

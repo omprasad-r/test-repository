@@ -1,0 +1,1585 @@
+<?php
+
+/**
+ * @file
+ *   Janrain Engage client admin page.
+ */
+/**
+ * Important Note: the widget will not show in the login dialog by default.
+ * It's hidden by CSS in the gardens_features.jquery.ui.dialog.css file.
+ * In order to make it show correctly, add the following CSS to your theme's
+ * custom CSS:
+
+.ui-dialog .rpx-signin,
+.ui-dialog .service-attribution {
+display: block;
+}
+.ui-dialog .service-attribution {
+width: 100%;
+}
+.ui-dialog .auth-methods > div {
+float: left;
+}
+
+ */
+
+/**
+ * Engage data update options.
+ *
+ * Then a user signs in using Engage, provider-sourced user profile data can
+ * optionally be imported into the Drupal User entity fields, using any of the
+ * below options.
+ */
+// Do not update the field (default).
+define('RPX_UPDATE_NONE', 0);
+// Only update the field if it is empty.
+define('RPX_UPDATE_EMPTY', 1);
+// Always update (overwriting the existing data).
+define('RPX_UPDATE_ALWAYS', 2);
+// Update (overwriting the existing data), based on a weighted provider table.
+define('RPX_UPDATE_MAYBE', 3);
+// Update the data field as an additional value (for multi-value fields).
+define('RPX_UPDATE_ADD', 4);
+
+
+/**
+ * Implements hook_menu().
+ */
+function janrain_login_menu() {
+  $items['janrain_login/token_handler'] = array(
+    'title' => 'RPX Token Handler URL',
+    'page callback' => 'janrain_login_token_handler',
+    'access callback' => TRUE,
+    'type' => MENU_CALLBACK,
+    'file' => 'janrain_login.pages.inc',
+  );
+
+  $items['janrain_confirm_account_merge/%dialog_js'] = array(
+    'title' => 'Confirm account merge',
+    'page callback' => 'janrain_login_account_merge_ajax_callback',
+    'page arguments' => array(1),
+    'access callback' => 'janrain_login_account_merge_access',
+    'type' => MENU_CALLBACK,
+  );
+
+  $items['user/%user/janrain-accounts'] = array(
+    'title' => 'Social login',
+    'page callback' => 'janrain_login_linked_accounts',
+    'page arguments' => array(1),
+    'access callback' => 'user_edit_access',
+    'access arguments' => array(1),
+    'type' => MENU_LOCAL_TASK,
+    'file' => 'janrain_login.pages.inc',
+  );
+  $items['user/%user/janrain-accounts/disable/%'] = array(
+    'title' => 'Disable linked account',
+    'page callback' => 'janrain_login_disable_linked_account',
+    'page arguments' => array(1, 4),
+    'access callback' => 'janrain_login_disable_linked_account_access',
+    'access arguments' => array(1),
+    'type' => MENU_CALLBACK,
+    'file' => 'janrain_login.pages.inc',
+  );
+  $items['user/janrain-cancel'] = array(
+    'title' => 'Cancel registration',
+    'page callback' => 'janrain_login_cancel',
+    'access callback' => 'janrain_login_cancel_access',
+    'type' => MENU_CALLBACK,
+    'file' => 'janrain_login.pages.inc',
+  );
+
+  $items['admin/config/people/janrain/mapping'] = array(
+    'title' => 'Map Fields',
+    'page callback' => 'drupal_get_form',
+    'page arguments' => array('janrain_login_mapping_settings_form'),
+    'access arguments' => array('administer janrain engage'),
+    'type' => MENU_LOCAL_TASK,
+    'weight' => -8,
+    'file' => 'janrain_login.admin.inc',
+  );
+  $items['admin/config/people/janrain/mapping/edit'] = array(
+    'title' => 'Edit mapping options',
+    'page callback' => 'drupal_get_form',
+    'page arguments' => array('janrain_login_profile_mapping_edit_form'),
+    'access arguments' => array('administer janrain engage'),
+    'type' => MENU_CALLBACK,
+    'file' => 'janrain_login.admin.inc',
+  );
+  $items["admin/config/people/janrain/fields"] = array(
+    'title' => 'Manage fields',
+    'page callback' => 'drupal_get_form',
+    'page arguments' => array('janrain_login_profile_field_overview_form'),
+    'access arguments' => array('administer janrain engage'),
+    'type' => MENU_LOCAL_TASK,
+    'weight' => -7,
+    'file' => 'janrain_login.admin.inc',
+  );
+  $items['admin/config/people/janrain/fields/edit'] = array(
+    'title' => 'Edit field',
+    'page callback' => 'drupal_get_form',
+    'page arguments' => array('janrain_login_profile_field_edit_form'),
+    'access arguments' => array('administer janrain engage'),
+    'type' => MENU_CALLBACK,
+    'file' => 'janrain_login.admin.inc',
+  );
+  $items['admin/config/people/janrain/fields/delete'] = array(
+    'title' => 'Delete field',
+    'page callback' => 'drupal_get_form',
+    'page arguments' => array('janrain_login_profile_field_delete'),
+    'access arguments' => array('administer janrain engage'),
+    'type' => MENU_CALLBACK,
+    'file' => 'janrain_login.admin.inc',
+  );
+  $items['admin/config/people/janrain/fields/reset'] = array(
+    'title' => 'Reset to defaults',
+    'page callback' => 'drupal_get_form',
+    'page arguments' => array('janrain_login_profile_field_reset_confirm'),
+    'access arguments' => array('administer janrain engage'),
+    'file' => 'janrain_login.admin.inc',
+  );
+
+  return $items;
+}
+
+/**
+ * Menu access callback.
+ */
+function janrain_login_cancel_access() {
+  return user_is_anonymous() && isset($_GET['token']) && ($_GET['token'] == drupal_get_token('janrain_login_cancel'));
+}
+
+/**
+ * Menu access callback.
+ */
+function janrain_login_disable_linked_account_access($account) {
+  return isset($_GET['token']) && ($_GET['token'] == drupal_get_token('janrain_login_disable_linked_account')) && user_edit_access($account);
+}
+
+/**
+ * Menu access callback.
+ */
+function janrain_login_disable_default_network_access() {
+  return isset($_GET['token']) && ($_GET['token'] == drupal_get_token('janrain_login_disable_default_network')) && user_access('administer janrain engage');
+}
+
+/**
+ * Menu access callback.
+ */
+function janrain_login_account_merge_access() {
+  // This callback should respond immediately to changes in this variable without
+  // a menu_rebuild(), but otherwise needs to be accesible to all (because it's used during signup).
+  $access = variable_get('janrain_login_allow_account_merge', TRUE) && user_is_anonymous();
+  if ($access && (empty($_SESSION['rpx']['stat']) || $_SESSION['rpx']['stat'] != 'ok')) {
+    $access = FALSE;
+    // I can't think of any message that would make sense to a user, but this really
+    // really really should never happen (it's just for people hitting the form directly,
+    // which they shouldn't do).
+    drupal_set_message('There was a problem with the social sign-in process.  Please try again later.');
+  }
+  return $access;
+}
+
+/**
+ * Implementation of hook_menu_alter().
+ */
+function janrain_login_menu_alter(&$items) {
+  $items['admin/config/people/janrain']['title'] = 'Social Login & Publish';
+}
+
+/**
+ * Implementation of hook_openid().
+ *
+ * Request Engage auth_info() token. This token will be used to retrieve from
+ * the gardener user profile info returned by Engage.
+ *
+ * Alas, due to the way these hooks are handled by Drupal, only the first one to
+ * be called will get to modify the request properly. Since there would be at
+ * least two of them (ours and gardens_client's), we have no choice but modify
+ * gardens_client_openid() to request our token instead.
+ */
+// function janrain_client_openid($op, $request = array()) {
+//   if ($op == 'request') {
+//     $request['openid.ax.type.rpx_token'] = 'http://drupalgardens.com/axschema/rpx_token';
+//     $request['openid.ax.if_available'] = 'rpx_token';
+//   }
+//   return $request;
+// }
+
+/**
+ * Implements hook_theme().
+ */
+function janrain_login_theme() {
+  $result = array();
+
+  $result += array(
+    'janrain_login_mapping_settings_form' => array(
+      'render element' => 'form',
+      'file' => 'janrain_login.admin.inc',
+    ),
+  );
+
+  $result += array(
+    'janrain_login_profile_field_overview_form' => array(
+      'render element' => 'form',
+      'file' => 'janrain_login.admin.inc',
+    ),
+  );
+
+  $result += array(
+    'janrain_login_provider_weight_table' => array(
+      'render element' => 'providers',
+      'file' => 'janrain_login.admin.inc',
+    ),
+  );
+
+  $result += array(
+    'rpx_path_tree' => array(
+      'file' => 'janrain_login.admin.inc',
+    ),
+  );
+
+  $result += array(
+    'janrain_client_admin_settings' => array(
+      'render element' => 'form',
+      'file' => 'janrain_login.admin.inc',
+    ),
+  );
+
+  $result += array(
+    'janrain_client_user_networks' => array(
+      'render element' => 'form',
+      'file' => 'janrain_login.pages.inc',
+    ),
+  );
+
+  return $result;
+}
+
+/**
+ * Implements hook_help().
+ */
+function janrain_login_help($path, $arg) {
+  switch ($path) {
+    case 'admin/config/people/janrain/mapping':
+      return '<p>' . t('During sign up with a social network account, user fields are populated from fields in the social network.') . '</p><p>'. t('Map existing social network fields to user fields on this site. To map social network fields not shown below, add them on <b>Manage Fields</b>') . '</p>';
+  case 'admin/config/people/janrain/fields':
+    return $help = '<p>' . t('Manage which social network fields are available in <b>Map Fields</b>.') . '</p><p>'. t('Note that not all social networks return these fields or tokens to Janrain Engage. <a href="@auth_info_help" target="_blank">Learn more</a>.', array('@auth_info_help' => 'http://documentation.janrain.com/engage/api/auth_info')) . '</p>';
+  case 'user/%/janrain-accounts':
+    return $help = '<p>' . t('This site supports Janrain Engage, an easy way to log in using your account with Facebook, Twitter, and other social networks. To log in using these services, click enable below and sign in if prompted.') . '</p>';
+  }
+}
+
+/**
+ * Helper function: deletes all data created by this module for a user.
+ *
+ * @param integer $uid
+ *   uid of the user that is being deleted.
+ */
+function _janrain_login_delete_user_data($uid) {
+  db_delete('rpx_mapping_provider')
+    ->condition('uid', $uid)
+    ->execute();
+
+  if (variable_get('acquia_gardens_local_user_accounts', FALSE)) {
+    db_delete('rpx_authmap_username')
+      ->condition('uid', $uid)
+      ->execute();
+  }
+}
+
+/**
+ * Implements hook_user_delete().
+ */
+function janrain_login_user_delete($account) {
+  _janrain_login_delete_user_data($account->uid);
+  _janrain_login_delete_engage_mapping('', $account->uid, TRUE);
+}
+
+/**
+ * Implements hook_user_cancel().
+ */
+function janrain_login_user_cancel($edit, $account, $method) {
+  switch ($method) {
+    case 'user_cancel_reassign':
+      _janrain_login_delete_user_data($account->uid);
+      _janrain_login_delete_engage_mapping('', $account->uid, TRUE);
+      break;
+  }
+}
+
+/**
+ * Determine the form ID, action and page title for a dialog_user form redirected from a janrain signup cancellation.
+ *
+ * @return
+ *   Array(form_id, path, title) of the form to render if successful, or FALSE if it either
+ *   could not be determined or is not supported.
+ */
+function janrain_login_cancel_get_form_info() {
+  if (!isset($_GET['destination'])) {
+    return FALSE;
+  }
+
+  $parts = explode('/', $_GET['destination']);
+  // This is robust enough for now for the 2 known use cases, can add to it later if needed.
+  $map = array(
+    'user' => array(
+      'login' => array(
+        'id' => 'user_login',
+        'path' => 'user/login/ajax',
+        'title' => t('Log in to %sitename', array('%sitename' => variable_get('site_name', NULL)))),
+      'register' => array(
+        'id' => 'user_register_form',
+        'path' => 'user/register/ajax',
+        'title' => t('Sign up for %sitename', array('%sitename' => variable_get('site_name', NULL)))),
+    )
+  );
+  return isset($map[$parts[0]][$parts[1]]) ? $map[$parts[0]][$parts[1]] : FALSE;
+}
+
+/**
+ * Implements hook_form_FORM_ID_alter().
+ *
+ * Prefills the registration form with values acquired via Engage.  We support
+ * both remote signins (mediated by the Gardener) and local ones (coming
+ * directly from Engage).
+ *
+ * Show the signin widget in the user register form displayed in a popup
+ * using AJAX for those Gardens sites that have
+ * acquia_gardens_local_user_accounts enabled.
+ *
+ * Show the signin widget on the registration form that is displayed
+ * as a page (as opposed to dialog). This available to users via
+ * /user/register when local accounts are enabled.
+ */
+function janrain_login_form_user_register_form_alter(&$form, &$form_state, $form_id) {
+
+  // Is this is a local accounts signup attempt and is the user anonymous?
+  if (variable_get('acquia_gardens_local_user_accounts', FALSE) && user_is_anonymous()) {
+    // Add the signin widget.
+    $form['#pre_render'][] = '_janrain_login_rearrange_user_register_login_form';
+    if (substr($form['#action'], 0, 19) != '/user/register/ajax') {
+      // Make sure we were not called from janrain_login_token_handler(), by
+      // way of drupal_form_submit().
+      if ($form['#action'] != '/janrain_login/token_handler') {
+        // This is a regular page, let hook_page_build() know there's no need
+        // to add the widget in a hidden div (for the dialog_user integration),
+        // as it will be added to the page in the pre_render function.
+        $_SESSION['rpx_signin_dont_hide'] = TRUE;
+      }
+    }
+    // If an Engage transaction is on we alter the form.
+    if (isset($_SESSION['rpx']) && $_SESSION['rpx']['stat'] == 'ok') {
+      drupal_set_title(t('The site !site-name wants to know more about you.', array('!site-name' => '<em class="placeholder">' . filter_xss_admin(gardens_client_site_name_or_domain()) . '</em>')), PASS_THROUGH);
+      drupal_add_js(array('rpxSuppress' => 1), 'setting');
+      janrain_login_alter_user_register_form_for_local_auth($form);
+      janrain_login_populate_user_fields($form);
+      if (module_exists('coppa_lite')) {
+        janrain_login_ensure_coppa($form, $form_state);
+      }
+       $form['actions']['submit']['#value'] = t('Finish registration');
+       $cancel_link = l(t('Cancel'), 'user/janrain-cancel', array('query' => array('token' => drupal_get_token('janrain_login_cancel'))));
+       // This markup and t() string is re-used from gardens_features.module
+       $form['actions']['submit']['#suffix'] = '<div class="form-navigation-wrapper form-control"><span class="button-spacer"> </span>' . t('or <span class="button-spacer"> </span>!register_link', array('!register_link' => $cancel_link)) . '</div></div>';
+      $form['#pre_render'][] = 'janrain_login_user_register_pre_render';
+    }
+  }
+  // Is this an Engage-facilitated remote signup?
+  else if (isset($_SESSION['openid']['response']['openid.ax.value.rpx_token'])) {
+    $token = $_SESSION['openid']['response']['openid.ax.value.rpx_token'];
+
+    // Request the Engage data from gardener using the token.
+    if (!$rpx_data = gardens_client_call_gardener('janrain.get.user.data', $token)) {
+      return;
+    }
+
+    // Save the data in the session so that it's available for hook_user_login()
+    // (that's where _all_ mapped user data is imported into Drupal, while this
+    // form contains only those fields that the admin decided to display here).
+    $_SESSION['rpx'] = json_decode($rpx_data, TRUE);
+    janrain_login_populate_user_fields($form);
+  }
+  // it's neither; nothing to do.
+}
+
+/**
+ * Implements hook_form_FORM_ID_alter().
+ *
+ * Show the signin widget in the user login form displayed in a popup
+ * using AJAX for those Gardens sites that have
+ * acquia_gardens_local_user_accounts enabled.
+ *
+ * Show the signin widget on the registration form that is displayed
+ * as a page (as opposed to dialog). This available to users via
+ * /user/login when local accounts are enabled.
+ */
+function janrain_login_form_user_login_alter(&$form, &$form_state, $form_id) {
+
+  if (variable_get('acquia_gardens_local_user_accounts', FALSE)) {
+    drupal_add_js(array('rpxSuppress' => 0), 'setting');
+    $form['#pre_render'][] = '_janrain_login_rearrange_user_register_login_form';
+    if (substr($form['#action'], 0, 16) != '/user/login/ajax') {
+      // This is a regular page, let hook_page_build() know there's no need
+      // to add the widget in a hidden div (for the dialog_user integration),
+      // as it will be added to the page in the pre_render function.
+      $_SESSION['rpx_signin_dont_hide'] = TRUE;
+    }
+  }
+}
+
+/**
+ * Implements hook_form_FORM_ID_alter().
+ */
+function janrain_login_form_janrain_client_admin_settings_alter(&$form, &$form_state, $form_id) {
+  foreach ($form['providers'] as $name => &$provider) {
+    $provider['social_login'] = array(
+        '#type' => 'markup',
+        '#markup' => 'enabled',
+        '#title' => t('Social log in'),
+        '#title_display' => 'invisible',
+      );
+  }
+  $form['#header'][] =  t('Social log in');
+  // This is ugly to do in the form builder, but keeping the
+  // existing logic from the unsplit module for now.
+  module_load_include('inc', 'janrain_login', 'janrain_login.admin');
+  janrain_login_rebuild_provider_precedence_lists();
+}
+
+
+/**
+ * Implements hook_page_build()
+ *
+ * Add CSS and JS for the signin widget.
+ * Add the sign-in widget in a hidden div if needed.
+ * @see janrain_login_form_alter()
+ */
+function janrain_login_page_build(&$page) {
+  // Only add for local accounts/anonymous users.
+  if (!variable_get('acquia_gardens_local_user_accounts', FALSE) || !user_is_anonymous()) {
+    return;
+  }
+
+  // Add the CSS and JS for the widget.
+  drupal_add_css(drupal_get_path('module', 'janrain_client') . '/janrain_client.css');
+  janrain_login_signin_js();
+
+  // If the page will have the widget added to it (e.g. it contains the
+  // registration form), there's no need to add a hidden one.
+  if (isset($_SESSION['rpx_signin_dont_hide'])) {
+    return;
+  }
+
+  $attrs = array(
+    'id' => 'rpx-widget-store',
+    'style' => 'display: none;',
+  );
+  $page['content']['rpx_widget_store'] = array(
+    '#markup' => '<div' . drupal_attributes($attrs) . '><div id="janrainEngageEmbed"></div></div>',
+  );
+}
+
+/**
+ * pre_render function: lay out the user register form for
+ * local-accounts-enabled Gardens sites.
+ */
+function _janrain_login_rearrange_user_register_login_form($form) {
+  if (isset($_SESSION['rpx_signin_dont_hide'])) {
+    // We are pre-rendering for a regular page. The widget will be displayed
+    // here and moved to the dialog lightbox if the latter is opened.
+    $markup = '<div id="rpx-widget-store"><div id="janrainEngageEmbed"></div></div>';
+    unset($_SESSION['rpx_signin_dont_hide']);
+  }
+  else {
+    // We are pre-rendering for a dialog lightbox. The widget will be moved here
+    // from rpx-widget-store when the lightbox is opened and moved back when it's
+    // closed.
+    $markup = '<div id="rpx-widget-embed"></div>';
+  }
+
+  // Create a new container that will hold the sign-in widget.
+  $form['rpx'] = array(
+    '#type' => 'container',
+    '#attributes' => array ('class' => array('rpx-signin')),
+    '#weight' => 500,
+    'widget' => array('#markup' => $markup),
+  );
+
+  return $form;
+}
+
+function janrain_login_alter_user_register_form_for_local_auth(&$form) {
+  $profile = $_SESSION['rpx']['profile'];
+
+  // Use the nickname returned by Engage.
+  $form['account']['name']['#default_value'] = $profile['preferredUsername'];
+  $mail = '';
+  if (!empty($profile['verifiedEmail'])) {
+    $mail = $profile['verifiedEmail'];
+  }
+  elseif (!empty($profile['email'])) {
+    $mail = $profile['email'];
+  }
+  // Use the email returned by Engage, if any.
+  $form['account']['mail']['#default_value'] = $mail;
+
+  // If email verification is not required, hide the password field and
+  // just fill with random password to avoid confusion.
+  if (!empty($profile['verifiedEmail']) ||
+      !variable_get('user_email_verification', TRUE) ||
+      variable_get('rpx_bypass_email_verification', FALSE)) {
+
+    $form['account']['pass']['#type'] = 'hidden';
+    $form['account']['pass']['#value'] = user_password();
+  }
+
+  $form['engage_claimed_id'] = array(
+    '#type' => 'value',
+    '#default_value' => $profile['identifier'],
+  );
+
+  // Replace the default user_register form submit handler with our custom
+  // version, since we need to honor verifiedEmail and
+  // rpx_bypass_email_verification, save the Engage user picture, etc.
+  $form['#submit'][array_search('user_register_submit', $form['#submit'])] = 'janrain_login_user_register_submit';
+
+  // Disable captcha (Captcha and Mollom modules), unless we are presenting the
+  // form to user after an error occurred during an attempt to sign him up
+  // automatically.
+  if (!isset($_SESSION['rpx_signup_errors'])) {
+    if (isset($form['actions']['captcha'])) {
+      unset($form['actions']['captcha']);
+    }
+    if (isset($form['mollom'])) {
+      unset($form['mollom']);
+
+      unset($form['#validate'][array_search('mollom_validate_analysis', $form['#validate'])]);
+      unset($form['#validate'][array_search('mollom_validate_captcha', $form['#validate'])]);
+      unset($form['#validate'][array_search('mollom_validate_post', $form['#validate'])]);
+
+      unset($form['#submit'][array_search('mollom_form_pre_submit', $form['#submit'])]);
+      unset($form['#submit'][array_search('mollom_form_submit', $form['#submit'])]);
+      if (isset($form['#submit']['mollom_data_delete_form_submit'])) {
+        unset($form['#submit']['mollom_data_delete_form_submit']);
+      }
+    }
+  }
+  else {
+    // If Janrain login returns an email that is already in the system, switch to a
+    // confirmation form to link the accounts.
+    janrain_login_user_register_merge($form, $mail);
+    foreach ($_SESSION['rpx_signup_errors'] as $field => $message) {
+      form_set_error($field, $message);
+    }
+    unset($_SESSION['rpx_signup_errors']);
+  }
+}
+
+/**
+ * Switch from the user_register form to an account merge confirmation form where appropriate.
+ *
+ * If a duplicate email address is detected when coming from a Janrain signup,
+ * we switch to a confirmation form giving the user the option to merge with the
+ * existing account.
+ */
+function janrain_login_user_register_merge($form, $mail) {
+  // This feature - allowing janrain signups that clash with an exising account's
+  // address to be merged with that account - can be disabled by setting
+  // janrain_login_allow_account_merge = FALSE;
+  if (variable_get('janrain_login_allow_account_merge', TRUE)) {
+    // If we are presenting the form to the user who signed into janrain with
+    // an email address that belongs to an existing site account, go to the merge-confirmation form.
+    $account = $form['#user'];
+    if (janrain_login_email_is_dupe($mail, $account)) {
+      // Don't present the merge form if the user has previously rejected a merge
+      // or if the provider is not whitelisted.
+      if (empty($_SESSION['rpx_no_merge']) && janrain_login_whitelisted_provider()) {
+        janrain_login_account_merge_confirm_form_switch($form);
+      }
+    }
+  }
+}
+
+/**
+ * Check if the provider is whitelisted for merging accounts.
+ *
+ * This provides superficial protection from anyone setting up a malicious openID
+ * provider
+ */
+function janrain_login_whitelisted_provider() {
+  $providers = janrain_client_get_providers();
+  // No generic OpenID allowed for account merge.
+  unset($providers['openid']);
+  // The white list has allowed machine names as keys.
+  $whitelist = variable_get('janrain_login_whitelisted_providers', array());
+  if ($whitelist) {
+    $providers = array_intersect_key($providers, $whitelist);
+  }
+  // Flip the array so the we can find the name readily.
+  $providers = array_flip($providers);
+  $name = $_SESSION['rpx']['profile']['providerName'];
+  if (empty($providers[$name])) {
+    $_SESSION['rpx_no_merge'] = TRUE;
+    return FALSE;
+  }
+  return TRUE;
+}
+
+/**
+ * Determine whether a given email address is a duplicate of an email in the system that is not the given user's account.
+ */
+function janrain_login_email_is_dupe($mail, $account) {
+  $cache = &drupal_static(__FUNCTION__);
+  if (!isset($cache[$mail][$account->uid])) {
+    if (empty($mail)) {
+      // If the email address is empty (e.g. the request has come from a service
+      // that doesn't provide emails, such as Twitter), don't look for
+      // duplicates of an empty string.
+      $cache[$mail][$account->uid] = FALSE;
+    }
+    else {
+      $cache[$mail][$account->uid] = (bool) db_select('users')
+        ->fields('users', array('uid'))
+        ->condition('uid', $account->uid, '<>')
+        ->condition('mail', db_like($mail), 'LIKE')
+        ->range(0, 1)
+        ->execute()
+        ->fetchField();
+    }
+  }
+  return $cache[$mail][$account->uid];
+}
+
+function janrain_login_account_merge_confirm_form($form, &$form_state, $js) {
+  $form['prompt'] = array(
+    '#markup' => t('From your e-mail address, it looks like you are already a member
+      of this site.  We recommend you link your %provider account to your existing
+      account so you don\'t have two accounts on this site.', array('%provider' => $_SESSION['rpx']['profile']['providerName'])),
+    '#prefix' => '<div class="message">',
+    '#suffix' => '</div>',
+  );
+
+  $form['actions'] = array(
+    '#type' => 'actions',
+    'submit' => array(
+      '#type' => 'submit',
+      '#value' => t('Link my accounts'),
+    ),
+  );
+
+
+  $login_link_attributes = array();
+  $login_link_query = array('destination' => 'user/login');
+  if ($js) {
+    $login_link_query['ajax'] = 1;
+    $login_link_attributes = array('class' => array('use-ajax', 'use-dialog'));
+
+    $form['dialog_display'] = array('#type' => 'value', '#value' => TRUE);
+    $form['#prefix'] = '<div id="dialog-form-wrapper">';
+    $form['#suffix'] = '</div>';
+    $form['actions']['submit']['#attributes'] = array('class' => array('use-ajax-submit'));
+    // Submit form via AJAX from within dialog. Do this instead of adding
+    // #ajax to the submit button, so that the ajax call is made to the
+    // callback handler we defined rather than system/ajax.
+    $form['#submit'][] = 'dialog_user_ajax_form_submit';
+    $form['#submit'][] = 'janrain_login_account_merge_confirm_form_submit';
+    $form['#process'][] = 'dialog_process_ajax_form';
+    $form['#action'] = url('janrain_confirm_account_merge/ajax');
+  }
+  else {
+    $form['#action'] = url('janrain_confirm_account_merge/nojs');
+  }
+
+  $login_link_query['token'] = drupal_get_token('janrain_login_cancel');
+  $login_link = l(t('Log in as a different user'), 'user/janrain-cancel', array(
+    'query' => $login_link_query,
+    'attributes' => $login_link_attributes,
+  ));
+
+  $form['actions']['submit']['#prefix'] = '<div class="submit-button-wrapper form-control">';
+  $form['actions']['submit']['#suffix'] = '<div class="form-navigation-wrapper form-control"><span class="button-spacer"> </span>' . t('or <span class="button-spacer"> </span>!login_link', array('!login_link' => $login_link)) . '</div></div>';
+
+  return $form;
+}
+
+/**
+ * Validation handler for janrain_login_account_merge_confirm_form
+ *
+ * Make sure we got an email address from Janrain, otherwise we can't let the
+ * user proceed with signup.
+ */
+function janrain_login_account_merge_confirm_form_validate($form, &$form_state) {
+  // Security notes:
+  //  - This all depends on the email provided by Janrain being trustworthy.  This may not be true.
+  //  - $_SESSION data cannot be manipulated by the user.
+  //  - The SESSION data gets wiped if it's used at the point where it is used for account linking
+  $account = janrain_login_load_account();
+  if (empty($account->uid) || empty($account->status)) {
+    form_set_error('submit', t('Unable to locate account.'));
+    return;
+  }
+
+  // For good measure, double-check we're in a valid janrain session.
+  if (empty($_SESSION['rpx']['stat']) || $_SESSION['rpx']['stat'] != 'ok') {
+    // I can't think of any message that would make sense to a user, but this really
+    // really really should never happen (it's just for people hitting the form directly,
+    // which they shouldn't do) ... Also covers us in case the janrain session is not valid.
+    form_set_error('submit', t('There was a problem with the social sign-in process.  Please try again later.'));
+  }
+}
+
+/**
+ * Submit handler for janrain_login_account_merge_confirm_form.
+ *
+ * On cancel will return the user to the user_register form to fill in required fields,
+ * on confirm will log the user into the existing account and link it to the current
+ * Janrain session account.
+ */
+function janrain_login_account_merge_confirm_form_submit($form, &$form_state) {
+  global $user;
+
+  // If merging was cancelled, return to the user/register form.
+  if ($form_state['values']['op'] == $form_state['values']['submit']) {
+    $account = janrain_login_load_account();
+
+    // log user in
+    $user = $account;
+    user_login_finalize();
+
+    // Merge the account
+    $rpx_id = $_SESSION['rpx']['profile']['identifier'];
+    $user_name = $_SESSION['rpx']['profile']['preferredUsername'];
+    // the identifier returned by auth_info() should not be already
+    // mapped to an existing account
+    if (user_get_authmaps($rpx_id)) {
+      $message = array(
+        'text' => t('We were unable to complete your request.  That account ID is already linked to a user on our site.'),
+        'type' => 'error',
+      );
+    }
+    else {
+      // Can't use user_set_authmaps() here, since it doesn't support
+      // multiple authnames per user via same module
+      $aid = db_insert('authmap')
+        ->fields(array(
+          'uid' => $user->uid,
+          'authname' => $rpx_id,
+          // Leave module as 'janrain_client' for back-compatibility.
+          'module' => 'janrain_client',
+        ))
+        ->execute();
+      db_insert('rpx_authmap_username')
+        ->fields(array(
+          'aid' => $aid,
+          'uid' => $user->uid,
+          'username' => $user_name,
+        ))
+        ->execute();
+      // Display no message if account was successfully linked.
+      $message = array();
+      _janrain_login_import_user_data($user);
+      _janrain_login_update_engage_mapping($user->uid);
+    }
+    unset($_SESSION['rpx']);
+    unset($_SESSION['rpx_show_validation']);
+    unset($_SESSION['rpx_overlay_message']);
+    if ($message) drupal_set_message($message['text'], $message['type']);
+
+    if (!empty($form['dialog_display']['#value'])) {
+      // dismiss the dialog
+      $commands = array();
+      $commands[] = dialog_command_reload();
+      ajax_deliver(array('#type' => 'ajax', '#commands' => $commands));
+      drupal_exit();
+    }
+    else {
+      drupal_goto();
+    }
+  }
+}
+
+
+/**
+ * Load a local user account based upon the email provided by a social login service.
+ *
+ * @return
+ *   $user object or FALSE.
+ */
+function janrain_login_load_account() {
+  $profile = $_SESSION['rpx']['profile'];
+  $mail = '';
+  if (!empty($profile['verifiedEmail'])) {
+    $mail = $profile['verifiedEmail'];
+  }
+  elseif (!empty($profile['email'])) {
+    $mail = $profile['email'];
+  }
+
+  return user_load_by_mail($mail);
+}
+
+function janrain_login_account_merge_confirm_form_switch($form) {
+  // Support dialog.module handling of this form.
+  if (!empty($form['dialog_display']['#value'])) {
+    // Kill all existing messages, as we're now switching to a new form.
+    drupal_get_messages('error', TRUE);
+    drupal_static_reset('form_set_error');
+
+    $commands = array();
+    $content = drupal_get_form('janrain_login_account_merge_confirm_form', TRUE);
+    $title = t('Welcome back!');
+    $commands[] = dialog_command_display($content, array('title' => $title, 'draggable' => false, 'resizable' => false, ));
+    ajax_deliver(array('#type' => 'ajax', '#commands' => $commands));
+    // We don't want to continue with the default form output (would also produce invalid json)
+    drupal_exit();
+  }
+  else {
+    drupal_goto('janrain_confirm_account_merge/nojs');
+  }
+}
+
+/**
+ * Menu callback for the account merge confirmation form.
+ *
+ * Handles both dialog_user and regular delivery of this form.
+ *
+ * @param $js
+ * @return unknown_type
+ */
+function janrain_login_account_merge_ajax_callback($js) {
+  $form = drupal_get_form('janrain_login_account_merge_confirm_form', $js);
+  if ($js) {
+    // Not much to do here - the real work is done in janrain_login_account_merge_confirm_form_submit().
+    $commands = array();
+    ajax_deliver(array('#type' => 'ajax', '#commands' => $commands));
+  }
+  else {
+    return $form;
+  }
+}
+
+/**
+ * Removes validation "errors" that don't indicate actual user error.
+ *
+ * New users who have signed up using outside services, such as Twitter, get
+ * returned to the registration form to enter required information, such as
+ * their date of birth, that the outside service didn't provide. We shouldn't
+ * throw big red errors in their face.
+ */
+function janrain_login_user_register_pre_render($form) {
+  // Only inhibit validation error messages first time through (when the form was
+  // automatically submitted).
+  if (!empty($_SESSION['rpx_show_validation'])) {
+    return $form;
+  }
+
+  $errors = form_get_errors();
+  if (!empty($errors)) {
+    $to_remove = array();
+
+    // Hide the duplicate email message. We can detect this condition without looking
+    // at the message text (and this particular message is tricky in that it has 2 tokens).
+    if (!empty($errors['mail']) && janrain_login_email_is_dupe($form['account']['mail']['#default_value'], $form['#user'])) {
+      $to_remove[] = $errors['mail'];
+    }
+
+    // Get a list of snippets such as "field is required" that we can search
+    // for within the drupal_set_message array.
+    $snippets = _janrain_login_get_error_message_snippets();
+    $regex = '@' . implode('|', array_map('preg_quote', $snippets)) . '@';
+    foreach ($errors as $key => $error_string) {
+      // If this error string is something like "Username field is required.",
+      // remove the drupal_set_message error.
+      if (preg_match($regex, $error_string)) {
+        $to_remove[] = $error_string;
+      }
+    }
+    if (!empty($to_remove)) {
+      // Figure out if there are any error messages left, after removing all
+      // the irrelevant "field is required" errors.
+      janrain_login_suppress_errors($to_remove);
+      // Clear all form errors, so that required fields won't be surrounded in
+      // red.
+      drupal_static_reset('form_set_error');
+    }
+  }
+
+  $_SESSION['rpx_show_validation'] = TRUE;
+
+  return $form;
+}
+
+function janrain_login_suppress_errors($to_remove) {
+  $errors = array_values(array_diff($_SESSION['messages']['error'], $to_remove));
+  if (empty($errors)) {
+    // Clear out the error message queue entirely.
+    drupal_get_messages('error', TRUE);
+  }
+  else {
+    $_SESSION['messages']['error'] = $errors;
+  }
+}
+
+/**
+ * Returns a localized list of error message snippets that should be suppressed.
+ *
+ * When we're in the Janrain Engage workflow, fields that fail validation
+ * because they were left blank should not trigger error messages. In order to
+ * suppress the irrelevant error messages, we need to compare the text of the
+ * error messages on the page with a list of snippets such as "field is
+ * required."
+ *
+ * This function includes a list of error messages that indicate a required
+ * field was left blank. As more such messages are discovered in core and
+ * contributed modules in Gardens, they should be added here.
+ *
+ * @return
+ *   An array of error message snippets (such as "field is required") to search
+ *   for in the drupal_set_message array.
+ */
+function _janrain_login_get_error_message_snippets() {
+  // Assemble a list of error messages that indicate a required field was left
+  // empty (i.e. "Username field is required.").
+  $messages[] = array(
+    '!name' => t('!name field is required.')
+  );
+  $messages[] = array(
+    '%title' => t('A valid date is required for %title.')
+  );
+  foreach ($messages as $message) {
+    foreach ($message as $key => $value) {
+      // In order to get the relevant part of the error message (i.e. "A valid
+      // date is required for ") we break it up into parts:
+      // - "A valid date is required for "
+      // - "."
+      $parts = explode($key, $value);
+      // Find the longest part of the message, on the assumption that the
+      // longest part of the message will contain the relevant text.
+      $lengths = array_map('strlen', $parts);
+      $longest = array_search(max($lengths), $lengths);
+      $strings[] = $parts[$longest];
+    }
+  }
+  return $strings;
+}
+
+/**
+ * Custom submit handler for the standard user_register form.
+ * Used for local Engage-facilitated signups.
+ */
+function janrain_login_user_register_submit($form, &$form_state) {
+  form_state_values_clean($form_state);
+
+  $pass = user_password();
+
+  $form_state['values']['pass'] = $pass;
+  $form_state['values']['init'] = $form_state['values']['mail'];
+
+  $account = $form['#user'];
+  $category = $form['#user_category'];
+
+  $account_unchanged = clone $account;
+
+  entity_form_submit_build_entity('user', $account, $form, $form_state);
+
+  $edit = array_intersect_key((array) $account, $form_state['values']);
+  $account = user_save($account_unchanged, $edit, $category);
+
+  // Add the Engage data to the account.
+  $edit['data']['rpx_data']['profile'] = $_SESSION['rpx']['profile'];
+  $account = user_save($account, $edit);
+  // Terminate if an error occurred during user_save().
+  if (!$account) {
+    drupal_set_message(t("Error saving user account."), 'error');
+    $form_state['redirect'] = '';
+    return;
+  }
+  // Add the 3rd party profile picture to the account.
+  $account = _janrain_login_save_profile_picture($account);
+  watchdog('janrain_login', 'New user: %name (%email).', array('%name' => $form_state['values']['name'], '%email' => $form_state['values']['mail']), WATCHDOG_NOTICE, l(t('edit'), 'user/' . $account->uid . '/edit'));
+
+  $form_state['user'] = $account;
+  $form_state['values']['uid'] = $account->uid;
+
+  _janrain_login_import_user_data($account);
+
+  // Add plain text password into user account to generate mail tokens.
+  $account->password = $pass;
+
+  // If no email verification required, log the user in immediately.
+  if ((!variable_get('user_email_verification', TRUE) ||
+       variable_get('rpx_bypass_email_verification', FALSE) ||
+       !empty($_SESSION['rpx']['profile']['verifiedEmail']) &&
+       strtolower($account->mail) == strtolower($_SESSION['rpx']['profile']['verifiedEmail'])) &&
+      $account->status) {
+
+    //_user_mail_notify('register_no_approval_required', $account);
+    $form_state['uid'] = $account->uid;
+    user_login_submit(array(), $form_state);
+    drupal_set_message(t('Registration successful. You are now logged in.'));
+  }
+  elseif ($account->status) {
+    // Require email confirmation
+    _user_mail_notify('register_no_approval_required', $account);
+    drupal_set_message(t('An email has been sent to you with confirmation instructions.'));
+  }
+  else {
+    _user_mail_notify('register_pending_approval', $account);
+    drupal_set_message(t('Thank you for applying for an account. Your account is currently pending approval by the site administrator.<br />In the meantime, a welcome message with further instructions has been sent to your e-mail address.'));
+  }
+
+  // Terminate the Engage signin transaction and remove any remaining cruft.
+  unset($_SESSION['rpx']);
+  unset($_SESSION['rpx_no_merge']);
+  unset($_SESSION['rpx_show_validation']);
+
+  $form_state['redirect'] = '';
+}
+
+/**
+ * Downloads user picture from the 3rd party and links it to the user account.
+ *
+ * Returns user account.
+ */
+function _janrain_login_save_profile_picture(&$account) {
+  // Should we bother?
+  if (!variable_get('rpx_import_profile_photo', 1) ||
+      !variable_get('user_pictures', 0) ||
+      !isset($account->data['rpx_data']['profile']['photo'])) {
+
+    return $account;
+  }
+  $photo_url = $account->data['rpx_data']['profile']['photo'];
+
+  // We need to have the file locally
+  $tmp_photo = drupal_tempnam('temporary://', 'drupal_rpx-');
+  $tmp_photo_realpath = drupal_realpath($tmp_photo);
+  if (copy($photo_url, $tmp_photo_realpath)) {
+    // We'll need a file object to work with the file
+    $info = image_get_info($tmp_photo_realpath);
+    $file = new stdClass();
+    $file->uid      = $account->uid;
+    $file->status   = 0; // mark the file as temporary
+    $file->filename = basename($tmp_photo_realpath);
+    $file->uri      = $tmp_photo;
+    $file->filemime = $info['mime_type'];
+    $file->filesize = $info['file_size'];
+
+    // The file should be an image
+    $errors = array();
+    $errors += file_validate_is_image($file);
+    $errors += file_validate_image_resolution($file, variable_get('user_picture_dimensions', '85x85'));
+    $errors += file_validate_size($file, variable_get('user_picture_file_size', '30') * 1024);
+
+    // Make sure file extension is a valid image
+    if (!in_array(strtolower($info['extension']), array('jpg', 'png', 'gif'))) {
+      $errors[] = ' invalid image file extension.';
+    }
+
+    if (count($errors)) {
+      drupal_set_message(t('Profile Image Import:') . ' ' . $errors[0], 'warning');
+      // Clean up (set fid to avoid error messages)
+      $file->fid = 0; file_delete($file);
+    }
+    else {
+      // We'll need a valid file id on the file object; file_save() will give us one
+      $file = file_save($file);
+      // Update user account (fid is not empty, status is temporary -- image
+      // will be moved to proper directory and assigned to the user)
+      $fields['picture'] = $file;
+      $account = user_save($account, $fields);
+    }
+  }
+
+  return $account;
+}
+
+/**
+ * Imports Engage user profile data into user entity fields, based on the
+ * settings for each mapping.
+ *
+ * @param object $account
+ *   Account for which we're importing the data.
+ */
+function _janrain_login_import_user_data($account) {
+  // In D7.7, user entity field are not always on the $user object (weird).
+  // Reload the account to make sure they are there.
+  $account = user_load($account->uid);
+
+  $map = variable_get('rpx_profile_fields_map', array());
+  $provider = janrain_client_get_provider_machine_name($_SESSION['rpx']['profile']['providerName']);
+
+  // This will signal that we've updated some fields in the loop below and need
+  // to do user_save().
+  $modified = FALSE;
+  foreach ($map as $mid => $mapping) {
+    // Should we try to update the field at all?
+    if (!isset($mapping['update']) || $mapping['update'] == RPX_UPDATE_NONE) {
+      continue;
+    }
+
+    $new_data = _janrain_login_data_map($_SESSION['rpx'], $mapping['fid']);
+
+    // Only update if provider returned data for the field.
+    if($new_data === '') {
+      continue;
+    }
+
+    // If data append is requested, make sure it's a multi-value field.
+    if ($mapping['update'] == RPX_UPDATE_ADD) {
+      $field_info = field_info_field($mapping['field']);
+      if (!isset($field_info['cardinality']) || $field_info['cardinality'] == 1) {
+        watchdog('janrain_login', 'Refusing to append new data to a single-value field %field_name.', array('%field_name' => $mapping['field']), WATCHDOG_WARNING);
+        continue;
+      }
+    }
+
+    // Check if whether we overwrite or not depends on the provider.
+    if ($mapping['update'] == RPX_UPDATE_MAYBE) {
+      // Make sure this provider is in the mapping's provider list.
+      if(($provider_weight = array_search($provider, $mapping['providers'])) === FALSE) {
+        continue;
+      }
+
+      // Make sure this provider is not lower in the weight table than the
+      // previous one.
+      $prev_provider = db_select('rpx_mapping_provider')
+        ->fields('rpx_mapping_provider', array('name'))
+        ->condition('uid', $account->uid)
+        ->condition('mid', $mid)
+        ->execute()
+        ->fetchAssoc();
+      $prev_provider = $prev_provider ? $prev_provider['name'] : '';
+      $prev_provider_weight = array_search($prev_provider, $mapping['providers']);
+      if ($prev_provider_weight !== FALSE && $provider_weight > $prev_provider_weight) {
+        continue;
+      }
+    }
+
+    // Check that the field still exists.
+    if (!isset($account->{$mapping['field']})) {
+      watchdog('janrain_login', 'Cannot map Janrain Engage data to the user entity field %field, as it does not seem to exist for user %user. Update your fields and/or the Janrain Engage field map.', array('%field' => $mapping['field'], '%user' => $account->name), WATCHDOG_WARNING, l(t('Field Mapping'), 'admin/config/people/janrain/mapping'));
+      continue;
+    }
+
+    $values = &$account->{$mapping['field']}[LANGUAGE_NONE];
+
+    if ($mapping['update'] == RPX_UPDATE_EMPTY) {
+      // Make sure the field is empty.
+      if(isset($values[0]['value'])) {
+        continue;
+      }
+    }
+
+    //
+    // Import the data.
+    //
+    if($mapping['update'] == RPX_UPDATE_ADD) {
+      // If we are appending to a multi-value field, make sure it can accept
+      // another value.
+      if ($field_info['cardinality'] != -1 && count($values) >= $field_info['cardinality']) {
+        watchdog('janrain_login', 'Refusing to append new data: multi-value field %field_name can\'t accept another value.', array('%field_name' => $mapping['field']), WATCHDOG_WARNING);
+        continue;
+      }
+      elseif ($values) {
+        // Make sure $new_data value isn't already there.
+        $exists = FALSE;
+        foreach ($values as $value) {
+          if (!strcmp($value['value'], $new_data)) {
+            $exists = TRUE;
+            break;
+          }
+        }
+        if ($exists) {
+          continue;
+        }
+        else {
+          $slot = count($values);
+        }
+      }
+      else {
+        // Field has no values.
+        $slot = 0;
+      }
+    }
+    else {
+      $slot = 0;
+    }
+
+    $values[$slot]['value'] = $new_data;
+    $modified = TRUE;
+
+    if($mapping['update'] != RPX_UPDATE_ADD) {
+      // Record the provider's name as the last provider used in the mapping.
+      db_merge('rpx_mapping_provider')
+        ->key(array(
+          'uid' => $account->uid,
+          'mid' => $mid,
+          ))
+        ->fields(array('name' => $provider))
+        ->execute();
+    }
+  }
+
+  if($modified) {
+    user_save($account);
+  }
+}
+
+/**
+ * Implements hook_user_login().
+ *
+ * Import Engage user profile data into user entity fields, based on the
+ * settings for each mapping. Update Engage mapping for the user.
+ */
+function janrain_login_user_login(&$edit, $account) {
+  // For local signins (and signups), we do this in
+  // janrain_login_token_handler(), janrain_login_user_register_submit() and
+  // hook_user_insert()
+  if (variable_get('acquia_gardens_local_user_accounts', FALSE)) {
+    return;
+  }
+
+  if (!isset($_SESSION['rpx'])) {
+    // If RPX session is not set but there's an RPX token in the openid response
+    // that means this is a return user whom gardener signed in using Engage; we
+    // should download the fresh Engage data for this user and import it into
+    // the user entity fields.
+    if (!isset($_REQUEST['openid_ax_value_rpx_token'])) {
+      return;
+    }
+
+    $token = $_REQUEST['openid_ax_value_rpx_token'];
+    $rpx_data = gardens_client_call_gardener('janrain.get.user.data', $token);
+    if (!$rpx_data) {
+      return;
+    }
+    $_SESSION['rpx'] = json_decode($rpx_data, TRUE);
+  }
+
+  _janrain_login_import_user_data($account);
+  _janrain_login_update_engage_mapping($account->uid);
+}
+
+
+/**
+ * Implements hook_user_insert().
+ *
+ * Link the 3rd party ID's for new user, that signed up locally using Engage, to
+ * their Drupal account (authmap). Update engage mapping, too.
+ */
+function janrain_login_user_insert(&$edit, $account, $category) {
+  // Make sure user has registered via Engage and this is a local signup.
+  if (!isset($_SESSION['rpx']) || !variable_get('acquia_gardens_local_user_accounts', FALSE)) {
+    return;
+  }
+
+  $aid = db_insert('authmap')
+    ->fields(array(
+      'uid' => $account->uid,
+      'authname' => $_SESSION['rpx']['profile']['identifier'],
+      // Leave module as janrain_client for back compatibility.
+      'module' => 'janrain_client',
+    ))
+  ->execute();
+  db_insert('rpx_authmap_username')
+    ->fields(array(
+      'aid' => $aid,
+      'uid' => $account->uid,
+      'username' => $_SESSION['rpx']['profile']['preferredUsername'],
+    ))
+    ->execute();
+
+  _janrain_login_update_engage_mapping($account->uid);
+}
+
+/**
+ * Given an Engage field ID, return the Engage data it maps to.
+ *
+ * @see _janrain_login_import_user_data()
+ */
+function _janrain_login_data_map($data, $fid) {
+  $parsed_path = db_query('SELECT parsed_path FROM {rpx_profile_field} WHERE fid = :fid', array(':fid' => $fid))->fetchField();
+
+  $result = '';
+  if ($parsed_path = unserialize($parsed_path)) {
+    $result = _janrain_login_extract_data($data, $parsed_path);
+  }
+
+  return $result;
+}
+
+/**
+ * Get data from multi-dimensional array by keys specified in $path array.
+ *
+ * @param array $data
+ * @param array $path
+ * @return
+ *   Mixed value or NULL if it doesn't exist.
+ */
+function _janrain_login_extract_data($data, $path) {
+  $key = array_shift($path);
+  if ($key !== NULL) {
+    if (is_int($key) && $key < 0) {
+      // Negative index means we should count from the end of array.
+      // For example, -1 means last item.
+      // Key is already negative, so we use plus here.
+      $key = count($data) + $key;
+    }
+    if (isset($data[$key])) {
+      $value = $data[$key];
+      if (empty($path)) {
+        // No more keys, we've finished.
+        return $value;
+      }
+      elseif (is_array($value)) {
+        return _janrain_login_extract_data($value, $path);
+      }
+    }
+  }
+  return '';
+}
+
+/**
+ * Make sure user mapping returned by Engage is right.
+ *
+ * @param integer $uid
+ *   User ID we are updating the mapping for.
+ *
+ * @throws Exception
+ */
+function _janrain_login_update_engage_mapping($uid) {
+  if (!variable_get('rpx_mapping_api', FALSE)) {
+    return;
+  }
+
+  // We use the mapping API only for local accounts (since for the SSO flow
+  // linked accounts are managed by Gardener and we have no way of knowing when
+  // users unlink their accounts).
+  if (!variable_get('acquia_gardens_local_user_accounts', FALSE)) {
+    return;
+  }
+
+  $primary_key = isset($_SESSION['rpx']['profile']['primaryKey']) ? $_SESSION['rpx']['profile']['primaryKey'] : -1;
+  if ($primary_key == $uid) {
+    return;
+  }
+
+  $rpx_id = $_SESSION['rpx']['profile']['identifier'];
+  $api_key = variable_get('rpx_api_key', '');
+  $class = variable_get('janrain_client_class', 'RPX');
+  // PHP 5.2 doesn't support direct use of variables for calling
+  // static class methods.
+  $result = call_user_func(array($class, 'map'), $api_key, $rpx_id, $uid);
+  if (!$result) {
+    $msg = 'Call to the api/map Janrain Engage API returned no data.';
+    watchdog('janrain_login', $msg, array(), WATCHDOG_ERROR);
+    throw new Exception($msg);
+  }
+
+  if ($result['stat'] != 'ok') {
+    watchdog('janrain_login', 'Call to Engage map failed for user ID %uid and Engage ID %rpx_id; map() returned error: %err', array('%uid' => $uid, '%rpx_id' => $rpx_id, '%err' => $result['err']['msg']), WATCHDOG_WARNING);
+  }
+}
+
+/**
+ * Call Engage's unmap API to disassociate 3rd party account from user.
+ *
+ *   This function is an Engage-level error handling wrapper around
+ *   RPX::unmap().
+ *
+ * @param string $authname
+ *   The identifier we are unlinking from a Drupal uid.
+ * @param integer $uid
+ *   The Drupal user ID we are unlinking for.
+ * @param boolean $all
+ *   Set to TRUE if we should unmap all identifiers mapped to $uid (for example,
+ *   when user is deleted.)
+ *
+ * @throws Exception
+ *
+ * @see http://rpxnow.com/docs
+ */
+function _janrain_login_delete_engage_mapping($authname, $uid, $all = FALSE) {
+  if (!variable_get('rpx_mapping_api', FALSE)) {
+    return;
+  }
+
+  // We use the mapping API only for local accounts (since for the SSO flow
+  // linked accounts are managed by Gardener and we have no way of knowing when
+  // users unlink their accounts).
+  if (!variable_get('acquia_gardens_local_user_accounts', FALSE)) {
+    return;
+  }
+
+  $api_key = variable_get('rpx_api_key', '');
+  $class = variable_get('janrain_client_class', 'RPX');
+  // PHP 5.2 doesn't support direct use of variables for calling
+  // static class methods.
+  $result = call_user_func(array($class, 'unmap'), $api_key, $authname, $uid, $all);
+  if (!$result) {
+    $msg = 'Call to the api/unmap Janrain Engage API returned no data.';
+    watchdog('janrain_login', $msg, array(), WATCHDOG_ERROR);
+    throw new Exception($msg);
+  }
+
+  if ($result['stat'] != 'ok') {
+    watchdog('janrain_login', 'Call to Engage unmap failed for user ID %uid and Engage ID %rpx_id; unmap() returned error: %err', array('%uid' => $uid, '%rpx_id' => $authname, '%err' => $result['err']['msg']), WATCHDOG_WARNING);
+  }
+}
+
+/**
+ * Adds Engage JS to the page; custom UI for the linked accounts tab.
+ */
+function janrain_login_linked_accounts_js() {
+  $token_url = _janrain_login_token_url(array('add_to_account' => 'true'));
+  $realm = janrain_client_js_realm();
+
+  janrain_client_custom_signin_ui_js($realm, $token_url);
+}
+
+/**
+ * Add Engage sign-in JS to the page.
+ */
+function janrain_login_signin_js() {
+  $vars = array(
+    'token_url' => _janrain_login_token_url(),
+    'rpx_realm' => janrain_client_js_realm(),
+  );
+  $path = drupal_get_path('module', 'janrain_client');
+  drupal_add_js(array('janrainClient' => $vars,), array('type' => 'setting'));
+  // On rare occasions, custom JS is required instead of the default.  There is no
+  // UI for changing this var. It is assumed if this var is set to FALSE, the developer
+  // handles inclusion of equivalent JS.
+  if (variable_get('janrain_login_add_default_js', TRUE)) {
+    drupal_add_js($path . '/janrain_client.js');
+  }
+}
+
+/**
+ * Returns the URL that will receive the Engage sign-in callback ("RPX token
+ * handler URL")
+ */
+function _janrain_login_token_url($rpx_params = array()) {
+  // Set destination so user will return to current page after login/registration
+  $dest = drupal_get_destination();
+  $dest = urldecode($dest['destination']);
+  // If initiating Engage login/registration from login or registration page send
+  // user to their account page
+  if (strpos($dest, 'user/login') !== FALSE || strpos($dest, 'user/register') !== FALSE) {
+    $dest = 'user';
+  }
+  $query[] = array('destination' => $dest);
+  if (is_array($rpx_params)) {
+    $query = array_merge($query, $rpx_params);
+  }
+
+  return url('janrain_login/token_handler', array('query' => $query, 'absolute' => TRUE));
+}
+
+/**
+ * Implements hook_admin_paths().
+ */
+function janrain_login_admin_paths() {
+  $paths = array();
+
+  if (variable_get('acquia_gardens_local_user_accounts', FALSE)) {
+    $paths += array(
+      'user/*/janrain-accounts' => TRUE,
+      'user/*/janrain-accounts/disable/*' => TRUE,
+    );
+  }
+
+  return $paths;
+}
+
+/**
+ * If we are in overlay, we want the user redirected back to it after the
+ * account is linked. We have to rely on HTTP_REFERER and do it manually
+ * since the sign-in widget bypasses the overlay code when POSTing to
+ * token_url, causing a complete page reload.
+ *
+ * @param string $url
+ *   Target URL that should be displayed in overlay.
+ */
+function janrain_login_save_overlay_uri($url) {
+  unset($_SESSION['rpx_overlay_uri']);
+  if (function_exists('overlay_get_mode') && overlay_get_mode() == 'child' && isset($_SERVER['HTTP_REFERER'])) {
+    // Construct referer URI to be passed to token_url.
+    $referer = $_SERVER['HTTP_REFERER'];
+    if (variable_get('clean_url', FALSE)) {
+      // Clean URLs are enabled.
+      global $base_url;
+      $referer = substr($referer, strlen($base_url)+1);
+    }
+    else {
+      $referer = substr(parse_url($referer, PHP_URL_QUERY), 2);
+    }
+    $dest = urlencode($url);
+    if (!variable_get('clean_url', FALSE)) {
+      $dest = urlencode('?q=') . $dest;
+    }
+    $_SESSION['rpx_overlay_uri'] = $referer . '#overlay=' . $dest;
+  }
+}
+
+/**
+ * Helper function.
+ * Populate user entity fields in a form with Engage user data.
+ */
+function janrain_login_populate_user_fields(&$form) {
+  // Use Engage data to pre-fill User entity fields.
+  $field_map = variable_get('rpx_profile_fields_map', array());
+  if (empty($field_map)) {
+    return;
+  }
+  $map = array();
+  foreach ($field_map as $mid => $field_mapping) {
+    // Make sure it's a valid mapping.
+    if (!isset($field_mapping['fid'])) {
+      continue;
+    }
+
+    if($field_mapping['set'] == 'user') {
+      $map[$field_mapping['field']] = $field_mapping['fid'];
+    }
+  }
+  if(!empty($map)) {
+    foreach (field_info_instances('user') as $bundle => $fields) {
+      foreach ($fields as $field => $field_data) {
+        if (isset($map[$field]) && $mapped_value = _janrain_login_data_map($_SESSION['rpx'], $map[$field])) {
+          // @TODO jessebeach, is ['value']['#default_value'] swapped here? Should
+          // it be ['#default_value']['value']?
+          $form[$field][LANGUAGE_NONE][0]['value']['#default_value'] = $mapped_value;
+        }
+      }
+    }
+  }
+}
+
+/**
+ * Helper function: integrate with the coppa_lite module.
+ *
+ * This is a quick hack to provide support for mapping Janrain Engage birthday to
+ * the (specific) coppa_lite date select box at user signup.
+ *
+ * FIXME: Ideally we should add support for mapping to date user fields so that
+ * site admins can map dates returned by Engage to arbitrary date user fields.
+ */
+function janrain_login_ensure_coppa(&$form, &$form_state) {
+  if (isset($_SESSION['rpx']['profile']['birthday'])) {
+    $dob = $_SESSION['rpx']['profile']['birthday'];
+
+    $field = variable_get('coppa_lite_field');
+
+    $form[$field][LANGUAGE_NONE][0]['#default_value']['value'] = $dob;
+
+    list ($year, $month, $day) = explode('-', $dob);
+
+    $form_state['input'][$field][LANGUAGE_NONE]['0']['value'] = array (
+      'year' => intval($year),
+      'month' => intval($month),
+      'day' => intval($day),
+    );
+  }
+}
+

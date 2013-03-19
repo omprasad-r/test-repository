@@ -1,0 +1,695 @@
+<?php
+
+/**
+ * Implements hook_menu
+ */
+function gardens_mail_media_menu() {
+  $items['admin/config/content/mail-media'] = array(
+    'title' => t('Mail media'),
+    'description' => t('Select taxonomy terms to organize photo or video content displayed in views.'),
+    'page callback' => 'drupal_get_form',
+    'page arguments' => array('gardens_mail_media_admin_form'),
+    'access arguments' => array('configure singlemailbox'),
+  );
+  return $items;
+}
+
+/**
+ * Administration form gardens_mail_media
+ */
+function gardens_mail_media_admin_form($form, &$form_state) {
+  $form = array();
+
+  $form['gardens_media_pro_photo_category'] = array(
+    '#type' => 'select',
+    '#title' => t('Pro photo category'),
+    '#options' => gardens_mail_media_get_terms('photo_category'),
+    '#default_value' => variable_get('gardens_media_pro_photo_category'),
+  );
+  $form['gardens_media_pro_video_category'] = array(
+    '#type' => 'select',
+    '#options' => gardens_mail_media_get_terms('video_category'),
+    '#title' => t('Pro video category'),
+    '#default_value' => variable_get('gardens_media_pro_video_category'),
+  );
+  // Set our theme function for this form
+  $form['#theme'] = 'gardens_mail_media_admin_form';
+
+  return system_settings_form($form);
+}
+
+/**
+* Implements hook_theme()
+*
+* @return array
+*/
+function gardens_mail_media_theme() {
+  return array(
+    'gardens_mail_media_admin_form' => array(
+      'arguments' => array('form' => NULL),
+      'render element' => 'form',
+    )
+  );
+}
+
+/**
+ * Theme function to change the output of the taxonomy select form
+ *
+ * @param array $variables
+ * @return rendered markup
+ */
+function theme_gardens_mail_media_admin_form($variables) {
+  $output = '<p>' . t('Select taxonomy terms to organize photo or video content displayed in views.') . ' </p>';
+  $form = $variables['form'];
+  $elements = element_children($form);
+  if (!empty($elements)) {
+    $header = array(t('Vocabulary'), t('Terms'));
+    foreach ($elements as $key) {
+      if ($form[$key]['#type'] == 'select') {
+        $row = array();
+        $row[] = $form[$key]['#title'];
+        unset($form[$key]['#title']);
+        $row[] = drupal_render($form[$key]);
+        $rows[] = $row;
+      }
+    }
+    $output .= theme('table', array('header' => $header, 'rows' => $rows));
+  }
+  $output .= drupal_render_children($form);
+  return $output;
+}
+
+/**
+ * Fetches all the taxonomy terms for a given vocabulary
+ *
+* @param $name
+ *   machine name for the taxonomy vocabulary
+ *
+ * @return
+ *   Associative array of taxonomy terms in the format tid => term_name
+ */
+function gardens_mail_media_get_terms($name) {
+  $taxonomy = taxonomy_vocabulary_machine_name_load($name);
+  $options = array();
+  if ($taxonomy) {
+    $options[] = '';
+    $terms = taxonomy_get_tree($taxonomy->vid, $parent = 0, $max_depth = NULL, $load_entities = FALSE);
+    foreach ($terms as $term) {
+      $options[$term->tid] = $term->name;
+    }
+  }
+  return $options;
+}
+
+/**
+ * Implements hook_node_presave()
+ *
+ * Responsible for filling in the node title if they are missing from
+ * the photo or video nodes.
+ */
+function gardens_mail_media_node_presave($node) {
+  if ($node->type == 'mail_media_import') {
+    if ($node->uid == 0) {
+      // do not publish unauthenticated content
+      $node->status = 0;
+      if ($fid = $node->field_mail_media_attachment[LANGUAGE_NONE][0]['fid']) {
+        // delete from file system if exists
+        $file = file_load($fid);
+        file_delete($file);
+      }
+      return;
+    }
+    // If we have a media attachment fid then we should process this mail as an image
+    if (!empty($node->field_mail_media_attachment[LANGUAGE_NONE][0]['fid'])) {
+      $node_user = user_load($node->uid);
+      // Ensure that we have a title.  If there isn't one to begin with
+      // we provide a default.
+      if ($node->title == '') {
+        $node->title = 'Photo from '. $node_user->name;
+      }
+      // initialize variables for the file and field settings
+      $fid = $node->field_mail_media_attachment[LANGUAGE_NONE][0]['fid'];
+      $field = field_info_instance('node', 'field_photo_asset', 'photo');
+      $extensions = $field['settings']['file_extensions'];
+      $file = file_load($fid);
+      // Feeds seems to bypass the validation of the file extension so we'll do that now
+      $errors = file_validate_extensions($file, $extensions);
+      // If an error occured send an email and exit
+      if (!empty($errors)) {
+        file_delete($file);
+        gardens_mail_media_message_error($node, array('errors' => $errors));
+        $node->status = 0;
+      }
+      else {
+        // Set the text format of the body. There is no way to know exactly
+        // which format to use, so we use the node owner's default format
+        // (i.e., the first format available to them, which will often be
+        // something like filtered HTML).
+        $node->body[LANGUAGE_NONE][0]['format'] = filter_default_format($node_user);
+        // Update the file entity to have proper ownership
+        $file->uid = $node->uid;
+        file_save($file);
+        // No errors and a valid photo so change the node type to photo and assign the fid to photo asset
+        $node->type = 'photo';
+        // Set the taxonomy term for this content if one has been assigned
+        if ($tid = (int)variable_get('gardens_media_pro_photo_category', FALSE)) {
+          $node->field_photo_category[LANGUAGE_NONE][0]['tid'] = $tid;
+        }
+        $node->field_photo_asset[LANGUAGE_NONE][0]['fid'] = $node->field_mail_media_attachment[LANGUAGE_NONE][0]['fid'];
+      }
+      if (function_exists('janrain_client_node_defaults')) {
+        janrain_client_node_defaults($node);
+      }
+    }
+    // If we have a media link then we should try and process this mail as an embed,
+    // deciding whether it's a photo or video after some processing has been done.
+    else if ($node->field_mail_media_link[LANGUAGE_NONE][0]['value']) {
+      $node_user = user_load($node->uid);
+
+      // Get our field instance information
+      $field = field_read_instance('node', 'field_video_asset', 'video', $include_additional = array());
+       // Build our form to create the file entity
+      $media_form_state = array();
+      $media_form_state['#validators'][0]['media_file_validate_types'] = $field['widget']['settings']['allowed_types'];
+      $media_form_state['values']['embed_code'] = $node->field_mail_media_link[LANGUAGE_NONE][0]['value'];
+      $media_form_state['values']['op'] = 'Submit';
+      // execute the media_add_upload form to create the entity and give us back an FID
+      drupal_form_submit('media_internet_add', $media_form_state);
+      $errors = form_get_errors();
+      // If an error occured creating the video entity send an email and exit
+      if (isset($errors['embed_code'])) {
+        gardens_mail_media_message_error($node, array('errors' => $errors['embed_code']));
+        $node->status = 0;
+      }
+      else {
+        // Set the text format of the body. There is no way to know exactly
+        // which format to use, so we use the node owner's default format
+        // (i.e., the first format available to them, which will often be
+        // something like filtered HTML).
+        $node->body[LANGUAGE_NONE][0]['format'] = filter_default_format($node_user);
+        // Update the file entity to have proper ownership
+        $file = file_load($media_form_state['redirect'][1]['query']['fid']);
+        $file->uid = $node->uid;
+        file_save($file);
+        if ($file->type == 'image') {
+          $details = array(
+            'type' => 'Photo',
+            'nodetype' => 'photo',
+            'field' => 'field_photo_asset',
+            'category_field' => 'field_photo_category',
+            'category_tid' => (int)variable_get('gardens_media_pro_photo_category', FALSE),
+          );
+        }
+        else {
+          $details = array(
+            'type' => 'Video',
+            'nodetype' => 'video',
+            'field' => 'field_video_asset',
+            'category_field' => 'field_video_category',
+            'category_tid' => (int)variable_get('gardens_media_pro_video_category', FALSE),
+          );
+        }
+        // Ensure that we have a title.  If there isn't one to begin with
+        // we provide a default.
+        if ($node->title == '') {
+          $node->title = t('!type from !user', array('!type' => $details['type'], '!user' => $node_user->name));
+        }
+        // No errors and a valid asset so change the node type as appropriate
+        //and assign the fid to the asset field
+        $node->type = $details['nodetype'];
+        $node->{$details['field']}[LANGUAGE_NONE][0]['fid'] = $file->fid;
+        // Set the taxonomy term for this content if one has been assigned
+        if (!empty($details['category_tid'])) {
+          $node->{$details['category_field']}[LANGUAGE_NONE][0]['tid'] = $details['category_tid'];
+        }
+      }
+      if (function_exists('janrain_client_node_defaults')) {
+        janrain_client_node_defaults($node);
+      }
+    }
+    else {
+      // Error -- neither image nor link found.
+      gardens_mail_media_message_error($node, array('errors' => array(t('No file or embed url was submitted'))));
+      // Set the node as unpublished
+      $node->status = 0;
+    }
+  }
+}
+
+/**
+ * Implements hook_node_insert().
+ *
+ * For photo and video nodes that have been imported by mail_media, send email notification
+ * to user.
+ */
+function gardens_mail_media_node_insert($node) {
+  switch ($node->type) {
+    case 'video':
+    case 'photo':
+      if (isset($node->field_mail_media_from[LANGUAGE_NONE][0]['value'])) {
+        if (!_gardens_mail_media_compare_email_address($node)) {
+          _gardens_mail_media_send_email($node, 'sender_success', $node->field_mail_media_from[LANGUAGE_NONE][0]['value']);
+        }
+      _gardens_mail_media_send_email($node, 'success');
+      }
+      break;
+  }
+}
+
+/**
+ * Implements hook_feeds_after_parse().
+ *
+ * Remove unauthenticated incoming mail messages.
+ */
+function gardens_mail_media_feeds_after_parse(FeedsSource $source, FeedsParserResult $result) {
+  $source_id = $source->id;
+  if ($source_id == 'mailhandler_media_nodes') {
+    foreach ($result->items as $key => $value) {
+      if ($value['authenticated_uid'] == 0) {
+        unset($result->items[$key]);
+      }
+    }
+  }
+}
+
+
+/**
+ * Compare the sender of incoming media with the user account it will be
+ * listed under.
+ *
+ * @param $node
+ *   the node for the incoming content
+ *
+ * @return
+ *   TRUE if matches, false otherwise
+ */
+function _gardens_mail_media_compare_email_address($node) {
+  $account = user_load($node->uid);
+  if (isset($node->field_mail_media_from[LANGUAGE_NONE][0]['value'])) {
+    if (_gardens_mail_media_get_address($account->mail)
+            == _gardens_mail_media_get_address($node->field_mail_media_from[LANGUAGE_NONE][0]['value'])) {
+      return TRUE;
+    }
+  }
+  else {
+    return FALSE;
+  }
+}
+
+/**
+ * Extract an unambiguous email address from a string. Regex from: http://refiddle.com/1b6
+ *
+ * @param $mail
+ *   email address EG. "Dries Buytaert<dries@drupal.org>"
+ *
+ * @return
+ *   unambiguous emailaddress EG. "dries@drupal.org"
+ */
+function _gardens_mail_media_get_address($mail) {
+  $address = '';
+  $matches = array();
+  $pattern = '/(([a-z0-9&*\+\-\=\?^_`{|\}~][a-z0-9!#$%&*+-=?^_`{|}~.]*[a-z0-9!#$%&*+-=?^_`{|}~])|[a-z0-9!#$%&*+-?^_`{|}~]|("[^"]+"))\@([-a-z0-9]+\.)+([a-z]{2,})/im';
+  if (preg_match($pattern, $mail, $matches)) {
+    $address = $matches[0];
+  }
+  else {
+    // in case the regex doesn't match a strange email address
+    $address = $mail;
+  }
+  return strtolower($address);
+}
+
+/**
+ * Send an error email when a mail media node is received with neither an image nor
+ * a video link.
+ *
+ * @param $node
+ *     The node object to generate the email for
+ */
+function gardens_mail_media_message_error($node, $data = array()) {
+  if (isset($node->field_mail_media_from[LANGUAGE_NONE][0]['value'])) {
+    _gardens_mail_media_send_email($node, 'fail', $node->field_mail_media_from[LANGUAGE_NONE][0]['value'], $data);
+  }
+  else {
+    _gardens_mail_media_send_email($node, 'fail', NULL, $data);
+  }
+}
+
+
+/**
+ * Implementation of hook_action_info()
+ */
+function gardens_mail_media_action_info() {
+  return array(
+    'gardens_mail_media_send_email_action' => array(
+      'type' => 'media',
+      'label' => t('Send a confirmation e-mail to the publisher of a node'),
+      'configurable' => FALSE,
+      'triggers' => array('any'),
+    ),
+  );
+}
+
+/**
+ * Action function for gardens_mail_media_send_email_action.
+ *
+ * This action accepts the node that the trigger sent in, and calls the
+ * send_email function that will send the notification email to the appropriate
+ * recipient.
+ *
+ * @param $entity
+ *   An optional node object
+ * @param $context
+ *   Array with parameters for this action: depends on the trigger. Hopefully
+ *   it's a node object.
+ */
+function gardens_mail_media_send_email_action(&$entity, $context = array()) {
+  // grab the NID from the entity and make sure it's proper.
+  if (isset($entity->nid)) {
+    _gardens_mail_media_send_email($entity);
+  } else if (isset($context['node'])) {
+    _gardens_mail_media_send_email($context['node']);
+  }
+}
+
+/**
+ * method of sending the notification email to the author
+ */
+function _gardens_mail_media_send_email($node, $msg_type, $from = NULL, $params = array()) {
+  if ($user_obj = user_load($node->uid)) {
+    if ($from == NULL) {
+      $from = $user_obj->mail;
+    }
+    drupal_mail('gardens_mail_media', 'notification', $from,
+        user_preferred_language($user_obj), array(
+          'account' => $user_obj,
+          'node' => $node,
+          'type' => $msg_type,
+          'errors' => !empty($params['errors']) ? $params['errors'] : array(),
+        )
+    );
+  }
+}
+
+/**
+ * Implementation of hook_mail
+ */
+function gardens_mail_media_mail($key, &$message, $params) {
+  if ($key == 'notification') {
+    $language = $message['language'];
+    $variables = array(
+        'user' => $params['account'],
+        'node' => $params['node'],
+        'type' => $params['type'],
+        'errors' => $params['errors'],
+    );
+    $variable_subject = variable_get('gardens_mail_media_subject_' . $variables['type'],
+        _gardens_mail_media_default_text('subject_' . $variables['type']));
+    $variable_body = variable_get('gardens_mail_media_body_' . $variables['type'],
+        _gardens_mail_media_default_text('body_' . $variables['type']));
+    $token_options = array(
+      'language' => $language,
+      'callback' => 'user_mail_tokens',
+      'sanitize' => FALSE
+    );
+    $message['subject'] .= token_replace($variable_subject, $variables, $token_options);
+    $message['body'][] = token_replace($variable_body, $variables, $token_options);
+  }
+}
+
+/**
+ * Provides default text for subject and email body
+ */
+function _gardens_mail_media_default_text($type) {
+  switch ($type) {
+    case 'subject_success':
+      return t('[node:content-type] upload successful - [site:url-brief]');
+    case 'subject_fail':
+      return t('Content upload failed - [site:url-brief]');
+    case 'subject_sender_success':
+      return t('[node:content-type] upload successful - [site:url-brief]');
+    case 'body_success':
+      return t("Your [node:content-type] [node:title] is now available at [node:url].");
+    case 'body_sender_success':
+      return t("Your [node:content-type] [node:title] is now available at [node:url].");
+    case 'body_fail':
+      return t("Your content couldn�t be saved because of the following error(s): [site:error]");
+  }
+}
+
+/**
+ * Implements hook_form_alter().
+ *
+ */
+function gardens_mail_media_form_alter(&$form, &$form_state, $form_id) {
+  global $user;
+  switch ($form_id) {
+    case 'user_admin_settings':
+
+      $form['gardens_mail_media_user_success'] = array(
+        '#type' => 'fieldset',
+        '#title' => t('Mail media user success'),
+        '#description' => t('Edit the e-mail messages sent to user accounts on successful mail media upload. The list of available tokens that can be used in e-mails is provided below.'),
+        '#collapsible' => TRUE,
+        '#collapsed' => TRUE,
+        '#group' => 'email',
+      );
+
+      $form['gardens_mail_media_user_success']['gardens_mail_media_subject_success'] = array(
+        '#type' => 'textfield',
+        '#title' => t('Subject'),
+        '#description' =>
+            t('The subject of the e-mail that will be sent to the user.'),
+        '#size' => 40,
+        '#default_value' => variable_get('gardens_mail_media_subject_success',
+            _gardens_mail_media_default_text('subject_success')),
+        '#maxlength' => 120,
+        '#required' => TRUE,
+      );
+
+      $form['gardens_mail_media_user_success']['gardens_mail_media_body_success'] = array(
+        '#type' => 'textarea',
+        '#title' => t('Body'),
+        '#default_value' => variable_get('gardens_mail_media_body_success',
+            _gardens_mail_media_default_text('body_success')),
+        '#rows' => 15,
+        '#required' => TRUE,
+        '#description' => t('The body of the e-mail that will be sent to the user.'),
+      );
+
+      $form['gardens_mail_media_sender_success'] = array(
+        '#type' => 'fieldset',
+        '#title' => t('Mail media sender success'),
+        '#description' => t('Edit the e-mail messages sent to sender addresses on successful mail media upload. The list of available tokens that can be used in e-mails is provided below.'),
+        '#collapsible' => TRUE,
+        '#collapsed' => TRUE,
+        '#group' => 'email',
+      );
+
+      $form['gardens_mail_media_sender_success']['gardens_mail_media_subject_sender_success'] = array(
+        '#type' => 'textfield',
+        '#title' => t('Subject'),
+        '#description' =>
+            t('The subject of the e-mail that will be sent to the user.'),
+        '#size' => 40,
+        '#default_value' => variable_get('gardens_mail_media_subject_sender_success',
+            _gardens_mail_media_default_text('subject_sender_success')),
+        '#maxlength' => 120,
+        '#required' => TRUE,
+      );
+
+      $form['gardens_mail_media_sender_success']['gardens_mail_media_body_sender_success'] = array(
+        '#type' => 'textarea',
+        '#title' => t('Body'),
+        '#default_value' => variable_get('gardens_mail_media_body_sender_success',
+            _gardens_mail_media_default_text('body_sender_success')),
+        '#rows' => 15,
+        '#required' => TRUE,
+        '#description' => t('The body of the e-mail that will be sent to the user.'),
+      );
+
+      $form['gardens_mail_media_fail'] = array(
+        '#type' => 'fieldset',
+        '#title' => t('Mail media failure'),
+        '#description' => t('Edit the e-mail messages sent to user accounts on a failed mail media upload. The list of available tokens that can be used in e-mails is provided below.'),
+        '#collapsible' => TRUE,
+        '#collapsed' => FALSE,
+        '#group' => 'email',
+      );
+
+      $form['gardens_mail_media_fail']['gardens_mail_media_subject_fail'] = array(
+        '#type' => 'textfield',
+        '#title' => t('Subject'),
+        '#description' =>
+            t('The subject of the e-mail that will be sent to the user.'),
+        '#size' => 40,
+        '#default_value' => variable_get('gardens_mail_media_subject_fail',
+            _gardens_mail_media_default_text('subject_fail')),
+        '#maxlength' => 120,
+        '#required' => TRUE,
+      );
+
+      $form['gardens_mail_media_fail']['gardens_mail_media_body_fail'] = array(
+        '#type' => 'textarea',
+        '#title' => t('Body'),
+        '#default_value' => variable_get('gardens_mail_media_body_fail',
+            _gardens_mail_media_default_text('body_fail')),
+        '#rows' => 15,
+        '#required' => TRUE,
+        '#description' => t('The body of the e-mail that will be sent to the user.'),
+      );
+
+      break;
+    case 'ctools_export_ui_edit_item_form':
+      // Alter the mailhandler form elements
+      if ($form_state['plugin']['name'] == 'mailhandler') {
+        // Simplify the Mailhandler mailbox form if not user 1.
+        if ($user->uid != 1) {
+          // Don't show password in the open
+          $form['connection']['settings']['pass']['#type'] = 'password';
+          $form['connection']['settings']['pass']['#required'] = TRUE;
+          // kill the fieldset
+          unset($form['extra']['settings']['#title']);
+          unset($form['extra']['settings']['#type']);
+          unset($form['extra']['settings']['#title']);
+          unset($form['extra']['settings']['#collapsible']);
+          unset($form['extra']['settings']['#collapsed']);
+
+          // hide the fields
+          $form['extra']['settings']['limit']['#type'] = 'hidden';
+          if (empty($form['extra']['settings']['limit']['#default_value'])) {
+            $form['extra']['settings']['limit']['#default_value'] = 0;
+          }
+
+          $form['extra']['settings']['encoding']['#type'] = 'hidden';
+
+          $form['extra']['settings']['delete_after_read']['#type'] = 'hidden';
+          if (empty($form['extra']['settings']['delete_after_read']['#default_value'])) {
+            $form['extra']['settings']['delete_after_read']['#default_value'] = TRUE;
+          }
+
+          $form['extra']['settings']['fromheader']['#type'] = 'hidden';
+
+          $form['extra']['settings']['security']['#type'] = 'hidden';
+          if (empty($form['extra']['settings']['security']['#default_value'])) {
+            $form['extra']['settings']['security']['#default_value'] = 0;
+          }
+
+          $form['extra']['settings']['replies']['#type'] = 'hidden';
+          if (empty($form['extra']['settings']['replies']['#default_value'])) {
+            $form['extra']['settings']['replies']['#default_value'] = 0;
+          }
+
+          $form['extra']['settings']['retrieve']['#type'] = 'hidden';
+          if (empty($form['extra']['settings']['retrieve']['#default_value'])) {
+            $form['extra']['settings']['retrieve']['#default_value'] = 'MailhandlerPhpImapRetrieve';
+          }
+        }
+        // Disable the test conncetion ajax callbacks on all fields
+        unset($form['connection']['settings']['folder']['#ajax']);
+        unset($form['connection']['settings']['domain']['#ajax']);
+        unset($form['connection']['settings']['port']['#ajax']);
+        unset($form['connection']['settings']['name']['#ajax']);
+        unset($form['connection']['settings']['pass']['#ajax']);
+        unset($form['connection']['settings']['extraimap']['#ajax']);
+        // Set up Ajax settings similar to the default mailhandler ajax items
+        $ajax_settings = array(
+          'callback' => '_mailhandler_mailbox_test',
+          'wrapper' => 'mailhandler_test_results',
+          'event' => 'click',
+          'progress' => array(
+            'type' => 'throbber',
+            'message' => t('Please wait - testing connection settings...'),
+          ),
+        );
+        // Add test connection button which uses the ajax callback to test the mailbox
+        $form['buttons']['test_connection'] = array(
+          '#type' => 'button',
+          '#value' => t('Test connection'),
+          '#ajax' => $ajax_settings,
+        );
+      }
+      break;
+    default:
+      break;
+  }
+}
+
+/**
+ * Implements hook_token_info
+ */
+function gardens_mail_media_token_info() {
+  $site['error'] = array(
+    'name' => t("Errors"),
+    'description' => t("Errors shown to the end user during the current operation"),
+  );
+  return array(
+    'tokens' => array('site' => $site),
+  );
+}
+
+/**
+ * Implements hook_token
+ */
+function gardens_mail_media_tokens($type, $tokens, array $data = array(), array $options = array()) {
+  $replacements = array();
+  if ($type == 'site') {
+    foreach ($tokens as $name => $original) {
+      switch ($name) {
+        case 'error':
+          $errors = "";
+          // If we have errors passed into the data array use those as the error text
+          if (!empty($data['errors'])) {
+            foreach ($data['errors'] as $position => $text) {
+              $errors .= $text;
+            }
+          }
+          // Fallback to errors stored in the session variable otherwise the token will be empty
+          else if (!empty($_SESSION['messages']['error'])) {
+            foreach ($_SESSION['messages']['error'] as $position => $text) {
+              $errors .= $text;
+            }
+          }
+          $replacements[$original] = $errors;
+          break;
+      }
+    }
+  }
+  return $replacements;
+}
+
+/**
+ * Implements hook_cron
+ */
+function gardens_mail_media_cron() {
+  // Garbage collection for mail_media_import nodes
+  $query = new EntityFieldQuery();
+  // Query entities to find unpublished mail_media_import nodes
+  $query
+    ->entityCondition('entity_type', 'node')
+    ->entityCondition('bundle', 'mail_media_import')
+    ->propertyCondition('status', 0);
+  $result = $query->execute();
+  // Iterate through the results and delete the nodes
+  if (!empty($result['node'])) {
+    foreach ($result['node'] as $node) {
+      node_delete($node->nid);
+    }
+  }
+}
+
+/**
+ * Implements hook_module_implements_alter().
+ *
+ * Make sure gardens_mail_media_node_insert runs after pathauto, so that url aliases
+ * are available for the confirmation mail.
+ */
+function gardens_mail_media_module_implements_alter(&$implementations, $hook) {
+  if ($hook == 'node_insert') {
+    if (isset($implementations['pathauto'])) {
+      // Move gardens_mail_media implementation into last place.
+      unset($implementations['gardens_mail_media']);
+      $implementations['gardens_mail_media'] = FALSE;
+    }
+  }
+}

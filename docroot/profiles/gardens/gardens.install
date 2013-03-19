@@ -1,0 +1,840 @@
+<?php
+
+/**
+ * Implement hook_install().
+ *
+ * Perform actions to set up the site for this profile.
+ */
+function gardens_install() {
+  // Duplicate the standard profile's installation step with some Gardens
+  // specific modifications.
+  gardens_copy_of_standard_install();
+
+  // Ensure that all the appropriate text formats have WYSIWYG enabled
+  gardens_misc_guarantee_wysiwyg();
+
+  // Move the temp directory used by mailhandler for temporary managed files
+  // into the site directory so it works easily with multiple webnodes.
+  $mailhandler_tmp_dir = 'public://gardens_temp/';
+  variable_set('mailhandler_temporary_path', $mailhandler_tmp_dir);
+  gardens_misc_create_tmp_dir($mailhandler_tmp_dir);
+
+  // Choose a theme at random to install as default. (Note that we do not
+  // include themes that are associated with a particular site template.)
+  $possible_themes = array('broadway', 'carbon', 'kenwood', 'sonoma', 'sparks');
+  $default_theme = $possible_themes[array_rand($possible_themes)];
+
+  // Allow users to register their own accounts.
+  variable_set('user_register', USER_REGISTER_VISITORS);
+
+  // Turn off email verification for users, since they are all remote users.
+  // Note that if the site chooses local logins later on, this will be turned
+  // on again automatically by scarecrow_allow_local_user_logins().
+  variable_set('user_email_verification', 0);
+
+  // Add a site maintainer role that has all allowed permissions.
+  $role = new stdClass();
+  $role->name = 'site maintainer';
+  user_role_save($role);
+  variable_set('gardens_site_owner_role', $role->rid);
+  user_role_grant_permissions($role->rid, array_keys(module_invoke_all('permission')));
+  // Remove permissions that should not be assigned, but that may have been
+  // assigned by the standard profile.
+  foreach (array_keys(user_roles()) as $rid) {
+    user_role_revoke_permissions($rid, scarecrow_forbidden_permissions());
+  }
+
+  // Run poor man's cron every 1 hour.
+  variable_set('cron_safe_threshold', 3600);
+
+  // Add taxonomy terms to every content type that may have been created during
+  // the installer, except for articles (where the standard install profile
+  // already added it) and pages (where we don't want it).
+  $node_types = array_diff(array_keys(node_type_get_types()), array('article', 'page'));
+  foreach ($node_types as $type) {
+    gardens_misc_add_tags_field_instance($type);
+  }
+
+  // Do not enable comments for polls by default.
+  variable_set('comment_poll', COMMENT_NODE_HIDDEN);
+
+  // Fix syslog format to something usable by Nagios.
+  variable_set('syslog_format', '!message; !base_url; !timestamp; !type; !ip; !request_uri; !referer; !uid; !link');
+
+  // Add the default navigation blocks to the correct regions. Skip the
+  // management menu for now, because this profile uses the toolbar as a
+  // replacement. (TODO: http://drupal.org/node/511258 is fixed. Revisit this.)
+  gardens_profile_add_block('system', 'user-menu', $default_theme, '1', '1', 'preheader_second', 0, '', 0, '<none>');
+  gardens_profile_add_block('system', 'main', $default_theme, '1', '1', 'content');
+  gardens_profile_add_block('system', 'main-menu', $default_theme, '1', '1', 'navigation', 0, '', 0, '<none>');
+  gardens_profile_add_block('system', 'secondary-menu', $default_theme, '1', '1', 'preheader_second');
+  gardens_profile_add_block('search', 'form', $default_theme, '1', '-1', 'sidebar_a');
+  // Add both login blocks. The one provided by the User module will not appear
+  // on the site (it's hidden by the Scarecrow module), but we place it in the
+  // sidebar so it's immediately available when the site is exported.
+  gardens_profile_add_block('user', 'login', $default_theme, '1', '1', 'sidebar_a');
+  gardens_profile_add_block('gardens_client', 'login', $default_theme, '1', '1', 'sidebar_a');
+  gardens_profile_add_block('system', 'navigation', $default_theme, '1', '1', 'sidebar_a');
+  gardens_profile_add_block('system', 'powered-by', $default_theme, '1', '1', 'copyright');
+  gardens_profile_add_block('system', 'help', $default_theme, '1', '1', 'help');
+
+  // Add our site manager dashboard block.
+  gardens_profile_add_block('gardens_client', 'site-manager', 'blossom', '1', '-100', 'dashboard_sidebar');
+
+  // Set the default theme.
+  gardens_misc_replace_default_theme($default_theme);
+
+  // Set PHP error logging to watchdog only (not to screen).
+  variable_set('error_level', 0); // ERROR_REPORTING_HIDE
+
+  // Drupal puts the temporary files directory within the docroot by default,
+  // but that nicely messes with the site export module (which tries to export
+  // the docroot to the temporary directory, leading to an infinite loop).
+  // Therefore, we set it to a saner place here.
+  // TODO: How does this affect importing an exported site onto a different
+  // operating system (e.g., Windows), since the Linux /tmp directory will be
+  // stored in the database?
+  variable_set('file_temporary_path', sys_get_temp_dir());
+
+  // Add the 'Safe HTML' input format.
+  $format = new stdClass;
+  $format->format = 'safe_html';
+  $format->name = 'Safe HTML';
+  $format->weight = -10;
+  $format->filters = array();
+  $format->filters['filter_url'] = array(
+    'status' => 1,
+    'weight' => 5,
+  );
+  $format->filters['htmlpurifier_basic'] = array(
+    'status' => 1,
+    'weight' => 6,
+  );
+  $format->filters['media_filter'] = array(
+    'status' => 1,
+    'weight' => 7,
+  );
+  filter_format_save($format);
+  variable_set('gardens_safe_html_format', $format->format);
+
+  // Allow administrators to use this format.
+  $permission = filter_permission_name($format);
+  if (($rid = variable_get('user_admin_role')) && $permission) {
+    user_role_grant_permissions($rid, array($permission));
+  }
+  if (($rid = variable_get('gardens_site_owner_role', 0)) && $permission) {
+    user_role_grant_permissions($rid, array($permission));
+  }
+
+  // Reorder default input formats.  This should give any admin 'Safe HTML' by
+  // default. Leave 'Plain text' at its default weight of 10.
+  db_update('filter_format')
+    ->condition('format', 'filtered_html')
+    ->fields(array('weight' => -9))
+    ->execute();
+  db_update('filter_format')
+    ->condition('format', 'full_html')
+    ->fields(array('weight' => -7))
+    ->execute();
+
+  // Enabled the media filter for all input formats
+  db_update('filter')
+    ->condition('module', 'media')
+    ->fields(array('status' => 1))
+    ->execute();
+
+  // Allow all users to see the search form.
+  user_role_grant_permissions(DRUPAL_ANONYMOUS_RID, array('search content'));
+  user_role_grant_permissions(DRUPAL_AUTHENTICATED_RID, array('search content'));
+
+  // Allow all users to save drafts.
+  user_role_grant_permissions(DRUPAL_ANONYMOUS_RID, array('save draft'));
+  user_role_grant_permissions(DRUPAL_AUTHENTICATED_RID, array('save draft'));
+
+  gardens_setup_user_mail();
+  gardens_setup_wysiwyg($format->format);
+  gardens_setup_xmlsitemap();
+
+  // Clear the node type cache.
+  node_type_cache_reset();
+  // Set up mollom to work with all comment forms by default.
+  // Retrieve available node types.
+  $types = db_query('SELECT * FROM {node_type}');
+  foreach ($types as $type) {
+    $mollom_form = mollom_form_new("comment_node_{$type->type}_form");
+    mollom_form_save($mollom_form);
+  }
+  variable_set('mollom_protect_new_comment_types', 1);
+
+  // Enable the sending of cache headers for redirects.
+  variable_set('redirect_page_cache', 1);
+
+  // Enable modules that need to be enabled late in the install process here
+  // instead of listing them in gardens.info.
+  module_enable(array('media_browser_plus', 'block_everything'));
+
+  // Set the correct default image style for media_crop
+  variable_set('media_crop_default_style', 'large');
+
+  // Set up the image toolkit defaults.
+  gardens_setup_image_toolkit();
+
+  // Enable extlink agressive caching compatibility
+  variable_set('extlink_cache_fix', 1);
+
+  // Set up Timeago module.
+  gardens_profile_timeago_date_format_types_setup();
+
+  // Set up audit_trail.
+  variable_set('audit_trail_form_changes_path', '/^admin/');
+  variable_set('audit_trail_form_submissions_path', '|.*/delete/?.*|');
+}
+
+/**
+ * Set Gardens-appropriate defaults for user notification emails.
+ *
+ * @see gardens_setup_user_mail_variables
+ */
+function gardens_setup_user_mail() {
+  $variables = gardens_setup_user_mail_variables();
+  foreach ($variables as $variable => $content) {
+    variable_set($variable, $content);
+  }
+}
+
+/**
+ * Define the user notification emails for which we want to set defaults.
+ *
+ * Because users are managed on the gardener, some of the default Drupal
+ * settings for user notification emails do not apply to Gardens sites. This
+ * function defines which notification emails we wish to override.
+ *
+ * Note that this array is also used in the site_export and scarecrow modules
+ * to reset these variables to "factory defaults."
+ */
+function gardens_setup_user_mail_variables() {
+  $gardener_url = scarecrow_get_gardener_url();
+  $gardener_account_url = ($gardener_url ? $gardener_url . '/user' : 'http://drupalgardens.com/user');
+  // Make sure this contains no HTML for mail texts.
+  $service_name = trim(strip_tags(variable_get('gardens_service_name_long', 'Drupal Gardens')));
+  $variables = array(
+    'user_mail_register_no_approval_required_body' => "[user:name],\n\nThank you for registering at [site:name] with your $service_name account. You can change your password or edit your profile by visiting $gardener_account_url.\n\n-- [site:name] team\n[site:url]\n",
+    'user_mail_register_pending_approval_body' => "[user:name],\n\nThank you for registering at [site:name] with your $service_name account. Your application for membership on this site is currently pending approval. We will send another email to let you know when it has been approved.\n\n-- [site:name] team\n[site:url]\n",
+    'user_mail_status_activated_body' => "[user:name],\n\nWelcome to [site:name]! Your membership has been activated. You may log in by visiting [site:name] and clicking on the \"Log in\" link. You can also visit $gardener_account_url to change your password or add profile information.\n\n-- [site:name] team\n[site:url]\n",
+    'user_mail_status_blocked_body' => "[user:name],\n\nYour membership at [site:name] has been revoked.\n\n-- [site:name] team\n[site:url]\n",
+    'user_mail_register_admin_created_subject' => "An administrator invited you to join the site [site:name]",
+    'user_mail_register_admin_created_body' => "You have been invited to be a member of [site:url-brief], a site hosted by $service_name.\n\nPlease complete your registration using the link below and the e-mail address [user:mail]:\n\n[site:register-url]\n",
+  );
+  return $variables;
+}
+
+function gardens_setup_wysiwyg($format_id) {
+  $wysiwyg_settings = array(
+    'default' => 1,
+    'user_choose' => 0,
+    'show_toggle' => 1,
+    'theme' => 'advanced',
+    'language' => 'en',
+    'wysiwyg_buttons' => array(
+      'default' => array(
+        'Bold' => 1,
+        'Italic' => 1,
+        'Underline' => 1,
+        'StrikeThrough' => 1,
+        'JustifyLeft' => 0,
+        'JustifyCenter' => 0,
+        'JustifyRight' => 0,
+        'JustifyFull' => 0,
+        'BulletedList' => 1,
+        'NumberedList' => 1,
+        'Outdent' => 1,
+        'Indent' => 1,
+        'Undo' => 1,
+        'Redo' => 1,
+        'Link' => 1,
+        'Unlink' => 1,
+        'Anchor' => 0,
+        'Image' => 0,
+        'TextColor' => 0,
+        'BGColor' => 0,
+        'Superscript' => 0,
+        'Subscript' => 0,
+        'Blockquote' => 1,
+        'Source' => 0,
+        'HorizontalRule' => 1,
+        'Cut' => 0,
+        'Copy' => 0,
+        'Paste' => 0,
+        'PasteText' => 0,
+        'PasteFromWord' => 1,
+        'ShowBlocks' => 0,
+        'RemoveFormat' => 1,
+        'SpecialChar' => 0,
+        'About' => 0,
+        'Format' => 1,
+        'Font' => 0,
+        'FontSize' => 0,
+        'Styles' => 0,
+        'Table' => 1,
+        'Find' => 0,
+        'Replace' => 0,
+        'SelectAll' => 0,
+        'CreateDiv' => 0,
+        'Flash' => 0,
+        'Smiley' => 0,
+        'FitWindow' => 0,
+        'SpellChecker' => 1,
+        'Scayt' => 0,
+      ),
+      'drupal' => array(
+        'break' => 0,
+        'gardens_client' => 1,
+        'media' => 1,
+      ),
+    ),
+    'toolbar_loc' => 'top',
+    'toolbar_align' => 'left',
+    'path_loc' => 'bottom',
+    'resizing' => 1,
+    'verify_html' => 1,
+    'preformatted' => 0,
+    'convert_fonts_to_spans' => 1,
+    'remove_linebreaks' => 1,
+    'apply_source_formatting' => 0,
+    'paste_auto_cleanup_on_paste' => 0,
+    'block_formats' => 'p,address,pre,h2,h3,h4,h5,h6,div',
+    'css_setting' => 'none',
+    'css_path' => '',
+    'css_classes' => '',
+    'buttons' => array(
+      'default' => array(
+        'Bold' => 1,
+        'Italic' => 1,
+        'Underline' => 1,
+        'StrikeThrough' => 1,
+        'BulletedList' => 1,
+        'NumberedList' => 1,
+        'Outdent' => 1,
+        'Indent' => 1,
+        'Undo' => 1,
+        'Redo' => 1,
+        'Link' => 1,
+        'Unlink' => 1,
+        'Blockquote' => 1,
+        'HorizontalRule' => 1,
+        'RemoveFormat' => 1,
+        'Format' => 1,
+        'Table' => 1,
+        'SpellChecker' => 1,
+      ),
+      'drupal' => array(
+        'media' => 1,
+        'gardens_client' => 1,
+      ),
+    ),
+  );
+
+  // Enable CKEditor by default.
+  db_insert('wysiwyg')->fields(
+    array(
+      'format' => $format_id,
+      'editor' => 'ckeditor',
+      'settings' => serialize($wysiwyg_settings),
+    )
+  )->execute();
+
+  // Set the media types available to embed in the WYSIWYG
+  variable_set('media__wysiwyg_allowed_types', array('image', 'video', 'audio', 'default'));
+}
+
+function gardens_setup_xmlsitemap() {
+  // Only regenerate once per day.
+  variable_set('xmlsitemap_minimum_lifetime', 86400);
+  // If enabled, more nodes means more memory needed.
+  variable_set('xmlsitemap_prefetch_aliases', 0);
+  // Set 1,000 links to be placed in each xml file.
+  variable_set('xmlsitemap_chunk_size', 1000);
+  // Set some popular search engines to be used by default.
+  variable_set('xmlsitemap_engines_engines', array('bing', 'google'));
+  // Include the main menu by default.
+  variable_set('xmlsitemap_settings_menu_link_main-menu', array('status' => '1', 'priority' => '0.5'));
+}
+
+/**
+ * Rebuild the XML sitemap via a batch operation.
+ *
+ * @param $process
+ *   Set this to FALSE to avoid actually processing the batch right away (e.g.,
+ *   if called from within an update function, which already takes care of
+ *   processing batches for you once you set them).
+ */
+function gardens_rebuild_xmlsitemap($process = TRUE) {
+  module_load_include('generate.inc', 'xmlsitemap');
+  $batch = xmlsitemap_rebuild_batch(xmlsitemap_get_rebuildable_link_types(), TRUE);
+  batch_set($batch);
+  $batch =& batch_get();
+  $batch['progressive'] = FALSE;
+  if ($process) {
+    batch_process();
+  }
+}
+
+/**
+ * Set the image toolkit to use imagemagick and set a few defaults.
+ */
+function gardens_setup_image_toolkit() {
+  $convert_path = 'convert';
+
+  // add configuration
+  variable_set('image_toolkit', 'imagemagick');
+  variable_set('imagemagick_convert', $convert_path);
+  variable_set('imagemagick_debug', 0);
+  variable_set('imagemagick_quality', '75');
+}
+
+/**
+ * Copied and slightly modified version of standard_install().
+ *
+ * Avoids maintaining core hacks for the changes we don't want to undo. Makes
+ * installs speedier, this profile self-contained. Parts of this code are
+ * commented out instead of removed to make diff-ing and change carry-over
+ * easier.
+ */
+function gardens_copy_of_standard_install() {
+  // Add text formats.
+  $filtered_html_format = array(
+    'format' => 'filtered_html',
+    'name' => 'Filtered HTML',
+    'weight' => 0,
+    'filters' => array(
+      // URL filter.
+      'filter_url' => array(
+        'weight' => 0,
+        'status' => 1,
+      ),
+      // HTML filter.
+      'filter_html' => array(
+        'weight' => 1,
+        'status' => 1,
+        // Gardens addition: preconfigure this format with p and br tags enabled too.
+        'settings' => array(
+          'allowed_html' => '<a> <em> <strong> <cite> <blockquote> <code> <ul> <ol> <li> <dl> <dt> <dd> <p> <br>',
+          'filter_html_help' => 1,
+          'filter_html_nofollow' => 0,
+        ),
+      ),
+      // Line break filter.
+      'filter_autop' => array(
+        'weight' => 2,
+        'status' => 1,
+      ),
+      // HTML corrector filter.
+      'filter_htmlcorrector' => array(
+        'weight' => 10,
+        'status' => 1,
+      ),
+    ),
+  );
+  $filtered_html_format = (object) $filtered_html_format;
+  filter_format_save($filtered_html_format);
+
+  $full_html_format = array(
+    'format' => 'full_html',
+    'name' => 'Full HTML',
+    'weight' => 1,
+    'filters' => array(
+      // URL filter.
+      'filter_url' => array(
+        'weight' => 0,
+        'status' => 1,
+      ),
+      // Line break filter.
+      'filter_autop' => array(
+        'weight' => 1,
+        'status' => 1,
+      ),
+      // HTML corrector filter.
+      'filter_htmlcorrector' => array(
+        'weight' => 10,
+        'status' => 1,
+      ),
+    ),
+  );
+  $full_html_format = (object) $full_html_format;
+  filter_format_save($full_html_format);
+
+  // Enable some standard blocks.
+  $default_theme = variable_get('theme_default', 'bartik');
+  $admin_theme = 'blossom';
+  $values = array(
+    array(
+      'module' => 'system',
+      'delta' => 'main',
+      'theme' => $default_theme,
+      'status' => 1,
+      'weight' => 0,
+      'region' => 'content',
+      'pages' => '',
+      'cache' => -1,
+    ),
+    array(
+      'module' => 'search',
+      'delta' => 'form',
+      'theme' => $default_theme,
+      'status' => 1,
+      'weight' => -1,
+      'region' => 'sidebar_first',
+      'pages' => '',
+      'cache' => -1,
+    ),
+    array(
+      'module' => 'node',
+      'delta' => 'recent',
+      'theme' => $admin_theme,
+      'status' => 1,
+      'weight' => 10,
+      'region' => 'dashboard_main',
+      'pages' => '',
+      'cache' => -1,
+    ),
+    array(
+      'module' => 'user',
+      'delta' => 'login',
+      'theme' => $default_theme,
+      'status' => 1,
+      'weight' => 0,
+      'region' => 'sidebar_first',
+      'pages' => '',
+      'cache' => -1,
+    ),
+    array(
+      'module' => 'system',
+      'delta' => 'navigation',
+      'theme' => $default_theme,
+      'status' => 1,
+      'weight' => 0,
+      'region' => 'sidebar_first',
+      'pages' => '',
+      'cache' => -1,
+    ),
+    array(
+      'module' => 'system',
+      'delta' => 'powered-by',
+      'theme' => $default_theme,
+      'status' => 1,
+      'weight' => 10,
+      'region' => 'footer',
+      'pages' => '',
+      'cache' => -1,
+    ),
+    array(
+      'module' => 'system',
+      'delta' => 'help',
+      'theme' => $default_theme,
+      'status' => 1,
+      'weight' => 0,
+      'region' => 'help',
+      'pages' => '',
+      'cache' => -1,
+    ),
+    array(
+      'module' => 'system',
+      'delta' => 'main',
+      'theme' => $admin_theme,
+      'status' => 1,
+      'weight' => 0,
+      'region' => 'content',
+      'pages' => '',
+      'cache' => -1,
+    ),
+    array(
+      'module' => 'system',
+      'delta' => 'help',
+      'theme' => $admin_theme,
+      'status' => 1,
+      'weight' => 0,
+      'region' => 'help',
+      'pages' => '',
+      'cache' => -1,
+    ),
+    array(
+      'module' => 'user',
+      'delta' => 'login',
+      'theme' => $admin_theme,
+      'status' => 1,
+      'weight' => 10,
+      'region' => 'content',
+      'pages' => '',
+      'cache' => -1,
+    ),
+    array(
+      'module' => 'user',
+      'delta' => 'new',
+      'theme' => $admin_theme,
+      'status' => 1,
+      'weight' => 0,
+      'region' => 'dashboard_sidebar',
+      'pages' => '',
+      'cache' => -1,
+    ),
+    array(
+      'module' => 'search',
+      'delta' => 'form',
+      'theme' => $admin_theme,
+      'status' => 1,
+      'weight' => -10,
+      'region' => 'dashboard_sidebar',
+      'pages' => '',
+      'cache' => -1,
+    ),
+  );
+  $query = db_insert('block')->fields(array('module', 'delta', 'theme', 'status', 'weight', 'region', 'pages', 'cache'));
+  foreach ($values as $record) {
+    $query->values($record);
+  }
+  $query->execute();
+
+  // Insert default pre-defined node types into the database. For a complete
+  // list of available node type attributes, refer to the node type API
+  // documentation at: http://api.drupal.org/api/HEAD/function/hook_node_info.
+  $types = array(
+    array(
+      'type' => 'page',
+      'name' => st('Basic page'),
+      'base' => 'node_content',
+      'description' => st("Use <em>basic pages</em> for your static content, such as an 'About us' page."),
+      'custom' => 1,
+      'modified' => 1,
+      'locked' => 0,
+    ),
+    array(
+      'type' => 'article',
+      'name' => st('Article'),
+      'base' => 'node_content',
+      'description' => st('Use <em>articles</em> for time-sensitive content like news, press releases or blog posts.'),
+      'custom' => 1,
+      'modified' => 1,
+      'locked' => 0,
+    ),
+  );
+
+  foreach ($types as $type) {
+    $type = node_type_set_defaults($type);
+    node_type_save($type);
+    node_add_body_field($type);
+  }
+
+  // Insert default pre-defined RDF mapping into the database.
+  $rdf_mappings = array(
+    array(
+      'type' => 'node',
+      'bundle' => 'page',
+      'mapping' => array(
+        'rdftype' => array('foaf:Document'),
+      ),
+    ),
+    array(
+      'type' => 'node',
+      'bundle' => 'article',
+      'mapping' => array(
+        'rdftype' => array('sioc:Item', 'foaf:Document'),
+  /*
+  // Removed this since we are not adding the field to articles in Gardens.
+        'field_image' => array(
+          'predicates' => array('og:image', 'rdfs:seeAlso'),
+          'type' => 'rel',
+        ),
+  */
+        'field_tags' => array(
+          'predicates' => array('dc:subject'),
+          'type' => 'rel',
+        ),
+      ),
+    ),
+  );
+  foreach ($rdf_mappings as $rdf_mapping) {
+    rdf_mapping_save($rdf_mapping);
+  }
+
+  // Default "Basic page" to not be promoted and have comments disabled.
+  variable_set('node_options_page', array('status'));
+  variable_set('comment_page', COMMENT_NODE_HIDDEN);
+
+  // Don't display date and author information for "Basic page" nodes by default.
+  variable_set('node_submitted_page', FALSE);
+
+  // Enable user picture support and set the default to a square thumbnail option.
+  variable_set('user_pictures', '1');
+  variable_set('user_picture_dimensions', '1024x1024');
+  variable_set('user_picture_file_size', '800');
+  variable_set('user_picture_style', 'thumbnail');
+
+  // Allow visitor account creation with administrative approval.
+  variable_set('user_register', USER_REGISTER_VISITORS_ADMINISTRATIVE_APPROVAL);
+
+  // Create a default vocabulary named "Tags", enabled for the 'article' content type.
+  $description = st('Use tags to group articles on similar topics into categories.');
+  $help = st('Enter a comma-separated list of words to describe your content.');
+  $vocabulary = (object) array(
+    'name' => 'Tags',
+    'description' => $description,
+    'machine_name' => 'tags',
+    'help' => $help,
+
+  );
+  taxonomy_vocabulary_save($vocabulary);
+
+  $field = array(
+    'field_name' => 'field_' . $vocabulary->machine_name,
+    'type' => 'taxonomy_term_reference',
+    // Set cardinality to unlimited for tagging.
+    'cardinality' => FIELD_CARDINALITY_UNLIMITED,
+    'settings' => array(
+      'allowed_values' => array(
+        array(
+          'vocabulary' => $vocabulary->machine_name,
+          'parent' => 0,
+        ),
+      ),
+    ),
+  );
+  field_create_field($field);
+
+  $instance = array(
+    'field_name' => 'field_' . $vocabulary->machine_name,
+    'entity_type' => 'node',
+    'label' => $vocabulary->name,
+    'bundle' => 'article',
+    'description' => $vocabulary->help,
+    'widget' => array(
+      'type' => 'taxonomy_autocomplete',
+      'weight' => -4,
+    ),
+    'display' => array(
+      'default' => array(
+        'type' => 'taxonomy_term_reference_link',
+        'weight' => 10,
+      ),
+      'teaser' => array(
+        'type' => 'taxonomy_term_reference_link',
+        'weight' => 10,
+      ),
+    ),
+  );
+  field_create_instance($instance);
+
+
+  // Create an image field named "Image", enabled for the 'article' content type.
+  // Many of the following values will be defaulted, they're included here as an illustrative examples.
+  // See http://api.drupal.org/api/function/field_create_field/7
+
+  $field = array(
+    'field_name' => 'field_image',
+    'type' => 'image',
+    'cardinality' => 1,
+    'locked' => FALSE,
+    'indexes' => array('fid' => array('fid')),
+    'settings' => array(
+      'uri_scheme' => 'public',
+      'default_image' => FALSE,
+    ),
+    'storage' => array(
+      'type' => 'field_sql_storage',
+      'settings' => array(),
+    ),
+  );
+  field_create_field($field);
+
+  /*
+  // Removed this since we are not adding the field to articles in Gardens (but
+  // still do need the field created above).
+
+  // Many of the following values will be defaulted, they're included here as an illustrative examples.
+  // See http://api.drupal.org/api/function/field_create_instance/7
+  $instance = array(
+    'field_name' => 'field_image',
+    'entity_type' => 'node',
+    'label' => 'Image',
+    'bundle' => 'article',
+    'description' => st('Upload an image to go with this article.'),
+    'required' => FALSE,
+
+    'settings' => array(
+      'file_directory' => 'field/image',
+      'file_extensions' => 'png gif jpg jpeg',
+      'max_filesize' => '',
+      'max_resolution' => '',
+      'min_resolution' => '',
+      'alt_field' => TRUE,
+      'title_field' => '',
+    ),
+
+    'widget' => array(
+      'type' => 'image_image',
+      'settings' => array(
+        'progress_indicator' => 'throbber',
+        'preview_image_style' => 'thumbnail',
+      ),
+      'weight' => -1,
+    ),
+
+    'display' => array(
+      'default' => array(
+        'label' => 'hidden',
+        'type' => 'image',
+        'settings' => array('image_style' => 'large', 'image_link' => ''),
+        'weight' => -1,
+      ),
+      'teaser' => array(
+        'label' => 'hidden',
+        'type' => 'image',
+        'settings' => array('image_style' => 'medium', 'image_link' => 'content'),
+        'weight' => -1,
+      ),
+    ),
+  );
+  field_create_instance($instance);
+  */
+
+  // Enable default permissions for system roles.
+  $filtered_html_permission = filter_permission_name($filtered_html_format);
+  user_role_grant_permissions(DRUPAL_ANONYMOUS_RID, array('access content', 'access comments', $filtered_html_permission));
+  user_role_grant_permissions(DRUPAL_AUTHENTICATED_RID, array('access content', 'access comments', 'post comments', 'skip comment approval', $filtered_html_permission));
+
+  // Create a default role for site administrators, with all available permissions assigned.
+  $admin_role = new stdClass();
+  $admin_role->name = 'administrator';
+  $admin_role->weight = 2;
+  user_role_save($admin_role);
+  user_role_grant_permissions($admin_role->rid, array_keys(module_invoke_all('permission')));
+  // Set this as the administrator role.
+  variable_set('user_admin_role', $admin_role->rid);
+
+  // Assign user 1 the "administrator" role.
+  db_insert('users_roles')
+    ->fields(array('uid' => 1, 'rid' => $admin_role->rid))
+    ->execute();
+
+  /*
+  // We manage menu item creation in site templates.
+  // Create a Home link in the main menu.
+  $item = array(
+    'link_title' => 'Home',
+    'link_path' => '<front>',
+    'menu_name' => 'main-menu',
+  );
+  menu_link_save($item);
+  */
+
+  // Update the menu router information.
+  menu_rebuild();
+
+  // Enable the admin theme.
+  db_update('system')
+    ->fields(array('status' => 1))
+    ->condition('type', 'theme')
+    ->condition('name', 'blossom')
+    ->execute();
+  variable_set('admin_theme', 'blossom');
+  variable_set('node_admin_theme', '1');
+}

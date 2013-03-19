@@ -1,0 +1,152 @@
+<?php
+/**
+ * @file
+ *   Theme builder blocks organizer prototype.
+ */
+
+/**
+ * Implementation of hook_menu().
+ */
+function themebuilder_blocks_menu() {
+  $items = array();
+  // Used to save the placement of blocks.
+  $items['themebuilder-blocks-submit'] = array(
+    'title' => t('Blocks placement submission'),
+    'page callback' => 'themebuilder_blocks_wizard_save',
+    'access arguments' => array('administer blocks'),
+    'type' => MENU_CALLBACK,
+  );
+  // Used to invoke the selection UI.
+  $items['themebuilder-blocks-palette'] = array(
+    'title' => t('Blocks palette'),
+    'page callback' => 'themebuilder_blocks_palette',
+    'access arguments' => array('administer blocks'),
+    'type' => MENU_CALLBACK,
+  );
+  return $items;
+}
+
+/**
+ * Implementation of hook_themebuilder_bar_items().
+ *
+ * If user has sufficient privileges, add blocks rearrange tool to the page.
+ * ******* THIS TAB CURRENTLY DISABLED ********** (note the false hook name)
+ */
+function themebuilder_blocks_themebuilder_bar_items_disabled($base_weight) {
+  if (user_access('administer blocks')) {
+    drupal_theme_initialize();
+    global $theme_key;
+
+    drupal_add_css(drupal_get_path('module', 'themebuilder_blocks') . '/themebuilder_blocks.css');
+    $scripts = array(drupal_get_path('module', 'themebuilder_blocks') . '/themebuilder_blocks.js');
+    drupal_add_js(
+      array(
+        'blocksPalettePath' => url('themebuilder-blocks-palette'),
+        'blocksSubmitToken' => drupal_get_token('themebuilder_blocks_wizard_save'),
+        'blocksSubmitPath'  => url('themebuilder-blocks-submit'),
+        'blocksRegions' => system_region_list($theme_key),
+      ),
+      array('type' => 'setting')
+    );
+    return array(array(
+      'name' => 'blocks',
+      'title' => t('Blocks'),
+      'link' => url('themebuilder-blocks-palette'),
+      'callback' => 'Drupal.behaviors.editBlocks.toggleEditor',
+      'scripts' => $scripts));
+  }
+}
+
+function themebuilder_blocks_palette() {
+  // Look like the theme system is not initialized unless we do it
+  // explicitly. There was no theme call before this point most probably.
+  drupal_theme_initialize();
+  global $user, $theme_key;
+
+  $blocks = array();
+  $rids = array_keys($user->roles);
+  _block_rehash();
+  $regions = array_keys(system_region_list($theme_key));
+
+  // Query based on code from _block_load_blocks().
+  $query = db_select('block', 'b');
+  $query->distinct();
+  $query->fields('b');
+  $query->leftJoin('block_role', 'r', 'b.module = r.module AND b.delta = r.delta');
+  $query->condition('b.theme', $theme_key);
+  $query->condition('b.status', 0);
+
+  // Filter blocks by role or blocks without role assigned.
+  $or = db_or();
+  $condition = db_condition();
+  $condition->condition('r.rid', $rids, 'IN');
+  $or->condition($condition);
+
+  $condition = db_condition();
+  $condition->isNull('r.rid');
+  $or->condition($condition);
+
+  $query->condition($or);
+  $query->orderBy('b.region');
+  $query->orderBy('b.weight');
+  $query->orderBy('b.module');
+  $query->addTag('block_load');
+  $results = $query->execute();
+
+  foreach ($results as $block) {
+    // Pretend that our blocks are enabled.
+    $block->enabled = $block->page_match = TRUE;
+    $blocks["{$block->module}_{$block->delta}"] = $block;
+  }
+
+  $blocks_content = _block_render_blocks($blocks);
+
+  // Prepare for rendering. Based on block_get_blocks_by_region().
+  $weight = 0;
+  $build = array();
+  foreach ($blocks_content as $key => $block) {
+    $build[$key] = array(
+      '#theme' => 'block',
+      '#block' => $block,
+      '#weight' => ++$weight,
+    );
+  }
+  $build['#sorted'] = TRUE;
+
+  // Render blocks.
+  $blocks_rendered = drupal_render($build);
+
+  // Layout picker shell to announce tool name and two filter dropdowns.
+  $output = '<h2 class="palette-title">' . t('Disabled blocks') . '</h2>';
+
+  print $output . '<div id="disabled-region" class="region">'. $blocks_rendered .'</div>';
+}
+
+/**
+ * Stores block positioning. Called via AJAX with form data.
+ */
+function themebuilder_blocks_wizard_save() {
+  drupal_theme_initialize();
+  global $theme_key;
+
+  foreach($_POST['regions'] as $region => $blocks) {
+    //if (!in_array($region,$regions)continue;
+    // Go through all regions and act on the blocks on them.
+    if (!empty($blocks)) {
+      // Blocks are listed in a comma separated list.
+      $blocks = split(',', $blocks);
+      $weight = 0;
+      foreach ($blocks as $block) {
+        // Capture the module name and delta in a subpattern.s
+        preg_match('!^block-(?<module>[^-]+)-(?<delta>.+)$!', $block, $pieces);
+        if ($region == 'disabled') {
+          watchdog('debug', "UPDATE {block} SET status = 0 WHERE module = '%s' AND delta = '%s' AND theme = '%s' $pieces[module] $pieces[delta] $theme_key");
+          db_query("UPDATE {block} SET status = 0 WHERE module = '%s' AND delta = '%s' AND theme = '%s'", $pieces['module'], $pieces['delta'], $theme_key);
+        }
+        else {
+          db_query("UPDATE {block} SET status = 1, region = '%s', weight = %d WHERE module = '%s' AND delta = '%s' AND theme = '%s'", $region, $weight++, $pieces['module'], $pieces['delta'], $theme_key);
+        }
+      }
+    }
+  }
+}

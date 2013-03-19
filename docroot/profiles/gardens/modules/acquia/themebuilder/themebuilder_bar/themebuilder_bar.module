@@ -1,0 +1,868 @@
+<?php
+
+/**
+ * Error levels for themebuilder exceptions
+ */
+define('THEMEBUILDER_ERROR_RECOVERABLE', @00);
+
+define('THEMEBUILDER_ERROR_NOTICE', 100);
+
+define('THEMEBUILDER_ERROR_FATAL', -1);
+
+/**
+ * @file
+ *   Theme builder toolbar module.
+ */
+/**
+ * Implementation of hook_menu().
+ */
+function themebuilder_bar_menu() {
+  $items = array();
+  // Used to invoke the selection UI.
+  $items['themebuilder-start'] = array(
+    'title' => t('Enter Edit Mode'),
+    'page callback' => 'themebuilder_bar_enter_edit_mode',
+    'type' => MENU_CALLBACK,
+  );
+  // Used to exit themebuilder mode.
+  $items['themebuilder-exit'] = array(
+    'title' => t('Exit Edit Mode'),
+    'page callback' => 'themebuilder_bar_exit_edit_mode',
+    'type' => MENU_CALLBACK,
+  );
+  // Used to save the state of the themebuilder tabs.
+  $items['themebuilder-save-state'] = array(
+    'title' => t('Save Themebuilder State'),
+    'page callback' => 'themebuilder_bar_ajax_request',
+    'page arguments' => array('themebuilder_bar_save_state'),
+    'type' => MENU_CALLBACK,
+  );
+  // Used to save the selection.
+  $items['themebuilder-save'] = array(
+    'title' => t('Save Themebuilder'),
+    'page callback' => 'themebuilder_bar_ajax_request',
+    'page arguments' => array('themebuilder_bar_save'),
+    'type' => MENU_CALLBACK,
+  );
+  // Used to export the theme into a tarball.
+  $items['themebuilder-export'] = array(
+    'title' => t('Export Themebuilder Theme'),
+    'page callback' => 'themebuilder_bar_ajax_request',
+    'page arguments' => array('themebuilder_bar_export'),
+    'type' => MENU_CALLBACK,
+  );
+  $items['themebuilder-update-theme'] = array(
+    'title' => t('Update theme'),
+    'page callback' => 'themebuilder_bar_ajax_request',
+    'page arguments' => array('themebuilder_bar_update_theme'),
+    'type' => MENU_CALLBACK,
+  );
+  $items['themebuilder-get-server'] = array(
+    'title' => t('get TB perferred server'),
+    'page callback' => 'themebuilder_bar_get_server',
+    'type' => MENU_CALLBACK,
+  );
+  $items['themebuilder-fix-themes'] = array(
+    'title' => t('Detect theme errors and fix them if possible.'),
+    'page callback' => 'themebuilder_bar_fix_themes',
+    'type' => MENU_CALLBACK,
+  );
+
+  foreach ($items as $path => &$item) {
+    $item['access callback'] = 'themebuilder_compiler_access';
+    $item['access arguments'] = array($path);
+  }
+  return $items;
+}
+
+/**
+ * Implementation of hook_menu_alter().
+ *
+ * Users must make all theme changes via the themebuilder.
+ */
+function themebuilder_bar_menu_alter(&$menu) {
+  $keys[] = 'admin/appearance/list';
+  $keys[] = 'admin/appearance/enable';
+  $keys[] = 'admin/appearance/disable';
+  $keys[] = 'admin/appearance/default';
+  $keys[] = 'admin/appearance/settings';
+  $keys[] = 'admin/appearance/settings/global';
+
+  foreach (list_themes() as $theme) {
+    $keys[] = 'admin/appearance/settings/' . $theme->name;
+  }
+
+  foreach ($keys as $path) {
+    unset($menu[$path]);
+  }
+  if (isset($menu['admin/appearance'])) {
+    $menu['admin/appearance']['page callback'] = 'themebuilder_bar_js_required';
+    $menu['admin/appearance']['page arguments'] = array();
+  }
+}
+
+/**
+ * Placeholder page callback.
+ */
+function themebuilder_bar_js_required() {
+  // Default to the standard error message.
+  $message = t('<p>Navigate to the <a href="!url">front page</a> or any other non-administrative page and click the <em>Appearance</em> link in the toolbar in order to open the theme builder.</p><p>You must have javascript enabled in order to use the theme building functions in !service_name_long.</p>', array(
+    '!url' => url('<front>'),
+    '!service_name_long' => variable_get('gardens_service_name_long', 'Drupal Gardens'),
+  ));
+  // If the user does not have permission to access the ThemeBuilder, warn them.
+  if (!themebuilder_bar_check_tab_permissions()) {
+    $message = t('<p>You do not have the necessary permissions to access the theme building functions in !service_name_long.</p><p>Please ask your site maintainer for access to at least one ThemeBuilder tab.', array(
+      '!url' => url('<front>'),
+      '!service_name_long' => variable_get('gardens_service_name_long', 'Drupal Gardens'),
+    ));
+  }
+  return $message;
+}
+
+/**
+ * Used to properly sort the tabs by weight before theming.
+ */
+function themebuilder_bar_tab_sort($a, $b) {
+  $a += array('weight' => 0);
+  $b += array('weight' => 0);
+  return $a['weight'] - $b['weight'];
+}
+
+/**
+ * Implementation of hook_init().
+ *
+ * Add toolbar items to page if any of those items are available.
+ */
+function themebuilder_bar_init() {
+  global $theme_key;
+
+  // If the user can access even one tab of the ThemeBuilder, continue loading;
+  // otherwise simpley return to cancel the ThemeBuilder load.
+  if (!themebuilder_bar_check_tab_permissions()) {
+    return;
+  }
+
+  // Don't load themebuilder inside the overlay.
+  if (isset($_GET['render']) && $_GET['render'] == 'overlay') {
+    return;
+  }
+
+  // Also don't load it when using the admin theme?
+  if ($theme_key == variable_get('admin_theme')) {
+    return;
+  }
+
+  _themebuilder_bar_add_resources('themebuilder_bar_header');
+  $server = new AffinityServer();
+  $webnode = $server->getWebnode();
+  $in_edit_mode = themebuilder_compiler_in_edit_mode();
+  if ($in_edit_mode) {
+    // Make sure the cookie is set.  Some users find it clever to
+    // delete their cookies at various points along the way.
+    if (!isset($_COOKIE['ah_app_server'])) {
+      setcookie('ah_app_server', $webnode['webnode'], 0, '/');
+    }
+    _themebuilder_bar_init_editor();
+  }
+  // Push theme data to the client-side settings.
+  _themebuilder_bar_theme_data_settings();
+
+  drupal_add_js(array('themebuilderServer' => $webnode,
+      'themebuilderAlertImage' => '/' . drupal_get_path('module', 'themebuilder_bar') . '/images/alert_icon.png',
+      'themebuilderInEditMode' => $in_edit_mode,
+      'gardensDevel' => themebuilder_compiler_is_devel_mode()), array('type' => 'setting'));
+  $path = drupal_get_path('module', 'themebuilder_bar');
+  drupal_add_js($path .'/themebuilder_bar_last.js', array('weight' => 100, 'preprocess' => TRUE));
+}
+
+/**
+ * Implements hook_permission().
+ */
+function themebuilder_bar_permission() {
+  $permissions = array(
+    'publish theme' => array(
+      'title' => t('Publish a theme'),
+      'description' => t('Publish a new theme, or save changes to the live theme.'),
+    ),
+  );
+
+  $tab_permissions = module_invoke_all('themebuilder_bar_tab_permissions');
+  return array_merge($permissions, $tab_permissions);
+}
+
+function themebuilder_bar_check_tab_permissions() {
+  $proceed = &drupal_static(__FUNCTION__, NULL);
+  // If access has already been determined, return the value of that access
+  // check from drupal_static. Permissions won't change in a single request and
+  // we want to save the cost of calling module_invoke_all.
+  if (isset($proceed)) {
+    return $proceed;
+  }
+  $proceed = FALSE;
+  $permissions = module_invoke_all('themebuilder_bar_tab_permissions');
+  foreach($permissions as $perm => $value) {
+    if (user_access($perm)) {
+      $proceed = TRUE;
+    }
+  }
+  return $proceed;
+}
+
+/**
+ * AJAX callback that reveals which webnode should be used for theme edit
+ * sessions for the current website.
+ */
+function themebuilder_bar_get_server() {
+  $server = new AffinityServer();
+  $preferredWebnode = $server->getWebnode();
+  themebuilder_compiler_json_output(array('error' => '') + $preferredWebnode);
+}
+
+/**
+ * Ajax callback that attempts to detect and resolve any theme issues
+ * that might prevent the themebuilder from opening.
+ */
+function themebuilder_bar_fix_themes() {
+  $result = array('error' => t('Unable to fix themes'));
+  try {
+    $status = themebuilder_compiler_fix_themes();
+    if (TRUE === $status) {
+      $result['error'] = '';
+    }
+  }
+  catch (Exception $e) {
+    $result['error'] = $e->getMessage();
+    ThemeBuilderLog()->gardensError('Error encountered while trying to fix themes: ' . $e->getMessage());
+  }
+  themebuilder_compiler_json_output($result);
+}
+
+/**
+ * Implementation of hook_user_logout().
+ */
+function themebuilder_bar_user_logout($account) {
+  if (user_access('administer themes')) {
+    $server = new AffinityServer();
+    $server->clearCookie();
+  }
+}
+
+/**
+ * Implentation of hook_preprocess_html();
+ *
+ * If the themebuilder is enabled, add classes that reveal the browser being
+ * used so css rules can be easily targeted to each browser.
+ */
+function themebuilder_bar_preprocess_html(&$variables) {
+  if (themebuilder_compiler_in_edit_mode()) {
+    require_once('browser_detection.php');
+    $browser_info = browser_detection('full');
+    $browser = $browser_info[0];
+    $version = explode('.', $browser_info[1]);
+    $browser_version = $browser_info[0] . substr($version[0], 0, 1);
+    $os = $browser_info[5];
+    $variables['classes_array'][] = $browser;
+    $variables['classes_array'][] = $browser_version;
+    $variables['classes_array'][] = $os;
+  }
+}
+
+/**
+ * Performs additional initialization required when the themebuilder is open.
+ */
+function _themebuilder_bar_init_editor() {
+  global $user;
+  /** returns an associative array of (name,title) **/
+  $base_weight = 50;
+  $path = drupal_get_path('module', 'themebuilder_bar');
+  $items = module_invoke_all('themebuilder_bar_items', $base_weight);
+
+  if (!$items) {
+    throw new Exception('Unable to continue, no tabs available');
+  }
+
+  drupal_add_library('system', 'effects.slide');
+
+  $markup = '<ul class="tabnav ui-tabs-nav ui-helper-reset ui-helper-clearfix ui-widget-header">';
+  $bodies = '';
+
+  usort($items, "themebuilder_bar_tab_sort");
+  $themebuilder_tab_items = array();
+  foreach ($items as $item) {
+    // Add it to a new array so it is referencable
+    $themebuilder_tab_items[$item['name']] = $item;
+    $markup .= '<li class="ui-state-default"><div class="left-cap"></div><a href="#themebuilder-' .$item['name'] .'">' .$item['title'] .'</a><div class="right-cap"></div></li>';
+    $bodies .= '<div id="themebuilder-' .$item['name'] .'" class="tabdiv"></div>';
+  }
+  // TODO: Maybe a theme function would make sense here.
+  $markup.='</ul>';
+  $control_veil = '<div id="themebuilder-control-veil"></div>';
+
+  $save_buttons = '<div id="themebuilder-save">' ."\n"
+		.'  <a href="javascript:void(0)" class="themebuilder-undo-button" class="undo">' .t('Undo') ."</a>\n"
+		.'  <a href="javascript:void(0)" class="themebuilder-redo-button" class="redo">' .t('Redo') ."</a>\n"
+  .'  <a href="javascript:void(0)" class="export">' .t('Export') ."</a>\n"
+  . theme('themebuilder_button', array('id' => 'save', 'text' => 'Save'))
+  . theme('themebuilder_button', array('id' => 'save-as', 'text' => 'Save as'))
+  . theme('themebuilder_button', array('id' => 'publish', 'text' => 'Publish', 'class' => 'primary'))
+  .'  <button id="themebuilder-mini-button"></button>' ."\n"
+  .'  <button id="themebuilder-exit-button"></button>' ."\n"
+  ."</div>\n";
+
+
+  //$html = '<div id="themebuilder-main" class="widget">' . $save_buttons .$markup .$bodies .'</div>';
+
+  $path = drupal_get_path('module', 'themebuilder_bar');
+  drupal_add_css($path .'/ui-theme/ui.all.css');
+
+  $form = drupal_get_form('themebuilder_bar_save_form');
+	$save_html = drupal_render($form);
+  $form = drupal_get_form('themebuilder_bar_publish_form');
+	$publish_html = drupal_render($form);
+  $form = drupal_get_form('themebuilder_bar_export_form');
+  $export_html = drupal_render($form);
+
+  // Set the first tab as the default.
+  $first_tab = reset($themebuilder_tab_items);
+  $state = variable_get($user->name .'_tb_state');
+  if (!$state) {
+    $state = json_encode(array('tabId' => 'themebuilder-' . $first_tab['name'], 'info' => array()));
+  }
+  $session = themebuilder_compiler_retrieve_session();
+  _themebuilder_bar_add_resources('themebuilder_bar_editor');
+
+  $settings = array(
+      'toolbarItems' => $themebuilder_tab_items,
+      'toolbarLoadingImg' => drupal_get_path('module','themebuilder_bar') .'/save-load.gif',
+      'toolbarStartEdit' => url('themebuilder-start'),
+      'toolbarStopEdit' => url('themebuilder-exit'),
+      'toolbarSaveState' => url('themebuilder-save-state'),
+      'toolbarState' => $state,
+      'toolbarDefault' => url('themebuilder-is-default'),
+      'themebuilderSave' => url('themebuilder-save'),
+      'themebuilderExport' => url('themebuilder-export'),
+      'themebuilderPublish' => url('themebuilder-publish'),
+      'themebuilderSaveDialog' => $save_html,
+      'themebuilderPublishDialog' => $publish_html,
+      'themebuilderExportDialog' => $export_html,
+  );
+
+  if (themebuilder_compiler_in_edit_mode()) {
+    $current_theme = themebuilder_compiler_get_current_theme();
+    $settings['themebuilderIsModified'] = $current_theme->isModified();
+
+    // We have to determine if this is a baseTheme.
+    // This is not a great pattern, but Theme.inc is too inconsistent to get it
+    // any other way.
+    $settings['themebuilderSaved'] = FALSE;
+    if ($current_theme->lastSavedLabel) {
+      $settings['themeLabel'] = check_plain($current_theme->lastSavedLabel);
+      $settings['themebuilderSaved'] = TRUE;
+    } else {
+      $settings['themeLabel'] = t("Untitled");
+    }
+    $status_tab = theme('theme_status_tab');
+    $theme_name = $settings['themeLabel'];
+    $published_theme = themebuilder_compiler_get_published_theme_name();
+
+    $name_tab = theme('theme_name_tab',
+       array(
+         'theme_name' => $theme_name,
+         'last_saved_date' => $current_theme->lastSavedTime,
+         'modified' => $current_theme->isModified(),
+         'published' => $current_theme->getOrigin() == $published_theme,
+       ));
+    $html = '<div id="themebuilder-wrapper" class="tb">' . $name_tab . $status_tab . '<div id="themebuilder-main" class="widget">' .$save_buttons .$markup .$bodies .$control_veil .'</div></div>';
+    $settings['toolbarHtml'] = $html;
+  }
+  drupal_add_js($settings, array('type' => 'setting'));
+  drupal_add_js('ThemeBuilder.getApplicationInstance().addApplicationInitializer(ThemeBuilder.Bar.initializeUserInterface);',
+    array('type' => 'inline'));
+}
+
+/**
+ * Adds resources that are provided by invoking the specified hook.  The
+ * resoures are javascript and css files.
+ *
+ * @param hook_name
+ *   The name of the hook to invoke to gather the resources
+ */
+function _themebuilder_bar_add_resources($hook_name) {
+  $headers = module_invoke_all($hook_name);
+
+  $css     = '';
+  $library = '';
+  $regular = '';
+
+  foreach($headers as $module => $header) {
+    $header += array('group' => JS_DEFAULT, 'weight' => 0);
+    if (isset($header['js'])) {
+      foreach($header['js'] as $src) {
+        drupal_add_js($src, array('group' => $header['group'], 'weight' => $header['weight'], 'preprocess' => TRUE));
+      }
+    }
+    if (isset($header['css'])) {
+      foreach($header['css'] as $css){
+        $options = (isset($css['options'])) ? $css['options'] : array();
+        drupal_add_css($css['data'], $options);
+      }
+    }
+    if (isset($header['library'])) {
+      foreach($header['library'] as $library){
+        drupal_add_library($library[0], $library[1]);
+      }
+    }
+  }
+}
+
+/**
+ * Provides resoures required by this module for running the part of
+ * themebuilder available when the themebuilder is not in edit mode.  This
+ * code is executed when the only exposure of the themebuilder is the button
+ * in the header bar.
+ */
+function themebuilder_bar_themebuilder_bar_header() {
+  global $base_path;
+
+  $path = drupal_get_path('module', 'themebuilder_bar');
+  return array(array(
+    'css' => array(
+      array(
+        'data' => $path . '/page.css',
+      ),
+      array(
+        'data' => $path . '/css/themebuilder_bar.css',
+      ),
+      array(
+        'data' => $path . '/plugins/jquery.flyoutList/jquery.flyoutList.css',
+      ),
+      array(
+        'data' => $path . '/plugins/jquery.smartToggle/jquery.smartToggle.css',
+      ),
+    ),
+    'js'  => array(
+      $path . '/themebuilder_bar.js',
+      $path . '/BrowserDetection.js',
+      $path . '/js/StartInteraction.js',
+      $path . '/js/Dialog.js',
+      $path . '/plugins/jquery.flyoutList/jquery.flyoutList.js',
+      $path . '/plugins/jquery.smartToggle/jquery.smartToggle.js',
+      $path . '/plugins/jquery.truncate/jquery.truncate.min.js',
+      $path . '/plugins/jquery.NobleCount/js/jquery.NobleCount.min.js',
+    ),
+    'library' => array(
+      array('system', 'ui.dialog'),
+    ),
+  ));
+}
+
+/**
+ * Provides resources required by this module for running the part of the
+ * themebuilder available when the themebuilder is open.  Note that
+ * hook_themebuilder_bar_header will be invoked before this hook, so no need
+ * to specify the resources twice.
+ */
+function themebuilder_bar_themebuilder_bar_editor() {
+  global $base_path;
+  $path = drupal_get_path('module', 'themebuilder_bar');
+  return array(
+    array(
+      'css' => array(
+        array(
+          'data' => $path . '/css/themebuilder.css',
+        ),
+        array(
+          'data' => $path . '/css/ui.css',
+        ),
+        array(
+          'data' => $path .'/css/ie/themebuilder-lte-ie-8.css',
+          'options' => array(
+            'browsers' => array('IE' => 'lte IE 8', '!IE' => FALSE),
+          ),
+        ),
+        array(
+          'data' => $path .'/css/ie/themebuilder_bar-lte-ie-8.css',
+          'options' => array(
+            'browsers' => array('IE' => 'lte IE 8', '!IE' => FALSE),
+          ),
+        ),
+      ),
+    ),
+    array(
+      'library'  => array(
+        array('system', 'ui.tabs'),
+        array('system', 'ui.slider'),
+        array('system', 'ui.sortable'),
+        array('system', 'ui.position'),
+      ),
+    ),
+    array(
+      'js'  => array(
+        $path . '/js/UndoStatusSwitch.js',
+        $path . '/js/HorizontalCarousel.js',
+        $path . '/js/FeaturedThemeInteraction.js',
+        $path . '/js/ActionList.js',
+      ),
+    )
+  );
+}
+/**
+ * Push information about the available themes to the client. This information
+ * populates the theme tab and informs the loading of the advanced tab.
+ */
+function _themebuilder_bar_theme_data_settings() {
+  global $theme_key;
+
+  $path = drupal_get_path('module', 'themebuilder_themes');
+
+  drupal_theme_initialize();
+
+  $themes = list_themes(TRUE);
+  $theme_files = array();
+  $theme_paths = array();
+
+  //@TODO: This needs to die.
+  foreach($themes as $name=>$obj){
+    if (isset($obj->info['stylesheets']['all'])) {
+      $theme_files[$name] = $obj->info['stylesheets']['all'];
+      $theme_paths[$name] = drupal_get_path('theme',$name);
+    }
+  }
+  drupal_add_js(
+    array(
+      'themeEditorFiles' => $theme_files,
+      'themeEditorPaths' => $theme_paths,
+      'themeSavePath'    => url('themes-save'),
+      'themeSaveToken'   => drupal_get_token('themes-save'),
+      'currentTheme'     => $theme_key,
+    ),
+    array('type' => 'setting')
+  );
+}
+/**
+ * Verifies the themebuilder AJAX request can be fulfilled.  This function is
+ * responsible for verifying the cookie matches, and then it calls the
+ * specified function.  If the cookie does not match, an exception is thrown
+ * and is handled through the standard error handling mechanism.
+ *
+ * This is meant to be a wrapper for AJAX callbacks within the themebuilder
+ * for which having the ah_app_server cookie match the webnode that handles
+ * the request is critical.  Note that this includes practically all
+ * themebuilder ajax requests.
+ *
+ * @param {String} $function_name
+ *   The name of the function to call.
+ */
+function themebuilder_bar_ajax_request($function_name) {
+  $server = new AffinityServer();
+  $server->verify();
+  $arg_count = func_num_args();
+  if ($arg_count > 1) {
+    $args = func_get_args();
+    array_shift($args);
+  }
+  else {
+    $args = array();
+  }
+  if (themebuilder_compiler_in_edit_mode()) {
+    call_user_func_array($function_name, $args);
+  }
+  else {
+    // We have no themebuilder session.  This can be caused by the
+    // user switching between 2 browsers (the themebuilder session is
+    // locked to a single browser) or because their session timed out.
+    // Either way we cannot execute the request.
+
+    // Getting the session will cause the session ownership to be
+    // tested and an exception thrown with an appropriate message if
+    // it is not associated with the current request.
+    $session = themebuilder_compiler_retrieve_session();
+
+    // This is the catch-all message if we can't otherwise identify
+    // the problem.  Maybe we forcefully closed their themebuilder
+    // session for site maintenance?
+    throw new ThemeBuilderException(t('We are sorry, but the ThemeBuilder needs to close while !service_name_long undergoes a brief maintenance period.  Click OK to close the ThemeBuilder.', array(
+      '!service_name_long' => variable_get('gardens_service_name_long', 'Drupal Gardens'),
+    )), THEMEBUILDER_ERROR_RECOVERABLE, array(ThemeBuilderException::HANDLER_ALERT_AND_CLOSE));
+  }
+}
+
+function themebuilder_bar_enter_edit_mode() {
+  $start_time = microtime(TRUE);
+  try {
+    global $user;
+    $error = '';
+    $session_theme = '';
+    $current_theme_path = '';
+    // If provided, this will force themebuilder_compiler_edit() to give the current
+    // session the ability to edit and will delete any existing sessions.
+    $take_over_session = empty($_POST['take_over_session']) ? FALSE : $_POST['take_over_session'];
+    $can_use = themebuilder_compiler_can_use();
+    $custom_theme_folder = themebuilder_compiler_get_custom_theme_folder();
+    if (!$can_use || !is_writable($custom_theme_folder)) {
+      // No point in opening the themebuilder; unable to save a theme.
+      gardens_statsd_send('themebuilder.enter.fail', 1, GARDENS_STATSD_COUNTER, 1);
+      $error = t("We're doing maintenance and making !service_name_long even better. Please try to relaunch the ThemeBuilder later. Thanks!", array(
+        '!service_name_long' => variable_get('gardens_service_name_long', 'Drupal Gardens'),
+      ));
+    }
+    else {
+      // The client must set the affinity cookie before calling this
+      // function, and the cookie must match the webnode on which the
+      // request is serviced.
+      $server = new AffinityServer();
+      $server->checkAndFail();
+
+      //This can be null, in which case, we are using the current theme as a base.
+      $new_theme_name = empty($_POST['theme_name']) ? null : $_POST['theme_name'];
+
+      // This may create an issue if someone quits too soon by closing the browser.
+      // But this code is messed up, because it is looking a theme which should never
+      // exist.
+
+      //themebuilder_compiler_revert_session(TRUE);
+      unset($_SESSION['init_message']);
+      $session_theme = themebuilder_compiler_edit($new_theme_name, $take_over_session);
+      $current_theme_path = drupal_get_path('theme', $session_theme);
+    }
+
+    module_invoke_all('themebuilder_opened');
+    themebuilder_compiler_json_output(array('error' => $error,
+        'current_theme' => $session_theme,
+        'current_theme_path' => $current_theme_path));
+    gardens_statsd_send('themebuilder.enter.success', 1, GARDENS_STATSD_COUNTER, 1);
+  }
+  catch (ThemeBuilderEditInProgressException $eip) {
+    // do not log this.
+    throw $eip;
+  }
+  catch (Exception $e) {
+    global $base_url;
+    gardens_statsd_send('themebuilder.enter.fail', 1, GARDENS_STATSD_COUNTER, 1);
+    ThemeBuilderLog()->gardensError('AN-22577 - Unable to enter the themebuilder.',
+      "site: $base_url " . '-> ' . $e->getMessage());
+    throw $e;
+  }
+  $end_time = microtime(TRUE);
+  gardens_statsd_send('themebuilder.enter', round(($end_time - $start_time) * 1000), GARDENS_STATSD_TIMER, 1);
+}
+
+/**
+ * Saves the state of the ThemeBuilder tabs.
+ *
+ * @global type $user
+ */
+function themebuilder_bar_save_state() {
+  global $user;
+  if (!empty($_POST['state']) && !empty($_POST['form_token']) && drupal_valid_token($_POST['form_token'], 'themebuilder-save-state')) {
+    $state = json_decode($_POST['state']);
+    variable_set($user->name .'_tb_state', $state);
+  }
+  else {
+    throw new ThemeBuilderException(t('Invalid Arguments'));
+  }
+}
+
+/**
+ * Menu callback to save a theme (or to save it under a new name).
+ *
+ * @global $_POST['publish']
+ *   TRUE if the theme needs to be published after save.
+ * @global $_POST['name']
+ *   The human-friendly name to use for this theme. Should be set for save-as
+ *   requests only.
+ * @global $_POST['system_name']
+ *   The system name to use for this theme. Should only be set for save-as
+ *   requests where the user wants a specific system name.
+ * @global $_POST['overwrite']
+ *   TRUE for save-as requests where the user has authorized overwriting an
+ *   existing theme.
+ */
+function themebuilder_bar_save() {
+  $publish = empty($_POST['publish']) ? FALSE : ('true' === $_POST['publish']);
+  $name_requested = empty($_POST['name']) ? FALSE : $_POST['name'];
+  $system_name_requested = empty($_POST['system_name']) ? FALSE : $_POST['system_name'];
+  $overwrite_requested = !empty($_POST['overwrite']);
+
+
+  $overwriting_current = (themebuilder_compiler_get_current_theme()->getOrigin() == themebuilder_compiler_get_published_theme_name() && !($name_requested || $system_name_requested));
+  if ($publish || $overwriting_current) {
+    // This is a publish request. Make sure the user has permission.
+    if (!user_access('publish theme')) {
+      // The UI doesn't allow this, so the user is probably tampering with the
+      // AJAX request values.
+      throw new ThemebuilderException('Publish theme access denied.');
+    }
+  }
+
+  if ($name_requested) {
+    // This is a save-as request.
+    if ($system_name_requested) {
+      if (themebuilder_compiler_theme_is_draft($system_name_requested)) {
+        // Do not allow the system name to match the pattern for draft themes.
+        $system_name_requested .= '_';
+      }
+      $info = themebuilder_compiler_save_as($name_requested, $system_name_requested, $publish, $overwrite_requested);
+    }
+    else {
+      // No specific system name requested.
+      $info = themebuilder_compiler_save_as($name_requested, NULL, $publish, $overwrite_requested);
+    }
+  }
+  else {
+    // This is a save request (not a save-as).
+    $info = themebuilder_compiler_save($publish);
+  }
+
+  themebuilder_compiler_json_output($info);
+}
+
+function themebuilder_bar_export() {
+  if (!empty($_POST['name'])) {
+    if (!empty($_POST['system_name'])) {
+      $system_name = themebuilder_compiler_human_to_machine_name($_POST['system_name']);
+    }
+    else {
+      $system_name = themebuilder_compiler_human_to_machine_name($_POST['name']);
+    }
+    $output_tarball = themebuilder_compiler_export($_POST['name'], $_POST['system_name']);
+    $export_download_url = url('themebuilder-export-download/' . basename($output_tarball) . '/' . $system_name);
+    themebuilder_compiler_json_output(array('export_download_url' => $export_download_url,
+      'name' => $_POST['name'],
+      'system_name' => $system_name));
+  }
+  else {
+    throw new ThemeBuilderException(t('Invalid Arguments'));
+  }
+}
+
+/**
+ * This is the callback invoked when the user clicks on the update theme link.
+ * It is responsible for causing the theme update to occur.
+ */
+function themebuilder_bar_update_theme() {
+  themebuilder_compiler_update_theme();
+  $info['error'] = '';
+  themebuilder_compiler_json_output($info);
+}
+
+function themebuilder_bar_exit_edit_mode() {
+  global $user;
+
+  $start_time = microtime(TRUE);
+  $server = new AffinityServer();
+  $server->clearCookie();
+  try {
+    themebuilder_compiler_revert_session();
+  } catch (ThemeBuilderEditInProgressException $e) {
+    // If we catch this exception and the user is actaully trying to quit
+    // we just want to return silently and do nothing.  When the page refreshes
+    // they will not see the TB.
+    gardens_statsd_send('themebuilder.exit.fail', 1, GARDENS_STATSD_COUNTER, 1);
+    return;
+  }
+  variable_del($user->name .'_tb_state');
+  gardens_statsd_send('themebuilder.exit.success', 1, GARDENS_STATSD_COUNTER, 1);
+  themebuilder_compiler_json_output(array('error' => ''));
+  $end_time = microtime(TRUE);
+  gardens_statsd_send('themebuilder.exit', round(($end_time - $start_time) * 1000), GARDENS_STATSD_TIMER, 1);
+}
+
+function themebuilder_bar_save_form($form, $form_state) {
+  $form = _themebuilder_bar_save_export_form() + $form;
+  $form['#prefix'] = '<div id="export-dialog">';
+	$form['name']['#title'] = t('Save theme as');
+	$form['name']['#id'] = 'edit-name';
+  return $form;
+}
+
+function themebuilder_bar_publish_form($form, $form_state) {
+  $form = _themebuilder_bar_save_export_form() + $form;
+  $form['#prefix'] = '<div id="export-dialog">';
+	$form['name']['#title'] = t('Publish theme as');
+	$form['name']['#id'] = 'edit-name-2';
+  return $form;
+}
+
+function themebuilder_bar_export_form($form, $form_state) {
+  $form = _themebuilder_bar_save_export_form() + $form;
+  $form['#prefix'] = '<div id="export-dialog">';
+	$form['name']['#title'] = t('Export theme as');
+	$form['name']['#id'] = 'edit-name-3';
+  return $form;
+}
+
+function _themebuilder_bar_save_export_form() {
+  $form = array();
+  $form['name'] = array(
+    '#type' => 'textfield',
+    '#size' => 20,
+    '#title' => t('Theme name'),
+    '#attributes' => array('class' => array('name')),
+  );
+
+  return $form;
+}
+
+/**
+ * Implementation of hook_theme
+ */
+function themebuilder_bar_theme() {
+  $registry = array();
+
+  $registry['theme_name_tab'] = array(
+    'variables' => array(
+      'theme_name' => NULL,
+      'modified' => NULL,
+      'last_saved_date' => NULL,
+      'published' => FALSE,
+    ),
+  );
+  $registry['theme_status_tab'] = array(
+    'variables' => array(),
+  );
+  $registry['themebuilder_button'] = array(
+    'variables' => array(
+      'id' => NULL,
+      'class' => '',
+      'text' => NULL,
+    ),
+  );
+
+  return $registry;
+}
+
+function theme_theme_name_tab($variables) {
+  $theme_name = $variables['theme_name'];
+  $modified = ($variables['modified'] ? '<span class="theme-modified"> *</span>' : '');
+  $theme_visibility = t('(Draft - only you can see this)');
+  if (!$variables['modified'] && $variables['published']) {
+    $theme_visibility = t('(Live - everyone can see this)');
+  }
+  return sprintf('<div id="themebuilder-theme-name">%s<span class="theme-name">%s</span><span class="theme-visibility">%s</span></div>', $modified, $theme_name, $theme_visibility);
+}
+
+/**
+ * Creates the status bar.
+ *
+ * @return String
+ *   The markup for the status bar.
+ */
+function theme_theme_status_tab() {
+  return '<div id="themebuilder-status"><span class="themebuilder-status-icon"/><span class="themebuilder-status-message"/></div>';
+}
+
+/**
+ * Creates the markup for a themebuilder button.
+ *
+ * @param {Associative array} $variables
+ *   An array that includes the button id (id) and the button text (text).
+ * @return {String}
+ *   The button markup.
+ */
+function theme_themebuilder_button($variables) {
+  return sprintf('<a id="%s" href="#" class="themebuilder-button %s"><span>%s</span></a>',
+    $variables['id'], $variables['class'], t($variables['text']));
+}
+

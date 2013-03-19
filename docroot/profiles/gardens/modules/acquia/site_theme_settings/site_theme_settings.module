@@ -1,0 +1,286 @@
+<?php
+
+define('SITE_THEME_SETTINGS_DEFAULT_AVATAR', 'public://AnonymousPicture.gif');
+
+
+/**
+ * Implements hook_menu().
+ */
+function site_theme_settings_menu() {
+  $items['admin/config/user-interface/avatar'] = array(
+    'title' => 'User avatars',
+    'description' => 'Manage the display of user avatars.',
+    'page callback' => 'drupal_get_form',
+    'page arguments' => array('site_theme_settings_avatars'),
+    'access arguments' => array('administer site configuration'),
+    'type' => MENU_NORMAL_ITEM,
+  );
+  return $items;
+}
+
+/**
+ * Implements hook_form_ID_alter().
+ *
+ * Remove the ablity to set a user picture on a gardens site (unless the site
+ * allows local non-OpenID logins).  For sites using OpenID, this should be
+ * done through the gardener site instead, at least until we figure out our
+ * policy.
+ */
+function site_theme_settings_form_user_profile_form_alter(&$form, &$form_state) {
+  if (scarecrow_force_openid()) {
+    unset($form['picture']);
+  }
+}
+
+/**
+ * Implements hook_form_ID_alter().
+ *
+ * Add the checkboxes in the site information form.
+ */
+function site_theme_settings_form_system_site_information_settings_alter(&$form, &$form_state) {
+  global $user;
+  $theme = !empty($user->theme) ? $user->theme : variable_get('theme_default');
+  $block_everything = (theme_get_setting('block_everything', $theme) && module_exists('block_everything'));
+
+  // Modify the site name.
+  $form['site_name_fieldset'] = array(
+    '#type' => 'fieldset',
+    '#title' => $form['site_information']['site_name']['#title'] . '&nbsp;<span class="form-required" title="' . t('This field is required.') . '">*</span>',
+    '#weight' => -3,
+    '#collapsible' => FALSE,
+    '#collapsed' => FALSE,
+  );
+  $form['site_name_fieldset']['site_name'] = $form['site_information']['site_name'];
+  unset($form['site_name_fieldset']['site_name']['#title']);
+  unset($form['site_information']['site_name']);
+
+  // If the theme supports site name as a block, just provide description text.
+  if ($block_everything) {
+    $form['site_name_fieldset']['site_name']['#description'] = t("To hide your site name, disable the 'Site name' block.");
+  } else {
+    $form['site_name_fieldset']['include_site_name'] = array(
+      '#type' => 'checkbox',
+      '#title' => t('Show site name'),
+      '#description' => t("You may want to turn site name off if you're using a logo that includes a site name."),
+      '#default_value' => theme_get_setting('toggle_name', $theme),
+    );
+  }
+
+  // Modify the site slogan.
+  $form['site_slogan_fieldset'] = array(
+    '#type' => 'fieldset',
+    '#title' => $form['site_information']['site_slogan']['#title'],
+    '#weight' => '-2',
+    '#collapsible' => FALSE,
+    '#collapsed' => FALSE,
+  );
+  $form['site_slogan_fieldset']['site_slogan'] = $form['site_information']['site_slogan'];
+  unset($form['site_slogan_fieldset']['site_slogan']['#title']);
+  unset($form['site_slogan_fieldset']['site_slogan']['#description']);
+  unset($form['site_information']['site_slogan']);
+
+  // If the theme supports site slogan as a block, just provide description text.
+  if ($block_everything) {
+    $form['site_slogan_fieldset']['site_slogan']['#description'] = t("To hide your site slogan, disable the 'Site slogan' block.");
+  } else {
+    $form['site_slogan_fieldset']['include_site_slogan'] = array(
+      '#title' => t('Show site slogan'),
+      '#type' => 'checkbox',
+      '#description' => t("Site slogan is a brief statement usually explaining your site's objectives."),
+      '#default_value' => theme_get_setting('toggle_slogan', $theme),
+    );
+  }
+
+  $form['#submit'][] = 'site_theme_settings_form_system_site_information_settings_submit';
+
+  // Fix remaining e-mail field.
+  $form['site_information']['#title'] = t('E-mail address') . '&nbsp;<span class="form-required" title="' . t('This field is required.') . '">*</span>';
+  unset($form['site_information']['site_mail']['#title']);
+}
+
+/**
+ * This callback processes the checkboxes that were added in this module.
+ */
+function site_theme_settings_form_system_site_information_settings_submit(&$form, &$form_state) {
+  $settings = variable_get('theme_settings', array());
+  $settings['toggle_name'] = $form_state['values']['include_site_name'];
+  $settings['toggle_slogan'] = $form_state['values']['include_site_slogan'];
+  variable_set('theme_settings', $settings);
+}
+
+/**
+ * Generates a form for configuring the default avatar and the avatar display
+ * settings.
+ */
+function site_theme_settings_avatars() {
+  $settings = variable_get('theme_settings', array('use_default_avatar' => 1));
+  if (!array_key_exists('use_default_avatar', $settings)) {
+    $settings['use_default_avatar'] = 1;
+  }
+  $custom_avatar = variable_get('user_picture_default');
+  if ($custom_avatar == SITE_THEME_SETTINGS_DEFAULT_AVATAR) {
+    $settings['use_default_avatar'] = 1;
+    $custom_avatar = '';
+  }
+  $form['avatar'] = array(
+    '#title' => t('Default avatar '),
+    '#type' => 'fieldset',
+    '#collapsible' => FALSE,
+    '#collapsed' => FALSE,
+  );
+  $form['avatar']['use_default_avatar'] = array(
+    '#type' => 'checkbox',
+    '#default_value' => $settings['use_default_avatar'],
+    '#title' => t('Use the default avatar.'),
+  );
+  $form['avatar']['default'] = array(
+    '#type' => 'container',
+    '#states' => array(
+      'invisible' => array(
+        'input[name="use_default_avatar"]' => array('checked' => FALSE),
+      ),
+    ),
+  );
+  $form['avatar']['settings'] = array(
+    '#type' => 'container',
+    '#states' => array(
+      'invisible' => array(
+        'input[name="use_default_avatar"]' => array('checked' => TRUE),
+      ),
+    ),
+  );
+  $form['avatar']['default']['avatar_default_image'] = array(
+    '#type' => 'hidden',
+    '#value' => '',
+    '#prefix' => '<img id="avatar_picture" src="' . file_create_url(SITE_THEME_SETTINGS_DEFAULT_AVATAR) . '"></img>',
+  );
+  if (!empty($custom_avatar)) {
+    $custom_avatar_url = $custom_avatar;
+    if (file_uri_scheme($custom_avatar_url) == 'public') {
+      $custom_avatar_url = file_create_url($custom_avatar_url);
+    }
+    $form['avatar']['settings']['avatar_custom_image'] = array(
+      '#type' => 'hidden',
+      '#value' => '',
+      '#prefix' => '<img id="avatar_picture" src="' . $custom_avatar_url . '"></img>',
+    );
+    $form['avatar']['settings']['user_picture_default'] = array(
+      '#type' => 'textfield',
+      '#title' => t('Path to custom avatar'),
+      '#default_value' => $custom_avatar,
+      '#description' => t('The path to the file you would like to use as your avatar file instead of the default avatar.'),
+    );
+  }
+  $form['avatar']['settings']['avatar_upload'] = array(
+    '#type' => 'file',
+    '#title' => t('Upload custom avatar image'),
+    '#maxlength' => 40,
+    '#size' => 40,
+  );
+  $form['avatar_config'] = array(
+    '#title' => t('Avatar settings'),
+    '#type' => 'fieldset',
+    '#collapsible' => FALSE,
+    '#collapsed' => FALSE,
+  );
+  $form['avatar_config']['toggle_node_user_picture'] = array(
+    '#type' => 'checkbox',
+    '#title' => t('Show user avatar in posts'),
+    '#description' => t("When enabled, an author's avatar will show next to their post."),
+    '#default_value' => $settings['toggle_node_user_picture'],
+  );
+  $form['avatar_config']['toggle_comment_user_picture'] = array(
+    '#type' => 'checkbox',
+    '#title' => t('Show user avatar in comments'),
+    '#description' => t("When enabled, a comment author's avatar will show next to their comment."),
+    '#default_value' => $settings['toggle_comment_user_picture'],
+  );
+  $form['actions']['submit'] = array('#type' => 'submit', '#value' => t('Save configuration'));
+  $form['#submit'][] = 'site_theme_settings_avatars_submit';
+  $form['#validate'][] = 'site_theme_settings_avatars_validate';
+  return $form;
+}
+
+/**
+ * The validation function for the avatar form.
+ */
+function site_theme_settings_avatars_validate($form, &$form_state) {
+  $validators = array('file_validate_is_image' => array());
+  $file = file_save_upload('avatar_upload', $validators);
+  if (isset($file)) {
+    if ($file) {
+      $form_state['values']['avatar_upload'] = $file;
+    }
+    else {
+      form_set_error('avatar_upload', t('The avatar could not be uploaded.'));
+    }
+  }
+  if ($form_state['values']['use_default_avatar'] == 1 ||
+    $form_state['values'] == SITE_THEME_SETTINGS_DEFAULT_AVATAR) {
+    $form_state['values']['use_default_avatar'] = 1;
+    $form_state['values']['user_picture_default'] = SITE_THEME_SETTINGS_DEFAULT_AVATAR;
+  }
+  else if ($form_state['values']['user_picture_default']) {
+    $path = _site_theme_settings_validate_path($form_state['values']['user_picture_default']);
+    if (!$path) {
+      form_set_error('user_picture_default', t('The custom avatar path is invalid.'));
+    }
+  }
+}
+
+/**
+ * The submit handler for the avatar form.
+ */
+function site_theme_settings_avatars_submit($form, &$form_state) {
+  $settings = variable_get('theme_settings', array());
+  $values = $form_state['values'];
+  $file = $values['avatar_upload'];
+  if ($file) {
+    unset($values['avatar_upload']);
+    $filename = file_unmanaged_copy($file->uri);
+    $values['use_default_avatar'] = 0;
+    $values['user_picture_default'] = $filename;
+  }
+  if (!empty($values['user_picture_default'])) {
+    $filename = _site_theme_settings_validate_path($values['user_picture_default']);
+    $values['user_picture_default'] = $filename;
+  }
+  // Set the default avatar settings into the theme settings.
+  $properties = array('use_default_avatar',
+                'toggle_node_user_picture',
+                'toggle_comment_user_picture');
+  foreach ($properties as $property) {
+    $settings[$property] = $values[$property];
+  }
+  variable_set('theme_settings', $settings);
+  variable_set('user_picture_default', $values['user_picture_default']);
+
+  drupal_set_message(t('The configuration options have been saved.'));
+  cache_clear_all();
+}
+
+/**
+ * Helper function for the avatar form.
+ *
+ * Attempts to validate normal system paths, paths relative to the public files
+ * directory, or stream wrapper URIs. If the given path is any of the above,
+ * returns a valid path or URI that the theme system can display.
+ *
+ * @param $path
+ *   A path relative to the Drupal root or to the public files directory, or
+ *   a stream wrapper URI.
+ * @return mixed
+ *   A valid path that can be displayed through the theme system, or FALSE if
+ *   the path could not be validated.
+ */
+function _site_theme_settings_validate_path($path) {
+  if (drupal_realpath($path)) {
+    // The path is relative to the Drupal root, or is a valid URI.
+    return $path;
+  }
+  $uri = 'public://' . $path;
+  if (file_exists($uri)) {
+    return $uri;
+  }
+  return FALSE;
+}
