@@ -1,0 +1,24 @@
+<?php
+/**
+ * @file
+ * Summary
+ */
+
+function migrate_ning_warner_is_admin($contributor_name) {
+  static $contributor_map = array();
+  if (!isset($contributor_map[$contributor_name])) {
+    $query = db_select('migrate_map_member', 'map')
+             ->condition('sourceid1', $contributor_name);
+    $query->innerJoin('users_roles', 'ur', 'map.destid1=ur.uid AND ur.rid=11');
+    $administrator = $query->fields('ur', array('uid'))
+                     ->execute()
+                     ->fetchField();
+    if ($administrator) {
+      $contributor_map[$contributor_name] = 1;
+    }
+    else {
+      $contributor_map[$contributor_name] = 0;
+    }
+  }
+  return $contributor_map[$contributor_name];
+}

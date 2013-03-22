@@ -1,0 +1,33 @@
+<?php
+/**
+ * @file
+ *    Install / uninstall functions for bunchball_user_roles module.
+ */
+
+/**
+ * Implement hook_uninstall()
+ *
+ * Delete all associated variables.
+ */
+function bunchball_user_roles_uninstall() {
+  variable_del('bunchball_user_roles');
+}
+
+/**
+ * Implements hook_enable().
+ */
+function bunchball_user_roles_enable() {
+  // Ensure that this module executes hooks before bunchball_user_interaction -
+  // this is necessary under some circumstances to ensure that postlogin callbacks
+  // registered in bunchball_user_roles get registered before the login is executed.
+  $user_interaction_weight = db_select('system', 's')
+    ->fields('s', array('weight'))
+    ->condition('name', 'bunchball_user_interaction')
+    ->execute()
+    ->fetchField();
+
+  db_update('system')
+    ->fields(array('weight' => $user_interaction_weight - 1))
+    ->condition('name', 'bunchball_user_roles')
+    ->execute();
+}

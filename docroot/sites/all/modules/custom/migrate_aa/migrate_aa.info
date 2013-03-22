@@ -1,0 +1,30 @@
+name = "Artist Arena migration"
+description = "Migrate content from Artist Arena sites to Enterprise Gardens"
+package = "Development"
+core = 7.x
+hidden = TRUE
+
+dependencies[] = migrate
+dependencies[] = migrate_d2d
+dependencies[] = migrate_extras
+
+files[] = migrate_aa.migrate.inc
+files[] = registry.inc
+
+files[] = atlhustlerclub.inc
+files[] = bieberfever.inc
+files[] = davidbowie.inc
+files[] = dcfcunion.inc
+files[] = gdgfanclub.inc
+files[] = greenday.inc
+files[] = idiotclub.inc
+files[] = keshasfamily.inc
+files[] = kolfanclub.inc
+files[] = mariahcarey.inc
+files[] = meatloaf.inc
+files[] = northerndownpour.inc
+files[] = officialspcrew.inc
+files[] = overcastkids.inc
+files[] = pattygriffin.inc
+files[] = theveronicas.inc
+files[] = thewilliambeckettsociety.inc

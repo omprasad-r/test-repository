@@ -1,0 +1,521 @@
+/**
+ * @file wmg.ui.dialog.css
+ *
+ * Standard structure styling for WMG user overlays.
+ */
+
+/* @group Dialog */
+
+.user-login-dialog,
+.user-register-form-dialog,
+.user-pass-dialog {
+  background-image: none;
+  padding-left: 10px;
+  padding-right: 10px;
+  padding-top: 0;
+  text-align: left;
+}
+.block #user-login:after,
+.block #user-register-form:after {
+  clear: both;
+  content: "x x x x x";
+  display: block;
+  height: 0;
+  visibility: hidden;
+  width: 100%;
+}
+.user-login-dialog .ui-dialog-content,
+.user-register-form-dialog .ui-dialog-content,
+.user-pass-dialog .ui-dialog-content {
+  overflow: visible;
+}
+.user-login-dialog a,
+.user-login-dialog a:link,
+.user-login-dialog a:visited,
+.user-login-dialog a:active,
+.user-register-form-dialog a,
+.user-register-form-dialog a:link,
+.user-register-form-dialog a:visited,
+.user-register-form-dialog a:active,
+.user-pass-dialog a,
+.user-pass-dialog a:link,
+.user-pass-dialog a:visited,
+.user-pass-dialog a:active {
+  font-size: 1em;
+}
+.user-login-dialog a:hover,
+.user-register-form-dialog a:hover,
+.user-pass-dialog a:hover {
+  text-decoration: none;
+}
+.user-login-dialog form,
+.user-register-form-dialog form,
+.user-pass-dialog form {
+  margin-top: 0;
+}
+
+/* @group Close button */
+
+.user-login-dialog .ui-widget-header [role="button"],
+.user-register-form-dialog .ui-widget-header [role="button"],
+.user-pass-dialog .ui-widget-header [role="button"] {
+  margin: 0;
+  right: 0;
+  top: -23px;
+  background-color: transparent;
+}
+.user-login-dialog .ui-widget-header .ui-icon,
+.user-register-form-dialog .ui-widget-header .ui-icon,
+.user-pass-dialog .ui-widget-header .ui-icon {
+  background:url('../images/bg_closebtn.png');
+}
+.user-login-dialog .ui-widget-header .ui-icon:hover,
+.user-register-form-dialog .ui-widget-header .ui-icon:hover,
+.user-pass-dialog .ui-widget-header .ui-icon:hover {
+  background-position: 0 -23px;
+}
+
+/* @end */
+
+/* @group Titlebar */
+
+.user-login-dialog .ui-widget-header,
+.user-register-form-dialog .ui-widget-header,
+.user-pass-dialog .ui-widget-header {
+  -moz-border-radius: 0;
+  -webkit-border-radius: 0;
+  border-radius: 0;
+  margin: 27px 0;
+  padding: 0;
+}
+.user-login-dialog .ui-widget-header > span,
+.user-register-form-dialog .ui-widget-header > span,
+.user-pass-dialog .ui-widget-header > span {
+  float: none;
+  margin: 0;
+}
+
+/* @end */
+
+/* @group User fields */
+
+.user-login-dialog .user-fields {
+  width: 380px;
+}
+/* This is a special case where the user has declined to link social accounts */
+.user-login-dialog #user-register-form-dialog .user-fields,
+.user-register-form-dialog .user-fields {
+  width: 420px;
+}
+.user-pass-dialog .user-fields {
+  width: 450px;
+}
+.user-login-dialog .user-fields .form-item,
+.user-register-form-dialog .user-fields .form-item,
+.user-pass-dialog .user-fields .form-item {
+  margin: 0;
+}
+.user-login-dialog .user-fields > *,
+.user-register-form-dialog .user-fields > *,
+.user-pass-dialog .user-fields > * {
+  position: relative;
+}
+.user-login-dialog .user-fields > .form-item,
+.user-register-form-dialog .user-fields > .form-item,
+.user-pass-dialog .user-fields > .form-item,
+.user-login-dialog .user-fields > .form-wrapper > *,
+.user-register-form-dialog .user-fields > .form-wrapper > *,
+.user-pass-dialog .user-fields > .form-wrapper > * {
+  margin-top: 5px;
+  min-height: 1.5em;
+  position: relative;
+}
+.gecko .user-login-dialog .user-fields > .form-item,
+.gecko .user-register-form-dialog .user-fields > .form-item,
+.gecko .user-pass-dialog .user-fields > .form-item,
+.gecko .user-login-dialog .user-fields > .form-wrapper > *,
+.gecko .user-register-form-dialog .user-fields > .form-wrapper > *,
+.gecko .user-pass-dialog .user-fields > .form-wrapper > * {
+  padding-bottom: 5px;
+}
+.user-login-dialog .user-fields > .form-actions > .form-control,
+.user-register-form-dialog .user-fields > .form-actions > .form-control,
+.user-pass-dialog .user-fields > .form-actions > .form-submit,
+.user-login-dialog .user-fields .form-item > .description > *,
+.user-register-form-dialog .user-fields .form-item > .description > *,
+.user-pass-dialog .user-fields .form-item > .description > * {
+  display: block;
+  position: relative;
+}
+.user-login-dialog .user-fields > .form-actions > .form-control,
+.user-login-dialog .user-fields .form-item > .description > * {
+  left: 40%;
+  width: 60%;
+}
+.user-login-dialog #user-register-form-dialog .user-fields > .form-actions > .form-control,
+.user-login-dialog #user-register-form-dialog .user-fields .form-item > .description > *,
+.user-register-form-dialog .user-fields > .form-actions > .form-control,
+.user-register-form-dialog .user-fields .form-item > .description > * {
+  left: 32%;
+  width: 68%;
+}
+.user-login-dialog .form-actions:after,
+.user-register-form-dialog .form-actions:after,
+.user-pass-dialog .form-actions:after {
+  clear: both;
+  content: "x x x x x";
+  display: block;
+  height: 0;
+  visibility: hidden;
+  width: 100%;
+}
+.user-pass-dialog .user-fields > .form-actions > .form-submit,
+.user-pass-dialog .user-fields .form-item > .description > * {
+  left: 50%;
+}
+.user-pass-dialog .user-fields .form-item > .description > * {
+  width: 50%;
+}
+.user-login-dialog .user-fields .submit-button-wrapper,
+.user-register-form-dialog .user-fields .submit-button-wrapper,
+.user-pass-dialog .user-fields .submit-button-wrapper {
+  font-size: 1em;
+}
+/* These ids are necessary as part of the styling migration */
+#user-login-dialog .form-submit,
+#user-register-form-dialog .form-submit,
+/* // */
+.user-login-dialog .user-fields .form-submit,
+.user-register-form-dialog .user-fields .form-submit,
+.user-pass-dialog .user-fields .form-submit {
+  float: left;
+  line-height: 1.4545em;
+  margin-bottom: 0;
+  margin-right: 0;
+  margin-top: 0;
+  padding: 4px 14px;
+  text-shadow: none;
+  width: auto;
+}
+.user-login-dialog .user-fields .form-submit:hover,
+.user-register-form-dialog .user-fields .form-submit:hover,
+.user-pass-dialog .user-fields .form-submit:hover {
+  text-shadow: none;
+}
+.user-login-dialog .user-fields .form-navigation-wrapper,
+.user-register-form-dialog .user-fields .form-navigation-wrapper,
+.user-pass-dialog .user-fields .form-navigation-wrapper {
+  margin-top: 0.75ex;
+  float: left;
+  font-weight: normal;
+}
+.user-login-dialog .user-fields > *:first-child,
+.user-register-form-dialog .user-fields > *:first-child,
+.user-pass-dialog .user-fields > *:first-child,
+.user-login-dialog .user-fields .form-item-name,
+.user-register-form-dialog .user-fields .form-item-name,
+.user-pass-dialog .user-fields .form-item-name {
+  margin-top: 0;
+}
+.user-login-dialog .user-fields > .form-actions,
+.user-register-form-dialog .user-fields > .form-actions,
+.user-pass-dialog .user-fields > .form-actions {
+  margin-bottom: 0;
+  margin-top: 1em;
+}
+.user-login-dialog .user-fields label > span.form-required,
+.user-register-form-dialog .user-fields label > span.form-required,
+.user-pass-dialog .user-fields label > span.form-required,
+/* This is a special case where the user has declined to link social accounts */
+.user-login-dialog #user-register-form-dialog .user-fields .description,
+.user-register-form-dialog .user-fields .description {
+  display: none;
+}
+
+/* @group Form items */
+
+/* @group Form item labels */
+
+.user-login-dialog .user-fields > .form-item:after,
+.user-register-form-dialog .user-fields > .form-item:after,
+.user-pass-dialog .user-fields > .form-item:after,
+.user-login-dialog .user-fields > .form-wrapper:after,
+.user-register-form-dialog .user-fields > .form-wrapper:after,
+.user-pass-dialog .user-fields > .form-wrapper:after,
+.user-login-dialog .user-fields > .form-wrapper .form-item:after,
+.user-register-form-dialog .user-fields > .form-wrapper .form-item:after,
+.user-pass-dialog .user-fields > .form-wrapper .form-item:after,
+.user-login-dialog .auth-methods:after,
+.user-register-form-dialog .auth-methods:after,
+.user-pass-dialog .auth-methods:after {
+  clear: both;
+  content: "x x x x x";
+  display: block;
+  height: 0;
+  visibility: hidden;
+  width: 100%;
+}
+.user-login-dialog .user-fields .form-item > label,
+.user-register-form-dialog .user-fields .form-item > label,
+.user-pass-dialog .user-fields .form-item > label,
+.user-login-dialog .user-fields .form-wrapper > legend,
+.user-register-form-dialog .user-fields .form-wrapper > legend,
+.user-pass-dialog .user-fields .form-wrapper > legend {
+  border-color: transparent;
+  border-style: solid;
+  border-width: 1px;
+  box-sizing: border-box;
+  display: block;
+  line-height: 1.5em;
+  min-height: 1.25em;
+  padding: 0;
+  width: 100%;
+}
+.user-login-dialog .user-fields .form-item > .description,
+.user-register-form-dialog .user-fields .form-item > .description,
+.user-pass-dialog .user-fields .form-item > .description {
+  margin-top: 3px;
+  position: relative;
+}
+
+/* @end */
+
+/* @group Form item inputs */
+
+.user-login-dialog .user-fields .form-item > label + *,
+.user-register-form-dialog .user-fields .form-item > label + *,
+.user-pass-dialog .user-fields .form-item > label + * {
+  -ms-box-sizing: border-box;
+  -moz-box-sizing: border-box;
+  -o-box-sizing: border-box;
+  -webkit-box-sizing: border-box;
+  box-sizing: border-box;
+}
+html.no-boxsizing .user-login-dialog .user-fields .form-type-textfield > label + *,
+html.no-boxsizing .user-register-form-dialog .user-fields .form-type-textfield > label + *,
+html.no-boxsizing .user-pass-dialog .user-fields .form-type-textfield > label + * {
+  height: 1.2em;
+}
+.user-login-dialog .user-fields .form-item > label + *,
+.user-register-form-dialog .user-fields .form-item > label + *,
+.user-pass-dialog .user-fields .form-item > label + *,
+.user-login-dialog .user-fields .form-wrapper > legend + *,
+.user-register-form-dialog .user-fields .form-wrapper > legend + *,
+.user-pass-dialog .user-fields .form-wrapper > legend + * {
+  margin: 0;
+  right: 1px;
+  position: absolute;
+  top: 0;
+}
+.user-login-dialog .user-fields .form-item > label + *,
+.user-login-dialog .user-fields .form-wrapper > legend + * {
+  width: 60%;
+}
+.user-login-dialog #user-register-form-dialog .user-fields .form-item > label + *,
+.user-login-dialog #user-register-form-dialog .user-fields .form-wrapper > legend + *,
+.user-register-form-dialog .user-fields .form-item > label + *,
+.user-register-form-dialog .user-fields .form-wrapper > legend + * {
+  width: 68%;
+}
+.user-pass-dialog .user-fields .form-item > label + *,
+.user-pass-dialog .user-fields .form-wrapper > legend + *  {
+  width: 50%;
+}
+.user-login-dialog .user-fields .form-item input,
+.user-register-form-dialog .user-fields .form-item input,
+.user-pass-dialog .user-fields .form-item input,
+.user-login-dialog .user-fields .form-item select,
+.user-register-form-dialog .user-fields .form-item select,
+.user-pass-dialog .user-fields .form-item select {
+  font-size: 12px;
+}
+.user-login-dialog .user-fields .form-item select,
+.user-register-form-dialog .user-fields .form-item select,
+.user-pass-dialog .user-fields .form-item select {
+  margin: 1px 0 0;
+}
+/* This is a special case where the user has declined to link social accounts */
+.user-login-dialog #user-register-form-dialog .user-fields .field-name-field-postal-code input,
+.user-register-form-dialog .user-fields .field-name-field-postal-code input {
+  right: 46%;
+  width: 22%;
+}
+
+/* @group Date */
+
+.user-login-dialog .user-fields .field-type-datetime .date-no-float,
+.user-register-form-dialog .user-fields .field-type-datetime .date-no-float,
+.user-login-dialog .user-fields .field-type-datetime .container-inline-date,
+.user-register-form-dialog .user-fields .field-type-datetime .container-inline-date {
+  clear: none;
+}
+.user-login-dialog .user-fields .field-type-datetime .date-no-float,
+.user-register-form-dialog .user-fields .field-type-datetime .date-no-float {
+  clear: none;
+  float: none;
+  width: auto;
+}
+.user-login-dialog .user-fields .field-type-datetime .form-type-date-select,
+.user-register-form-dialog .user-fields .field-type-datetime .form-type-date-select {
+  margin: 0;
+}
+.user-login-dialog .user-fields .container-inline-date .form-item input,
+.user-register-form-dialog .user-fields .container-inline-date .form-item input,
+.user-login-dialog .user-fields .container-inline-date .form-item select,
+.user-register-form-dialog .user-fields .container-inline-date .form-item select {
+  margin-right: 0;
+}
+.user-login-dialog .user-fields .container-inline-date > .form-item,
+.user-register-form-dialog .user-fields .container-inline-date > .form-item {
+  border: 0 none;
+  margin: 0;
+}
+.user-login-dialog .user-fields .container-inline-date .date-padding,
+.user-register-form-dialog .user-fields .container-inline-date .date-padding {
+  float: none;
+  padding: 0;
+}
+.user-login-dialog .user-fields .container-inline-date .form-item .form-item,
+.user-register-form-dialog .user-fields .container-inline-date .form-item .form-item {
+  padding: 0;
+}
+.user-login-dialog .field-name-field-birthdate .form-type-date-select,
+.user-register-form-dialog .field-name-field-birthdate .form-type-date-select {
+  position: relative;
+  width: 100%;
+}
+.user-login-dialog .field-name-field-birthdate .form-type-date-select .form-item + .form-item,
+.user-register-form-dialog .field-name-field-birthdate .form-type-date-select .form-item + .form-item {
+  margin-left: 3px;
+}
+.user-login-dialog .field-name-field-birthdate .form-type-date-select .form-item:nth-child(n),
+.user-register-form-dialog .field-name-field-birthdate .form-type-date-select .form-item:nth-child(n) {
+  margin-left: 0;
+  position: absolute;
+  width: 26%;
+}
+.user-login-dialog .field-name-field-birthdate .form-type-date-select .form-item:nth-child(n) select,
+.user-register-form-dialog .field-name-field-birthdate .form-type-date-select .form-item:nth-child(n) select {
+  width: 100%;
+}
+.user-login-dialog .field-name-field-birthdate .form-type-date-select .form-item:nth-child(1),
+.user-register-form-dialog .field-name-field-birthdate .form-type-date-select .form-item:nth-child(1) {
+  left: 0;
+  width: 35%;
+}
+.user-login-dialog .field-name-field-birthdate .form-type-date-select .form-item:nth-child(2),
+.user-register-form-dialog .field-name-field-birthdate .form-type-date-select .form-item:nth-child(2) {
+  right: 32.5%;
+}
+.user-login-dialog .field-name-field-birthdate .form-type-date-select .form-item:nth-child(3),
+.user-register-form-dialog .field-name-field-birthdate .form-type-date-select .form-item:nth-child(3) {
+  right: 0;
+}
+.user-login-dialog .field-name-field-birthdate .form-type-date-select .form-item:nth-child(2):before,
+.user-login-dialog .field-name-field-birthdate .form-type-date-select .form-item:nth-child(3):before,
+.user-register-form-dialog .field-name-field-birthdate .form-type-date-select .form-item:nth-child(2):before,
+.user-register-form-dialog .field-name-field-birthdate .form-type-date-select .form-item:nth-child(3):before {
+  content: '/';
+  left: -17%;
+  line-height: 2em;
+  position: absolute;
+  text-align: center;
+  top: -2px;
+  width: 7px;
+}
+
+/* @end */
+
+/* @group Errors */
+
+.user-login-dialog input.error,
+.user-register-form-dialog input.error,
+.user-pass-dialog input.error {
+  border: 2px solid red;
+}
+
+/* @end */
+
+/* @end */
+
+/* @group Form controls */
+
+.user-login-dialog .user-fields .form-submit,
+.user-register-form-dialog .user-fields .form-submit,
+.user-pass-dialog .user-fields .form-submit {
+  border: 0;
+  border-radius: 0;
+  cursor: pointer;
+  height: auto;
+  text-align: center;
+  width: auto;
+}
+
+/* @end */
+
+.user-login-dialog .tos-and-disclaimer,
+.user-register-form-dialog .tos-and-disclaimer {
+  color: inherit;
+  line-height: 1.2;
+  margin-top: 2em;
+  position: relative;
+  text-align: justify;
+}
+.user-register-form-dialog .tos-and-disclaimer {
+  left: 32%;
+  width: 68%;
+}
+/* This is a special case where the user has declined to link social accounts */
+.user-login-dialog .tos-and-disclaimer {
+  left: 32%;
+  width: 68%;
+}
+
+/* @end */
+
+/* @group RPX widget */
+
+.block .rpx-signin {
+  float: left;
+}
+.block .rpx-signin + * {
+  clear: left;
+}
+/* @end */
+
+/* @group IE */
+
+/* Deal with IE 7 fieldset legends. */
+
+.msie7 .user-login-dialog #field-birthdate-add-more-wrapper > fieldset,
+.msie7 .user-register-form-dialog #field-birthdate-add-more-wrapper > fieldset {
+  position: relative;
+}
+.msie7 .user-login-dialog #field-birthdate-add-more-wrapper > fieldset > legend,
+.msie7 .user-register-form-dialog #field-birthdate-add-more-wrapper > fieldset > legend {
+  position: absolute;
+  left: -7px;
+}
+/* Space the birthday select boxes in IE7 */
+.msie7 .user-login-dialog .field-name-field-birthdate .form-type-date-select .form-item-field-birthdate-und-0-value-day,
+.msie7 .user-login-dialog .field-name-field-birthdate .form-type-date-select .form-item-field-birthdate-und-0-value-year,
+.msie7 .user-register-form-dialog .field-name-field-birthdate .form-type-date-select .form-item-field-birthdate-und-0-value-day,
+.msie7 .user-register-form-dialog .field-name-field-birthdate .form-type-date-select .form-item-field-birthdate-und-0-value-year {
+  margin-left: 1em;
+}
+
+/* Add line-height to the rpx or */
+.msie7 .user-login-dialog .rpx-or,
+.msie7 .user-login-dialog .rpx-or > span,
+.msie7 .user-register-form-dialog .rpx-or,
+.msie7 .user-register-form-dialog .rpx-or > span {
+  line-height: 1;
+}
+
+/* Color inherit doesn't work in IE7 */
+.msie7 .user-login-dialog .tos-and-disclaimer,
+.msie7 .user-register-form-dialog .tos-and-disclaimer {
+  color: black;
+}
+
+/* @end */

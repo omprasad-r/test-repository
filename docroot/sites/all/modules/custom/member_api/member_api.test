@@ -1,0 +1,338 @@
+<?php
+
+/**
+ * @file
+ * Tests for the Member API.
+ */
+
+class MemberAPITestV1 extends DrupalWebTestCase {
+  protected $version = 'v1';
+
+  public static function getInfo() {
+    return array(
+      'name' => t('Member API tests v1'),
+      'description' => t('Tests that the Member API functions correctly.'),
+      'group' => t('Member API'),
+    );
+  }
+
+  function setUp() {
+    $modules = array('member_api');
+    parent::setUp($modules);
+
+    // Create an administrative user with API permissions.
+    $this->apiUser = $this->drupalCreateUser(array('administer users', 'access user profiles', 'administer permissions', 'change own username'));
+
+    // Create some test users.
+    $this->userA = $this->drupalCreateUser();
+    $this->userB = $this->drupalCreateUser();
+
+    // Assign an API key and secret to the user with API permissions.
+    $options = array(
+      'callback_url' => 'oob', // Stands for "out of band".
+      'uid' => $this->apiUser->uid,
+      'provider_consumer' => TRUE,
+      'in_database' => TRUE,
+      'context' => 'memberapi',
+    );
+    $this->consumer = new DrupalOAuthConsumer(user_password(32), user_password(32), $options);
+    $this->consumer->write();
+
+    $this->signatureMethod = new OAuthSignatureMethod_HMAC('SHA1');
+  }
+
+  /**
+   * Test that the index endpoint successfully lists users.
+   */
+  function testIndex() {
+    $path = "memberapi/{$this->version}/user.json";
+    $result = json_decode($this->servicesGet($path));
+    $expected = array(
+      $this->userA->uid => $this->userA,
+      $this->userB->uid => $this->userB,
+      $this->apiUser->uid => $this->apiUser,
+    );
+    // Make sure we don't have any unexpected data.
+    foreach ($result as $data) {
+      $uid = $data->uid;
+      // There is some weirdness with user 1 in a simpletest context, so don't
+      // get too picky about what data we expect to find.
+      if ($uid > 1) {
+        $this->assertEqual($expected[$uid]->name, $data->name, "Correctly retrieved data for user $uid.");
+        unset($expected[$uid]);
+      }
+    }
+    // Make sure we retrieved data on all three users we expected to find.
+    $this->assert(empty($expected), "Retrieved data on all known users.");
+  }
+
+  /**
+   * Test that the retrieve endpoint correctly retrieves individual user data.
+   */
+  function testRetrieve() {
+    $path = "memberapi/{$this->version}/user/{$this->userA->uid}.json";
+    $result = json_decode($this->servicesGet($path));
+    $this->assertEqual($this->userA->uid, $result->uid, 'Retrieved record for user A.');
+    $this->assert(empty($result->pass), 'API did not return user password.');
+    $this->assertEqual($result->name, $this->userA->name, 'Retrieved correct username for user A.');
+    $userA = user_load($this->userA->uid);
+    $this->assertLooselyEqual($result->roles, $userA->roles, 'Retrieved correct roles for user A.');
+  }
+
+  /**
+   * Test that we can create a new user and get back the new user's info.
+   */
+  function testCreate() {
+    $data = array('name' => 'userC', 'mail' => 'userc@example.com', 'pass' => 'thepasswordbelongingtouserc');
+    $path = "memberapi/{$this->version}/user.json";
+    $result = json_decode($this->servicesPost($path, $data));
+    $this->assert($result->uid > 1, 'A valid uid was returned.');
+    // Make sure the user now exists on the system.
+    $account = user_load_by_name($data['name']);
+    $this->assert($account->uid == $result->uid && $account->uid > 1, 'User C was added to the site.');
+  }
+
+  /**
+   * Test that we can update information for an existing user.
+   */
+  function testUpdate() {
+    $data = array(
+      'name' => 'newUserA',
+      'mail' => 'userA@example.com',
+      'pass' => 'thepasswordbelongingtoUserA',
+    );
+    $path = "memberapi/{$this->version}/user/{$this->userA->uid}.json";
+    $result = json_decode($this->servicesPut($path, $data));
+    $userA = user_load($this->userA->uid);
+    // Make sure the correct name and email were returned and are reflected in
+    // the database.
+    $this->assert(($result->name == $userA->name && $userA->name == $data['name']), 'Successfully updated username.');
+    $this->assert(($result->mail == $userA->mail && $userA->mail == $data['mail']), 'Successfully updated email.');
+    // Make sure the password was updated correctly.
+    require_once DRUPAL_ROOT . '/' . variable_get('password_inc', 'includes/password.inc');
+    $this->assert($result->pass == $data['pass'] && user_check_password($result->pass, $userA), 'Successfully updated password.');
+  }
+
+  /**
+   * Test that we can delete an existing user.
+   */
+  function testDelete() {
+    // Delete user B.
+    $path = "memberapi/{$this->version}/user/{$this->userB->uid}.json";
+    $result = json_decode($this->servicesDelete($path));
+    $this->assert($result === TRUE, 'The API reports the user was successfully deleted.');
+    $userB = user_load($this->userB->uid);
+    $this->assertFalse($userB, 'The user was successfully deleted.');
+  }
+
+  /**
+   * Test that we can block and unblock a user.
+   */
+  function testBlock() {
+    $userA = user_load($this->userA->uid);
+    $this->assertTrue(intval($userA->status), 'User A is not blocked.');
+    // Block user A.
+    $data = array(
+      'status' => 0,
+    );
+    $path = "memberapi/{$this->version}/user/{$this->userA->uid}.json";
+    $result = json_decode($this->servicesPut($path, $data));
+    $userA = user_load($this->userA->uid, TRUE);
+    $this->assertFalse(intval($userA->status), 'User A was successfully blocked.');
+    $this->drupalGet('user');
+    // Unblock user A.
+    $data = array(
+      'status' => 1,
+    );
+    $path = "memberapi/{$this->version}/user/{$this->userA->uid}.json";
+    $result = json_decode($this->servicesPut($path, $data));
+    $userA = user_load($this->userA->uid, TRUE);
+    $this->assertTrue(intval($userA->status), 'User A was successfully unblocked.');
+  }
+
+  /**
+   * Test that the API correctly lists all user roles.
+   */
+  function testRoleIndex() {
+    $path = "memberapi/{$this->version}/roles.json";
+    $result = json_decode($this->servicesGet($path));
+    $this->assertLooselyEqual($result, user_roles(), 'API correctly retrieved a list of user roles.');
+  }
+
+  /**
+   * Test that the API correctly lists roles for a given user.
+   */
+  function testRoleRetrieve() {
+    $path = "memberapi/{$this->version}/roles/{$this->userA->uid}.json";
+    $result = json_decode($this->servicesGet($path));
+    // Compare the retrieved roles with the user's actual roles.
+    $userA = user_load($this->userA->uid);
+    $this->assertLooselyEqual($result->roles, $userA->roles, 'API correctly returned roles for a given user.');
+  }
+
+  /**
+   * Add roles to a user and remove them.
+   */
+  function testRoleUpdate() {
+    // Determine which role ID corresponds to the "administrator" role.
+    $admin_role = variable_get('user_admin_role');
+    $userB = user_load($this->userB->uid);
+    $roles = drupal_map_assoc(array_keys($userB->roles));
+    $roles[$admin_role] = $admin_role;
+
+    // Assign user B the administrator role.
+    $data = array('roles' => implode(',', $roles));
+    $path = "memberapi/{$this->version}/roles/{$this->userB->uid}.json";
+    $result = json_decode($this->servicesPut($path, $data));
+    // Verify that user B now has the administrator role.
+    $userB = user_load($this->userB->uid, TRUE);
+    $this->assert(!empty($userB->roles[$admin_role]), 'Successfully assigned the administrator role to user B.');
+
+    // Remove the administrator role from user B.
+    unset($roles[$admin_role]);
+    $data = array('roles' => implode(',', $roles));
+    $result = json_decode($this->servicesPut($path, $data));
+    // Verify that user B no longer has the administrator role.
+    $userB = user_load($this->userB->uid, TRUE);
+    $this->assert(empty($userB->roles[$admin_role]), 'Successfully removed the administrator role from user B.');
+  }
+
+  /**
+   * Check to see if two arrays are loosely equal to each other.
+   *
+   * json_decode() converts integer keys to strings, so we need a way to compare
+   * array(1 => 'a', 2 => 'b') with array('1' => 'a', '2' => 'b).
+   */
+  function assertLooselyEqual($a, $b, $message = '', $group = 'Other') {
+    if (!is_array($a) && !is_object($a)) {
+      $result = $a == $b;
+    }
+    else {
+      $a_copy = (array) $a;
+      $b_copy = (array) $b;
+      // Assume equality until proven otherwise.
+      $result = TRUE;
+      // TODO: Factor into a helper and recurse, if comparing deeper arrays.
+      foreach ($a_copy as $k => $v) {
+        $k_integer = (int) $k;
+        $k_string = (string) $k;
+        if (isset($b_copy[$k_integer])) {
+          $result = $result && ($v == $b_copy[$k_integer]);
+          unset($b_copy[$k_integer]);
+        }
+        elseif (isset($b_copy[$k_string])) {
+          $result = $result && ($v == $b_copy[$k_string]);
+          unset($b_copy[$k_string]);
+        }
+        else {
+          $result = FALSE;
+          break;
+        }
+      }
+      // There should be nothing left in $b_copy at this point.
+      $result = $result && (empty($b_copy));
+    }
+    $this->assertTrue($result, $message ? $message : t('@a and @b are loosely equal.', array('@a' => var_export($a, TRUE), '@b' => var_export($b, TRUE))), $group);
+  }
+
+  /**
+   * Helper function for making a GET request.
+   */
+  function servicesGet($path) {
+    $request = OAuthRequest::from_consumer_and_token($this->consumer, NULL, 'GET', $this->getAbsoluteUrl($path), NULL);
+    $request->sign_request($this->signatureMethod, $this->consumer, NULL);
+    $requestURL = $request->to_url();
+
+    $out = $this->curlExec(array(
+      CURLOPT_HTTPGET => TRUE,
+      CURLOPT_URL => $requestURL,
+      CURLOPT_NOBODY => FALSE,
+      CURLOPT_HTTPHEADER => array(),
+    ));
+    // Ensure that any changes to variables in the other thread are picked up.
+    $this->refreshVariables();
+    if (!strpos($this->headers[0], ' 200 ')) {
+      debug($this->headers);
+    }
+    $this->verbose('<pre>' . $out . '</pre>');
+    return $out;
+  }
+
+  /**
+   * Helper function for making a POST request.
+   *
+   * @param $path
+   *   The path to be requested, relative to the Drupal root.
+   * @param $data
+   *   An array of POST data, appropriate for http_build_query().
+   * @param $options
+   *   Optional. An associative array of cURL options.
+   * @return
+   *   The result of the cURL request.
+   */
+  function servicesPost($path, $data, $options = array()) {
+    $request = OAuthRequest::from_consumer_and_token($this->consumer, NULL, 'POST', $this->getAbsoluteUrl($path), $data);
+    $request->sign_request($this->signatureMethod, $this->consumer, NULL);
+
+    $defaults = array(
+      CURLOPT_URL => $request->to_url(),
+      CURLOPT_POST => TRUE,
+      CURLOPT_POSTFIELDS => http_build_query($request->get_parameters(), '', '&'),
+    );
+    $options = $defaults + $options;
+    $out = $this->curlExec($options);
+    if (!strpos($this->headers[0], ' 200 ')) {
+      debug($this->headers);
+    }
+    // Ensure that any changes to variables in the other thread are picked up.
+    $this->refreshVariables();
+    $this->verbose('<pre>' . $out . '</pre>');
+    return $out;
+  }
+
+  function servicesPut($path, $data) {
+    $request = OAuthRequest::from_consumer_and_token($this->consumer, NULL, 'PUT', $this->getAbsoluteUrl($path), $data);
+    $request->sign_request($this->signatureMethod, $this->consumer, NULL);
+    $options = array(
+      CURLOPT_CUSTOMREQUEST => 'PUT',
+      CURLOPT_URL => $request->to_url(),
+      CURLOPT_POST => FALSE,
+      CURLOPT_POSTFIELDS => http_build_query($request->get_parameters(), '', '&'),
+    );
+    $out = $this->curlExec($options);
+    if (!strpos($this->headers[0], ' 200 ')) {
+      debug($this->headers);
+    }
+    // Ensure that any changes to variables in the other thread are picked up.
+    $this->refreshVariables();
+    $this->verbose('<pre>' . $out . '</pre>');
+    return $out;
+  }
+  /**
+   * Helper function for making a DELETE request.
+   *
+   * @param $path
+   *   The path to be requested, relative to the Drupal root.
+   * @return
+   *   The result of the cURL request.
+   */
+  function servicesDelete($path) {
+    $request = OAuthRequest::from_consumer_and_token($this->consumer, NULL, 'DELETE', $this->getAbsoluteUrl($path), NULL);
+    $request->sign_request($this->signatureMethod, $this->consumer, NULL);
+    $requestURL = $request->to_url();
+
+    $out = $this->curlExec(array(
+      CURLOPT_CUSTOMREQUEST => 'DELETE',
+      CURLOPT_URL => $requestURL,
+      CURLOPT_NOBODY => FALSE,
+      CURLOPT_HTTPHEADER => array(),
+    ));
+    // Ensure that any changes to variables in the other thread are picked up.
+    $this->refreshVariables();
+    if (!strpos($this->headers[0], ' 200 ')) {
+      debug($this->headers);
+    }
+    $this->verbose('<pre>' . $out . '</pre>');
+    return $out;
+  }
+}

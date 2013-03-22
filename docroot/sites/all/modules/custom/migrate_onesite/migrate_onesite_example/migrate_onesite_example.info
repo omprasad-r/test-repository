@@ -1,0 +1,12 @@
+name = "Example Migration from OneSite"
+description = "Example Migration from OneSite"
+package = "Development"
+core = 7.x
+hidden = TRUE
+
+dependencies[] = migrate_onesite
+
+files[] = migrate_onesite_example.migrate.inc
+files[] = blog_post.inc
+files[] = photo.inc
+files[] = user.inc

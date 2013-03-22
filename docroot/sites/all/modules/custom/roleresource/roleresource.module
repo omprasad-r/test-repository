@@ -1,0 +1,59 @@
+<?php
+// $Id$
+
+/**
+ * Implementation of hook_services_resources().
+ */
+function roleresource_services_resources() {
+  return array(
+   'roles' => array(
+     'index' => array(
+       'help' => 'Lists all user roles',
+       'file' => array('file' => 'inc', 'module' => 'roleresource'),
+       'callback' => '_roleresource_index',
+       'access callback' => 'user_access',
+       'access arguments' => array('administer permissions'),
+       'args' => array(),
+     ),
+     'retrieve' => array(
+       'help' => 'Retrieves roles for a given user',
+       'file' => array('file' => 'inc', 'module' => 'roleresource'),
+       'callback' => '_roleresource_retrieve',
+       'access callback' => 'user_access',
+       'access arguments' => array('administer permissions'),
+       'args' => array(
+         array(
+           'name' => 'uid',
+           'type' => 'int',
+           'description' => 'The uid of the user to retrieve roles for',
+           'source' => array('path' => '0'),
+           'optional' => FALSE,
+         ),
+       ),
+     ),
+     'update' => array(
+       'help' => 'Updates user roles',
+       'file' => array('file' => 'inc', 'module' => 'roleresource'),
+       'callback' => '_roleresource_update',
+       'access callback' => 'user_access',
+       'access arguments' => array('administer users'),
+       'args' => array(
+         array(
+           'name' => 'id',
+           'type' => 'int',
+           'description' => 'The uid of the user to update roles for',
+           'source' => array('path' => '0'),
+           'optional' => FALSE,
+         ),
+         array(
+           'name' => 'roles',
+           'type' => 'struct',
+           'description' => 'The user\'s roles',
+           'source' => 'data',
+           'optional' => FALSE,
+         ),
+       ),
+     ),
+   ),
+  );
+}

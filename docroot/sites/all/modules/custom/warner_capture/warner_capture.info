@@ -1,0 +1,4 @@
+name = Janrain Capture for Warner
+description = Warner-specific integration with the Janrain Capture module.
+core = 7.x
+dependencies[] = entity

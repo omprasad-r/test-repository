@@ -1,0 +1,62 @@
+<?php
+
+/**
+ * Implements hook_schema
+ */
+function bulk_email_schema() {
+  $schema['bulk_email'] = array(
+    'description' => 'Temporary table used for bulk mailing users of a site.',
+    'fields' => array(
+      'uid' => array(
+        'type' => 'int',
+        'not null' => TRUE,
+        'default' => 0,
+        'description' => "User's {users}.uid.",
+      ),
+      'access' => array(
+        'type' => 'int',
+        'not null' => TRUE,
+        'default' => 0,
+        'description' => "Access mask.",
+      ),
+    ),
+    'primary key' => array('uid'),
+  );
+  return $schema;
+}
+
+/**
+ * Implements hook_install
+ */
+function bulk_email_install() {
+  variable_set('bulk_email_batch', 100);
+  variable_set('bulk_email_counter', 1);
+}
+
+/**
+ * Implements hook_uninstall
+ */
+function bulk_email_uninstall() {
+  variable_del('bulk_email_batch');
+  variable_del('bulk_email_subject');
+  variable_del('bulk_email_body');
+  variable_del('bulk_email_counter');
+  variable_del('bulk_email_batch_status');
+}
+
+/**
+ * Add the access field that is used for controlling access when sending email
+ * with multiple threads.
+ */
+function bulk_email_update_11113() {
+  $table = 'bulk_email';
+  $schema = bulk_email_schema();
+  if (!db_table_exists($table)) {
+    db_create_table($table, $schema[$table]);
+  }
+  else {
+    if (!db_field_exists($table, 'access')) {
+      db_add_field($table, 'access', $schema[$table]['fields']['access']);
+    }
+  }
+}

@@ -1,0 +1,25 @@
+.fieldset-wrapper .form-type-textfield {
+  margin-left: 1.3em;
+  padding-top: 2px;
+}
+
+.fieldset-wrapper .form-type-checkbox {
+  margin: 8px 0 0 0;
+}
+
+.author-rewards,
+.user-rewards {
+  width: 49%;
+  float: left;
+  max-width: 410px;
+}
+
+.author-rewards {
+  margin-right: 2%;
+}
+
+.author-rewards > span,
+.user-rewards > span {
+  display: block;
+  font-weight: bold;
+}

@@ -1,0 +1,16 @@
+name = "Warner Migration from Ning"
+description = "Warner Migration from Ning"
+package = "Import/Export"
+core = 7.x
+
+dependencies[] = migrate_ning
+
+files[] = migrate_ning_warner.migrate.inc
+files[] = blog.inc
+files[] = discussion.inc
+files[] = event.inc
+files[] = group.inc
+files[] = member.inc
+files[] = page.inc
+files[] = photo.inc
+files[] = video.inc

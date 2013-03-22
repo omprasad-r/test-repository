@@ -1,0 +1,14 @@
+name = "Warner Migration from OneSite"
+description = "Warner Migration from OneSite"
+package = "Development"
+core = 7.x
+
+dependencies[] = migrate_onesite
+
+files[] = migrate_diggy.migrate.inc
+files[] = blog_post.inc
+files[] = forums.inc
+files[] = forum_thread.inc
+files[] = photo.inc
+files[] = user.inc
+files[] = video.inc

@@ -1,0 +1,13 @@
+#user-profile-form #edit-block,
+#user-profile-form #edit-overlay-control,
+#user-profile-form #edit-contact,
+#user-profile-form #edit-timezone,
+#user-profile-form #edit-field-type,
+#user-profile-form #edit-field-usage-type,
+#user-profile-form #edit-field-eos-id,
+#user-profile-form #edit-field-site-id,
+#user-profile-form #edit-field-profile-updated,
+#user-profile-form #edit-field-birthdate,
+#user-profile-form #edit-redirect {
+  display: none;
+}

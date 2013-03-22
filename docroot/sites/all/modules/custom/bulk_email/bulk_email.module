@@ -1,0 +1,409 @@
+<?php
+
+/**
+ * @file
+ * Bulk email allows administrators to batch send emails to all users
+ */
+
+/**
+ * HTTP Response codes
+ * - Batch Complete   -> 200 Ok
+ * - Queue Finished   -> 410 Gone
+ * - Invalid Key      -> 401 Unauthorized
+ * - DB Error         -> 400 Bad Request
+ */
+
+/**
+ * Implememtation of hook_menu
+ */
+function bulk_email_menu() {
+  $items = array();
+
+  $items['admin/config/people/bulk_email'] = array(
+    'title' => 'Bulk mail',
+    'description' => t('Configure post-migration user notification e-mail'),
+    'type' => MENU_NORMAL_ITEM,
+    'page callback' => 'drupal_get_form',
+    'page arguments' => array('bulk_email_admin_form'),
+    'access arguments' => array('administer users'),
+  );
+
+  // path for executing the batch process..
+  $items['bulk-email-process'] = array(
+    'type' => MENU_CALLBACK,
+    'page callback' => '_bulk_email_batch_processor',
+    'access callback' => TRUE,
+  );
+
+  return $items;
+}
+
+/**
+ * Implements hook_menu_alter
+ */
+function bulk_email_menu_alter(&$items) {
+  $items['user/reset/%/%/%']['page arguments'] = array('bulk_email_user_pass_reset', 2, 3, 4);
+}
+
+/**
+ * Implements hook_enable
+ */
+function bulk_email_enable() {
+  $configuration = variable_get('mail_system', array('default-system' => 'DefaultMailSystem'));
+  // TODO: enable the following to use third party mail system
+  // $configuration['bulk_email'] = 'BulkMailSystem';
+  // variable_set('mail_system', $configuration);
+}
+
+/**
+ * Implements hook_disable
+ */
+function bulk_email_disable() {
+  $configuration = variable_get('mail_system', array('default-system' => 'DefaultMailSystem'));
+  if (isset($configuration['bulk_email'])) {
+    unset($configuration['bulk_email']);
+    variable_set('mail_system', $configuration);
+  }
+}
+
+/**
+ * Callback: Batch processing callback
+ */
+function _bulk_email_batch_processor() {
+  // Do not cache this page; it is called anonymously.
+  $GLOBALS['conf']['cache'] = FALSE;
+  $tid = 1;
+  $log = FALSE;
+  $log_file = '/tmp/bulk_email.txt';
+  $dry_run = FALSE;
+
+  if (empty($_GET['tid'])) {
+    drupal_add_http_header("Status", "400 Bad Request");
+    echo "400 Bad Request";
+    exit;
+  }
+  if (!is_numeric($_GET['tid'])) {
+    drupal_add_http_header("Status", "400 Bad Request");
+    echo "400 Bad Request";
+    exit;
+  }
+  $tid = (int)$_GET['tid'];
+  if ($tid <= 0) {
+    drupal_add_http_header("Status", "400 Bad Request");
+    echo "400 Bad Request";
+    exit;
+  }
+  // Make sure the id makes sense - it can't have more than one bit set.
+  $l = log($tid) / log(2);
+  if ($l != (int)$l) {
+    // There is only one bit set if the log base 2 of the number is an
+    // integer.  In this case that isn't true, meaning this thread id is not
+    // an appropriate mask value.
+    drupal_add_http_header("Status", "400 Bad Request");
+    echo "400 Bad Request";
+    exit;
+  }
+
+  if (!empty($_GET['log'])) {
+    if (strtolower(trim($_GET['log'])) == 'true') {
+      $log = TRUE;
+      $hostname = bulk_email_get_hostname();
+    }
+  }
+
+  if (!empty($_GET['dry-run'])) {
+    if (strtolower(trim($_GET['dry-run'])) == 'true') {
+      $dry_run = TRUE;
+    }
+  }
+
+  // Check if we have a valid cron key and act accordingly
+  if (empty($_GET['cron_key']) || variable_get('cron_key', 'drupal') != $_GET['cron_key']) {
+    watchdog('bulk_email', 'Bulk email could not run because an invalid key was used.', array(), WATCHDOG_ERROR);
+    drupal_add_http_header("Status", "401 Unauthorized");
+    echo "401 Unauthorized";
+  }
+  elseif (variable_get('maintenance_mode', 0)) {
+    watchdog('bulk_email', 'Bulk email could not be run because the site is in maintenance .', array(), WATCHDOG_NOTICE);
+    drupal_add_http_header("Status", "404 Not Found");
+    echo "404 Not Found";
+  }
+  else { // We have a valid key and we can proceed processing
+    $batch_size = variable_get('bulk_email_batch', 100);
+
+    // Try connecting to the database and getting values from the
+    // specified table. If unable to connect set status and exit
+    try {
+      // First mark and reserve uids for this thread to operate on.
+      // This is atomic, guaranteeing no duplicate mails get sent if
+      // this is being done with multiple processes simultaneously.
+      db_query("UPDATE {bulk_email} SET access = access | :tid WHERE access = 0 LIMIT $batch_size", array(':tid' => $tid));
+
+      // Now grab the uids marked for this process.
+      $result = db_query("SELECT uid, access FROM {bulk_email} WHERE access & :tid > 0 LIMIT $batch_size", array(':tid' => $tid));
+    }
+    catch (Exception $e) {
+      watchdog('bulk_email', 'Bulk email could not be run because the there was a problem connecting to the database.', array(), WATCHDOG_ERROR);
+      drupal_add_http_header("Status", "400 Bad Request");
+      echo "400 Bad Request";
+      exit;
+    }
+    // Populate the UIDs from the database results into an array
+    $uids = array();
+    while($record = $result->fetchAssoc()) {
+      if ($record['access'] > ($tid * 2) - 1) {
+        // This is a simple scheme for mitigating conflicts.  There
+        // are two or more threads identified in the access mask.
+        // Allow only the highest responsible thread to continue
+        // processing this uid.
+        continue;
+      }
+      $uids[] = $record['uid'];
+    }
+
+    if (count($uids)) {
+      // An array of user objects, indexed by uid.
+      $users = user_load_multiple($uids);
+      foreach ($users as $uid => $user_obj) {
+        if (!$dry_run) {
+          drupal_mail('bulk_email', 'reset', $user_obj->mail, user_preferred_language($user_obj), array('account' => $user_obj));
+        }
+        if ($log) {
+          $log_message = sprintf("%s tid:%s web:%s\n", $uid, $tid, $hostname);
+          @file_put_contents($log_file, $log_message, FILE_APPEND);
+        }
+        // Remove the user from the queue
+        db_delete('bulk_email')->condition('uid', $uid)->execute();
+      }
+      // Send a batch status email
+      $count = variable_get('bulk_email_counter');
+      $site_name = variable_get('site_name');
+      $site_mail = variable_get('site_mail');
+      global $language;
+      if (!$dry_run) {
+        drupal_mail('bulk_email', 'counter', $site_mail, $language, array('counter' => $count, 'site_name' => $site_name));
+        variable_set('bulk_email_counter', $count + 1);
+        watchdog('bulk_email', "Batch #$count has completed successfully", array(), WATCHDOG_NOTICE);
+      }
+      drupal_add_http_header("Status", "200 OK");
+      echo "200 OK";
+    }
+    else {
+      drupal_add_http_header("Status", "410 Gone");
+      echo "410 Gone";
+    }
+  }
+}
+
+function bulk_email_get_hostname() {
+  $path = '/tmp/hostname_base.txt';
+  $hostname = @file_get_contents($path);
+  if (empty($hostname)) {
+    // Fall back to making a new shell exec.
+    $hostname_full = trim(shell_exec("hostname"));
+    $hostname = explode('.', $hostname_full);
+    $hostname = $hostname[0];
+    @file_put_contents($path, $hostname);
+  }
+  return $hostname;
+}
+
+// Implements hook_mail
+function bulk_email_mail($key, &$message, $params) {
+  // send the bulk email
+  if ($key == 'reset') {
+    $language = $message['language'];
+    $variables = array('user' => $params['account']);
+    $variable_subject = variable_get('bulk_email_subject', bulk_email_default_text('subject'));
+    $variable_body = variable_get('bulk_email_body', bulk_email_default_text('body'));
+    $token_options = array(
+      'language' => $language,
+      'callback' => 'user_mail_tokens',
+      'sanitize' => FALSE
+    );
+    $message['subject'] .= token_replace($variable_subject, $variables, $token_options);
+    $message['body'][] = token_replace($variable_body, $variables, $token_options);
+  }
+  // send a batch status email
+  if ($key == 'counter') {
+    $message['subject'] .= t('Batch !value has completed for !sitename', array('!value' => $params['counter'], '!sitename' => $params['site_name']));
+    $message['body'][] = t('Batch !value has completed for !sitename', array('!value' => $params['counter'], '!sitename' => $params['site_name']));
+  }
+
+}
+
+/**
+ * Administration form for bulk_email
+ */
+function bulk_email_admin_form($form_state) {
+  $form = array();
+
+  $form['bulk_email_batch'] = array(
+    '#type' => 'textfield',
+    '#default_value' => variable_get('bulk_email_batch', 100),
+    '#title' => t('Batch size'),
+    '#required' => TRUE,
+    '#description' => t('The number of e-mails sent per batch.'),
+  );
+
+  $form['bulk_email_subject'] = array(
+    '#type' => 'textfield',
+    '#title' => t('Subject'),
+    '#description' => t('The subject of the e-mail which will be sent to a user.'),
+    '#size' => 40,
+    '#default_value' => variable_get('bulk_email_subject', bulk_email_default_text('subject')),
+    '#maxlength' => 120,
+    '#required' => TRUE,
+  );
+
+  $email_token_help = t('Available variables are: [site:name], [site:url], [user:name], [user:mail], [site:login-url], [site:url-brief], [user:edit-url], [user:one-time-login-url], [user:cancel-url].');
+
+  $form['bulk_email_body'] = array(
+    '#type' => 'textarea',
+    '#title' => t('Body'),
+    '#default_value' => variable_get('bulk_email_body', bulk_email_default_text('body')),
+    '#rows' => 8,
+    '#required' => TRUE,
+    '#description' => t('The body text of the e-mail which will be sent to a user.') . ' ' . $email_token_help,
+  );
+
+  $form['submit'] = array('#type' => 'submit', '#value' => t('Save settings'));
+
+  return $form;
+}
+
+/**
+ * Form validation handler for bulk_email_admin_form
+ */
+function bulk_email_admin_form_validate($form, $form_state) {
+  $batch = $form_state['values']['bulk_email_batch'];
+
+  if(!((int)$batch == $batch && (int)$batch > 0)) {
+    form_set_error('bulk_email_batch', 'Batch size must be an integer larger than 0.');
+  }
+}
+
+/**
+ * Form submit handler for bulk_email_admin_form
+ */
+function bulk_email_admin_form_submit($form, $form_state) {
+  // Set our variables in the database
+  variable_set('bulk_email_batch', $form_state['values']['bulk_email_batch']);
+  variable_set('bulk_email_subject', $form_state['values']['bulk_email_subject']);
+  variable_set('bulk_email_body', $form_state['values']['bulk_email_body']);
+
+  switch ($form_state['values']['op']) {
+    case 'Save settings':
+      drupal_set_message(t('Your settings have been saved'));
+      break;
+  }
+}
+
+/**
+ * Custom Menu callback; process one time login link and redirects to the user page on success.
+ * modified to generate a new login link if the old one has expired.
+ */
+function bulk_email_user_pass_reset($form, &$form_state, $uid, $timestamp, $hashed_pass, $action = NULL) {
+  global $user;
+
+  // When processing the one-time login link, we have to make sure that a user
+  // isn't already logged in.
+  if ($user->uid) {
+    // The existing user is already logged in.
+    if ($user->uid == $uid) {
+      drupal_set_message(t('You are logged in as %user. <a href="!user_edit">Change your password.</a>', array('%user' => $user->name, '!user_edit' => url("user/$user->uid/edit"))));
+    }
+    // A different user is already logged in on the computer.
+    else {
+      $reset_link_account = user_load($uid);
+      if (!empty($reset_link_account)) {
+        drupal_set_message(t('Another user (%other_user) is already logged into the site on this computer, but you tried to use a one-time link for user %resetting_user. Please <a href="!logout">logout</a> and try using the link again.',
+          array('%other_user' => $user->name, '%resetting_user' => $reset_link_account->name, '!logout' => url('user/logout'))));
+      }
+      else {
+        // Invalid one-time link specifies an unknown user.
+        drupal_set_message(t('The one-time login link you clicked is invalid.'));
+      }
+    }
+    drupal_goto();
+  }
+  else {
+    // Time out, in seconds, until login URL expires. 24 hours = 86400 seconds.
+    $timeout = 86400;
+    $current = REQUEST_TIME;
+    // Some redundant checks for extra security ?
+    $users = user_load_multiple(array($uid), array('status' => '1'));
+    if ($timestamp <= $current && $account = reset($users)) {
+      // No time out for first time login.
+      if ($account->login && $current - $timestamp > $timeout) {
+        // CUSTOM: This section has been modified from the version in user.module to
+        // create and send a new email if the link has expired.
+        $user_obj = user_load($uid);
+        // Generate and send a new email link
+        $message = drupal_mail('bulk_email', 'reset', $user_obj->mail, user_preferred_language($user_obj), array('account' => $user_obj), NULL, TRUE);
+        // Set a message for the user
+        drupal_set_message(t('You have tried to use a one-time login link that has expired. A new link has been created and e-mailed to you. Please check your e-mail and use the new link to access the site.'));
+        drupal_goto(''); // Go to the homepage
+      }
+      elseif ($account->uid && $timestamp >= $account->login && $timestamp <= $current && $hashed_pass == user_pass_rehash($account->pass, $timestamp, $account->login)) {
+        // First stage is a confirmation form, then login
+        if ($action == 'login') {
+          watchdog('user', 'User %name used one-time login link at time %timestamp.', array('%name' => $account->name, '%timestamp' => $timestamp));
+          // Set the new user.
+          $user = $account;
+          // user_login_finalize() also updates the login timestamp of the
+          // user, which invalidates further use of the one-time login link.
+          user_login_finalize();
+          drupal_set_message(t('You have just used your one-time login link. It is no longer necessary to use this link to log in. Please change your password.'));
+          // Let the user's password be changed without the current password check.
+          $token = drupal_hash_base64(drupal_random_bytes(55));
+          $_SESSION['pass_reset_' . $user->uid] = $token;
+          drupal_goto('user/' . $user->uid . '/edit', array('query' => array('pass-reset-token' => $token)));
+        }
+        else {
+          $form['message'] = array('#markup' => t('<p>This is a one-time login for %user_name and will expire on %expiration_date.</p><p>Click on this button to log in to the site and change your password.</p>', array('%user_name' => $account->name, '%expiration_date' => format_date($timestamp + $timeout))));
+          $form['help'] = array('#markup' => '<p>' . t('This login can be used only once.') . '</p>');
+          $form['actions'] = array('#type' => 'actions');
+          $form['actions']['submit'] = array('#type' => 'submit', '#value' => t('Log in'));
+          $form['#action'] = url("user/reset/$uid/$timestamp/$hashed_pass/login");
+          return $form;
+        }
+      }
+      else {
+        drupal_set_message(t('You have tried to use a one-time login link that has either been used or is no longer valid. Please request a new one using the form below.'));
+        drupal_goto('user/password');
+      }
+    }
+    else {
+      // Deny access, no more clues.
+      // Everything will be in the watchdog's URL for the administrator to check.
+      drupal_access_denied();
+    }
+  }
+}
+
+/**
+ * Provides default text for subject and email body
+ */
+function bulk_email_default_text($type) {
+  switch ($type) {
+    case 'subject':
+      return t('Account details for [user:name] at [site:name]');
+
+    case 'body':
+      return t("[user:name],
+
+Thank you for registering at [site:name]. You may now log in by clicking this link or copying and pasting it to your browser:
+
+[user:one-time-login-url]
+
+This link can only be used once to log in and will lead you to a page where you can set your password.
+
+After setting your password, you will be able to log in at [site:login-url] in the future using:
+
+username: [user:name]
+password: Your password
+
+--  [site:name] team");
+  }
+}

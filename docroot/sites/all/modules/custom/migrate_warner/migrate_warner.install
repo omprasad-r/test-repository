@@ -1,0 +1,80 @@
+<?php
+
+/**
+ * @file
+ * Warner migration module installation
+ */
+
+function migrate_warner_schema() {
+  $schema = array();
+  $schema['migrate_warner_username_fix'] = migrate_warner_username_fix();
+  return $schema;
+}
+
+function migrate_warner_username_fix() {
+  return array(
+        'description' => 'Log of username fixes',
+        'fields' => array(
+          'uid' => array(
+            'type' => 'int',
+            'unsigned' => TRUE,
+            'not null' => TRUE,
+          ),
+          'original_username' => array(
+            'type' => 'varchar',
+            'length' => 255,
+            'not null' => TRUE,
+          ),
+          'fixed_username' => array(
+            'type' => 'varchar',
+            'length' => 255,
+            'not null' => TRUE,
+          ),
+          'email' => array(
+            'type' => 'varchar',
+            'length' => 255,
+            'not null' => TRUE,
+          ),
+          'login' => array(
+            'type' => 'int',
+            'unsigned' => TRUE,
+            'not null' => TRUE,
+          ),
+          'reason' => array(
+            'type' => 'varchar',
+            'length' => 255,
+            'not null' => TRUE,
+          ),
+          'fixed' => array(
+            'type' => 'int',
+            'size' => 'tiny',
+            'unsigned' => TRUE,
+            'not null' => TRUE,
+          ),
+        ),
+        'primary key' => array('uid'),
+      );
+}
+
+/**
+ * Implementation of hook_disable().
+ */
+function migrate_warner_disable() {
+  $subdirectory = variable_get('warner_private_directory', '');
+  if ($subdirectory) {
+    $directory = "warner://$subdirectory";
+
+    // Remove any previous uploads
+    file_unmanaged_delete_recursive($directory);
+  }
+}
+
+/**
+ * Add table to log username fixes.
+ */
+function migrate_warner_update_7001() {
+  $ret = array();
+  $ret[] = t('Create migrate_warner_username_fix table');
+  db_create_table('migrate_warner_username_fix', migrate_warner_username_fix());
+  return $ret;
+}

@@ -1,0 +1,78 @@
+<?php
+
+define('MIGRATE_WARNER_IMPORT', 'import EOS content dumps');
+
+/**
+ * @file
+ * Support for importing EOS dumps into Gardens for Warner.
+ */
+
+/**
+ * Implements hook_permission().
+ */
+function migrate_warner_permission() {
+  return array(
+    MIGRATE_WARNER_IMPORT => array(
+      'title' => t('Import Warner content dumps from EOS into Drupal'),
+    ),
+  );
+}
+
+/**
+ * Implements hook_menu().
+ */
+function migrate_warner_menu() {
+  $items = array();
+
+  $items['admin/content/warner'] = array(
+    'title' => 'EOS dump import',
+    'type' => MENU_LOCAL_TASK | MENU_NORMAL_ITEM,
+    'description' => 'Import EOS dumps into Drupal',
+    'page callback' => 'migrate_warner_import',
+    'access arguments' => array(MIGRATE_WARNER_IMPORT),
+    'file' => 'migrate_warner.pages.inc',
+    'weight' => 10,
+  );
+  $items['admin/content/warner/import'] = array(
+    'title' => 'Upload',
+    'type' => MENU_DEFAULT_LOCAL_TASK,
+    'weight' => -10,
+  );
+  $items['admin/content/warner/review'] = array(
+    'title' => 'Review and Import',
+    'type' => MENU_LOCAL_TASK,
+    'description' => 'Review and manage EOS imports',
+    'page callback' => 'migrate_warner_review',
+    'access arguments' => array(MIGRATE_WARNER_IMPORT),
+    'file' => 'migrate_warner.pages.inc',
+    'weight' => 0,
+ 	  );
+
+  return $items;
+}
+
+/**
+ * Implementation of hook_migrate_api.
+ */
+function migrate_warner_migrate_api() {
+  $api = array(
+    'api' => 2,
+  );
+  return $api;
+}
+
+/**
+ * Implements hook_stream_wrappers().
+ */
+function migrate_warner_stream_wrappers() {
+  $wrappers = array(
+    'warner' => array(
+      'name' => t('Uploaded Warner site import files'),
+      'class' => 'MigrateWarnerStreamWrapper',
+      'description' => t('Uploaded EOS dumps for import - not to be seen by the world.'),
+      'type' => STREAM_WRAPPERS_LOCAL_HIDDEN,
+    )
+  );
+
+  return $wrappers;
+}

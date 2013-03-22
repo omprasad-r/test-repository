@@ -1,0 +1,18 @@
+name = "Migration from OneSite"
+description = "Migration from OneSite"
+package = "Development"
+core = 7.x
+
+dependencies[] = migrate
+dependencies[] = migrate_extras
+
+files[] = migrate_onesite.migrate.inc
+files[] = blog_post.inc
+files[] = comment.inc
+files[] = forums.inc
+files[] = forum_post.inc
+files[] = forum_thread.inc
+files[] = photo.inc
+files[] = picture.inc
+files[] = user.inc
+files[] = video.inc

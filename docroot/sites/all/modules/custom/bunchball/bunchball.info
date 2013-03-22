@@ -1,0 +1,17 @@
+name = Bunchball
+description = Reward user behavior using the Bunchball Nitro service.
+core = 7.x
+
+version = "7.x-1.0"
+core = "7.x"
+
+package = Bunchball
+
+dependencies[] = ctools
+
+files[] = nitro/nitro.api.class.php
+files[] = BunchballPluginInterface.inc
+files[] = bunchball.test
+files[] = nitro/nitro.api.mock.inc
+
+configure =  admin/config/people/bunchball

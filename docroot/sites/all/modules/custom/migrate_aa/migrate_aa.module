@@ -1,0 +1,12 @@
+<?php
+/**
+ * @file
+ * Artist Arena migration.
+ */
+
+/**
+ * Implementats hook_flush_caches().
+ */
+function migrate_aa_flush_caches() {
+  AAMigrationRegistry::registerAll();
+}

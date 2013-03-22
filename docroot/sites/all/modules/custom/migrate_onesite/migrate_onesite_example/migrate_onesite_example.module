@@ -1,0 +1,105 @@
+<?php
+/**
+ * @file
+ * Summary
+ */
+
+/**
+ * Implements hook_flush_caches().
+ */
+function migrate_onesite_example_flush_caches() {
+  $common_arguments = array(
+    'source_connection' => 'onesite',
+    'source_database' => array(
+      'driver' => 'mysql',
+      'database' => 'onesite',
+      'username' => 'legacy',
+      'host' => '1.2.3.4',
+      'prefix' => '',
+    ),
+  );
+
+  $user_arguments = $common_arguments + array(
+    'class_name' => 'MigrateOnesiteExampleUser',
+    'machine_name' => 'User',
+  );
+  MigrationBase::registerMigration($user_arguments['class_name'],
+    $user_arguments['machine_name'], $user_arguments);
+
+  $forum_term_arguments = $common_arguments + array(
+    'class_name' => 'OnesiteForumsMigration',
+    'machine_name' => 'ForumTerm',
+  );
+  MigrationBase::registerMigration($forum_term_arguments['class_name'],
+    $forum_term_arguments['machine_name'], $forum_term_arguments);
+
+  $common_arguments += array(
+    'user_migration' => 'User',
+  );
+
+  $forum_thread_arguments = $common_arguments + array(
+    'class_name' => 'OnesiteForumThreadMigration',
+    'machine_name' => 'ForumThread',
+    'default_format' => 'filtered_html',
+    'forum_migration' => 'ForumTerm',
+  );
+  MigrationBase::registerMigration($forum_thread_arguments['class_name'],
+    $forum_thread_arguments['machine_name'], $forum_thread_arguments);
+
+  $forum_post_arguments = $common_arguments + array(
+    'class_name' => 'OnesiteForumPostMigration',
+    'machine_name' => 'ForumPost',
+    'comment_bundle' => 'comment_node_forum',
+    'parent_migration' => 'ForumThread',
+    'default_format' => 'filtered_html',
+  );
+  MigrationBase::registerMigration($forum_post_arguments['class_name'],
+    $forum_post_arguments['machine_name'], $forum_post_arguments);
+
+  $discussion_arguments = $common_arguments + array(
+    'class_name' => 'OnesiteDiscussionMigration',
+    'machine_name' => 'Discussion',
+    'default_format' => '1',
+  );
+  MigrationBase::registerMigration($discussion_arguments['class_name'],
+    $discussion_arguments['machine_name'], $discussion_arguments);
+
+  $discussion_comment_arguments = $common_arguments + array(
+    'class_name' => 'OnesiteDiscussionCommentMigration',
+    'machine_name' => 'DiscussionComment',
+    'comment_bundle' => 'comment_node_forum',
+    'parent_migration' => 'Discussion',
+    'default_format' => '1',
+  );
+  MigrationBase::registerMigration($discussion_comment_arguments['class_name'],
+                                   $discussion_comment_arguments['machine_name'], $discussion_comment_arguments);
+
+  $blog_post_arguments = $common_arguments + array(
+    'class_name' => 'MigrateOnesiteExampleBlogPost',
+    'machine_name' => 'BlogPost',
+    'default_format' => 'filtered_html',
+  );
+  MigrationBase::registerMigration($blog_post_arguments['class_name'],
+    $blog_post_arguments['machine_name'], $blog_post_arguments);
+
+  $blog_post_comment_arguments = $common_arguments + array(
+    'class_name' => 'OnesiteGeneralCommentMigration',
+    'machine_name' => 'BlogPostComment',
+    'parent_type' => 'blog_post',
+    'parent_migration' => 'BlogPost',
+    'comment_bundle' => 'comment_node_blog',
+    'default_format' => 'filtered_html',
+  );
+  MigrationBase::registerMigration($blog_post_comment_arguments['class_name'],
+    $blog_post_comment_arguments['machine_name'], $blog_post_comment_arguments);
+
+  $photo_arguments = $common_arguments + array(
+    'class_name' => 'MigrateOnesiteExamplePhoto',
+    'machine_name' => 'Photo',
+    'bundle' => 'photo',
+    'default_format' => 'filtered_html',
+    'image_field' => 'field_photo_asset',
+  );
+  MigrationBase::registerMigration($photo_arguments['class_name'],
+    $photo_arguments['machine_name'], $photo_arguments);
+}

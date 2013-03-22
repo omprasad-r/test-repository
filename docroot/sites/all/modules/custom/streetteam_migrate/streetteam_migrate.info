@@ -1,0 +1,9 @@
+name = "Streetteam Migration"
+description = "Warner Street Team Migration for FueledByRamen"
+package = "Development"
+core = 7.x
+
+dependencies[] = migrate
+dependencies[] = migrate_extras
+
+files[] = streetteam_migrate.migrate.inc

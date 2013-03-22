@@ -1,0 +1,326 @@
+<?php
+
+/**
+ * Implements hook_default_services_endpoint().
+ */
+function member_api_default_services_endpoint() {
+  $endpoints = array();
+  $endpoint = new stdClass;
+  $endpoint->disabled = FALSE; /* Edit this to true to make a default endpoint disabled initially */
+  $endpoint->api_version = 3;
+  $endpoint->name = 'memberapi';
+  $endpoint->server = 'rest_server';
+  $endpoint->path = 'memberapi/v1';
+  $endpoint->authentication = array(
+    'services_oauth' => array(
+      'oauth_context' => 'memberapi',
+      'credentials' => 'consumer',
+    ),
+  );
+  $endpoint->server_settings = array(
+    'formatters' => array(
+      'json' => TRUE,
+      'xml' => TRUE,
+      'bencode' => FALSE,
+      'jsonp' => FALSE,
+      'php' => FALSE,
+      'rss' => FALSE,
+      'yaml' => FALSE,
+    ),
+    'parsers' => array(
+      'application/json' => TRUE,
+      'application/x-www-form-urlencoded' => TRUE,
+      'multipart/form-data' => TRUE,
+      'application/vnd.php.serialized' => FALSE,
+      'application/x-yaml' => FALSE,
+    ),
+  );
+  $endpoint->resources = array(
+    'roles' => array(
+      'operations' => array(
+        'index' => array(
+          'enabled' => 1,
+        ),
+        'retrieve' => array(
+          'enabled' => 1,
+        ),
+        'update' => array(
+          'enabled' => 1,
+        ),
+      ),
+    ),
+    'user' => array(
+      'operations' => array(
+        'retrieve' => array(
+          'enabled' => 1,
+        ),
+        'create' => array(
+          'enabled' => 1,
+        ),
+        'update' => array(
+          'enabled' => 1,
+        ),
+        'delete' => array(
+          'enabled' => 1,
+        ),
+        'index' => array(
+          'enabled' => 1,
+        ),
+      ),
+      'actions' => array(
+        'login' => array(
+          'enabled' => 1,
+        ),
+        'logout' => array(
+          'enabled' => 1,
+        ),
+      ),
+    ),
+  );
+  $endpoint->debug = 0;
+  $endpoints['memberapi'] = $endpoint;
+  return $endpoints;
+}
+
+/**
+ * Implements hook_ctools_plugin_api().
+ */
+function member_api_ctools_plugin_api() {
+  list($module, $api) = func_get_args();
+  if ($module == "oauth_common" && $api == "oauth") {
+    return array("version" => 1);
+  }
+  elseif ($module == "services" && $api == "services") {
+    return array("version" => 3);
+  }
+}
+
+/**
+ * Implements hook_default_oauth_common_context().
+ */
+function member_api_default_oauth_common_context() {
+  $contexts = array();
+  $context = new stdClass;
+  $context->disabled = FALSE; /* Edit this to true to make a default context disabled initially */
+  $context->api_version = 1;
+  $context->name = 'memberapi';
+  $context->title = 'Member API';
+  $context->authorization_options = array(
+    'access_token_lifetime' => 0,
+    'signature_methods' => array(
+      0 => 'HMAC-SHA1',
+    ),
+    'default_authorization_levels' => array(),
+  );
+  $context->authorization_levels = array();
+  $contexts['memberapi'] = $context;
+  return $contexts;
+}
+
+/**
+ * Implements hook_menu().
+ *
+ * Adds a user page tab for generating API keys on a given account
+ */
+function member_api_menu() {
+  $items = array();
+
+  $items['user/%user/keys'] = array(
+    'title' => 'API key',
+    'page callback' => 'drupal_get_form',
+    'page arguments' => array('member_api_user_key_form', 1),
+    'access arguments' => array('administer users'),
+    'type' => MENU_LOCAL_TASK,
+  );
+
+  return $items;
+}
+
+/**
+ * Implements hook_menu_alter().
+ *
+ * Hides API users' profile pages
+ */
+function member_api_menu_alter(&$items) {
+  $items['user/%user']['access callback'] = 'member_api_user_view_access';
+}
+
+/**
+ * Form for generating a new API Key and secret for a given user.
+ *
+ * @param $form
+ * @param $form_state
+ * @param $account
+ */
+function member_api_user_key_form($form, $form_state, $account) {
+  $form = array();
+
+  $form['#account'] = $account;
+
+  $form['message'] = array(
+    '#type' => 'item',
+    '#markup' => t('Use this page to generate an OAuth API key and secret. The API uses <a href="@twoleg">two-legged OAuth</a> for authentication.', array('@twoleg' => url('http://www.drupalgardens.com/documentation/member-management-api')))
+  );
+
+  if (!($api_consumer = member_api_consumer_get($account->uid))) {
+    $form['warning'] = array(
+      '#type' => 'item',
+      '#markup' => t("WARNING: Generating an API key hides this user's profile page, and removes references to this account on existing content. Removing the key reverts the account back to its original state."),
+    );
+
+    $form['generate'] = array(
+      '#type' => 'submit',
+      '#value' => t('Generate API key and secret'),
+      '#submit' => array('member_api_user_key_form_submit_generate'),
+    );
+  }
+  else {
+    $form['info'] = array(
+      '#type' => 'item',
+      '#markup' => t('This account is configured with the following API key and secret:')
+    );
+    $form['key'] = array(
+      '#type' => 'item',
+      '#title' => t('Key'),
+      '#markup' => $api_consumer->key,
+    );
+    $form['secret'] = array(
+      '#type' => 'item',
+      '#title' => t('Secret'),
+      '#markup' => $api_consumer->secret,
+    );
+
+    $form['delete'] = array(
+      '#type' => 'submit',
+      '#value' => t('Remove API key and secret'),
+      '#submit' => array('member_api_user_key_form_submit_delete'),
+      '#description' => t('Remove the API key and secret for this account to remove
+      API access for this account and restore content ownership and profile page visibility
+      or to have the option of regenerating a fresh key.'),
+    );
+  }
+
+  return $form;
+}
+
+/**
+ * Form submit handler: generate a new API key and secret.
+ */
+function member_api_user_key_form_submit_generate($form, $form_state) {
+  member_api_consumer_create($form['#account']);
+}
+
+/**
+ * Form submit handler: delete an API key and secret for a given account.
+ */
+function member_api_user_key_form_submit_delete($form, $form_state) {
+  member_api_consumer_delete($form['#account']);
+}
+
+/**
+ * Access callback for profile pages: deny access to profile pages of API users.
+ *
+ * @param $account
+ */
+function member_api_user_view_access($account) {
+  $uid = is_object($account) ? $account->uid : (int) $account;
+
+  // Never allow access to view the anonymous user account.
+  if ($uid) {
+    // Admins can view all, users can view own profiles at all times.
+    if ($GLOBALS['user']->uid == $uid || user_access('administer users')) {
+      return TRUE;
+    }
+    elseif (user_access('access user profiles')) {
+      // At this point, load the complete account object.
+      if (!is_object($account)) {
+        $account = user_load($uid);
+      }
+      $api_consumer = member_api_consumer_get($account->uid);
+      if (empty($api_consumer)) {
+        return (is_object($account) && $account->status);
+      }
+    }
+  }
+  return FALSE;
+}
+
+/**
+ * Retrieve an api consumer for a given user.
+ *
+ * @param $uid
+ * @return
+ *   DrupalOAuthConsumer object, or FALSE if none found for the given uid in the
+ *   memberapi context.
+ */
+function member_api_consumer_get($uid) {
+  module_load_include('inc', 'oauth_common');
+  $consumers = oauth_common_user_consumers($uid);
+  foreach ($consumers as $consumer) {
+    if ($consumer->context === 'memberapi') {
+      $api_consumer = $consumer;
+      break;
+    }
+  }
+  return empty($api_consumer) ? FALSE : $api_consumer;
+}
+
+/**
+ * Generate a new Member API key and secret for a given user.
+ *
+ * @param $account
+ * @return
+ *   DrupalOAuthConsumer object.
+ */
+function member_api_consumer_create($account) {
+  // Assign an API key and secret to the user.
+  $options = array(
+    'callback_url' => 'oob', // Stands for "out of band".
+    'uid' => $account->uid,
+    'provider_consumer' => TRUE,
+    'in_database' => TRUE,
+    'context' => 'memberapi',
+  );
+  $api_consumer = new DrupalOAuthConsumer(user_password(32), user_password(32), $options);
+  $api_consumer->write();
+  return $api_consumer;
+}
+
+/**
+ * Delete Member API key and secret for an account
+ *
+ * @param $account
+ */
+function member_api_consumer_delete($account) {
+  $result = db_select('oauth_common_provider_consumer', 'occ')
+    ->fields('occ', array('csid'))
+    ->condition('uid', $account->uid)
+    ->execute();
+
+  foreach($result as $row) {
+    db_delete('oauth_common_consumer')
+      ->condition('csid', $row->csid)
+      ->execute();
+  }
+
+  db_delete('oauth_common_provider_consumer')
+    ->condition('uid', $account->uid)
+    ->execute();
+}
+
+/**
+ * Implements hook_node_load().
+ *
+ * If the user is the nominated API user, don't allow content to point to the account.
+ * As a side-effect, the API user also cannot edit their content, unless they have an
+ * "edit all * content" permission.
+ */
+function member_api_node_load($nodes, $types) {
+  foreach($nodes as $node) {
+    $api_consumer = member_api_consumer_get($node->uid);
+    if (!empty($api_consumer)) {
+      // Pretend that all content authored by the API user was created by anon.
+      $node->uid = 0;
+    }
+  }
+}

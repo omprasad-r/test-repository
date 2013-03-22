@@ -1,0 +1,471 @@
+<?php
+
+/**
+ * Implements hook_schema().
+ * This table logs the number of active sessions at a given moment.
+ */
+function warner_misc_schema() {
+  $schema = array();
+
+  $schema['warner_session_count'] = array(
+    'description' => 'Logs statistics that can be aggregated by the Gardener.',
+    'fields' => array(
+      'timestamp' => array(
+        'type' => 'int',
+        'unsigned' => TRUE,
+        'not null' => TRUE,
+      ),
+      'count' => array(
+        'type' => 'int',
+        'unsigned' => TRUE,
+        'not null' => TRUE,
+      ),
+    ),
+    'indexes' => array(
+      'timestamp' => array('timestamp'),
+    ),
+  );
+
+  return $schema;
+}
+
+/**
+ * Implements hook_install().
+ */
+function warner_misc_install() {
+  // Set the default value of the viewport metatag to enabled.
+  variable_set('themebuilder_metatag_viewport_default_enabled', TRUE);
+
+  // New sites should have the janrain dialog common styling.
+  variable_set('warner_common_dialog_css', TRUE);
+
+  // If this module is enabled for the first time on a WMG site, we need to make
+  // sure that any themes with extra regions are rebased to the wmg base theme.
+  _warner_misc_rebase_themes();
+
+  // Enable the Modernizr library by marking it as enabled in the javascript_libraries
+  // module. We don't want to simply call drupal_add_library in hook_init because
+  // we want to grant site builders the option to turn Modernizr off from the
+  // javascript_libraries UI.
+  $javascript_libraries_config = variable_get('javascript_libraries_drupal_libraries', array());
+  $javascript_libraries_config['gardens_features-modernizr'] = array(
+    'library' => 'modernizr',
+    'module' => 'gardens_features',
+  );
+  variable_set('javascript_libraries_drupal_libraries', $javascript_libraries_config);
+
+  // Configure the roles that can be attributed as authors of mobile-posted
+  // content.
+  $mast_roles = _warner_misc_mast_role_settings();
+  variable_set('mast_settings_roles', $mast_roles);
+
+  _warner_misc_enable_membership_stats_block();
+
+  // Ensure that antivirus is installed and configured properly.
+  _warner_misc_configure_antivirus();
+}
+
+/**
+ * Implements hook_requirements().
+ */
+function warner_misc_requirements($phase) {
+  $requirements = array();
+
+  if ($phase == 'runtime') {
+    $users_done = variable_get('warner_misc_comment_on_anything_user_done', 0);
+    $message = t('All users are now processed.');
+    if (!$users_done) {
+      $num_nodes = (int) db_query("SELECT COUNT(nid) FROM {node} WHERE type = 'comment_on_anything'")->fetchField();
+      $num_users = (int) db_query("SELECT COUNT(uid) FROM {users}")->fetchField();
+      if ($num_nodes === ($num_users - 1)) {
+        variable_set('warner_misc_comment_on_anything_user_done', 1);
+      }
+      else {
+        $message = t('@num_nodes out of @num_users processed. Rollout ongoing.', array('@num_nodes' => $num_nodes, '@num_users' => $num_users - 1));
+      }
+    }
+
+    $requirements['hook_comment_on_anything_user_rollout'] = array(
+      'severity' => REQUIREMENT_INFO,
+      'title' => t('Comment on anything rollout on users'),
+      'value' => $message,
+    );
+  }
+
+  return $requirements;
+}
+
+/**
+ * Implements hook_enable().
+ */
+function warner_misc_enable() {
+  // Enable the gardens-flash CKEditor plugin to fix the % width bug.
+  _warner_misc_enable_gardens_wmode_plugin();
+  // Enable the advanced layout module.
+  module_enable(array('themebuilder_advanced_layout'), FALSE);
+
+  // Determines how recently a user must have been active to
+  // suggest that they have an "active session".
+  if (!variable_get('warner_active_session_window', 0)) {
+    variable_set('warner_active_session_window', 300);
+  }
+}
+
+/**
+ * Rebases any WMG site theme with a coda region to the wmg base theme.
+ */
+function _warner_misc_rebase_themes() {
+  $path = drupal_get_path('module', 'warner_misc');
+  include_once($path . '/includes/rebaseThemes.inc');
+  // Rebase themes to the new wmg base theme.
+  warner_misc_rebase_themes('wmg');
+}
+
+/**
+ * Inject the wmode attribute into object and embed tags
+ * without wmode specified.
+ */
+function _warner_misc_force_wmode_update() {
+  $path = drupal_get_path('module', 'warner_misc');
+  include_once($path . '/includes/forceWMode.inc');
+  warner_misc_force_wmode('transparent');
+}
+
+/**
+ * Returns the user roles that are allowed to post content via the mobile app.
+ */
+function _warner_misc_mast_role_settings() {
+  $roles = array(
+    'administrator',
+    'site maintainer',
+    'professional member',
+  );
+  $result = db_select('role', 'r')
+    ->fields('r', array('rid'))
+    ->condition('r.name', $roles, 'IN')
+    ->execute()
+    ->fetchAllKeyed();
+  return drupal_map_assoc(array_keys($result));
+}
+
+/**
+ * Enable the gardens-wmode CKEditor plugin for all formats.
+ */
+function _warner_misc_enable_gardens_wmode_plugin() {
+  // Bail out if the wysiwyg module isn't installed.
+  if (!db_table_exists('wysiwyg')) {
+    return;
+  }
+
+  $result = db_query("SELECT format, settings FROM {wysiwyg} WHERE editor = :editor;", array(':editor' => 'ckeditor'));
+  foreach ($result as $config) {
+    // The settings array is stored in serialized format.
+    $config->settings = unserialize($config->settings);
+    // Turn the gardens-wmode CKEditor plugin on.
+    if (!isset($config->settings['buttons']['drupal']['gardens-wmode']) || $config->settings['buttons']['drupal']['gardens-wmode'] != 1) {
+      $config->settings['buttons']['drupal']['gardens-wmode'] = 1;
+
+      // Resave the settings array to the database.
+      db_update('wysiwyg')
+        ->fields(array(
+          'settings' => serialize($config->settings),
+        ))
+        ->condition('format', $config->format)
+        ->condition('editor', 'ckeditor')
+        ->execute();
+    }
+  }
+}
+
+function _warner_misc_enable_membership_stats_block() {
+  $block = array(
+    'module' => 'warner_misc',
+    'delta' => 'membership_stats',
+    'theme' => 'blossom',
+    'status' => 1,
+    'weight' => -99,
+    'region' => 'content',
+    'visibility' => 1,
+    'pages' => 'admin/people/stats',
+    'cache' => -1,
+  );
+  $bid = db_select('block', 'b')
+    ->fields('b', array('bid'))
+    ->condition('b.theme', 'blossom')
+    ->condition('b.module', 'warner_misc')
+    ->condition('b.delta', 'membership_stats')
+    ->execute()
+    ->fetchField();
+  if (!$bid) {
+    $query = db_insert('block')->fields(array('module', 'delta', 'theme', 'status', 'weight', 'region', 'visibility', 'pages', 'cache'));
+    $query->values($block);
+  }
+  else {
+    $query = db_update('block')
+      ->fields($block)
+      ->condition('bid', $bid);
+  }
+  $query->execute();
+}
+
+/**
+ * Helper function to ensure that antivirus is installed and properly configured.
+ */
+function _warner_misc_configure_antivirus() {
+  if (!module_exists('antivirus')) {
+    module_enable(array('antivirus'), FALSE);
+  }
+
+  // Default configuration.
+  variable_set('antivirus_action_error', ANTIVIRUS_FAIL_SILENT);
+  variable_set('antivirus_debug', 1);
+  variable_set('antivirus_enabled_scanners', array('clamavdaemon'));
+  variable_set('antivirus_notify', ANTIVIRUS_NOTIFY_NONE);
+  variable_set('antivirus_notify_email', "support@acquia.com");
+  variable_set('antivirus_notify_msg', "");
+  variable_set('antivirus_scanner_clamavdaemon_flags', array('-v' => '-v'));
+  variable_set('antivirus_settings_clamavdaemon', array(
+    'host' => 'custom-108.wmg-egardens.hosting.acquia.com',
+    'port' => '3310',
+    'timeout' => '5',
+  ));
+}
+
+/**
+ * Updates on trunk after the 1.11 release start at 11110.
+ */
+
+/**
+ * Rebase themes that have the coda region on to the new wmg base theme.
+ *
+ * The coda and postcontent_first regions were added to aid Blink Reaction in
+ * the intial theme buildout of their WMG Gardens sites.
+ */
+function warner_misc_update_11110(&$sandbox) {
+  _warner_misc_rebase_themes();
+}
+
+/**
+ * Add Warner Google Analytics code for each site.
+ */
+function warner_misc_update_11111() {
+  variable_set('gardens_misc_ga_tracking_code', 'UA-27236638-1');
+}
+
+/**
+ * Enable the comment_goodness module for Warner sites.
+ */
+function warner_misc_update_11120(&$sandbox) {
+  module_enable(array('comment_goodness'), FALSE);
+}
+
+/**
+ * Add wmode="transparent" to any object or embed tags in a node.
+ */
+function warner_misc_update_11121(&$sandbox) {
+  _warner_misc_force_wmode_update();
+}
+
+/**
+ * Enable the gardens-wmode CKEditor plugin for all formats.
+ */
+function warner_misc_update_11122(&$sandbox) {
+  _warner_misc_enable_gardens_wmode_plugin();
+}
+
+/**
+ * Updates on trunk after the 1.12 release start at 11126.
+ */
+
+/**
+ * Enable the themebuilder_advanced_layout module for existing Warner sites.
+ */
+function warner_misc_update_11126() {
+  module_enable(array('themebuilder_advanced_layout', 'gardens_mail_media'), FALSE);
+}
+
+/**
+ * Updates on trunk after the 1.13 release start at 11130.
+ */
+
+/**
+ * Enable the Modernizr js library on all sites.
+ */
+function warner_misc_update_11131(&$sandbox) {
+  // Enable the Modernizr library by marking it as enabled in the javascript_libraries
+  // module. We don't want to simply call drupal_add_library in hook_init because
+  // we want to grant site builders the option to turn Modernizr off from the
+  // javascript_libraries UI.
+  $javascript_libraries_config = variable_get('javascript_libraries_drupal_libraries', array());
+  $javascript_libraries_config['gardens_features-modernizr'] = array(
+    'library' => 'modernizr',
+    'module' => 'gardens_features',
+  );
+  variable_set('javascript_libraries_drupal_libraries', $javascript_libraries_config);
+
+}
+
+/**
+ * Enable the role indicators module on existing sites. Includes the tac_* suite.
+ */
+function warner_misc_update_11132() {
+  module_enable(array('taxonomy_access', 'tac_alt_ui', 'tac_redirect_403', 'tac_redirect_403_alt_ui', 'role_indicators'), FALSE);
+}
+
+/**
+ * Ensure that the photo content type has a 'field_photo_asset'
+ * field configured to have warner defined default file extensions as allowed
+ * upload file types.
+ */
+function warner_misc_update_11140() {
+  $entity_info = entity_get_info('node');
+  if (!empty($entity_info['bundles']['photo'])) {
+    if($instance = field_info_instance('node','field_photo_asset','photo')) {
+      $default_extensions = media_variable_get('file_extensions');
+      if(empty($instance['settings']['file_extensions']) || ($default_extensions == $instance['settings']['file_extensions'])){
+        $default_extensions = 'jpg jpeg gif png';
+        $instance['settings']['file_extensions'] = $default_extensions;
+      }
+      field_update_instance($instance);
+    }
+  }
+}
+
+/**
+ * Enable gardens site variables on every existing Warner site.
+ */
+function warner_misc_update_11141() {
+  module_enable(array('gardens_site_variables'), FALSE);
+}
+
+/**
+ * Enable the domain_301_redirect module.
+ */
+function warner_misc_update_11142() {
+  module_enable(array('domain_301_redirect'), FALSE);
+}
+
+/**
+ * Remove the 'Site Maintainer' role from all but wmgd2c.
+ */
+function warner_misc_update_11144() {
+  $rid = db_query("SELECT rid FROM role WHERE name = 'site maintainer'")->fetchField();
+  $result = db_query("SELECT u.uid, u.name FROM {users_roles} ur INNER JOIN {users} u ON u.uid = ur.uid WHERE ur.rid = :rid AND u.name <> 'wmgd2c';", array(':rid' => $rid));
+
+  foreach ($result as $row) {
+    if ($row->name != 'wmgd2c') {
+      $user = user_load($row->uid);
+      if (isset($user->roles[$rid])) {
+        unset($user->roles[$rid]);
+        user_save($user);
+      }
+    }
+  }
+}
+
+/**
+ * Create the warner_active_sessions table.
+ */
+function warner_misc_update_11145() {
+  drupal_install_schema('warner_misc');
+  variable_set('warner_active_session_window', 300);
+}
+
+/**
+ * Disable twitter maintenance alerts for Warner.
+ */
+function warner_misc_update_11146() {
+  variable_set('gardens_show_twitter_alerts', FALSE);
+}
+
+/**
+ * Configure MASt roles.
+ */
+function warner_misc_update_11147() {
+  $mast_roles = _warner_misc_mast_role_settings();
+  variable_set('mast_settings_roles', $mast_roles);
+}
+
+/**
+ * Enable the audit_trail and gardens_enterprise_misc modules.
+ */
+function warner_misc_update_11148() {
+  module_enable(array('audit_trail', 'gardens_enterprise_misc'), FALSE);
+}
+
+/**
+ * Enable the member stats block on the member admin view page.
+ */
+function warner_misc_update_11149() {
+  _warner_misc_enable_membership_stats_block();
+}
+
+/**
+ * Enable Site Guard module.
+ */
+function warner_misc_update_11150() {
+  if (!module_exists('site_guard')) {
+    module_enable(array('site_guard'), FALSE);
+  }
+}
+
+/**
+ * Set the stage name for the gardens_statsd module.
+ */
+function warner_misc_update_11151() {
+  variable_set('gardens_statsd_stage', 'wmg-egardens');
+}
+
+/**
+ * Set the default value of the viewport metatag to enabled.
+ */
+function warner_misc_update_11152() {
+  variable_set('themebuilder_metatag_viewport_default_enabled', TRUE);
+}
+
+/**
+ * Enable views_rss.
+ */
+function warner_misc_update_11153() {
+  module_enable(array('getid3'), FALSE);
+  if (module_exists('views')) {
+    // These modules are now hidden submodules of Views for Warner sites, so we
+    // need to manually enable them on any existing site that already has Views
+    // enabled.
+    module_enable(array('views_rss', 'views_rss_core', 'views_rss_itunes'), FALSE);
+  }
+}
+
+/*
+ * Ensure that antivirus is installed and configured properly.
+ */
+function warner_misc_update_11154() {
+  _warner_misc_configure_antivirus();
+}
+
+/**
+ * Remove Janrain field mapping from Avatar to member name.
+ */
+function warner_misc_update_11155() {
+  $map = variable_get('rpx_profile_fields_map', array());
+  if ($map && is_array($map)) {
+    $delete = array();
+    foreach ($map as $mid => $mapping) {
+      if (!empty($mapping['field']) && !empty($mapping['fid']) && $mapping['field'] == 'field_member_name') {
+        $mapping_source = db_query('SELECT title FROM {rpx_profile_field} WHERE fid = :fid', array(':fid' => $mapping['fid']))->fetchField();
+        if ($mapping_source == 'Avatar') {
+          $delete[] = $mid;
+        }
+      }
+    }
+    if ($delete) {
+      db_delete('rpx_mapping_provider')
+        ->condition('mid', $delete)
+        ->execute();
+      foreach ($delete as $mid) {
+        unset($map[$mid]);
+      }
+      variable_set('rpx_profile_fields_map', $map);
+    }
+  }
+}

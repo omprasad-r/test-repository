@@ -1,0 +1,24 @@
+name = "Warner Migration"
+description = "Warner Migration"
+package = "Development"
+core = 7.x
+
+dependencies[] = migrate
+dependencies[] = migrate_extras
+dependencies[] = date_migrate
+
+files[] = album.inc
+files[] = audio.inc
+files[] = blog.inc
+files[] = comment.inc
+files[] = comment_wall.inc
+files[] = discussion.inc
+files[] = event.inc
+files[] = field.inc
+files[] = member.inc
+files[] = photo.inc
+files[] = picture.inc
+files[] = redirect.inc
+files[] = video.inc
+files[] = warner.inc
+files[] = warner_wrapper.inc

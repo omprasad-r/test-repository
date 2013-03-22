@@ -1,0 +1,26 @@
+<?php
+
+/**
+ * Implements hook_install().
+ */
+function streetteam_migrate_install() {
+  // Create field_street_address if it doesn't already exist
+  $field_name = 'field_street_address';
+  $label = 'Street address';
+  if (!field_read_instance('user', $field_name, 'user')) {
+    $field_record = array(
+      'field_name' => $field_name,
+      'type' => 'text',
+    );
+    $field_record = field_create_field($field_record);
+    if ($field_record) {
+      $instance = array(
+        'field_name' => $field_name,
+        'entity_type' => 'user',
+        'bundle' => 'user',
+        'label' => $label,
+      );
+      $instance = field_create_instance($instance);
+    }
+  }
+}

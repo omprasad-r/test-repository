@@ -1,0 +1,56 @@
+<?php
+
+class WarnerMiscWebTestCase extends DrupalWebTestCase {
+  protected $user;
+  protected $profile = 'warner';
+
+  public static function getInfo() {
+    return array(
+      'name' => 'Warner Misc',
+      'description' => 'Test features within the Warner misc module.',
+      'group' => 'Gardens',
+    );
+  }
+
+  public function setUp() {
+    require_once drupal_get_path('module', 'warner_misc') . '/warner_misc.drush.inc';
+    // Enable any modules required for the test
+    parent::setUp('warner_misc');
+  }
+
+  /**
+   * Test that we can log active sessions and then expose them
+   * via our simple webservice.
+   */
+  public function testActiveSessionCount() {
+    $this->user = $this->drupalCreateUser(array('access content'));
+    $this->drupalLogin($this->user);
+    $this->drupalGet('<front>');
+
+    // Log the current session to the db via the drush callback.
+    $time = time();
+    $min = date('i', time());
+    $min_round = floor($min / 5) * 5;
+    $time = mktime(date('H', $time), $min_round, 0, date('n', $time), date('j', $time), date('Y', $time));
+    drush_warner_misc_warner_stats_run($time);
+
+    $count = db_select('warner_session_count', 'w')
+      ->fields('w', array('count'))
+      ->execute()
+      ->fetchField();
+
+    // We should now see one active session in the db.
+    $this->assertTrue($count == 1, t('There should be 1 active session, I found @count.', array('@count' => $count)));
+
+    // Write the session count db to the log file.
+    $day = date('N', $time);
+    drush_warner_misc_warner_stats_flush($day, 12345, 'http://test.com');
+
+    $json = $this->drupalGet('report-session-count/' . $day);
+    $stats = json_decode($json, TRUE);
+
+    // We should see our test data in the webservice.
+    $this->assertTrue($stats[$time]['http://test.com'] == 1, 'The one active session should be accessible via the webservice endpoint (thus in the log file).');
+  }
+
+}

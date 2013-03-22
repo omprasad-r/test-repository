@@ -1,0 +1,27 @@
+name = Miscellaneous Warner functionality
+description = A holding pen for things which only belong on Warner sites.
+core = 7.x
+package = Drupal Gardens
+hidden = TRUE
+
+files[] = warner_misc.test
+files[] = warner_misc.install
+
+dependencies[] = coppa_lite
+dependencies[] = server_variables
+dependencies[] = metatag
+dependencies[] = metatag_opengraph
+dependencies[] = gardens_media
+dependencies[] = comment_goodness
+;dependencies[] = themebuilder_advanced_layout
+dependencies[] = gardens_mail_media
+dependencies[] = taxonomy_access
+dependencies[] = tac_alt_ui
+dependencies[] = tac_redirect_403
+dependencies[] = tac_redirect_403_alt_ui
+dependencies[] = role_indicators
+dependencies[] = gardens_site_variables
+dependencies[] = domain_301_redirect
+dependencies[] = comment_on_anything
+dependencies[] = getid3
+dependencies[] = antivirus

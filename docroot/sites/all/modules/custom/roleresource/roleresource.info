@@ -1,0 +1,5 @@
+name = Role resource
+description = Services resource to expose a CRUD interface for user roles.
+package = Services
+dependencies[] = services
+core = 7.x

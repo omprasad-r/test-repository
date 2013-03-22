@@ -1,0 +1,79 @@
+<?php
+
+/**
+ * @file
+ * Warner-specifc mapping of Capture data to user profiles.
+ *
+ */
+
+/**
+ * Implements hook_janrain_capture_profile_sync().
+ */
+function warner_capture_janrain_capture_profile_sync($account, $capture_profile) {
+  // Only GUID is Warner-specific at this point.
+  $warner_fields = warner_capture_get_profile_fields();
+  $wrapper = entity_metadata_wrapper('user', $account);
+  foreach ($warner_fields as $drupal_field => $capture_field) {
+    if (isset($wrapper->{$drupal_field}) && isset($capture_profile[$capture_field])) {
+      $wrapper->{$drupal_field} = $capture_profile[$capture_field];
+    }
+  }
+}
+
+/**
+ * Implements hook_form_FORM_ID_alter().
+ */
+function warner_capture_form_janrain_capture_settings_alter(&$form, &$form_state) {
+  // Do not expose the "Profile name field" setting because we will only change
+  // that programmatically.
+  $form['janrain_capture_fields']['capture_name_field']['#access'] = FALSE;
+}
+
+/**
+ * Implements hook_form_FORM_ID_alter().
+ */
+function warner_capture_form_janrain_capture_settings_mapping_alter(&$form, &$form_state) {
+  // Prevent admins from assigning anything to the internal janrain GUID user field.
+  foreach(element_children($form) as $item) {
+    if (isset($form[$item]['field']['#options']['field']['field_janrain_capture_guid'])) {
+      unset($form[$item]['field']['#options']['field']['field_janrain_capture_guid']);
+    }
+  }
+}
+
+/**
+ * Get fields to map from Capture to local user fields.
+ *
+ * @return
+ *   An associative array of field mappings where the key of each element
+ *   is the Drupal user Field API field name and the value is the name of the
+ *   Capture profile field that should be mapped to it.
+ *
+ * @see warner_capture_janrain_capture_profile_sync().
+ */
+function warner_capture_get_profile_fields() {
+  return array(
+    'field_janrain_capture_guid' => 'guid',
+  );
+}
+
+/**
+ * Implements hook_form_FORM_ID_alter().
+ */
+function warner_capture_form_bunchball_admin_form_alter(&$form, &$form_state) {
+  $form['bunchball_unique_id_fieldset']['bunchball_unique_id']['#options']['janrain_guid'] = t('Janrain GUID');
+  // #states normally uses AND conditions only, but an OR condition can be simulated
+  // by reversing the logic, using invisible/!value rather than visible/value and
+  // a dummy element on the selector so that the array keys stay unique.
+  $form['bunchball_unique_id_fieldset']['bunchball_janrain_fallback']['#states']['invisible'][':input[name="bunchball_unique_id"]']['!value'] = 'janrain_uuid';
+  $form['bunchball_unique_id_fieldset']['bunchball_janrain_fallback']['#states']['invisible'][':input[name="bunchball_unique_id"],dummy_element_ignore_12345']['!value'] = 'janrain_guid';
+}
+
+/**
+ * Implements hook_bunchball_userid().
+ */
+function warner_capture_bunchball_userid($account, $unique_id_type) {
+  if ($unique_id_type == 'janrain_guid' && !empty($account->field_janrain_capture_guid[LANGUAGE_NONE][0]['value'])) {
+    return $account->field_janrain_capture_guid[LANGUAGE_NONE][0]['value'];
+  }
+}

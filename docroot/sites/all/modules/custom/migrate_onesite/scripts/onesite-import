@@ -1,0 +1,51 @@
+#!/bin/bash
+# $1: Source directory containing ONEsite dumps
+# $2: Prefix on the ".sql" files in the directory
+# $3: Key for decrypting encrypted fields
+# $4: MySQL database to load data into
+# $5: MySQL username
+# $6: MySQL password
+# $7: MySQL host (defaults to localhost)
+#
+if [ -z "$1" ]; then
+    echo usage: $0 source_directory prefix key database username password host
+    echo example: $0 /data/dumps/onesite 12345678_foo_ 'K3Y-VA!U3' onesitedb dbuser 'MyD8pas$' 12.34.56.78
+    exit
+fi
+
+SOURCE_DIR=$1
+PREFIX=$2
+KEY=$3
+DB=$4
+USER=$5
+PASS=$6
+if [ -z "$7" ]; then
+  HOST=""
+else
+  HOST="-h $7"
+fi
+
+# Find where this script is, so we can find the table creation SQL
+SCRIPT_DIR="$( cd -P "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
+
+# (Re)create the database and tables
+mysql $HOST -u $USER --password="$PASS" -e "DROP DATABASE IF EXISTS $DB; CREATE DATABASE $DB"
+mysql $HOST -u $USER --password="$PASS" $DB < "$SCRIPT_DIR/create-onesite-tables.sql"
+
+# @todo These just include the tables relevant to the original project, the
+# following tables would need CREATE TABLE statements in the .sql file
+# blog, cal, ext_content, forum_category, friend, group, group_categories,
+# message_user, prof_text, rss, user_auth_token, user_stat, user_status
+TABLES="blog_post comment core_video discussion discussion_comment forum_post forum_topic_lookup forum_thread forums photo photo_gal prof_ext_entry prof_ext_fulltext profile tags user video"
+for TABLE in $TABLES;
+do
+  echo Importing $TABLE
+  FILE=`ls $SOURCE_DIR/$PREFIX$TABLE.sql`
+  mysql $HOST -u $USER --password="$PASS" $DB -e "LOAD DATA LOCAL INFILE '"$FILE"' INTO TABLE $TABLE fields terminated by ',' optionally enclosed by '\"' escaped by '^' lines terminated by '\n'"
+done
+
+# Decrypt the encrypted fields
+mysql $HOST -u $USER --password="$PASS" $DB -e "UPDATE photo SET photo_id=AES_DECRYPT(photo_id, '"$KEY"')"
+mysql $HOST -u $USER --password="$PASS" $DB -e "UPDATE user SET username=AES_DECRYPT(username, '"$KEY"')"
+mysql $HOST -u $USER --password="$PASS" $DB -e "UPDATE user SET password=AES_DECRYPT(password, '"$KEY"')"
+mysql $HOST -u $USER --password="$PASS" $DB -e "UPDATE user SET email=AES_DECRYPT(email, '"$KEY"')"

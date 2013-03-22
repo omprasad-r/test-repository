@@ -1,0 +1,6 @@
+name = Bulk Email
+description = Batch processes bulk emails to users
+core = 7.x
+files[] = bulk_email.module
+files[] = bulk_email.install
+files[] = bulk_email.mailer.inc

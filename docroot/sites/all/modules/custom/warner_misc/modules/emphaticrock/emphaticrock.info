@@ -1,0 +1,5 @@
+name = WMG submodule for emphaticrock.com
+description = Holdover functionality from the Emphaticrock POC that grew up.
+core = 7.x
+package = Drupal Gardens
+hidden = TRUE

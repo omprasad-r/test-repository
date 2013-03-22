@@ -1,0 +1,592 @@
+<?php
+
+/**
+ * @file
+ * Miscellaneous functionality for Warner.
+ *
+ * Note: It is rarely (if ever) a good idea to put any code in this module! We
+ * are trying *not* to have customer-specific code in Gardens. Plus, it is not
+ * included on site export. Instead, use this module mainly just to enable
+ * other general-purpose modules in the Gardens codebase which the customer
+ * needs.
+ */
+
+/**
+ * Implements hook_menu().
+ */
+function warner_misc_menu() {
+  $items = array();
+
+  $items['report-session-count/%/%'] = array(
+    'title' => 'Status',
+    'description' => 'Get the past 24 hours of session counts.',
+    'access callback' => 'warner_misc_stats_access',
+    'access arguments' => array(2),
+    'page callback' => 'warner_misc_report_session_count',
+    'page arguments' => array(1),
+    'type' => MENU_CALLBACK,
+  );
+
+  return $items;
+}
+
+/**
+ * Implements hook_theme().
+ */
+function warner_misc_theme() {
+  return array(
+    'warner_misc_membership_stats' => array(
+      'variables' => array('member_count' => 0, 'fan_member_count' => 0, 'new_member_count' => 0, 'inactive_member_count' => 0),
+    ),
+  );
+}
+
+/**
+ * Access callback to ensure that the request came from a legitimate source.
+ */
+function warner_misc_stats_access($hash) {
+  if (md5('gardens-http://' . $_SERVER['HTTP_HOST']) == $hash) {
+    return TRUE;
+  }
+}
+
+/**
+ * Implements hook_disallowed_modules_alter().
+ *
+ * Allow Janrain, Gardens moderation and Gardens site variables to be enabled.
+ */
+function warner_misc_disallowed_modules_alter(&$modules) {
+  $modules = array_diff($modules, array(
+    'gardens_moderation',
+    'gardens_mail_media',
+    'gardens_site_variables',
+    'comment_on_anything',
+    'janrain_client',
+    'janrain_login',
+    'janrain_capture',
+    'janrain_capture_ui',
+    'janrain_capture_mapping',
+    'bunchball',
+    // It's debatable whether all these bunchball submodules need including here.
+    // They are included for consistency in case Warner disable simplified_modules.
+    'bunchball_entities',
+    'bunchball_fivestar',
+    'bunchball_groups',
+    'bunchball_nitro',
+    'bunchball_poll',
+    'bunchball_user_interaction',
+    'bunchball_user_roles',
+    'bunchball_webform',
+    'bunchball_queue',
+    'request_queue',
+    'mast',
+    'flag_friend',
+    'flag_friend_access',
+    'views_data_export',
+    // These are hidden submodules but we need them here in case simplified
+    // modules gets disabled.
+    'views_rss',
+    'views_rss_core',
+    'views_rss_itunes',
+  ));
+}
+
+/**
+ * Implements hook_simplified_modules_hidden_submodules().
+ */
+function warner_misc_simplified_modules_hidden_submodules() {
+  return array(
+    // Prevent the Views RSS and Views RSS Core modules from appearing on the
+    // Modules page, but turn them on automatically whenever Views (which they
+    // depend on) is enabled.
+    'views_rss',
+    'views_rss_core',
+    'views_rss_itunes',
+  );
+}
+
+/**
+ * Implements hook_file_formatter_info_alter().
+ */
+function warner_misc_file_formatter_info_alter(&$formatters) {
+  if (isset($formatters['media_oembed'])) {
+    $formatters['media_oembed']['default settings']['wmode'] = 'transparent';
+    $formatters['media_oembed']['view callback'] = 'warner_misc_file_formatter_media_oembed_view';
+  }
+  if (isset($formatters['media_oembed_thumbnail'])) {
+    $formatters['media_oembed_thumbnail']['view callback'] = 'warner_misc_file_formatter_media_oembed_thumbnail_view';
+  }
+  if (isset($formatters['media_oembed_thumbnail_style'])) {
+    $formatters['media_oembed_thumbnail_style']['view callback'] = 'warner_misc_file_formatter_media_oembed_thumbnail_style_view';
+  }
+}
+
+/**
+ * Implements hook_file_formatter_FORMATTER_view().
+ *
+ * Decorator for media_oembed_file_formatter_media_oembed_view() that adds a post-render
+ * for adding wmode=transparent to all embeds.
+ */
+function warner_misc_file_formatter_media_oembed_view($file, $display, $langcode) {
+  $element = media_oembed_file_formatter_media_oembed_view($file, $display, $langcode);
+  $scheme = file_uri_scheme($file->uri);
+  if ($scheme == 'oembed') {
+    $element['#post_render'][] = 'warner_misc_oembed_post_render';
+    $element['#cache']['expire'] = CACHE_PERMANENT;
+  }
+  return $element;
+}
+
+/**
+ * Implements hook_file_formatter_FORMATTER_view().
+ *
+ * Decorator for media_oembed_file_formatter_media_oembed_thumbnail_view() that
+ * forces CACHE_PERMANENT for all oembed thumbs.
+ */
+function warner_misc_file_formatter_media_oembed_thumbnail_view($file, $display, $langcode) {
+  $element = media_oembed_file_formatter_media_oembed_thumbnail_view($file, $display, $langcode);
+  $scheme = file_uri_scheme($file->uri);
+  if ($scheme == 'oembed') {
+    $element['#cache']['expire'] = CACHE_PERMANENT;
+  }
+  return $element;
+}
+
+/**
+ * Implements hook_file_formatter_FORMATTER_view().
+ *
+ * Decorator for media_oembed_file_formatter_media_oembed_thumbnail_style_view() that
+ * forces CACHE_PERMANENT for all oembed thumbs.
+ */
+function warner_misc_file_formatter_media_oembed_thumbnail_style_view($file, $display, $langcode) {
+  $element = media_oembed_thumbnail_style_file_formatter_view($file, $display, $langcode);
+  $scheme = file_uri_scheme($file->uri);
+  if ($scheme == 'oembed') {
+    $element['#cache']['expire'] = CACHE_PERMANENT;
+  }
+  return $element;
+}
+
+/**
+ * Force wmode=transparent on all Warner oembed embed fields.
+ */
+function warner_misc_oembed_post_render($element) {
+  include_once(drupal_get_path('module', 'warner_misc') . '/includes/forceWMode.inc');
+  $element = _warner_misc_force_wmode_clean_data($element, 'transparent');
+  return $element;
+}
+
+/**
+ * Implements hook_preprocess_image().
+ */
+function warner_misc_preprocess_image(&$variables) {
+  // This is mostly a copy of remote_stream_wrapper_preprocess_image() to avoid
+  // having broken images on an http page when image url is cached as https.
+  // In warner_misc_file_formatter_info_alter we are setting some media
+  // formatters to add some extra settings to them. The interesting one is
+  // warner_misc_file_formatter_media_oembed_thumbnail_style_view() which is
+  // enabling the site to use derivatives of 3rd party images. The oembed
+  // modules are caching some data to avoid querying 3rd party sites all the
+  // time (see oembedcore_render_cache) but this does not distinguish if the
+  // cache is for https or http page, so when a page is generated for an https
+  // url and an image derivative is being generated for a 3rd party media then
+  // the cache will store the image with an https url even when it's being used
+  // for an http page. This leads to a broken images since our SSL certs usually
+  // need accepting. This could be fixed by altering the cache keys, but there's
+  // an other feature making life hard. The media module supports inserting some
+  // macros into node bodies which gets transformed into actual images via the
+  // core filter functionality which is again cached similarly - does not
+  // differentiate between http and https. In such cases filters disable the
+  // caching for the format, but that would be a performance hit in our case.
+  // We could try to use relative paths but in case the content would be used on
+  // a 3rd party site as part of a widget that would lead to a broken image as
+  // well. The current approach will be to force images to http. This is not
+  // ideal either since a browser loading an https page with components from
+  // http could complain. see DG-5571.
+  if (!empty($GLOBALS['is_https']) && !empty($variables['style_name']) && !empty($variables['source_path'])) {
+    if (module_exists('remote_stream_wrapper') && file_is_scheme_remote(file_uri_scheme($variables['source_path']))) {
+      $url = file_create_url(remote_stream_wrapper_image_style_path($variables['style_name'], $variables['source_path']));
+      if (strpos($url, $GLOBALS['base_secure_url']) === 0) {
+        $variables['path'] = str_replace($GLOBALS['base_secure_url'], $GLOBALS['base_insecure_url'], $url);
+      }
+    }
+  }
+}
+
+/**
+ * Implements hook_page_build().
+ */
+function warner_misc_init() {
+  $path = drupal_get_path('module', 'warner_misc');
+  // Common styling for overlay dialogs on Warner sites.
+  // @todo, change the default to FALSE before launching.
+  if (variable_get('warner_common_dialog_css', FALSE)) {
+    drupal_add_css($path . '/css/wmg.ui.dialog.css', array('group' => CSS_DEFAULT, 'every_page' => TRUE));
+  }
+
+  // Variables forced for Warner.
+  // Make sure the views data export temporary file location is in gluster.  gardens_temp
+  // conveniently is already handled in site export also (is used by mailhandler).
+  $GLOBALS['conf']['views_data_export_directory'] = 'public://gardens_temp';
+}
+
+/**
+ * Implements hook_theme_registry_alter()
+ * @param array $theme_registry
+ */
+function warner_misc_theme_registry_alter(&$theme_registry) {
+
+  // path to the wmg theme
+  $wmg_theme_path = drupal_get_path('theme', 'wmg');
+
+  // make sure the theme is available and can be accessed
+  if(!file_exists($wmg_theme_path)) {
+    return;
+  }
+
+  // figure out the config path for the current web node.
+  $config_path = conf_path();
+  $config_length = strlen($config_path);
+
+  // walk through each hook to the registry
+  foreach ($theme_registry as $hook => $details) {
+
+    // change behaviour based on whether it's a theme or module
+    switch ($details['type']) {
+      case 'theme_engine':
+
+        // make sure you are selecting the proper element.
+        if (substr($details['theme path'], 0, $config_length)
+                === $config_path) {
+          $tpl_new_path = $wmg_theme_path
+                          . '/'
+                          . $details['template']
+                          . '.tpl.php';
+
+          // does the template file exists?
+          if(file_exists($tpl_new_path)) {
+            // TODO: Figure out whether both should be changed or only one.
+            $details['theme path'] = $wmg_theme_path;
+            $details['path'] = $wmg_theme_path;
+          }
+        }
+
+
+        break;
+      default:
+        // nothing to do...
+        break;
+    }
+  }
+}
+
+/**
+ * Implements hook_simplified_modules_hidden_dependencies().
+ */
+function warner_misc_simplified_modules_hidden_dependencies() {
+  return array(
+    // Hide the gardens site variables module as a hidden dependency.
+    'gardens_site_variables',
+  );
+}
+
+/**
+ * Implements hook_library().
+ */
+function warner_misc_library() {
+  $path = drupal_get_path('module', 'warner_misc');
+  // Register the debug jQuery plugin as a library.
+  $libraries['prevent_multiple_clicks'] = array(
+    'title' => 'Prevents multiple clicks in comment forms.',
+    'website' => 'http://www.drupalgardens.com',
+    'version' => '1.00',
+    'js' => array(
+      $path . '/plugins/prevent-multiple-clicks/prevent-multiple-clicks.js' => array('group' => JS_THEME, 'every_page' => TRUE,),
+    ),
+  );
+  return $libraries;
+}
+
+/**
+ * Implements hook_javascript_libraries_available_alter().
+ */
+function warner_misc_javascript_libraries_available_alter(&$groups) {
+  $groups['Theme plugins']['library'][] = 'prevent_multiple_clicks';
+}
+
+/**
+ * Implements default_oembedcore_provider_alter().
+ *
+ * Enables the youtube provider by default and reassigns some of the embedly-handled
+ * urls to the youtube handler.
+ */
+function warner_misc_default_oembedcore_provider_alter(&$providers) {
+  // The youtube provider is disabled by default - enabled it.
+  $providers['youtube']->disabled = FALSE;
+
+  // These regular expressions are being taken from the embed.ly provider and given
+  // back to the youtube provider so that it handles the majority of normal youtube
+  // embeds, rather than embed.ly, which charges per API call.  The original regexps
+  // are obtained in oembedembedly_default_oembedcore_provider() via an API call to
+  // http://api.embed.ly/1/services . There are some patterns which youtube themselves
+  // do not handle over oembed, so these are left with the embed.ly provider.
+  $providers['youtube']->scheme = "http://*youtube.com/watch*\n"
+    . "https://*youtube.com/watch*\n"
+    . "http://youtu.be/*\n"
+    // This next pattern was copied from the original embedly patterns list, but it's
+    // pointless, as it's covered by the wildcards above.
+    //  . "http://m.youtube.com/watch*\n"
+
+    // Removed "." to catch bare domain.
+    . "http://*youtube.com/playlist*";
+
+  // Leave embedly enabled to handle urls that youtube do not or no longer handle.
+  $providers['oembedembedly_youtube']->scheme = "http://*youtube.com/view_play_list*\n"
+    // Removed the "." from the default on all of these to also catch the bare domain.
+    . "http://*youtube.com/v/*\n"
+    . "http://m.youtube.com/index*\n"
+    . "http://*youtube.com/profile*\n"
+    . "https://*youtube.com/v/*\n"
+    . "http://*youtube.com/user/*\n"
+    . "http://*youtube.com/*#*/*";
+}
+
+/**
+ * Implements hook_oembed_request_alter().
+ */
+function warner_misc_oembed_request_alter(&$attributes, &$provider, &$url) {
+  // Youtube's own oembed endpoint does not directly support /v/<video> urls that
+  // embedly does support.  In order to reduce on costly API calls (as we have a
+  // lot of these urls in Warner), we attempt to translate the url into something
+  // youtube can handle here,  and if successful, we swap out the underlying provider
+  // before the request goes out.  Youtube's endpoint is happiest if all urls are
+  // of the form /watch?v=<video> .
+  if ($provider['name'] == 'oembedembedly_youtube') {
+    $url_parts = parse_url($url);
+    // If the url path contains more than one part (I've never seen this happen),
+    // let embedly work out what to do with it, otherwise convert this to a url
+    // that the youtube endpoint can handle.
+    if (preg_match('@/v/([^/]+)$@', $url_parts['path'], $matches)) {
+      $youtube_provider = oembedcore_provider_load('youtube');
+      if (!empty($youtube_provider) && !$youtube_provider->disabled) {
+        $provider = (array) $youtube_provider;
+        $url_parts['query'] = 'v=' . $matches[1] . '&' . $url_parts['query'];
+        $url = $url_parts['scheme']
+          . '://' . $url_parts['host']
+          . '/watch?' . $url_parts['query']
+          . (!empty($url_parts['fragment']) ? '#' . $url_parts['fragment'] : '');
+        unset($attributes['key']);
+      }
+    }
+  }
+
+  // If iframe=0 is not specified, youtube returns an iframe, which is immune to
+  // all our wmode=transparent tweaks.
+  if ($provider['name'] == 'youtube') {
+    $attributes['iframe'] = 0;
+  }
+
+  // Just for good measure, force wmode parameter (this can save 1 API request per
+  // provider if the *validation* calls match the actual embed calls). It's ignored
+  // by most providers, but honoured by emebedly.
+  $attributes['wmode'] = 'transparent';
+
+  // Sort to make sure that our cache keys remain consistent - a different order
+  // would change the cache key.
+  ksort($attributes);
+}
+
+/**
+ * Implements hook_oembed_request_element_alter().
+ */
+function warner_misc_oembed_request_element_alter(&$element) {
+  // Force all requests to CACHE_PERMANENT.
+  $element['#cache']['expire'] = CACHE_PERMANENT;
+}
+
+/**
+ * Implements hook_comment_on_anything_queue_done().
+ */
+function warner_misc_comment_on_anything_queue_done($instance) {
+  $entity_type = $instance['entity_type'];
+  $site_mail = variable_get('site_mail', '');
+  if (!empty($site_mail)) {
+    // Send an email to the site maintainers notifying them of the rollout.
+    drupal_mail('warner_misc', 'queue_notice', $site_mail, language_default(), array('entity_type' => $entity_type));
+  }
+
+  // Record a timestamp of when was the entity conversion done. This can be looked
+  // up later on each site even if the mail will not land.
+  variable_set('warner_misc_comment_on_anything_' . $entity_type . '_done', time());
+}
+
+/**
+ * Implements hook_mail().
+ */
+function warner_misc_mail($key, &$message, $params) {
+  global $base_url;
+  if ($key == 'queue_notice') {
+    $variables = array(
+      '!site_name' => variable_get('site_name', $base_url),
+      '!entity_type' => $params['entity_type'],
+    );
+    $message['subject'] = drupal_html_to_text(t('Comments node creation on !site_name complete', $variables));
+    $message['body'][] = t('Nodes for comments on !entity_type type content are all created now on !site_name.', $variables);
+  }
+}
+
+/**
+ * Implements hook_cron().
+ */
+function warner_misc_cron() {
+  // Clean out any old session counts that happen to live on.
+  $threshold = time() - (60 * 60 * 24 * 2);
+  db_delete('warner_session_count')
+    ->condition('timestamp', $threshold, '<')
+    ->execute();
+}
+
+/**
+ * Page callback to report session counts.
+ *
+ * @param int $day
+ *  Day of the week as in date("N").
+ * @param bool $return
+ *  Specify if you want the value returned, else printed as json.
+ */
+function warner_misc_report_session_count($day = 1, $return = FALSE) {
+  // We need to suppress any errors here in order to get
+  // clean json to the read script.
+  ini_set('error_reporting', 0);
+  ini_set('display_errors', 0);
+  $dir = '/var/log/warner';
+  $file = 'warner_stats_' . $day . '.log';
+
+  $total = array();
+  if (($handle = fopen($dir . '/' . $file, 'r')) !== FALSE) {
+    while (($data = fgetcsv($handle, 1000, ',')) !== FALSE) {
+      $total[$data[2]]['total'] += $data[3];
+      $total[$data[2]][$data[1]] = $data[3];
+    }
+    fclose($handle);
+  }
+
+  if ($return) {
+    return drupal_json_encode($total);
+  }
+
+  drupal_json_output($total);
+  exit();
+}
+
+/**
+ * Implements hook_modules_enabled().
+ */
+function warner_misc_modules_enabled($modules) {
+  // Enable the gardens-flash CKEditor plugin to fix the % width bug.
+  if (in_array('wysiwyg', $modules)) {
+    _warner_misc_enable_gardens_wmode_plugin();
+  }
+
+  if (in_array('bunchball_nitro', $modules)) {
+    warner_misc_bunchball_filter_create();
+  }
+}
+
+/**
+ * Create the filter format for replacing ownerID placeholders within bunchball NML.
+ */
+function warner_misc_bunchball_filter_create() {
+  if (($filters = filter_get_filters()) && isset($filters['filter_bunchball']) && ($formats = filter_formats()) && !isset($formats['bunchball_nml'])) {
+    $format = new stdClass;
+    $format->format = 'bunchball_nml';
+    $format->name = 'Bunchball NML';
+    $format->weight = 10;
+    $format->filters = array();
+    $format->filters['filter_bunchball'] = array(
+      'status' => 1,
+      'weight' => 0,
+    );
+    filter_format_save($format);
+    // Assign this role to site maintainers and admin for now
+    $permission = filter_permission_name($format);
+    if (($rid = variable_get('user_admin_role')) && $permission) {
+      user_role_grant_permissions($rid, array($permission));
+    }
+    if (($rid = variable_get('gardens_site_owner_role', 0)) && $permission) {
+      user_role_grant_permissions($rid, array($permission));
+    }
+  }
+}
+
+/**
+ * Implements hook_views_api().
+ **/
+function warner_misc_views_api() {
+  return array(
+    'api' => 3,
+    'path' => drupal_get_path('module', 'warner_misc') . '/views',
+  );
+}
+
+/**
+ * Implements hook_block_info().
+ */
+function warner_misc_block_info() {
+  $blocks['membership_stats'] = array(
+    'info' => t('Membership stats'),
+  );
+  return $blocks;
+}
+
+/**
+ * Implements hook_block_view().
+ */
+function warner_misc_block_view($delta) {
+  $block = array();
+  if ($delta == 'membership_stats' && user_access('administer users')) {
+    $block['content'] = warner_misc_membership_stats();
+  }
+  return $block;
+}
+
+/**
+ * Returns statics about memberships on the site.
+ */
+function warner_misc_membership_stats() {
+  // Get a count of all members.
+  $member_count = db_query("SELECT COUNT(uid) FROM {users} WHERE uid > 0")->fetchField();
+
+  // Get a count of members with the 'fan club member role'.
+  $fc_role = user_role_load_by_name('fan club member');
+  $fan_member_count = db_query(
+    "SELECT COUNT(u.uid) FROM {users} u INNER JOIN
+    {users_roles} r ON r.uid = u.uid WHERE r.rid = :rid",
+    array(':rid' => $fc_role->rid)
+  )->fetchField();
+
+  // Get a count of members that registered within the last 24 hours.
+  $new_member_count = db_query("SELECT COUNT(uid) FROM {users} WHERE created > :time", array(':time' => REQUEST_TIME - 86400))->fetchField();
+
+  // Get a count of members that have never logged in.
+  $inactive_member_count = db_query("SELECT COUNT(uid) FROM {users} WHERE access = 0")->fetchField();
+  $vars = array(
+    'member_count' => $member_count,
+    'fan_member_count' => $fan_member_count,
+    'new_member_count' => $new_member_count,
+    'inactive_member_count' => $inactive_member_count
+  );
+  return theme('warner_misc_membership_stats', $vars);
+}
+
+/**
+ * Theme function for the membership statistics block.
+ */
+function theme_warner_misc_membership_stats($variables) {
+  return theme('table', array('header' => array(), 'rows' => array(
+    array(t('Total members'), $variables['member_count']),
+    array(t('Fan club members'), $variables['fan_member_count']),
+    array(t('New members'), $variables['new_member_count']),
+    array(t('Inactive members'), $variables['inactive_member_count'])
+  )));
+}

@@ -1,0 +1,126 @@
+<?php
+/**
+ * @file
+ * Summary
+ */
+
+/**
+ * Implements hook_flush_caches().
+ */
+function migrate_diggy_flush_caches() {
+  $common_arguments = array(
+    'source_connection' => 'onesite',
+    'source_database' => array(
+      'driver' => 'mysql',
+      'database' => 'os',
+      'username' => 'legacy',
+      'host' => '23.23.120.51',
+      'prefix' => '',
+    ),
+  );
+
+  $picture_arguments = $common_arguments + array(
+    'class_name' => 'OnesitePictureMigration',
+    'machine_name' => 'Picture',
+  );
+  MigrationBase::registerMigration($picture_arguments['class_name'],
+    $picture_arguments['machine_name'], $picture_arguments);
+
+  $user_arguments = $common_arguments + array(
+    'class_name' => 'MigrateDiggyUser',
+    'machine_name' => 'User',
+  );
+  MigrationBase::registerMigration($user_arguments['class_name'],
+    $user_arguments['machine_name'], $user_arguments);
+
+  $forum_term_arguments = $common_arguments + array(
+    'class_name' => 'MigrateDiggyForums',
+    'machine_name' => 'ForumTerm',
+  );
+  MigrationBase::registerMigration($forum_term_arguments['class_name'],
+    $forum_term_arguments['machine_name'], $forum_term_arguments);
+
+  $common_arguments += array(
+    'user_migration' => 'User',
+  );
+
+  $forum_thread_arguments = $common_arguments + array(
+    'class_name' => 'MigrateDiggyForumThread',
+    'machine_name' => 'ForumThread',
+    'default_format' => '1',
+    'forum_migration' => 'ForumTerm',
+  );
+  MigrationBase::registerMigration($forum_thread_arguments['class_name'],
+    $forum_thread_arguments['machine_name'], $forum_thread_arguments);
+
+  $forum_post_arguments = $common_arguments + array(
+    'class_name' => 'OnesiteForumPostMigration',
+    'machine_name' => 'ForumPost',
+    'comment_bundle' => 'comment_node_forum',
+    'parent_migration' => 'ForumThread',
+    'default_format' => '1',
+  );
+  MigrationBase::registerMigration($forum_post_arguments['class_name'],
+    $forum_post_arguments['machine_name'], $forum_post_arguments);
+
+  $blog_post_arguments = $common_arguments + array(
+    'class_name' => 'MigrateDiggyBlogPost',
+    'machine_name' => 'BlogPost',
+    'default_format' => '6',
+  );
+  MigrationBase::registerMigration($blog_post_arguments['class_name'],
+    $blog_post_arguments['machine_name'], $blog_post_arguments);
+
+  $blog_post_comment_arguments = $common_arguments + array(
+    'class_name' => 'OnesiteBlogPostCommentMigration',
+    'machine_name' => 'BlogPostComment',
+    'parent_type' => 'blog_post',
+    'parent_migration' => 'BlogPost',
+    'comment_bundle' => 'comment_node_blog',
+    'default_format' => '1',
+  );
+  MigrationBase::registerMigration($blog_post_comment_arguments['class_name'],
+    $blog_post_comment_arguments['machine_name'], $blog_post_comment_arguments);
+
+  $photo_arguments = $common_arguments + array(
+    'class_name' => 'MigrateDiggyPhoto',
+    'machine_name' => 'Photo',
+    'bundle' => 'photo',
+    'default_format' => '1',
+    'image_field' => 'field_photo_asset',
+  );
+  MigrationBase::registerMigration($photo_arguments['class_name'],
+    $photo_arguments['machine_name'], $photo_arguments);
+
+  $photo_comment_arguments = $common_arguments + array(
+    'class_name' => 'OnesitePhotoCommentMigration',
+    'machine_name' => 'PhotoComment',
+    'parent_type' => 'photo',
+    'parent_migration' => 'Photo',
+    'comment_bundle' => 'comment_node_photo',
+    'default_format' => '1',
+  );
+  MigrationBase::registerMigration($photo_comment_arguments['class_name'],
+    $photo_comment_arguments['machine_name'], $photo_comment_arguments);
+
+  $video_arguments = $common_arguments + array(
+    'class_name' => 'MigrateDiggyVideo',
+    'machine_name' => 'Video',
+    'bundle' => 'video',
+    'default_format' => '1',
+    'video_field' => 'field_video_asset',
+  );
+  MigrationBase::registerMigration($video_arguments['class_name'],
+    $video_arguments['machine_name'], $video_arguments);
+
+  $video_comment_arguments = $common_arguments + array(
+    'class_name' => 'OnesiteVideoCommentMigration',
+    'machine_name' => 'VideoComment',
+    'parent_type' => 'video',
+    'parent_migration' => 'Video',
+    'comment_bundle' => 'comment_node_video',
+    'default_format' => '1',
+  );
+  MigrationBase::registerMigration($video_comment_arguments['class_name'],
+                                   $video_comment_arguments['machine_name'], $video_comment_arguments);
+}

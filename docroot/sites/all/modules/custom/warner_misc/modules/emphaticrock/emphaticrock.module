@@ -1,0 +1,133 @@
+<?php
+
+/**
+ * @file
+ * Miscellaneous functionality for Emphatic Rock.
+ *
+ * This submodule is a holdover from the first engagement with WMG and the
+ * Emphatic Rock POC site. This module should be made obsolete when emphaticrock
+ * is ported to the standard WMG Gardens template.
+ */
+
+/**
+ * Implements hook_file_formatter_info().
+ */
+function emphaticrock_file_formatter_info() {
+  $formatters = array();
+
+  // File formatter for displaying an EOS image from the Akamai CDN.
+  $formatters['eos_image'] = array(
+    'label' => t('EOS Image'),
+    'default settings' => array('image_style' => ''),
+    'view callback' => 'emphaticrock_file_formatter_eos_image_view',
+    'settings callback' => 'emphaticrock_file_formatter_eos_image_settings',
+  );
+
+  return $formatters;
+}
+
+/**
+ * Implements hook_file_formatter_FORMATTER_view().
+ *
+ * Returns a drupal_render() array to display an image that was uploaded via
+ * EOS to the Akamai CDN. Image derivatives are in the same location with a
+ * suffix appended to the file name.
+ */
+function emphaticrock_file_formatter_eos_image_view($file, $display, $langcode) {
+  if (strpos($file->uri, 'http://d2ceoshttpcontent.com.edgesuite.net') === 0) {
+    $path = $file->uri;
+    if (!empty($display['settings']['image_style']) && ($pos = strrpos($path, '.'))) {
+      $base = substr($path, 0, $pos);
+      $extension = substr($path, $pos+1);
+      $path = $base . '_' . $display['settings']['image_style'] . '.' . $extension;
+    }
+    $element = array(
+      '#theme' => 'image',
+      '#path' => $path,
+    );
+    return $element;
+  }
+}
+
+/**
+ * Implements hook_file_formatter_FORMATTER_settings().
+ *
+ * Returns form elements for configuring the 'eos_image' formatter.
+ */
+function emphaticrock_file_formatter_eos_image_settings($form, &$form_state, $settings) {
+  $element = array();
+  $element['image_style'] = array(
+    '#title' => t('Image style'),
+    '#type' => 'select',
+    '#options' => drupal_map_assoc(array(1, 2, 3, 4, 5, 6, 7, 8, 9)),
+    '#default_value' => $settings['image_style'],
+    '#empty_option' => t('None (original image)'),
+  );
+  return $element;
+}
+
+/**
+ * Implements hook_preprocess_html()
+ */
+function emphaticrock_preprocess_html(&$variables) {
+  if (isset($variables['head_title_array']) && !isset($variables['head_title_array']['slogan']) ) {
+    $variables['head_title'] = implode(' | ', array(variable_get('site_name', t('EMPHATIC ROCK')), drupal_get_title(),));
+  }
+}
+
+/*
+ * Implements hook_process_node()
+ */
+function emphaticrock_process_node(&$variables) {
+  if (isset($variables['view_mode']) && $variables['view_mode'] === 'teaser') {
+    unset($variables['content']['links']['node']);
+    unset($variables['content']['links']['comment']);
+  }
+}
+
+/*
+ * Implements hook_process_comment_wrapper()
+ */
+function emphaticrock_process_comment_wrapper(&$variables) {
+  if (isset($variables['content'])
+        && isset($variables['content']['comment_form'])
+        && isset($variables['content']['comment_form']['actions'])
+        && isset($variables['content']['comment_form']['actions']['submit'])
+        && isset($variables['content']['comment_form']['actions']['submit']['#value'])) {
+    $variables['content']['comment_form']['actions']['submit']['#value'] = t('Post comment');
+  }
+}
+
+/*
+ * Implements hook_form_FORM_ID_alter()
+ */
+function emphaticrock_form_comment_form_alter(&$form, &$form_state, $form_id) {
+  if (isset($form['subject'])) {
+    $form['subject']['#type'] = 'hidden';
+  }
+  if (isset($form['comment_body'])) {
+    $form['comment_body']['und']['0']['#type'] = 'textarea';
+    unset($form['comment_body']['und']['#title']);
+    unset($form['comment_body']['und']['0']['#title']);
+    unset($form['comment_body']['und']['0']['#base_type']);
+  }
+  if (isset($form['actions']) && isset($form['actions']['preview'])) {
+    unset($form['actions']['preview']);
+  }
+  if (isset($form['notify_settings'])) {
+    unset($form['notify_settings']);
+  }
+}
+
+/**
+ * Implements hook_form_FORM_ID_alter()
+ */
+function emphaticrock_form_user_profile_form_alter(&$form, &$form_state) {
+  if(!isset($form['#attached'])) {
+    $form['#attached'] = array();
+  }
+  if(!isset($form['#attached']['css'])) {
+    $form['#attached']['css'] = array();
+  }
+  $form['#attached']['css'][] = drupal_get_path('module', 'emphaticrock') . '/css/emphaticrock-blossom.css';
+}

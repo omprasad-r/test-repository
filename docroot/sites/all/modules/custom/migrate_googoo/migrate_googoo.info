@@ -1,0 +1,16 @@
+name = "googoodolls.com migration"
+description = "Import of googoodolls.com content into Gardens"
+package = "Import/Export"
+core = 7.x
+
+dependencies[] = migrate
+dependencies[] = migrate_extras
+dependencies[] = date_migrate
+
+files[] = migrate_googoo.migrate.inc
+files[] = blog.inc
+files[] = event.inc
+files[] = forum.inc
+files[] = photo.inc
+files[] = picture.inc
+files[] = user.inc

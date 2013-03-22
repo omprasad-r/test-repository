@@ -1,0 +1,10 @@
+name = Member API
+description = "REST API for CRUD operations on site users."
+core = 7.x
+dependencies[] = "oauth_common"
+dependencies[] = "services"
+dependencies[] = "rest_server"
+dependencies[] = "services_oauth"
+dependencies[] = "roleresource"
+;Tests commented out because of notices from Services and core.
+;files[] = "member_api.test"

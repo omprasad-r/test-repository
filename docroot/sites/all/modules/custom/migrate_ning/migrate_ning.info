@@ -1,0 +1,21 @@
+name = "Migration from Ning"
+description = "Migration from Ning"
+package = "Import/Export"
+core = 7.x
+
+dependencies[] = migrate
+dependencies[] = migrate_extras
+dependencies[] = media
+
+files[] = migrate_ning.migrate.inc
+files[] = blog.inc
+files[] = comment.inc
+files[] = discussion.inc
+files[] = event.inc
+files[] = group.inc
+files[] = member.inc
+files[] = music.inc
+files[] = page.inc
+files[] = photo.inc
+files[] = picture.inc
+files[] = video.inc
