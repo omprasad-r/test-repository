@@ -1,0 +1,305 @@
+<?php
+
+/**
+ * @file
+ * Provides integration with a number of 3rd-party virus scanning utilities.
+ */
+
+/**
+ * Denotes that no viruses were found in a file.
+ */
+define('ANTIVIRUS_SCAN_OK', 0x0);
+
+/**
+ * Denotes that a virus was found in a file.
+ */
+define('ANTIVIRUS_SCAN_FOUND', 0x1);
+
+/**
+ * Denotes that a scan was unable to complete.
+ */
+define('ANTIVIRUS_SCAN_ERROR', 0x2);
+
+/**
+ * Denotes alerts should not be sent when a virus is detected.
+ */
+define('ANTIVIRUS_NOTIFY_NONE', 0x10);
+
+/**
+ * Denotes alerts should be sent to admins when a virus is detected.
+ */
+define('ANTIVIRUS_NOTIFY_ADMIN', 0x11);
+
+/**
+ * Denotes that a failed scan should result in an error, preventing the upload.
+ */
+define('ANTIVIRUS_FAIL_ERROR', 0x20);
+
+/**
+ * Denotes that a failed scan should result in a message.
+ */
+define('ANTIVIRUS_FAIL_MSG', 0x21);
+
+/**
+ * Denotes that a failed scan should not show any message.
+ */
+define('ANTIVIRUS_FAIL_SILENT', 0x22);
+
+/**
+ * Implements hook_menu().
+ */
+function antivirus_menu() {
+  $items = array();
+
+  $items['admin/config/system/antivirus'] = array(
+    'title' => 'Antivirus settings',
+    'description' => 'Configure antivirus settings and behavior.',
+    'page callback' => 'drupal_get_form',
+    'page arguments' => array('antivirus_admin_form'),
+    'access arguments' => array('administer antivirus'),
+    'file' => 'antivirus.admin.inc',
+  );
+
+  $items['admin/config/system/antivirus/configure'] = array(
+    'title' => 'Configure',
+    'access arguments' => array('administer antivirus'),
+    'type' => MENU_DEFAULT_LOCAL_TASK,
+  );
+
+  $items['admin/config/system/antivirus/scanner'] = array(
+    'title' => 'Scanner',
+    'description' => 'Enable, disable, and configure available scanners.',
+    'page callback' => 'antivirus_admin_overview',
+    'access arguments' => array('administer antivirus'),
+    'file' => 'antivirus.admin.inc',
+    'type' => MENU_LOCAL_TASK,
+  );
+
+  $items['admin/config/system/antivirus/scanner/%'] = array(
+    'title' => 'Scanner settings',
+    'title callback' => '_antivirus_scanner_get_title',
+    'title arguments' => array(5),
+    'description' => 'Configure scanner settings.',
+    'page callback' => 'drupal_get_form',
+    'page arguments' => array('antivirus_admin_scanner_form', 5),
+    'access arguments' => array('administer antivirus'),
+    'file' => 'antivirus.admin.inc',
+  );
+
+  $items['admin/config/system/antivirus/scanner/%/enable'] = array(
+    'title' => 'Enable scanner',
+    'description' => 'Enable scanner.',
+    'page callback' => 'drupal_get_form',
+    'page arguments' => array('antivirus_admin_scanner_enable_form', 5),
+    'access arguments' => array('administer antivirus'),
+    'file' => 'antivirus.admin.inc',
+  );
+
+  $items['admin/config/system/antivirus/scanner/%/disable'] = array(
+    'title' => 'Disable scanner',
+    'description' => 'Disable scanner.',
+    'page callback' => 'drupal_get_form',
+    'page arguments' => array('antivirus_admin_scanner_disable_form', 5),
+    'access arguments' => array('administer antivirus'),
+    'file' => 'antivirus.admin.inc',
+  );
+
+  $items['admin/config/system/antivirus/scan'] = array(
+    'title' => 'Run scan',
+    'description' => 'Run a manual antivirus scan.',
+    'page callback' => 'drupal_get_form',
+    'page arguments' => array('antivirus_admin_run_scan'),
+    'access arguments' => array('run antivirus scan'),
+    'file' => 'antivirus.admin.inc',
+    'type' => MENU_LOCAL_TASK,
+    'weight' => 10,
+  );
+
+  return $items;
+}
+
+/**
+ * Implements hook_permission().
+ */
+function antivirus_permission() {
+  return array(
+    'administer antivirus' => array(
+      'title' => t('Administer antivirus'),
+      'description' => t('Perform administration tasks for my module.'),
+    ),
+    'bypass antivirus scan' => array(
+      'title' => t('Bypass antivirus scan'),
+      'description' => t('Upload files without configured virus scan.'),
+      'restrict access' => TRUE,
+    ),
+    'run antivirus scan' => array(
+      'title' => t('Run antivirus scan'),
+      'description' => t('Manually run virus scan of uploaded files.'),
+    ),
+  );
+}
+
+/**
+ * Implements hook_theme().
+ */
+function antivirus_theme() {
+  return array(
+    'antivirus_admin_overview' => array(
+      'render element' => 'form',
+      'file' => 'antivirus.admin.inc',
+    ),
+  );
+}
+
+/**
+ * Implements hook_file_validate().
+ */
+function antivirus_file_validate($file) {
+  $scan = antivirus_scan()
+    ->addTargets(array($file))
+    ->scan();
+
+  ##GardensExcludeFromExportStart################################################
+  // Begin Gardens antivirus tracking via statsd.
+  switch ($scan) {
+    case ANTIVIRUS_SCAN_OK:
+      $stat_type = 'ok';
+      break;
+    case ANTIVIRUS_SCAN_FOUND:
+      $stat_type = 'virus';
+      break;
+    default:
+      $stat_type = 'error';
+      break;
+  }
+  gardens_statsd_send("clamd.$stat_type", 1, GARDENS_STATSD_COUNTER, 1);
+  // End Gardens antivirus tracking via statsd.
+  ##################################################GardensExcludeFromExportEnd##
+
+  if ($scan == ANTIVIRUS_SCAN_FOUND) {
+    return array(t('The file contains a virus.'));
+  }
+  elseif ($scan == ANTIVIRUS_SCAN_ERROR) {
+    switch (variable_get('antivirus_action_error', ANTIVIRUS_FAIL_ERROR)) {
+      case ANTIVIRUS_FAIL_ERROR:
+        return array(t('Unable to scan file for viruses, upload was denied.'));
+      case ANTIVIRUS_FAIL_MSG:
+        drupal_set_message(t('Scan of file %file failed.', array('%file' => $file->filename)), 'warning');
+      case ANTIVIRUS_FAIL_SILENT:
+        watchdog('antivirus', 'Scan of file %file failed.', array('%file' => $file->filename), WATCHDOG_WARNING);
+        break;
+    }
+  }
+}
+
+/**
+ * Implements hook_antivirus_scanner_info().
+ */
+function antivirus_antivirus_scanner_info() {
+  $defaults = array('module' => 'antivirus');
+
+  return array(
+    'clamav' => $defaults + array(
+      'name' => t('Clam AntiVirus'),
+      'link' => 'http://www.clamav.net/',
+      'download' => 'http://www.clamav.net/download/',
+      'class' => 'ClamAVScanner',
+    ),
+    'clamavdaemon' => $defaults + array(
+      'name' => t('Clam AntiVirus (Daemon)'),
+      'link' => 'http://www.clamav.net/',
+      'download' => 'http://www.clamav.net/download/',
+      'class' => 'ClamAVDaemonScanner',
+    ),
+    'test' => $defaults + array(
+      'name' => t('Test Scanner'),
+      'class' => 'TestScanner',
+      'hidden' => TRUE,
+    ),
+  );
+}
+
+/**
+ * Gathers a list of available antivirus scanners.
+ *
+ * @param $reset
+ *   Reset the action info static cache.
+ * @return
+ *   An associative array, keyed on scanner name.
+ */
+function antivirus_get_scanners($scanner = '', $reset = FALSE) {
+  $scanners = &drupal_static(__FUNCTION__);
+
+  if (!isset($scanners) || $reset) {
+    $scanners = module_invoke_all('antivirus_scanner_info');
+  }
+
+  // See module_implements() for an explanation of this cast.
+  if (isset($scanner) && isset($scanners[$scanner])) {
+    return $scanners[$scanner];
+  }
+  else {
+    return (array) $scanners;
+  }
+}
+
+/**
+ * Implements hook_file_operations_info().
+ */
+function antivirus_file_operations_info() {
+  $operations = array(
+    'antivirus_scan' => array(
+      'label' => t('Scan the selected files for viruses'),
+      'callback' => 'antivirus_scan_files',
+    ),
+  );
+
+  return $operations;
+}
+
+/**
+ * Runs the antivirus scanners.
+ */
+function antivirus_scan($scanners = array()) {
+  return AntivirusScan::getScanner($scanners);
+}
+
+/**
+ * Runs the antivirus scanners on a given set of files.
+ */
+function antivirus_scan_files($files) {
+  return antivirus_scan()->addTargets($files)->scan();
+}
+
+/**
+ * Returns whether a given antivirus scanner is enabled.
+ */
+function antivirus_scanner_is_enabled($scanner) {
+  return array_search($scanner, variable_get('antivirus_enabled_scanners', array())) !== FALSE;
+}
+
+/**
+ * Enables a given antivirus scanner.
+ */
+function antivirus_scanner_enable($scanner) {
+  $enabled_scanners = variable_get('antivirus_enabled_scanners', array());
+
+  if (!isset($enabled_scanners[$scanner])) {
+    array_push($enabled_scanners, $scanner);
+    variable_set('antivirus_enabled_scanners', $enabled_scanners);
+  }
+}
+
+/**
+ * Disables a given antivirus scanner.
+ */
+function antivirus_scanner_disable($scanner) {
+  $enabled_scanners = variable_get('antivirus_enabled_scanners', array());
+
+  $key = array_search($scanner, $enabled_scanners);
+  if ($key !== FALSE) {
+    unset($enabled_scanners[$key]);
+    variable_set('antivirus_enabled_scanners', $enabled_scanners);
+  }
+}
+

@@ -1,0 +1,12 @@
+<?php
+
+/**
+ * @file
+ * Antivirus module integration with the IEContentAnalyzer library.
+ */
+
+/**
+ * Defines the default URL location of the IEContentAnalyzer library.
+ */
+define('ANTIVIRUS_IECONTENTANALYZER_URL', 'http://svn.wikimedia.org/svnroot/mediawiki/trunk/phase3/includes/libs/IEContentAnalyzer.php');
+

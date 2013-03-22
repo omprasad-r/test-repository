@@ -1,0 +1,57 @@
+<?php
+
+/**
+ * @file
+ * Tests for the Antivirus module.
+ */
+
+class AntivirusTestCase extends DrupalWebTestCase {
+
+  public static function getInfo() {
+    return array(
+      'name' => 'Antivirus tests',
+      'description' => 'Test the scanning functionality of the Antivirus module.',
+      'group' => 'Antivirus',
+    );
+  }
+
+  public function setUp() {
+    parent::setUp('antivirus', 'file_test');
+    variable_set('antivirus_enabled_scanners', array('test'));
+  }
+
+  public function testCleanFile() {
+    $file = drupal_tempnam('temporary://', 'clean');
+
+    $result = antivirus_scan()->addTargets(array($file))->scan();
+    unlink($file);
+    $this->assertEqual($result, ANTIVIRUS_SCAN_OK, t('A clean file containing no virus was successfully scanned.'));
+  }
+
+  public function testVirusFile() {
+    $file = drupal_tempnam('temporary://', 'virus');
+
+    $result = antivirus_scan()->addTargets(array($file))->scan();
+    unlink($file);
+    $this->assertEqual($result, ANTIVIRUS_SCAN_FOUND, t('A file containing a virus was successfully found.'));
+  }
+
+  public function testLocalAndRemoteTargets() {
+    $local_file = drupal_tempnam('public://', 'local');
+    $local_file_no_wrapper = drupal_realpath(drupal_tempnam('public://', 'local_no_wrapper'));
+    $remote_file = drupal_tempnam('dummy-remote://', 'remote');
+
+    $scan = antivirus_scan()
+      ->addTargets(array($local_file, $local_file_no_wrapper, $remote_file));
+
+    $this->assertTrue(in_array(drupal_realpath($local_file), $scan->targets), t('Stream wrappers using local storage should be scanned.'));
+    $this->assertTrue(in_array($local_file_no_wrapper, $scan->targets), t('Files not using stream wrappers should be scanned.'));
+    $this->assertTrue(count($scan->targets) == 2, t('Stream wrappers using remote storage should not be scanned.'));
+
+    unlink($local_file);
+    unlink($local_file_no_wrapper);
+    unlink($remote_file);
+  }
+
+}
+

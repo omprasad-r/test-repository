@@ -1,0 +1,15 @@
+name = Antivirus IEContentAnalyzer
+description = Antivirus module integration with the <a href="http://svn.wikimedia.org/viewvc/mediawiki/trunk/phase3/includes/libs/IEContentAnalyzer.php">IEContentAnalyzer</a> library.
+package = Security
+core = 7.x
+dependencies[] = antivirus
+
+files[] = IEContentAnalyzerScanner.php
+
+
+; Information added by drupal.org packaging script on 2012-11-14
+version = "7.x-1.0-alpha2"
+core = "7.x"
+project = "antivirus"
+datestamp = "1352934659"
+

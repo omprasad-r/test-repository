@@ -1,0 +1,47 @@
+<?php
+
+/**
+ * @file
+ * Install, update and uninstall functions for the Antivirus module.
+ */
+
+/**
+ * Implements hook_uninstall().
+ */
+function antivirus_uninstall() {
+  variable_del('antivirus_notify');
+  variable_del('antivirus_notify_email');
+  variable_del('antivirus_notify_msg');
+  variable_del('antivirus_enabled_scanners');
+
+  // Delete all scanner-specific settings.
+  db_delete('variable')
+    ->condition('name', 'antivirus_scanner_%', 'LIKE')
+    ->execute();
+}
+
+/**
+ * Implements hook_requirements().
+ */
+function antivirus_requirements($phase) {
+  $requirements = array();
+
+  if ($phase == 'runtime') {
+    // On Windows, system calls are not reported separately in execution time.
+    // Warn users that on Windows systems, bulk antivirus scans via the UI will
+    // likely timeout.
+    //
+    // @see http://php.net/manual/en/function.set-time-limit.php#refsect1-function.set-time-limit-notes
+    if (drupal_strtoupper(drupal_substr(PHP_OS, 0, 3)) === 'WIN') {
+      $requirements['antivirus_os'] = array(
+        'title' => t('Operating system'),
+        'value' => PHP_OS,
+        'severity' => REQUIREMENT_WARNING,
+        'description' => t('Running batch antivirus scans using the UI on Windows will likely result in a page timeout. See the !php-documentaion for more details.', array('!php-documentaion' => l(t('PHP documentation'), 'http://php.net/manual/en/function.set-time-limit.php#refsect1-function.set-time-limit-notes'))),
+      );
+    }
+  }
+
+  return $requirements;
+}
+

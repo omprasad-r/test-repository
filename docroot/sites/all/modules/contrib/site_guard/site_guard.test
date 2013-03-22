@@ -1,0 +1,131 @@
+<?php
+
+/**
+ * @file
+ * Tests for the MASt module.
+ */
+
+class site_guardTest extends DrupalWebTestCase {
+
+  public static function getInfo() {
+    return array(
+      'name' => t('Site Guard Tests'),
+      'description' => t('Tests the Site Guard functionality.'),
+      'group' => t('Site Guard'),
+    );
+  }
+
+  function setUp() {
+    parent::setUp(array('site_guard'));
+    $this->adminUser = $this->drupalCreateUser(array('administer site_guard', 'access administration pages', 'administer site configuration', 'access content'));
+  }
+
+  /**
+   * Helper function to parse the header.
+   *
+   * @param type $content
+   *
+   * @return array
+   */
+  function parseHeader($content) {
+    $info = curl_getinfo($this->curlHandle);
+    $header = drupal_substr($content, 0, $info['header_size']);
+    $header = str_replace("HTTP/1.1 100 Continue\r\n\r\n", '', $header);
+    $header_values = array();
+    foreach (explode("\n", $header) as $str) {
+      if (strpos($str, ': ') !== FALSE) {
+        $line = explode(': ', $str);
+        $header_values[$line[0]] = trim($line[1]); 
+      }
+    }
+    $status = strtok($header, "\r\n");
+    $code = $info['http_code'];
+    return array($info, $header, $status, $code, $header_values);
+  }
+
+  /**
+   * Tests basic Site Guard functionality.
+   */
+  function testsite_guardToggle() {
+    // Enable caching and set the page max age to one hour
+    $original_max_age = 3600;
+    variable_set('cache', 1);
+    variable_set('page_cache_maximum_age', $original_max_age);
+    // For this GET request we can't use drupalGet as we want to be able to
+    // parse the response headers so we can check the Cache-Control header.
+    $content = $this->curlExec(array(CURLOPT_HTTPGET => TRUE, CURLOPT_HEADER => TRUE, CURLOPT_URL => url('', array('absolute' => TRUE)), CURLOPT_NOBODY => FALSE, CURLOPT_RETURNTRANSFER => TRUE));
+    $this->assertResponse('200');
+    // Parse response.
+    list($info, $header, $status, $code, $header_values) = $this->parseHeader($content);
+    $this->verbose('<hr />Header: ' . highlight_string('<?php ' . var_export($header, TRUE), TRUE) .
+                   '<hr />Curl info: ' . highlight_string('<?php ' . var_export($info, TRUE), TRUE) .
+                   '<hr />Raw response: ' . $content);
+
+    $this->assertEqual($header_values['Cache-Control'], "public, max-age=$original_max_age");
+
+    $auth_user = $this->randomName();
+    $auth_pass = $this->randomName();
+    // Enable Site Guard with this username and password.
+    site_guard_enable_site_guard($auth_user, $auth_pass);
+    $this->drupalGet('');
+    $this->assertResponse('401');
+    $http_header = array('Authorization: Basic ' . base64_encode($auth_user . ':' . $auth_pass));
+    $this->drupalGet('', array(), $http_header);
+    $this->assertResponse('200');
+    // For this GET request we can't use drupalGet as we want to be able to
+    // parse the response headers so we can check the Cache-Control header.
+    $content = $this->curlExec(array(CURLOPT_HTTPGET => TRUE, CURLOPT_HEADER => TRUE, CURLOPT_URL => url('', array('absolute' => TRUE)), CURLOPT_NOBODY => FALSE, CURLOPT_RETURNTRANSFER => TRUE, CURLOPT_HTTPHEADER => $http_header));
+    $this->assertResponse('200');
+    // Parse response.
+    list($info, $header, $status, $code, $header_values) = $this->parseHeader($content);
+    $this->verbose('<hr />Header: ' . highlight_string('<?php ' . var_export($header, TRUE), TRUE) .
+                   '<hr />Curl info: ' . highlight_string('<?php ' . var_export($info, TRUE), TRUE) .
+                   '<hr />Raw response: ' . $content);
+    $this->assertEqual($header_values['Cache-Control'], 'public, max-age=0');
+
+    // Now disable Site Guard and make sure everything goes back to how it was
+    // before.
+    site_guard_disable_site_guard();
+    $content = $this->curlExec(array(CURLOPT_HTTPGET => TRUE, CURLOPT_HEADER => TRUE, CURLOPT_URL => url('', array('absolute' => TRUE)), CURLOPT_NOBODY => FALSE, CURLOPT_RETURNTRANSFER => TRUE));
+    $this->assertResponse('200');
+    // Parse response.
+    list($info, $header, $status, $code, $header_values) = $this->parseHeader($content);
+    $this->verbose('<hr />Header: ' . highlight_string('<?php ' . var_export($header, TRUE), TRUE) .
+                   '<hr />Curl info: ' . highlight_string('<?php ' . var_export($info, TRUE), TRUE) .
+                   '<hr />Raw response: ' . $content);
+
+    $this->assertEqual($header_values['Cache-Control'], "public, max-age=$original_max_age");
+  }
+
+  /**
+   * Tests the admin form functionality.
+   */
+  function testsite_guardAdminUI() {
+    $this->drupalLogin($this->adminUser);
+    $auth_user = $this->randomName();
+    $auth_pass = $this->randomName();
+    $edit = array(
+      'enabled' => 1,
+      'shield_user' => $auth_user,
+      'shield_pass' => '',
+    );
+    $this->drupalPost('admin/config/system/site_guard', $edit, t('Submit'));
+    $this->assertText('You need to provide both a username and password to enable Site Guard', 'Validation fails when only a username is provided');
+    $this->drupalGet('');
+    // Assert that Site Guard did not get activated.
+    $this->assertResponse('200');
+    $edit['shield_user'] = '';
+    $edit['shield_pass'] = $auth_pass;
+    $this->drupalPost('admin/config/system/site_guard', $edit, t('Submit'));
+    $this->assertText('You need to provide both a username and password to enable Site Guard', 'Validation fails when only a password is provided');
+    $this->drupalGet('');
+    // Assert that Site Guard did not get activated.
+    $this->assertResponse('200');
+    $edit['shield_user'] = $auth_user;
+    $this->drupalPost('admin/config/system/site_guard', $edit, t('Submit'));
+    $this->assertResponse('401');
+    $this->drupalGet('', array(), array('Authorization: Basic ' . base64_encode($auth_user . ':' . $auth_pass)));
+    $this->assertResponse('200');
+  }
+
+}

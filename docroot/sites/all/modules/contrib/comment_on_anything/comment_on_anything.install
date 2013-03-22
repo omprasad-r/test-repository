@@ -1,0 +1,48 @@
+<?php
+
+/**
+ * @file
+ * Setup and uninstallation code for Comment on anything module.
+ */
+
+/**
+ * Implements hook_schema().
+ */
+function comment_on_anything_schema() {
+  $schema = array();
+
+  // Used to store quick lookup information for related entities to avoid
+  // doing entity field query and figuring out entity - node - comment
+  // relationships indirectly from there that is likely slower.
+  $schema['comment_on_anything_cache'] = drupal_get_schema_unprocessed('system', 'cache');
+
+  return $schema;
+}
+
+/**
+ * Implements hook_install().
+ */
+function comment_on_anything_install() {
+  node_types_rebuild();
+  // Do not generate permissions automatically for our node type.
+  // @todo revisit based on needs and means to manage those nodes.
+  variable_set('node_permissions_comment_on_anything', 0);
+
+  // Hide post information on Comment on anything nodes.
+  // @see template_preprocess_node()
+  variable_set('node_submitted_comment_on_anything', FALSE);
+}
+
+/**
+ * Implements hook_uninstall().
+ */
+function comment_on_anything_uninstall() {
+  $variables = array(
+    'node_permissions_comment_on_anything',
+    'node_submitted_comment_on_anything',
+  );
+
+  foreach ($variables as $variable) {
+    variable_del($variable);
+  }
+}

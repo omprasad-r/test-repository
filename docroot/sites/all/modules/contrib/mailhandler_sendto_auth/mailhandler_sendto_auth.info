@@ -1,0 +1,6 @@
+name = Mailhandler Sendto Auth
+description = To Address authentication plugin for Mailhandler. Associates send-to address with a user ID.
+core = 7.x
+package = mailhandler
+dependencies[] = mailhandler
+files[] = plugins/mailhandler/authenticate/MailhandlerAuthenticateSendto.class.php

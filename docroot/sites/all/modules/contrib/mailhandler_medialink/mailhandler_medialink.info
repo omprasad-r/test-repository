@@ -1,0 +1,6 @@
+name = Mailhandler_Medialink
+description = Media link command plugin for Mailhandler extracts link from incoming email body.
+core = 7.x
+package = mailhandler
+dependencies[] = mailhandler
+files[] = plugins/mailhandler/commands/MailhandlerCommandsMailMediaLink.class.php

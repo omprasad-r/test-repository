@@ -1,0 +1,82 @@
+<?php
+
+/**
+ * @file
+ * Comment on anything and Field permissions automated tests.
+ */
+
+class CommentOnAnythingFieldPermissionsTestCase extends CommentOnAnythingTestCase {
+
+  protected $unprivileged_user;
+
+  public static function getInfo() {
+    return array(
+      'name' => 'Comment field with Field Permissions',
+      'description' => 'Test comment on anything field with the Field Permissions module',
+      'group' => 'Comment on anything',
+    );
+  }
+
+  protected function setUp() {
+    parent::setUp('field_permissions');
+
+    $this->privileged_user = $this->drupalCreateUser(array(
+      'administer users',
+      'administer content types',
+      'access devel information',
+      'access comments',
+      'post comments',
+      'access user profiles',
+      'administer site configuration',
+      'administer field permissions',
+      'access private fields',
+    ));
+
+    $this->unprivileged_user = $this->drupalCreateUser(array(
+      'access comments',
+      'post comments',
+      'access user profiles',
+    ));
+  }
+
+  public function testFieldCreationOnUser() {
+    list($field_name, $user_id) = parent::testFieldCreationOnUser();
+    $this->checkFieldPermissionsOnEntity("admin/config/people/accounts/fields/field_$field_name", "user/$user_id");
+  }
+
+  public function testFieldCreationOnNode() {
+    list($field_name, $content_type, $nid) = parent::testFieldCreationOnNode();
+    $this->checkFieldPermissionsOnEntity("admin/structure/types/manage/$content_type/fields/field_$field_name", "node/$nid");
+  }
+
+  /**
+   * Checks the behavior of the comment field with the Field permission module.
+   *
+   * @param string $field_settings_path
+   *   Path for the Field settings form.
+   * @param string $entity_url
+   *   Url for an existing entity where the field settings can be tested.
+   */
+  protected function checkFieldPermissionsOnEntity($field_settings_path, $entity_url) {
+    $this->drupalLogin($this->privileged_user);
+
+    // Make field permission private.
+    $edit = array(
+      'field[field_permissions][type]' => FIELD_PERMISSIONS_PRIVATE,
+    );
+
+    $this->drupalPost($field_settings_path, $edit, t('Save settings'));
+
+    // Field should still be availible for the privileged user.
+    $this->drupalGet($entity_url);
+    $this->assertFieldByName('subject');
+
+    // Field should not be availible for an unprivileged user.
+    $this->drupalLogout();
+    $this->drupalLogin($this->unprivileged_user);
+
+    $this->drupalGet($entity_url);
+    $this->assertNoFieldByName('subject');
+  }
+
+}

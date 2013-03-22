@@ -1,0 +1,482 @@
+<?php
+
+/**
+ * @file
+ * This module implements authentication endpoints for Janrain Capture.
+ *
+ * @see http://www.janrain.com/products/capture
+ */
+
+/**
+ * Implements hook_init().
+ */
+function janrain_capture_init() {
+
+  // Don't do anything if the module settings have not been configured.
+  if (!janrain_capture_configured()) {
+    return;
+  }
+
+  $janrain_capture_main = variable_get('janrain_capture_main', array());
+  $janrain_capture_optional = variable_get('janrain_capture_optional', array());
+
+  $capture_sso_address = !empty($janrain_capture_optional['capture_sso_address'])
+    ? $janrain_capture_optional['capture_sso_address'] : '';
+  $capture_client_id = !empty($janrain_capture_main['capture_client_id'])
+    ? $janrain_capture_main['capture_client_id'] : '';
+
+  $uri_opts = array('absolute' => TRUE);
+  if ($_GET['q']) {
+    $uri_opts['query'] = array('destination' => $_GET['q']);
+  }
+  $settings = array(
+    'janrainCapture' => array(
+      'profile_sync_url' => url('janrain_capture/profile_sync', $uri_opts),
+      'token_expired_url' => url('janrain_capture/token_expired/' . drupal_get_token('janrain_capture_token_expired')),
+      'logout_url' => url('user/logout', array('absolute' => TRUE, 'real_logout' => TRUE)),
+      'enforce' => variable_get('janrain_capture_enforce', FALSE),
+    ),
+  );
+  if (!empty($janrain_capture_optional['backplane_server'])
+    && !empty($janrain_capture_optional['backplane_bus_name'])) {
+    $settings['janrainCapture']['backplane_server'] = $janrain_capture_optional['backplane_server'];
+    $settings['janrainCapture']['backplane_bus_name'] = $janrain_capture_optional['backplane_bus_name'];
+  }
+  if (!empty($capture_sso_address)) {
+    $settings['janrainCapture']['sso_address'] = $capture_sso_address;
+  }
+  drupal_add_js($settings, array('type' => 'setting', 'every_page' => TRUE));
+
+  // Add the jQuery BBQ plugin to handle destination redirects.
+  drupal_add_library('system', 'jquery.bbq', TRUE);
+
+  $scripts = array(
+    'file' => array(),
+    'inline' => array(),
+    'external' => array(),
+  );
+  $scripts['file'][] = drupal_get_path('module', 'janrain_capture') . '/janrain_capture.js';
+  $scripts['external'][] = 'https://d7v0k4dt27zlp.cloudfront.net/assets/capture_client.js';
+
+  if (!empty($capture_sso_address)) {
+        
+    $scripts['external'][] = "https://$capture_sso_address/sso.js";
+    $scripts['inline'][] = '
+    var janrainCaptureClientId ="'. $capture_client_id .'";
+    var janrainCaptureRedirectUri ="'. url('janrain_capture/oauth', array('absolute' => TRUE)).'";
+    var janrainCaptureLogoutUri ="'. url('user/logout', array('absolute' => TRUE, 'real_logout' => TRUE)).'";
+    var janrainCaptureXdReceiver ="'. url(NULL, array('absolute' => TRUE)) . drupal_get_path('module', 'janrain_capture') . '/xdcomm.html";
+    
+    if(undefined == "'.$janrain_capture_optional['backplane_bus_name'].'") {
+		console.log("Not Federated");
+		JANRAIN.SSO.CAPTURE.check_login({
+			  sso_server: "https://" + Drupal.settings.janrainCapture.sso_address,
+			  client_id: janrainCaptureClientId,
+			  redirect_uri: janrainCaptureRedirectUri,
+			  logout_uri: janrainCaptureLogoutUri,
+			  xd_receiver: janrainCaptureXdReceiver
+			});
+    }';
+  }
+
+  if (!empty($janrain_capture_optional['backplane_js_path'])) {
+    $scripts['external'][] = $janrain_capture_optional['backplane_js_path'];
+  }
+
+  if (isset($_SESSION['janrain_capture_password_recover']) && $_SESSION['janrain_capture_password_recover'] == TRUE) {
+    $url = url('janrain_capture/profile', array(
+      'absolute' => TRUE,
+      'query' => array(
+        'method' => '_change_password',
+        'callback' => 'Drupal.janrainCapture.closeRecoverPassword',
+      ),
+    ));
+    $scripts['inline'][] = 'jQuery(function($) {Drupal.janrainCapture.passwordRecover(' . $url .')});';
+    $_SESSION['janrain_capture_password_recover'] = FALSE;
+  }
+
+    foreach ($scripts['file'] as $s) {
+      drupal_add_js($s, array('type' => 'file', 'every_page' => TRUE, 'weight' => 1));
+    }
+    foreach ($scripts['external'] as $s) {
+      drupal_add_js($s, array('type' => 'external', 'every_page' => TRUE, 'weight' => 2));
+    }
+    foreach ($scripts['inline'] as $s) {
+      drupal_add_js($s, array('type' => 'inline', 'every_page' => TRUE, 'weight' => 3));
+    }
+}
+
+/**
+ * Implements hook_menu().
+ */
+function janrain_capture_menu() {
+
+  $items['janrain_capture/oauth'] = array(
+    'title' => 'Capture Oauth Receiver',
+    'page callback' => 'janrain_capture_oauth',
+    'access callback' => 'user_is_anonymous',
+    'type' => MENU_CALLBACK,
+    'file' => 'janrain_capture.pages.inc',
+  );
+
+  $items['janrain_capture/signin_redirect'] = array(
+    'title' => 'Capture redirect page',
+    'page callback' => 'janrain_capture_signin_redirect',
+    'access callback' => 'user_is_logged_in',
+    'type' => MENU_CALLBACK,
+    'file' => 'janrain_capture.pages.inc',
+  );
+
+  $items['janrain_capture/profile'] = array(
+    'title' => 'Capture Profile',
+    'page callback' => 'janrain_capture_profile',
+    'access callback' => 'user_is_logged_in',
+    'type' => MENU_CALLBACK,
+    'file' => 'janrain_capture.pages.inc',
+  );
+
+  $items['janrain_capture/profile_sync'] = array(
+    'title' => 'Capture Profile Receiver',
+    'page callback' => 'janrain_capture_profile_sync',
+    'access callback' => 'user_is_logged_in',
+    'type' => MENU_CALLBACK,
+    'file' => 'janrain_capture.pages.inc',
+  );
+
+  $items['janrain_capture/resend_verification_email'] = array(
+    'title' => 'Capture Verification Email Resent',
+    'page callback' => 'janrain_capture_resend_verification_email',
+    'access callback' => TRUE,
+    'type' => MENU_CALLBACK,
+    'file' => 'janrain_capture.pages.inc',
+  );
+
+  $items['admin/config/people/janrain_capture'] = array(
+    'title' => 'Janrain Capture',
+    'description' => t('Connect to Janrain Capture service for centralized storage of social profile data.'),
+    'page callback' => 'drupal_get_form',
+    'page arguments' => array('janrain_capture_settings'),
+    'access arguments' => array('administer site configuration'),
+    'weight' => -4,
+    'file' => 'janrain_capture.admin.inc',
+  );
+  $items['admin/config/people/janrain_capture/settings'] = array(
+    'title' => 'Settings',
+    'page callback' => 'drupal_get_form',
+    'page arguments' => array('janrain_capture_settings'),
+    'access arguments' => array('administer site configuration'),
+    'type' => MENU_DEFAULT_LOCAL_TASK,
+    'weight' => -10,
+    'file' => 'janrain_capture.admin.inc',
+  );
+
+  $items['janrain_capture/token_expired/%'] = array(
+    'title' => 'Capture Token Expired',
+    'page callback' => 'janrain_capture_token_expired',
+    'access callback' => 'janrain_capture_token_expired_access',
+    'access arguments' => array(2),
+    'type' => MENU_CALLBACK,
+    'file' => 'janrain_capture.pages.inc',
+  );
+
+  return $items;
+}
+
+/**
+ * Access callback for janrain_capture_token_expired().
+ */
+function janrain_capture_token_expired_access($token) {
+  // This path is for authenticated users and is protected from CSRF with a token.
+  return user_is_logged_in() && ($token === drupal_get_token('janrain_capture_token_expired'));
+}
+
+/**
+ * Helper function to determine if a user is associated with a Capture account.
+ */
+function janrain_capture_mapping_exists($uid) {
+  // Check to see if this user is already mapped to a Capture uuid.
+  return (bool) db_query("SELECT 1 FROM {authmap} WHERE module = 'janrain_capture' AND uid = :uid", array(':uid' => $uid))->fetchField();
+}
+
+/**
+ * Checks whether the module has been configured.
+ */
+function janrain_capture_configured() {
+  $configured = &drupal_static(__FUNCTION__, NULL);
+  if (is_null($configured)) {
+    $janrain_capture_main = variable_get('janrain_capture_main', array());
+    // Make sure we at least have non-empty values for the basic configuration
+    // settings.
+    $address = isset($janrain_capture_main['capture_address']) && !empty($janrain_capture_main['capture_address']);
+    $client_id = isset($janrain_capture_main['capture_client_id']) && !empty($janrain_capture_main['capture_client_id']);
+    $client_secret = isset($janrain_capture_main['capture_client_secret']) && !empty($janrain_capture_main['capture_client_secret']);
+    $configured = $address && $client_id && $client_secret;
+  }
+  return $configured;
+}
+
+/**
+ * Returns the full URL of a specified CaptureUI screen
+ *
+ * @param array $options
+ *   An associative array of options to use in constructing the URL
+ *
+ * @return string
+ *   The full URL string of the Capture URL screen being requested
+ */
+function janrain_capture_url($options = NULL) {
+  $janrain_capture_main = variable_get('janrain_capture_main', array());
+  $janrain_capture_optional = variable_get('janrain_capture_optional', array());
+  if (!empty($janrain_capture_main['capture_address'])
+    && !empty($janrain_capture_main['capture_client_id'])) {
+
+    $required = array(
+      'redirect_uri' => url('janrain_capture/oauth', array('absolute' => TRUE)),
+      'xd_receiver' => url(NULL, array('absolute' => TRUE)) . drupal_get_path('module', 'janrain_capture') . '/xdcomm.html',
+      'client_id' => $janrain_capture_main['capture_client_id'],
+    );
+
+    if (!$options || strpos($options['action'], 'profile') !== 0) {
+      if (!$options) {
+        $options = array();
+      }
+      $defaults = array(
+        'action' => 'signin',
+        'recover_password_callback' => 'Drupal.janrainCapture.closeRecoverPassword',
+        'response_type' => 'code',
+      );
+    }
+    else {
+      $defaults = array(
+        'callback' => 'Drupal.janrainCapture.closeProfileEditor',
+      );
+    }
+    $args = array_merge($required, $defaults, $options);
+    $action = $args['action'];
+    unset($args['action']);
+
+    $url = 'https://'
+      . (!empty($janrain_capture_optional['captureui_address']) ? $janrain_capture_optional['captureui_address'] : $janrain_capture_main['capture_address'])
+      . '/oauth/' . $action . '?' . http_build_query($args, '', '&');
+  }
+  else {
+    $url = '';
+  }
+  return $url;
+}
+
+/**
+ * Implements hook_url_outbound_alter().
+ */
+function janrain_capture_url_outbound_alter(&$path, &$options, $original_path) {
+  // Override lougout link
+  //var_dump($path);
+  switch ($path) {
+    case 'user/logout':
+      $janrain_capture_optional = variable_get('janrain_capture_optional', array());
+      //var_dump($janrain_capture_optional);
+      if($janrain_capture_optional['capture_sso_address'] && !isset($options['real_logout'])) {
+        $path = 'javascript:CAPTURE.logout()';
+        $options['external'] =TRUE;
+      }
+      break;
+  }
+}
+
+/**
+ * Implements hook_menu_alter().
+ */
+function janrain_capture_menu_alter(&$items) {
+  if (variable_get('janrain_capture_enforce', FALSE)) {
+    // Make capture the only way to log in to the site.
+    foreach (array('user/login','user/register') as $key) {
+      $items[$key]['page callback'] = 'janrain_capture_signin';
+      unset($items[$key]['page arguments']);
+      unset($items[$key]['file']);
+      // Override to be callbacks instead of tabs.
+      $items[$key]['type'] = MENU_CALLBACK;
+    }
+      
+    // Let logged in users use the shortcut to their profile.
+    $items['user']['access callback'] = 'user_is_logged_in';
+    // All password reset requests should go via Capture.
+    $items['user/password']['access callback'] = FALSE;
+  }
+}
+
+
+/**
+ * Menu callback to override user/login and user/register.
+ */
+function janrain_capture_signin() {
+  $url = janrain_capture_url();
+  if (isset($_GET['destination'])) {
+    $destination = $_GET['destination'];
+    // TODO: we have to unset this here because otherwise drupal_goto will just
+    // go to the destination, but how can we tell Janrain Capture to redirect to
+    // this page afterwards?
+    unset($_GET['destination']);
+  }
+  drupal_goto($url);
+}
+
+/**
+ * Implements hook_block_view_MODULE_DELTA_alter().
+ */
+function janrain_capture_block_view_user_login_alter(&$data, $block) {
+  if (!janrain_capture_configured()) {
+    return;
+  }
+
+  if (variable_get('janrain_capture_enforce', FALSE)) {
+    // Change the user login block so that instead of presenting a login form it
+    // presents the contents of the Janrain Capture block, i.e. a link to login
+    // via Capture or, if already logged in, a link to the profile edit screen.
+
+    global $user;
+    if (!$user->uid) {
+      $data['content'] = janrain_capture_block_content();
+    }
+  }
+}
+
+/**
+ * Returns a render array for the 'Register / Sign in' link for Janrain Capture.
+ */
+function janrain_capture_signin_link() {
+  $link = array(
+    '#type' => 'link',
+    '#title' => t('Register / Sign in'),
+    '#href' => janrain_capture_url(),
+    '#attributes' => array(
+      'class' => array('janrain_capture_anchor', 'janrain_capture_signin'),
+    ),
+  );
+  return $link;
+}
+
+/**
+ * Returns a render array for the 'Edit profile' link for Janrain Capture.
+ */
+function janrain_capture_profile_link() {
+  $link = array(
+    '#type' => 'link',
+    '#title' => t('View / Edit Profile'),
+    '#href' => 'janrain_capture/profile',
+    '#options' => array(
+      'absolute' => TRUE,
+    ),
+    '#attributes' => array(
+      'class' => array('janrain_capture_anchor'),
+    ),
+  );
+  return $link;
+}
+
+/**
+ * Generates a 'Logout' link for Janrain Capture.
+ */
+function janrain_capture_render_logout_link() {
+  $janrain_capture_optional = variable_get('janrain_capture_optional', array());
+  if ($janrain_capture_optional['capture_sso_address']) {
+    $link = '<a href="javascript:CAPTURE.logout()">' . t('Log out') . '</a>';
+  }
+  else {
+    $link = l(t('Log out'), 'user/logout');
+  }
+  return $link;
+}
+/**
+ * Provides the content for the Janrain Capture block, and is also used to
+ * replace the user login block content if the "enforce" setting is on.
+ */
+function janrain_capture_block_content() {
+  global $user;
+  $items = array();
+  // Provide either a "Register / Sign in" link or a "View Profile" link
+  // depending on whether the user is logged in.
+  $link_type = $user->uid ? 'profile' : 'signin';
+  $link_func = sprintf('janrain_capture_%s_link', $link_type);
+  $link = $link_func();
+  $items[] = drupal_render($link);
+  // Add a logout link for logged in users.
+  if ($user->uid) {
+    $items[] = janrain_capture_render_logout_link();
+  }
+  return theme('item_list', array('items' => $items));
+}
+
+/**
+ * Modifies the user account with values from the Janrain Capture profile array.
+ *
+ * Invokes a hook to allow other modules to modify the account as well.
+ *
+ * @param $account
+ *   The account object to modify with values from the Janrain Capture profile
+ * @param array $profile
+ *   The Janrain Capture profile array.
+ */
+function janrain_capture_sync_account($account, $profile) {
+  $account->mail = $profile['email'];
+  // Set the profile email address as the default username - this can be overridden
+  // either by implementing the janrain_capture_profile_sync hook or using the mapping
+  // submodule.
+  $account->name = $profile['email'];
+  // Set the uuid field value from the Capture uuid. Hardcoding LANGUAGE_NONE here
+  // should be ok as the field is not translatable.
+  $account->field_janrain_capture_uuid[LANGUAGE_NONE][0]['value'] = $profile['uuid'];
+
+  // Map the profile pic if configured to do so. This requires special handling.
+  $janrain_capture_fields = variable_get('janrain_capture_fields', array());
+  if (isset($janrain_capture_fields['capture_map_profile_pic']) && $janrain_capture_fields['capture_map_profile_pic']) {
+    if (!empty($profile['photos'])) {
+      $preferred = isset($janrain_capture_fields['capture_preferred_photo_variant']) ? $janrain_capture_fields['capture_preferred_photo_variant'] : 'small';
+      foreach($profile['photos'] as $variant) {
+        if ($variant['type'] == $preferred) {
+          _janrain_capture_update_picture($account, $variant);
+          break;
+        }
+      }
+    }
+    elseif (!empty($account->picture)) {
+      // We have a local picture, but picture was removed on server. Delete!
+      $account->picture = new stdClass();
+      db_delete('janrain_capture_photos')
+        ->condition('uid', $account->uid)
+        ->execute();
+    }
+  }
+
+  module_invoke_all('janrain_capture_profile_sync', $account, $profile);
+}
+
+/**
+ * Helper function for updating a user picture.
+ */
+function _janrain_capture_update_picture($account, $variant) {
+  $args = array(':uid' => $account->uid, ':uri' => $variant['value']);
+  if (empty($account->picture) || (!db_query('SELECT uid FROM {janrain_capture_photos} WHERE uid = :uid and uri = :uri', $args)->fetchField())) {
+    // Either first or updated user profile image. Download remote image,
+    // save locally and set user picture to this image.
+    $image_response = drupal_http_request($variant['value']);
+    if (($image_response->code == 200) && !empty($image_response->data)) {
+      $image_file = file_save_data($image_response->data);
+      if (!empty($image_file)) {
+        // Make the file non-permanent, so we can get it moved and
+        // renamed as a proper user picture on the righ path. (which
+        // happens inside user_save()).
+        $image_file->status = 0;
+        $image_file = file_save($image_file);
+        $account->picture = $image_file;
+        // Keep track of the remote image URI so we only download it once.
+        db_merge('janrain_capture_photos')
+          ->key(array('uid' => $account->uid))
+          ->fields(array(
+              'uid' => $account->uid,
+              'uri' => $variant['value'],
+          ))
+          ->execute();
+      }
+    }
+  }
+}

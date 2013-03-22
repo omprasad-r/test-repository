@@ -1,0 +1,13 @@
+name = Janrain Capture UI
+description = Adds UI elements necessary for integrating Janrain Capture
+package = Janrain Capture
+core = 7.x
+
+dependencies[] = janrain_capture
+
+; Information added by drupal.org packaging script on 2012-11-27
+version = "7.x-1.6"
+core = "7.x"
+project = "janrain_capture"
+datestamp = "1354060649"
+

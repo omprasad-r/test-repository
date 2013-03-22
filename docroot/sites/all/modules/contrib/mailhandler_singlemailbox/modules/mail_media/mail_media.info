@@ -1,0 +1,10 @@
+core = 7.x
+name = Mail Media
+dependencies[] = mailhandler_singlemailbox
+dependencies[] = mailhandler_medialink
+dependencies[] = image
+dependencies[] = text
+description = Import a feed from a
+features[ctools][] = "feeds:feeds_importer_default:1"
+features[feeds_importer][] = "mailhandler_media_nodes"
+package = Mailhandler

@@ -1,0 +1,7 @@
+name = Site Guard
+description = Provides a Basic auth based Site Guard for use during development of a site.
+core = 7.x
+
+configure = admin/config/system/site_guard
+
+files[] = site_guard.test

@@ -1,0 +1,36 @@
+<?php
+
+/**
+ * @file
+ * Functions for checking requirements during install of janrain_capture_ui.
+ */
+
+/**
+ * Implements hook_requirements.
+ */
+function janrain_capture_ui_requirements($phase) {
+  $requirements = array();
+
+  if ($phase == 'runtime') {
+    // Ensure translations don't break at install time
+    $t = get_t();
+    module_load_include('module', 'janrain_capture_ui');
+    $js_css = janrain_capture_ui_js_css();
+
+    foreach ($js_css as $type => $files) {
+      foreach ($files as $name => $filename) {
+        $full_path = janrain_capture_ui_get_library_path($name) . '/' . $filename;
+        if (!file_exists($full_path)) {
+          $args = array('@file' => $filename, '@path' => 'sites/all/libraries/' . $name);
+          $requirements['janrain_capture_ui_' . $type] = array(
+            'title' => $t('Fancybox for Janrain Capture UI'),
+            'description' => $t('Please use the Libraries module, or place the file at @path', $args),
+            'value' => $t('Missing file: @file', $args),
+            'severity' => REQUIREMENT_ERROR,
+          );
+        }
+      }
+    }
+  }
+  return $requirements;
+}

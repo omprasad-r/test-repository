@@ -1,0 +1,253 @@
+<?php
+
+/**
+ * @file
+ * Comment on anything automated tests.
+ */
+
+class CommentOnAnythingTestCase extends DrupalWebTestCase {
+
+  protected $privileged_user;
+
+  public static function getInfo() {
+    return array(
+      'name' => 'Comment field creation',
+      'description' => 'Test comment on anything field creation on entities.',
+      'group' => 'Comment on anything',
+    );
+  }
+
+  protected function setUp() {
+    $modules = array_merge(
+      func_get_args(),
+      array('comment_on_anything', 'comment', 'field', 'entity', 'devel')
+    );
+
+    parent::setUp($modules);
+
+    $this->privileged_user = $this->drupalCreateUser(array(
+      'administer users',
+      'administer content types',
+      'access devel information',
+      'access comments',
+      'post comments',
+      'access user profiles',
+      'administer site configuration',
+    ));
+  }
+
+  /**
+   * Tests comment on anything field behavior on the user entity.
+   */
+  public function testFieldCreationOnUser() {
+    $field_name = $this->createFieldOnUser();
+
+    // Create a user to see its field.
+    $new_user = $this->drupalCreateUserFromAdminUi();
+
+    $this->drupalGet('admin/config/development/performance');
+    $this->assertResponse(200);
+    $this->drupalPost(NULL, array(), t('Clear all caches'));
+    $this->assertResponse(200);
+
+    $this->checkUserField($new_user->uid);
+
+    return array($field_name, $new_user->uid);
+  }
+
+  protected function checkUserField($uid) {
+    $this->drupalGet('user/' . $uid);
+    $this->assertFieldByName('subject');
+  }
+
+  protected function createFieldOnEntity($manage_fields_path) {
+    // Log in as admin.
+    $this->drupalLogin($this->privileged_user);
+    $this->drupalGet($manage_fields_path);
+    $this->assertResponse(200);
+
+    // Create comment on anything field on the user accounts.
+    $field_name = strtolower($this->randomName());
+    $label = $this->randomName();
+
+    $edit = array(
+      'fields[_add_new_field][label]' => $label,
+      'fields[_add_new_field][field_name]' => $field_name,
+      'fields[_add_new_field][type]' => 'comment_on_anything',
+      'fields[_add_new_field][widget_type]' => 'comment_on_anything_widget',
+    );
+
+    $this->drupalPost($manage_fields_path, $edit, t('Save'));
+    $this->drupalPost(NULL, array(), t('Save field settings'));
+    $this->drupalPost(NULL, array(), t('Save settings'));
+
+    $this->assertFieldByXPath('//table[@id="field-overview"]//td[1]', $label, t('Field was created and appears in the overview page.'));
+
+    return $field_name;
+  }
+
+  protected function createFieldOnUser() {
+    return $this->createFieldOnEntity('admin/config/people/accounts/fields');
+  }
+
+  protected function createFieldOnNode($content_type) {
+    // We are adding the field on a node here which already has commenting
+    // support. To properly test our comment field, we need to disable the
+    // inherent comment feature on this node type so it does not interfere with
+    // the feature provided by the field.
+    variable_set("comment_$content_type", COMMENT_NODE_HIDDEN);
+
+    $content_type = str_replace('_', '-', $content_type);
+    return $this->createFieldOnEntity("admin/structure/types/manage/{$content_type}/fields");
+  }
+
+  /**
+   * Tests comment on anything field behavior on the user entity.
+   */
+  public function testFieldCreationOnNode() {
+    $content_type = 'article';
+    $field_name = $this->createFieldOnNode($content_type);
+    $node = $this->createNode($content_type);
+
+    $this->drupalGet("node/{$node->nid}");
+    $this->assertResponse(200);
+    $this->assertFieldByName('subject');
+
+    return array($field_name, $content_type, $node->nid);
+  }
+
+  protected function createNode($content_type) {
+    $user = $this->drupalCreateUser(array("create {$content_type} content"));
+    $this->drupalLogin($user);
+
+    $this->drupalGet("node/add/{$content_type}");
+    $this->assertResponse(200);
+    $title = $this->randomName();
+    $edit = array(
+      'title' => $title,
+    );
+    $this->drupalPost(NULL, $edit, t('Save'));
+
+    $nodes = node_load_multiple(array(), array('title' => $title));
+    $node = array_pop($nodes);
+
+    $this->assertTrue((bool) $node, t('Found node'));
+
+    return $node;
+  }
+
+  /**
+   * Creates a user account from the user interface.
+   */
+  protected function drupalCreateUserFromAdminUi() {
+    $this->drupalGet('admin/people/create');
+
+    $edit = array();
+    $user_name = $this->randomName();
+    $email = $user_name . '@example.com';
+    $edit['name'] = $user_name;
+    $edit['mail'] = $email;
+    $pass = $edit['pass[pass1]'] = $edit['pass[pass2]'] = user_password();
+
+    $this->drupalPost('admin/people/create', $edit, t('Create new account'));
+
+    $users = user_load_multiple(array(), array('name' => $user_name, 'mail' => $email));
+    $user = array_pop($users);
+
+    $this->assertTrue((bool) $user, t('Found user account.'));
+
+    $user->pass_raw = $pass;
+
+    return $user;
+  }
+
+  public function testFieldCreationAfterUsersCreated() {
+    $users = array();
+    for ($i = 0; $i < 100; $i++) {
+      $users[] = $this->drupalCreateUser();
+    }
+
+    $this->createFieldOnUser();
+
+    $this->drupalGet('admin/reports/status/run-cron');
+    $this->assertResponse(200);
+    $this->drupalGet('admin/reports/status/run-cron');
+    $this->assertResponse(200);
+
+    foreach ($users as $user) {
+      $this->checkUserField($user->uid);
+    }
+  }
+
+  protected function setupPerInstanceFieldSettingTest(array $settings, array $settings2) {
+    $edit = array();
+    foreach ($settings as $name => $value) {
+      $edit["instance[settings][comment][{$name}]"] = $value;
+    }
+    $edit2 = array();
+    foreach ($settings2 as $name => $value) {
+      $edit2["instance[settings][comment][{$name}]"] = $value;
+    }
+
+    $field_name = $this->createFieldOnUser();
+    $this->drupalGet('admin/config/people/accounts/fields/field_' . $field_name);
+    $this->drupalPost(NULL, $edit, t('Save settings'));
+
+    $field_name2 = $this->createFieldOnUser();
+    $this->drupalGet('admin/config/people/accounts/fields/field_' . $field_name2);
+    $this->drupalPost(NULL, $edit2, t('Save settings'));
+
+    $new_user = $this->drupalCreateUserFromAdminUi();
+
+    $this->drupalGet('admin/config/development/performance');
+    $this->assertResponse(200);
+    $this->drupalPost(NULL, array(), t('Clear all caches'));
+    $this->assertResponse(200);
+
+    return $new_user;
+  }
+
+  public function testPerInstanceSettingsCommentNumberOnPage() {
+    $new_user = $this->setupPerInstanceFieldSettingTest(array(
+      'comment_default_per_page' => '10',
+    ), array(
+          'comment_default_per_page' => '30',
+        ));
+    $this->drupalGet('user/' . $new_user->uid);
+
+    for ($i = 0; $i < 11; $i++) {
+      $this->drupalPost(NULL, array(
+        'comment_body[und][0][value]' => "COMMENT_0_{$i}",
+      ), t('Save'));
+    }
+
+    for ($i = 0; $i < 10; $i++) {
+      $this->assertText("COMMENT_0_{$i}");
+    }
+    $this->assertNoText("COMMENT_0_{$i}");
+
+    $node = $this->drupalCreateNode();
+    $this->drupalGet('node/' . $node->nid);
+    for ($i = 0; $i < 11; $i++) {
+      $this->drupalPost(NULL, array(
+        'comment_body[und][0][value]' => "COMMENT_{$i}",
+      ), t('Save'));
+    }
+    for ($i = 0; $i < 11; $i++) {
+      $this->assertText("COMMENT_{$i}");
+    }
+
+    $this->drupalGet('user/' . $new_user->uid);
+
+    for ($i = 0; $i < 31; $i++) {
+      $this->drupalPost(NULL, array(
+        'comment_body[und][0][value]' => "COMMENT_1_{$i}",
+      ), t('Save'), array(), array(), 'comment-form--2');
+    }
+
+    for ($i = 0; $i < 30; $i++) {
+      $this->assertText("COMMENT_1_{$i}");
+    }
+    $this->assertNoText("COMMENT_1_{$i}");
+  }
+}

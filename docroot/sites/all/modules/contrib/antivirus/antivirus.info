@@ -1,0 +1,22 @@
+name = Antivirus
+description = Integration with a number of 3rd-party virus scanning utilities to scan and protect uploaded files.
+package = Security
+core = 7.x
+configure = admin/config/system/antivirus
+
+files[] = antivirus.test
+files[] = includes/AntivirusScan.php
+files[] = includes/AntivirusScanner.php
+files[] = includes/AntivirusDaemonScanner.php
+files[] = includes/AntivirusExecutableScanner.php
+files[] = includes/ClamAVScanner.php
+files[] = includes/ClamAVDaemonScanner.php
+files[] = includes/TestScanner.php
+
+
+; Information added by drupal.org packaging script on 2012-11-14
+version = "7.x-1.0-alpha2"
+core = "7.x"
+project = "antivirus"
+datestamp = "1352934659"
+

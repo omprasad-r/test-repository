@@ -1,0 +1,11 @@
+name = Comment on anything
+description = Allows commenting on entities that are not nodes, such as users or media.
+core = 7.x
+
+dependencies[] = node
+dependencies[] = comment
+dependencies[] = field
+dependencies[] = entity
+
+files[] = tests/comment_on_anything.test
+files[] = tests/comment_on_anything.field_permission.test

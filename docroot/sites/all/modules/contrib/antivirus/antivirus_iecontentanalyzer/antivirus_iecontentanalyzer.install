@@ -1,0 +1,30 @@
+<?php
+
+/**
+ * @file
+ * Install, update and uninstall functions for the Antivirus IEContentAnalyzer
+ * module.
+ */
+
+/**
+ * Implements hook_requirements().
+ */
+function antivirus_iecontentanalyzer_requirements($phase) {
+  $t = get_t();
+
+  // Prevent installation and alert error if IEContentAnalyzer class is not
+  // found.
+  if (!class_exists('IEContentAnalyzer')) {
+    drupal_load('module', 'antivirus_iecontentanalyzer');
+
+    $requirements['antivirus_iecontentanalyzer'] = array(
+      'title' => $t('IEContentAnalyzer library'),
+      'value' => $t('Not found'),
+      'description' => $t('Unable to find IEContentAnalyzer library. Please download from !mediawiki.', array('!mediawiki' => l($t('MediaWiki'), ANTIVIRUS_IECONTENTANALYZER_URL))),
+      'severity' => REQUIREMENT_ERROR,
+    );
+  }
+
+  return $requirements;
+}
+

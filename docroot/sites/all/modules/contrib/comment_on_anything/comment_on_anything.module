@@ -1,0 +1,873 @@
+<?php
+
+/**
+ * @file
+ * Module that implements commenting on entities via proxy nodes.
+ */
+
+/**
+ * Used as a nid replacement to signify the node needs to be created.
+ */
+define('COMMENT_ON_ANYTHING_CREATE_NODE', -1);
+
+/**
+ * Cache table used to do faster data lookups for related nodes.
+ */
+define('COMMENT_ON_ANYTHING_CACHE_TABLE', 'comment_on_anything_cache');
+
+/**
+ * Implements hook_node_info().
+ */
+function comment_on_anything_node_info() {
+  return array(
+    'comment_on_anything' => array(
+      'name' => t('Comment on anything node'),
+      'base' => 'comment_on_anything',
+      // Titles are automatically generated to ease moderation.
+      'has_title' => TRUE,
+      // Locked node type means it cannot be edited or deleted.
+      // We have our own settings page to edit comment settings.
+      'locked' => TRUE,
+    ),
+  );
+}
+
+/**
+ * Implements hook_menu_alter().
+ */
+function comment_on_anything_menu_alter(&$items) {
+  // Removes the node/add page for entity comment node.
+  unset($items['node/add/comment-on-anything']);
+}
+
+/**
+ * Implements hook_node_view().
+ *
+ * This function prevents accessing the comment proxy node directly.
+ * @see comment_on_anything_field_formatter_view()
+ */
+function comment_on_anything_node_view($node, $view_mode) {
+  if ($view_mode === 'full' && $node->type === 'comment_on_anything' && node_is_page($node) && !isset($node->__rendered_as_field)) {
+    if ($uri = comment_on_anything_get_uri_to_original_entity($node->nid)) {
+      // @todo find out why drupal_alter() rewrites this redirect to NULL.
+      // [jesse.beach] Do we need to check isset($uri)?
+      call_user_func_array('drupal_goto', $uri);
+    }
+  }
+}
+
+/**
+ * Implements hook_field_info().
+ */
+function comment_on_anything_field_info() {
+  return array(
+    'comment_on_anything' => array(
+      'label' => t('Comment on anything'),
+      'description' => t('Allows commenting on any entity by creating a proxy node.'),
+      'default_widget' => 'comment_on_anything_widget',
+      'default_formatter' => 'comment_on_anything_formatter',
+      // We have no field or instance settings, but we'll integrate the node
+      // type's comment settings in the field global settings form so there is
+      // a way to control the comment settings. We don't save those as field
+      // settings since we alrady have the node type settings for that.
+      'settings' => array(),
+      'instance_settings' => array(),
+    ),
+  );
+}
+
+/**
+ * Implements hook_form_field_ui_field_edit_form_alter().
+ */
+function comment_on_anything_form_field_ui_field_edit_form_alter(&$form, &$form_state) {
+  if ($form['#field']['type'] == 'comment_on_anything') {
+    // Hide the cardinality setting on the field settings for
+    // comment_on_anything field and force it to 1. It does not make sense for
+    // this to be set any other way.
+    $form['field']['cardinality']['#default_value'] = 1;
+    $form['field']['cardinality']['#access'] = FALSE;
+    // Add custom submission function to save commenting settings.
+    $form['#submit'][] = 'comment_on_anything_field_instance_settings_form_submit';
+  }
+}
+
+/**
+ * Implements hook_field_settings_form().
+ *
+ * We do not have field settings directly but reproduce the comment settings
+ * for our node type, so that those settings can be configured.
+ */
+function comment_on_anything_field_instance_settings_form($field, $instance) {
+  // Set up a fake base form with enough data to invoke the node commment
+  // settings form builder.
+  $base_form = array(
+    'type' => TRUE,
+    '#node_type' => (object) array('type' => 'comment_on_anything'),
+  );
+
+  // Add comment settings to $base_form as well as any other
+  // modifications made by related modules such as comment_goodness.
+  // We are NOT invoking all alters here since we do not have a full
+  // node type edit form to present, and we cannot predict how all
+  // modules would react to our fake base form. These are cross-checked.
+  _comment_on_anything_override_variables($instance);
+  $form_state = array();
+  comment_form_node_type_form_alter($base_form, $form_state);
+  if (module_exists('comment_goodness')) {
+    comment_goodness_form_node_type_form_alter($base_form, $form_state);
+  }
+  _comment_on_anything_restore_variables();
+
+  // Take only the pieces of the resulting form that we need.
+  $form = array(
+    'comment' => array(
+      '#type' => 'container',
+      '#tree' => TRUE,
+    ),
+  );
+  foreach ($base_form['comment'] as $key => $item) {
+    if (is_array($item)) {
+      $form['comment'][$key] = $item;
+    }
+  }
+  return $form;
+}
+
+/**
+ * Custom submission function for field settings form.
+ *
+ * We store comment settings as part of the pre-existing node settings
+ * instead of the field settings so they directly apply to the proxy nodes.
+ */
+function comment_on_anything_field_instance_settings_form_submit($form, $form_state) {
+  $instance_string = "{$form_state['values']['instance']['field_name']}__{$form_state['values']['instance']['entity_type']}__{$form_state['values']['instance']['bundle']}";
+  foreach ($form_state['values']['instance']['settings']['comment'] as $key => $value) {
+    // Set all node type based settings based on these updates.
+    variable_set($key . "_comment_on_anything--{$instance_string}", $value);
+  }
+}
+
+/**
+ * Implements hook_field_schema().
+ */
+function comment_on_anything_field_schema($field) {
+  if ($field['type'] === 'comment_on_anything') {
+    return array(
+      'columns' => array(
+        'nid' => array(
+          'type' => 'int',
+          'not null' => TRUE,
+          'default' => 0,
+        ),
+      ),
+      'indexes' => array(
+        'nid' => array('nid'),
+      ),
+      'foreign keys' => array(
+        'node' => array(
+          'table' => 'node',
+          'columns' => array('nid' => 'nid'),
+        ),
+      ),
+    );
+  }
+
+  return array();
+}
+
+/**
+ * Implements hook_field_widget_info().
+ */
+function comment_on_anything_field_widget_info() {
+  return array(
+    'comment_on_anything_widget' => array(
+      'label' => t('Comments'),
+      'field types' => array('comment_on_anything'),
+      'settings' => array(),
+      'behaviors' => array(
+        'multiple values' => FIELD_BEHAVIOR_DEFAULT,
+        'default value' => FIELD_BEHAVIOR_NONE,
+      ),
+    ),
+  );
+}
+
+/**
+ * Implements hook_field_widget_form().
+ *
+ * Puts the Comment on anything settings on the field widget form.
+ *
+ * The submit callback for the comment settings form is added via form_alter,
+ * because the #submit element might not be initialized by the time the widget
+ * form is called.
+ *
+ * @see comment_on_anything_form_alter()
+ */
+function comment_on_anything_field_widget_form(&$form, &$form_state, $field, $instance, $langcode, $items, $delta, $element) {
+  $nid = isset($items[$delta]['nid']) ? $items[$delta]['nid'] : NULL;
+  $node = $nid ? node_load($nid) : NULL;
+
+  if (!$node) {
+    // This triggers node creation in hook_field_presave().
+    $nid = COMMENT_ON_ANYTHING_CREATE_NODE;
+  }
+
+  $element += array(
+    '#type' => 'container',
+  );
+
+  $element['nid'] = array(
+    '#type' => 'value',
+    '#value' => (int) $nid,
+  );
+
+  // Add comment settings form from the proxy node.
+  if ($nid !== COMMENT_ON_ANYTHING_CREATE_NODE) {
+    if (!isset($form['comment_on_anything'])) {
+      $form['comment_on_anything'] = array(
+        '#type' => 'container',
+        '#tree' => TRUE,
+      );
+    }
+
+    $form['comment_on_anything'][$element['#field_name']] = _comment_on_anything_settings_form($node);
+    $form['comment_on_anything'][$element['#field_name']]['#title'] = t('@field_label settings', array('@field_label' => $instance['label']));
+    // Remove some cruft that makes this fieldset integrate unnaturally otherwise.
+    unset($form['comment_on_anything'][$element['#field_name']]['#attached']);
+    $form['comment_on_anything'][$element['#field_name']]['#collapsible'] = TRUE;
+    $form['comment_on_anything'][$element['#field_name']]['#collapsed'] = FALSE;
+
+    // We don't know which fields are entity node related, so build a list of
+    // them in this value field.
+    // @see _comment_on_anything_settings_form_submit()
+    if (!isset($form['comment_on_anything_fields'])) {
+      $form['comment_on_anything_fields'] = array(
+        '#type' => 'value',
+      );
+    }
+
+    $form['comment_on_anything_fields']['#value'][] = $element['#field_name'];
+  }
+
+  return $element;
+}
+
+/**
+ * Implements hook_form_alter().
+ *
+ * Add submit callback if there are comment field settings to save.
+ * @see comment_on_anything_field_widget_form()
+ */
+function comment_on_anything_form_alter(&$form, &$form_state, $form_id) {
+  if (isset($form['comment_on_anything_fields'])) {
+    $form['#submit'][] = '_comment_on_anything_settings_form_submit';
+  }
+}
+
+/**
+ * Form submit handler for the Entity node fields.
+ *
+ * @see comment_on_anything_field_widget_form()
+ */
+function _comment_on_anything_settings_form_submit($form, &$form_state) {
+  foreach ($form_state['values']['comment_on_anything_fields'] as $field_name) {
+    $field = $form_state['values'][$field_name];
+
+    $nid = $field[LANGUAGE_NONE][0]['nid'];
+    $comment_setting = $form_state['values']['comment_on_anything'][$field_name]['comment'];
+    if ($nid && $nid !== COMMENT_ON_ANYTHING_CREATE_NODE) {
+      entity_node_update_comment_settings($nid, $comment_setting);
+    }
+  }
+}
+
+/**
+ * Updates the comment settings for a node.
+ *
+ * @param int $nid
+ *   Node id.
+ * @param int $comment_setting
+ *   Comment setting.
+ *   @see COMMENT_NODE_HIDDEN
+ *   @see COMMENT_NODE_CLOSED
+ *   @see COMMENT_NODE_CLOSED
+ *
+ * @return stdClass
+ *   Updated Drupal node.
+ */
+function entity_node_update_comment_settings($nid, $comment_setting) {
+  $node = node_load($nid, NULL, TRUE);
+  $node->comment = $comment_setting;
+  node_save($node);
+
+  return $node;
+}
+
+/**
+ * Implements hook_field_formatter_info().
+ */
+function comment_on_anything_field_formatter_info() {
+  return array(
+    'comment_on_anything_formatter' => array(
+      'label' => t('Formatter for comment on anything'),
+      'field types' => array('comment_on_anything'),
+      'settings' => array(),
+    ),
+  );
+}
+
+/**
+ * Implements hook_field_formatter_view().
+ */
+function comment_on_anything_field_formatter_view($entity_type, $entity, $field, $instance, $langcode, $items, $display) {
+  $element = array();
+
+  $orig_path = $_GET['q'];
+
+  $title = drupal_get_title();
+  _comment_on_anything_override_variables($instance);
+  foreach ($items as $delta => $item) {
+    $_GET['q'] = "node/{$item['nid']}";
+    $node = node_load($item['nid']);
+    if ($node->comment != COMMENT_NODE_HIDDEN) {
+      $node->__rendered_as_field = TRUE;
+      $node_view = $node ? node_view($node) : '';
+      $element[$delta] = $node_view;
+    }
+  }
+  _comment_on_anything_restore_variables();
+  if ($title) {
+    drupal_set_title($title);
+  }
+
+  $_GET['q'] = $orig_path;
+
+  return $element;
+}
+
+/**
+ * Implements hook_field_is_empty().
+ */
+function comment_on_anything_field_is_empty() {
+  return FALSE;
+}
+
+/**
+ * Implements hook_field_presave().
+ */
+function comment_on_anything_field_presave($entity_type, $entity, $field, $instance, $langcode, &$items) {
+  $account = NULL;
+
+  // Get user id from the entity if present.
+  // For example on node creation.
+  if (!empty($entity->uid)) {
+    $account = user_load($entity->uid);
+  }
+
+  // Else use the current user.
+  // For example when an admin creates a new user account.
+  if (!$account) {
+    $account = $GLOBALS['user'];
+  }
+
+  foreach ($items as &$item) {
+    if ($item['nid'] == COMMENT_ON_ANYTHING_CREATE_NODE) {
+      $item['nid'] = comment_on_anything_create_and_cache($account, $entity_type, $entity);
+    }
+  }
+}
+
+/**
+ * Implements hook_field_create_instance().
+ */
+function comment_on_anything_field_create_instance($instance) {
+  $field = field_info_field($instance['field_name']);
+  if ($field['type'] === 'comment_on_anything') {
+    comment_on_anything_add_job_to_queue($instance);
+    drupal_set_message(t('All @entity instances are added to a cron queue for processing. You will not be able to comment on a(n) @entity until it is processed.', array(
+      '@entity' => $instance['entity_type'],
+    )));
+  }
+}
+
+/**
+ * Implements hook_drupal_goto_alter().
+ */
+function comment_on_anything_drupal_goto_alter(&$path, &$options, &$http_response_code) {
+  $matches = array();
+  if (preg_match('#^node/([0-9]+)$#', $path, $matches) && isset($matches[1])) {
+    $nid = $matches[1];
+    $uri = comment_on_anything_get_uri_to_original_entity($nid);
+    if (!empty($uri)) {
+      $path = $uri['path'];
+      $options = $uri['options'];
+      $http_response_code = 301;
+    }
+  }
+}
+
+/**
+ * Creates a comment node for a user.
+ *
+ * @param stdClass $account
+ *   The user object to save the proxy node under.
+ * @param string $entity_label
+ *   Label of the entity to be commented.
+ * @param string $entity_type
+ *   Internal name of the entity type to be commented.
+ *
+ * @return stdClass
+ *   Node object.
+ */
+function comment_on_anything_create($account, $entity_label, $entity_type) {
+  $node = (object) array(
+    'is_new' => TRUE,
+    'type' => 'comment_on_anything',
+    'uid' => $account->uid,
+    // Obey node type settings for comment setting defaults.
+    'comment' => variable_get('comment_comment_on_anything', COMMENT_NODE_OPEN),
+    'title' => t('Comment on anything for "@label" (@type)', array('@label' => $entity_label, '@type' => $entity_type)),
+    'language' => LANGUAGE_NONE,
+  );
+  node_save($node);
+
+  return $node;
+}
+
+/**
+ * Creates a comment node for a user and caches ids for quick lookup.
+ *
+ * @param stdClass $account
+ *   The user object to save the proxy node under.
+ * @param string $entity_type
+ *   Internal name of the entity type to be commented.
+ * @param string $entity
+ *   The entity itself or the identifier of the entity to be commented.
+ *
+ * @return int
+ *   Identifier of the node created.
+ */
+function comment_on_anything_create_and_cache($account, $entity_type, $entity) {
+  $cache = new EntityNodeCommentCacheDataWrapper($entity_type, $entity);
+  $entity_label = entity_label($entity_type, $entity);
+  $nid = comment_on_anything_create($account, $entity_label, $entity_type)->nid;
+  $cache->save($nid);
+  return $nid;
+}
+
+/**
+ * Attempts to get the uri of the comment node's corresponding entity.
+ *
+ * @param int $nid
+ *   Node id.
+ *
+ * @return null|array
+ *   An array containing the 'path' and 'options' keys used to build the uri of
+ *   the entity, and matching the signature of url(). NULL if the entity has no
+ *   uri of its own or if the entity is not found.
+ */
+function comment_on_anything_get_uri_to_original_entity($nid) {
+  $cache = EntityNodeCommentCacheDataWrapper::fromNid($nid);
+
+  if (!$cache) {
+    list($entity_type, $entity_id) = _comment_on_anything_get_entity_by_nid($nid);
+    if ($entity_type && $entity_id) {
+      $cache = new EntityNodeCommentCacheDataWrapper($entity_type, $entity_id);
+      $cache->save($nid);
+    }
+  }
+
+  if ($cache) {
+    return entity_uri($cache->getEntityType(), $cache->getEntity());
+  }
+
+  return NULL;
+}
+
+/**
+ * Implements hook_preprocess_node().
+ */
+function comment_on_anything_preprocess_node(&$variables) {
+  if ($variables['type'] == 'comment_on_anything') {
+    $variables['title'] = NULL;
+  }
+}
+
+/**
+ * Helper function to comment_on_anything_get_uri_to_original_entity().
+ */
+function _comment_on_anything_get_entity_by_nid($nid) {
+  $instance_info = field_info_instances();
+  $fields_info = field_info_fields();
+  foreach ($instance_info as $entity => $bundles) {
+    foreach ($bundles as $bundle => $fields) {
+      foreach (array_keys($fields) as $field) {
+        if ($fields_info[$field]['type'] === 'comment_on_anything') {
+          $efq = new EntityFieldQuery();
+          $efq
+            ->fieldCondition($field, 'nid', $nid)
+            ->entityCondition('entity_type', $entity)
+            ->entityCondition('bundle', $bundle);
+          $result = $efq->execute();
+          if ($result) {
+            $entities = array_keys($result[$entity]);
+            $entity_id = reset($entities);
+            return array($entity, $entity_id);
+          }
+        }
+      }
+    }
+  }
+
+  return array(NULL, NULL);
+}
+
+/**
+ * Wrapper class around the Comment on anything cache.
+ */
+class EntityNodeCommentCacheDataWrapper {
+
+  /**
+   * @var string
+   *   Entity type.
+   */
+  public $entity_type;
+
+  /**
+   * @var int
+   *   Entity id.
+   */
+  public $entity_id;
+
+  /**
+   * Setter for $entity_id.
+   *
+   * @param int $entity_id
+   */
+  public function setEntityId($entity_id) {
+    $this->entity_id = $entity_id;
+    return $this;
+  }
+
+  /**
+   * Getter for $entity_id.
+   *
+   * @return int
+   */
+  public function getEntityId() {
+    return $this->entity_id;
+  }
+
+  /**
+   * Setter for $entity_type.
+   *
+   * @param string $entity_type
+   */
+  public function setEntityType($entity_type) {
+    $this->entity_type = $entity_type;
+    return $this;
+  }
+
+  /**
+   * Getter for $entity_type.
+   *
+   * @return string
+   */
+  public function getEntityType() {
+    return $this->entity_type;
+  }
+
+  /**
+   * Loads the entity based on $entity_type and $entity_id.
+   *
+   * @return object|null
+   */
+  public function getEntity() {
+    $entity_type = $this->getEntityType();
+    $entity_id = $this->getEntityId();
+
+    if ($entity_type && $entity_id) {
+      $entities = entity_load($entity_type, array($entity_id));
+      return $entities ? reset($entities) : NULL;
+    }
+
+    return NULL;
+  }
+
+  /**
+   * Sets $entity_id from the entity itself.
+   *
+   * Note: $entity_type must be set prior calling this function.
+   *
+   * @param object $entity
+   */
+  public function setEntity($entity) {
+    if ($entity_type = $this->getEntityType()) {
+      list($idkey) = entity_extract_ids($entity_type, $entity);
+      if (!empty($entity->{$idkey})) {
+        $this->setEntityId($entity->{$idkey});
+      }
+    }
+    return $this;
+  }
+
+  function __construct($entity_type = NULL, $entity = NULL) {
+    if ($entity_type !== NULL) {
+      $this->setEntityType($entity_type);
+      if ($entity !== NULL) {
+        if (is_numeric($entity)) {
+          $this->setEntityId($entity);
+        }
+        else {
+          $this->setEntity($entity);
+        }
+      }
+    }
+  }
+
+  /**
+   * Saves this object to the database.
+   *
+   * @param int $nid
+   *   The id of the node which is attached to the entity.
+   */
+  public function save($nid) {
+    if ($this->getEntityType() && $this->getEntityId()) {
+      cache_set($nid, $this, COMMENT_ON_ANYTHING_CACHE_TABLE);
+    }
+    return $this;
+  }
+
+  /**
+   * Loads the instance from the database.
+   *
+   * @param int $nid
+   *   The id of the node which is attached to the entity.
+   *
+   * @return null|EntityNodeCommentCacheDataWrapper
+   *   Loaded instance or null.
+   */
+  public static function fromNid($nid) {
+    $result = cache_get($nid, COMMENT_ON_ANYTHING_CACHE_TABLE);
+    return $result ? $result->data : NULL;
+  }
+}
+
+/**
+ * Implements hook_cron_queue_info().
+ */
+function comment_on_anything_cron_queue_info() {
+  $queues = array();
+
+  $queues['comment_on_anything'] = array(
+    'worker callback' => '_comment_on_anything_queue_worker',
+    'time' => 120,
+  );
+
+  return $queues;
+}
+
+/**
+ * This function adds a job to Drupal's job queue.
+ *
+ * The job puts all entities in a given bundle to a cron queue.
+ *
+ * @param array $instance
+ *   The field instance data.
+ *
+ * @param int $limit
+ *   The number of items to be processed in one round.
+ */
+function comment_on_anything_add_job_to_queue(array $instance) {
+  DrupalQueue::get('comment_on_anything', TRUE)
+    ->createItem(array(
+      'instance' => $instance,
+      'field' => field_info_field($instance['field_name']),
+    ));
+}
+
+/**
+ * Worker callback for the job defined in comment_on_anything_add_job_to_queue().
+ *
+ * @param $data
+ */
+function _comment_on_anything_queue_worker(array $data) {
+  static $limit = 64;
+
+  $instance = $data['instance'];
+  $field = $data['field'];
+  $info = entity_get_info($instance['entity_type']);
+  $entity_table = isset($info['base table']) ? $info['base table'] : NULL;
+  $id_key = isset($info['entity keys']['id']) ? $info['entity keys']['id'] : NULL;
+  $bundle_key = isset($info['entity keys']['bundle']) ? $info['entity keys']['bundle'] : NULL;
+
+  if ($field['storage']['type'] === 'field_sql_storage' && $entity_table && $id_key) {
+    $field_table = _field_sql_storage_tablename($field);
+    $field_nid_column = _field_sql_storage_columnname($field['field_name'], 'nid');
+    $query = db_select($entity_table, 'et');
+    if ($bundle_key) {
+      $query->condition("et.{$bundle_key}", $instance['bundle']);
+    }
+    $query
+      ->fields('et', array($id_key))
+      ->isNull("ft.{$field_nid_column}")
+      // Some entities (eg.: user) reserve the 0 id for special purposes.
+      // This condition is here to avoid conflicts with special entities.
+      ->condition("et.{$id_key}", 0, '<>')
+      ->range(0, $limit)
+      ->addJoin('LEFT OUTER', $field_table, 'ft', "et.{$id_key} = %alias.entity_id");
+
+    $result = $query->execute();
+
+    $entities = array();
+    $ids = $result->fetchCol();
+    if ($ids) {
+      $entities = entity_load($instance['entity_type'], $ids);
+      _comment_on_anything_queue_worker_process_entities($instance['entity_type'], $entities, $field['field_name']);
+    }
+    if (count($entities) === $limit) {
+      // If we still likely have entities to process, add the job back.
+      comment_on_anything_add_job_to_queue($instance);
+    }
+    else {
+      // Otherwise inform modules we are done. In case they want to do
+      // something to help the rollout of this new feature move forward.
+      module_invoke_all('comment_on_anything_queue_done', $instance);
+    }
+  }
+}
+
+/**
+ * Helper function for _comment_on_anything_queue_worker().
+ *
+ * @param string $entity_type
+ *   Type of the entities.
+ * @param array $entities
+ *   List of the entity objects.
+ * @param string $field_name
+ *   Name of the "comment on anything" field.
+ */
+function _comment_on_anything_queue_worker_process_entities($entity_type, array $entities, $field_name) {
+  global $user;
+
+  foreach ($entities as $entity) {
+    $language = empty($entity->language) ? LANGUAGE_NONE : $entity->language;
+    if (empty($entity->{$field_name}[$language])) {
+      // Try to determine the author of the entity.
+      $account = $user;
+      if ($entity_type === 'user') {
+        $account = $entity;
+      }
+      elseif (isset($entity->uid) && ($acc = user_load($entity->uid))) {
+        $account = $acc;
+      }
+      $entity->{$field_name}[$language] = array(
+        array(
+          'nid' => comment_on_anything_create_and_cache(
+            $account, $entity_type, $entity
+          )
+        ),
+      );
+      entity_save($entity_type, $entity);
+    }
+  }
+}
+
+/**
+ * Implements hook_views_api().
+ */
+function comment_on_anything_views_api() {
+  return array(
+    'api' => 3,
+    'path' => drupal_get_path('module', 'comment_on_anything') . '/views',
+  );
+}
+
+/**
+ * Comment on anything settings form.
+ *
+ * The function fakes the node edit form to pass it trough
+ * comment_form_node_form_alter().
+ *
+ * @param stdClass $node
+ *   Comment proxy node.
+ *
+ * @return array
+ *   Comment settings form of the node.
+ */
+function _comment_on_anything_settings_form($node) {
+  // We pass the proxy node, so we get its comment settings.
+  // @see comment_form_node_form_alter().
+  $fake_form['#node'] = $node;
+
+  comment_form_node_form_alter($fake_form, array());
+
+  unset($fake_form['comment_settings']['comment']['#parents']);
+
+  return $fake_form['comment_settings'];
+}
+
+/**
+ * Static container for the overridden variables.
+ *
+ * @param array $values
+ *   NULL to return the overridden variables, array to override and return them.
+ *
+ * @return array
+ *   The overridden variables.
+ *
+ * @see _comment_on_anything_override_variables().
+ */
+function _comment_on_anything_overridden_variables(array $values = NULL) {
+  $vals = &drupal_static(__FUNCTION__, array());
+
+  if ($values !== NULL) {
+    $vals = $values;
+  }
+
+  return $vals;
+}
+
+/**
+ * Temporarly overrides all comment related variables.
+ *
+ * It replaces all comment settings to the ones suffixed with values from field
+ * instance data.
+ *
+ * You can revert this effect with _comment_on_anything_restore_variables().
+ *
+ * @param array $instance
+ *   Field instance.
+ */
+function _comment_on_anything_override_variables(array $instance) {
+  global $conf;
+
+  $instance_string = "--{$instance['field_name']}__{$instance['entity_type']}__{$instance['bundle']}";
+  $search_string = "comment_on_anything{$instance_string}";
+  $overridden = array();
+
+  foreach ($conf as $name => $value) {
+    if (substr($name, -strlen($search_string)) === $search_string) {
+      $override_name = substr($name, 0, -strlen($instance_string));
+      $overridden[$override_name] = isset($conf[$override_name]) ? $conf[$override_name] : NULL;
+      $conf[$override_name] = $value;
+    }
+  }
+
+  _comment_on_anything_overridden_variables($overridden);
+}
+
+/**
+ * Restores the variables overridden by _comment_on_anything_override_variables().
+ *
+ * @see _comment_on_anything_override_variables().
+ */
+function _comment_on_anything_restore_variables() {
+  global $conf;
+
+  foreach (_comment_on_anything_overridden_variables() as $name => $value) {
+    $conf[$name] = $value;
+  }
+
+  _comment_on_anything_overridden_variables(array());
+}

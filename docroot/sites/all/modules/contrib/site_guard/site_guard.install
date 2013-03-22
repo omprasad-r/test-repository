@@ -1,0 +1,22 @@
+<?php
+/**
+ * @file
+ * Install, update, and uninstall functions for the Site Guard module.
+ */
+
+/**
+ * Implements hook_disable().
+ */
+function site_guard_disable() {
+  module_disable(array('shield'));
+}
+
+/**
+ * Implements hook_uninstall().
+ */
+function site_guard_uninstall() {
+  // Shield's uninstall will never run so we just delete these variables here.
+  variable_del('shield_user');
+  variable_del('shield_pass');
+  variable_del('shield_print');
+}

@@ -1,0 +1,75 @@
+<?php
+/**
+ * @file
+ * Functions for site_guard module
+ */
+
+/**
+ * Implements hook_perm().
+ */
+function site_guard_permission() {
+  return array(
+    'administer site_guard' => array(
+      'title' => t('Administer Site Guard'),
+      'description' => t('Turn the Site Guard on or off and configure its settings.'),
+    ),
+  );
+}
+
+/**
+ * Implements hook_menu().
+ */
+function site_guard_menu() {
+  $items['admin/config/system/site_guard'] = array(
+    'title' => 'Site Guard',
+    'description' => t('Prevent content from being viewed on your site '),
+    'page callback' => 'drupal_get_form',
+    'page arguments' => array('site_guard_toggle_form'),
+    'weight' => 10,
+    'access arguments' => array('administer site_guard'),
+    'file' => 'site_guard.admin.inc',
+  );
+
+  return $items;
+}
+
+/**
+ * Implements hook_menu_alter().
+ */
+function site_guard_menu_alter(&$items) {
+  // Remove the shield config UI entirely as we provide a replacement for it.
+  // @todo In the site_guard UI we don't have a checkbox for allowing command line
+  //   access, so that cannot be set at all now. Figure out how to deal with
+  //   this.
+  unset($items['admin/config/system/shield']);
+}
+
+/**
+ * Turns Site Guard on.
+ */
+function site_guard_enable_site_guard($username, $password, $message = '') {
+  if (!module_exists('shield')) {
+    module_enable(array('shield'));
+  }
+  variable_set('shield_user', $username);
+  variable_set('shield_pass', $password);
+  variable_set('shield_print', $message);
+  // If page_cache_max_age had previously been set, we need to store the value
+  // so that we can restore it when site_guard is disabled.
+  $original_value = variable_get('page_cache_maximum_age');
+  if (isset($original_value)) {
+    variable_set('site_guard_original_cache_max_age', $original_value);
+  }
+  variable_set('page_cache_maximum_age', 0);
+}
+
+/**
+ * Turns Site Guard off.
+ */
+function site_guard_disable_site_guard() {
+  module_disable(array('shield'));
+  $original_value = variable_get('site_guard_original_cache_max_age');
+  if (isset($original_value)) {
+    variable_set('page_cache_maximum_age', $original_value);
+  }
+}
