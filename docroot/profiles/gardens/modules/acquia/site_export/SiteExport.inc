@@ -499,7 +499,7 @@ class SiteExport {
 	$sqlEditor->insertTableData('variable', "'install_profile', '" . serialize('standard') . "'");
       }
       // Hack to get all caches flushed including file paths.
-      $sqlEditor->insertTableData('variable', "'sqbs_flush_all_caches', '" . serialize(TRUE) ."'");
+      $sqlEditor->insertTableData('variable', "'gardens_misc_flush_all_caches', '" . serialize(TRUE) ."'");
     }
     foreach ($updates as $statement) {
       $sqlEditor->updateTableData($statement);
