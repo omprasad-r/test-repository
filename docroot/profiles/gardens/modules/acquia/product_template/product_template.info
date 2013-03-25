@@ -3,5 +3,6 @@ name = Product template
 description = Provides a template for a product website.
 core = 7.x
 files[] = product_template.module
+files[] = product_template.inc
 dependencies[] = site_template
 hidden = TRUE

@@ -3,5 +3,6 @@ name = Blog template
 description = Provides a template for a blog website.
 core = 7.x
 files[] = blog_template.module
+files[] = blog_template.inc
 dependencies[] = site_template
 hidden = TRUE
