@@ -1,0 +1,3 @@
+#!/usr/bin/env bash
+cd ./docroot
+../drush/drush --include='./modules/acquia/themebuilder/themebuilder_compiler/' tb-seed-cache
