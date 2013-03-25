@@ -26,6 +26,20 @@ function gardens_misc_init() {
   $conf['node_export_code'] = 'file';
 
   gardens_misc_setlocale();
+
+  // Allow gardens_misc to clear all caches on a page request.
+  if (variable_get('gardens_misc_flush_all_caches', FALSE)) {
+    // Use locking to prevent multiple clearing.
+    if (lock_acquire('gardens_misc_flush_all_caches')) {
+      variable_del('gardens_misc_flush_all_caches');
+      drupal_flush_all_caches();
+      lock_release('gardens_misc_flush_all_caches');
+    }
+    else {
+      // Give the flush time to finish.
+      lock_wait('gardens_misc_flush_all_caches');
+    }
+  }
 }
 
 /**

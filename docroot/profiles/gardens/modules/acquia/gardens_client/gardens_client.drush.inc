@@ -143,7 +143,7 @@ function drush_gardens_client_gardens_move_cluster($gardener_url = NULL, $userma
   variable_del('drupal_private_key');
   variable_del('file_public_path');
   variable_set('menu_rebuild_needed', TRUE);
-  variable_set('sqbs_flush_all_caches', TRUE);
+  variable_set('gardens_misc_flush_all_caches', TRUE);
 
   db_query('TRUNCATE {sessions}');
   db_query('TRUNCATE {themebuilder_session}');

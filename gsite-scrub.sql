@@ -44,8 +44,8 @@ INSERT INTO `variable` (name, value) VALUES ('menu_rebuild_needed', 'b:1;');
 INSERT INTO `variable` (name, value) VALUES ('drupal_private_key', CONCAT('s:32:\"', MD5(RAND()), '\";'));
 
 -- Force everything to refresh
-DELETE FROM `variable` WHERE `name` = 'sqbs_flush_all_caches';
-INSERT INTO `variable` (name, value) VALUES ('sqbs_flush_all_caches', 'b:1;');
+DELETE FROM `variable` WHERE `name` = 'gardens_misc_flush_all_caches';
+INSERT INTO `variable` (name, value) VALUES ('gardens_misc_flush_all_caches', 'b:1;');
 
 -- Set restored sites to have gardens_devel set so that js errors spit out alerts
 DELETE FROM `variable` WHERE `name` = 'gardens_devel';
