@@ -72,24 +72,17 @@ class SiteExport {
       $this->addReadmeToArchive($tarfile);
     }
 
-
     // Include files that need to have certain lines stripped out of them before
-    // being included in the site export. Note that the files listed here should
-    // also be listed in export_exclude.txt (so that the original version of the
-    // file is not exported, only this one).
-    $files_to_strip_lines_from = array(
-      'index.php',
-      '.htaccess',
-      'sites/all/modules/views_bulk_operations/actions/script.action.inc',
-      'sites/all/modules/gardens_statsd/gardens_statsd.install',
-      'sites/all/modules/gardens_statsd/gardens_statsd.module',
-      'modules/aggregator/aggregator.pages.inc',
-      'modules/block/block.module',
-      'sites/all/modules/antivirus/antivirus.module',
-    );
+    // being included in the site export.
+    $files_to_strip_lines_from = $this->getFilesToStrip();
+
     $edited_files = array();
     foreach ($files_to_strip_lines_from as $file) {
       $edited_files[] = $this->stripFile($file, $working_dir);
+    }
+    foreach (array('gardens.profile', 'gardens.install') as $filename) {
+      $path = $working_dir . '/profiles/gardens/' . $filename;
+      $edited_files[] = $this->replaceProfileContents($path);
     }
     $this->addFilesToArchive($tarfile, $edited_files, $working_dir, 'docroot/', '/');
 
@@ -145,6 +138,8 @@ class SiteExport {
   private function addDrupalFiles($tarfile) {
     // All hidden modules are in modules/acquia.
     $exclude_patterns = $this->getDirectoriesToRemove();
+    $exclude_patterns += $this->getFilesToStrip();
+    $exclude_patterns += $this->getFilesToRemove();
 
     $tar_cmd = new CliTar($tarfile);
     $tar_cmd->compression_mode = '';
@@ -154,7 +149,6 @@ class SiteExport {
       $tar_cmd->setOption('--exclude', $pattern, TRUE);
     }
     $tar_cmd->setOption('-C', dirname(DRUPAL_ROOT));
-    $tar_cmd->setOption('-X', $this->getExcludeFilePath());
     $tar_cmd->setOption('--mode', 'u+rw,g+r,o+r');
     // Add the docroot
     $tar_cmd->add('docroot');
@@ -245,15 +239,6 @@ class SiteExport {
     exec((string)$tar_cmd, $output, $result);
   }
 
-  /**
-   * Returns the path to a file that contains files that must be excluded from the exported site.
-   *
-   * @return {String}
-   *   The path to the exclude file.
-   */
-  private function getExcludeFilePath() {
-    return dirname(__FILE__) . '/export_exclude.txt';
-  }
 
   /**
    * Returns a list of module names that should not be included in the export.
@@ -304,21 +289,18 @@ class SiteExport {
       'themebuilder_typekit',
       'themebuilder_test',
       'thumbgen',
-      // Customer-specific modules.
-      'florida_hospital_misc',
-      'warner_misc',
-      'migrate_warner',
-      // Installation profiles. These mostly work the same way as modules, so
-      // they need to be included here (to make sure anything they store in the
-      // database is also removed). However, the database only stores the current
-      // active profile, so in order to make sure that all profiles in the system
-      // are actually deleted from the filesystem, we need to also remove them in
-      // getDirectoriesToRemove().
-      'gardens',
-      'gardens_verification',
-      'florida_hospital',
-      'warner',
-      'pfizer',
+    );
+  }
+
+  /**
+   * Returns a list of files that should not be included in the export.
+   */
+  private function getFilesToRemove() {
+    return array(
+      '.git',
+      'settings.php',
+      'profiles/gardens/gardens.install',
+      'profiles/gardens/gardens.profile',
     );
   }
 
@@ -332,24 +314,40 @@ class SiteExport {
   private function getDirectoriesToRemove() {
     return array(
       // We want to exclude all of modules/acquia.
-      'modules/acquia',
+      'profiles/gardens/modules/acquia',
       // We store some data in the top-level files directory intended to be
       // shared between Gardens sites, but we don't want to include that on
       // export.
       'docroot/files',
-      // Installation profiles. See note in getModulesToRemove()
-      // for why these need to be removed here as well.
-      'profiles/gardens',
-      'profiles/gardens_verification',
-      'profiles/florida_hospital',
-      'profiles/warner',
-      'profiles/pfizer',
       // We don't want to copy everyone's site.  We'll come back for sites/all
       // and sites/whatevermysiteis later.
       'sites',
       // Exclude the WMG theme.
       'themes/acquia/wmg',
     );
+  }
+
+  /**
+   * Return the list of files that need to have certain lines stripped out of
+   * them before being included in the site export.
+   *
+   * @return {Array}
+   *   The list of filenames that need to be stripped.
+   */
+  private function getFilesToStrip() {
+    $files = array(
+      'index.php',
+      '.htaccess',
+      'profiles/gardens/modules/contrib/views_bulk_operations/actions/script.action.inc',
+      'profiles/gardens/modules/gardens/gardens_statsd/gardens_statsd.install',
+      'profiles/gardens/modules/gardens/gardens_statsd/gardens_statsd.module',
+      'modules/aggregator/aggregator.pages.inc',
+      'modules/block/block.module',
+    );
+    foreach (module_implements('gardens_site_export_strip') as $module) {
+      $files = array_merge($files, module_invoke($module, 'gardens_site_export_strip'));
+    }
+    return $files;
   }
 
   /**
@@ -696,6 +694,62 @@ EOT;
   }
 
   /**
+   * Creates a sanitized .install or .profile file at the specified path.
+   *
+   * @param $path
+   *   The full path where the modified file is to be placed.
+   *
+   * @return
+   *   The path to the newly-created file.
+   */
+  private function replaceProfileContents($path) {
+    preg_match('/\.(install|profile)$/', $path, $matches);
+    if (empty($matches)) {
+      return;
+    }
+    switch ($matches[1]) {
+      case 'install':
+        $new_contents = <<<EOT
+<?php
+
+/**
+ * Implement hook_install().
+ *
+ * Perform actions to set up the site for this profile.
+ */
+function gardens_install() {
+  include_once DRUPAL_ROOT . "/profiles/standard/standard.install";
+  standard_install();
+}
+EOT;
+        break;
+      case 'profile':
+        $new_contents = <<<EOT
+<?php
+
+/**
+ * Implements hook_form_FORM_ID_alter().
+ *
+ * Allows the profile to alter the site configuration form.
+ */
+function gardens_form_install_configure_form_alter(&\$form, \$form_state) {
+  // Pre-populate the site name with the server name.
+  \$form["site_information"]["site_name"]["#default_value"] = \$_SERVER["SERVER_NAME"];
+}
+EOT;
+        break;
+    }
+
+    $directory = dirname($path);
+    if (!is_dir($directory)) {
+      mkdir($directory, 0755, TRUE);
+    }
+    file_put_contents($path, $new_contents);
+    chmod($path, 0644);
+    return $path;
+  }
+
+  /**
    * Creates a settings file in the specified directory.  This settings file
    * will have database connection settings that will likely cause a db
    * connection error which will hopefully prompt the user to change the
@@ -880,7 +934,6 @@ EOT;
 
     $tar_cmd->setOption('--mode', 'u+rw,g+r,o+r');
     $tar_cmd->setOption('-C', dirname(DRUPAL_ROOT));
-    $tar_cmd->setOption('-X', $this->getExcludeFilePath());
     // Archive the content of symbolic links
     $tar_cmd->setOption('--dereference', '');
     $tar_cmd->add('docroot/sites/all');
