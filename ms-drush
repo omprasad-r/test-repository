@@ -148,6 +148,10 @@ if($args['verbose']) {
   $cmd .= ' -v';
 }
 
+if($args['force']) {
+  $cmd .= ' -f';
+}
+
 foreach($args['dc'] as $command) {
   $cmd .= ' --dc ' . escapeshellarg($command);
 }
@@ -343,6 +347,7 @@ function drush_gardens_args() {
     'nice' => FALSE,
     'dry-run' => FALSE,
     'cleanup' => FALSE,
+    'force' => FALSE,
   );
 }
 

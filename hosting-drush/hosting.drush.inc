@@ -129,6 +129,10 @@ function hosting_drush_command() {
         'description' => 'Port to use (default is 8081).',
         'example-value' => '8082',
       ),
+      'timeout' => array(
+        'description' => 'cURL request timeout (default is 120 sec)',
+        'example-value' => '300',
+      ),
       'host-header' => array(
         'description' => 'Host header (default taken from the alias, or --uri, or omitted).',
         'example-value' => 'foo.drupalgardens.com',
@@ -736,7 +740,7 @@ function drush_hosting_localhost_curl($path) {
   $ch = curl_init("http://localhost:{$port}/{$path}");
   curl_setopt($ch, CURLOPT_HTTPHEADER, array('Host: ' . $host_header));
   curl_setopt($ch, CURLOPT_RETURNTRANSFER, TRUE);
-  curl_setopt($ch, CURLOPT_TIMEOUT, 30);
+  curl_setopt($ch, CURLOPT_TIMEOUT, (int) drush_get_option('timeout', 120));
   $content = curl_exec($ch);
   $errno = curl_errno($ch);
   $code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
