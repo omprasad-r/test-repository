@@ -1,0 +1,10 @@
+; $Id$
+name = "UI for Drupal-to-Drupal migration"
+description = "Support for migrating external Drupal sites into the current site"
+package = "Development"
+core = 7.x
+
+dependencies[] = migrate_d2d
+dependencies[] = migrate_ui
+
+files[] = migrate_d2d_ui.migrate.inc
