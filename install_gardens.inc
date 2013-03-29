@@ -949,7 +949,7 @@ function acquia_gardens_ensure_settings_file($site_directory, $hosting_site_name
   $settings_inc = "/var/www/site-php/{$hosting_site_name}/D7-{$hosting_site_environment}-{$gardens_site_id}-settings.inc";
   if (!file_exists($settings_inc)) {
     // Try the old naming scheme.
-    $settings_filename = "/var/www/site-php/{$hosting_site_name}/D7-{$gardens_site_id}-settings.inc";
+    $settings_inc = "/var/www/site-php/{$hosting_site_name}/D7-{$gardens_site_id}-settings.inc";
   }
   if (!file_exists($settings_inc)) {
     throw new Exception("Trying to create settings file but ${settings_inc} hasn't been created by Hosting yet. This message is expected for a couple minutes after a new site starts installing.");
