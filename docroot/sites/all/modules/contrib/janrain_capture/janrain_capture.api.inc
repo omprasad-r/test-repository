@@ -14,20 +14,23 @@ class JanrainCaptureApi {
    * Retrives API access credentials from settings.
    */
   function __construct() {
-    $janrain_capture_main = variable_get('janrain_capture_main', array());
-    $janrain_capture_optional = variable_get('janrain_capture_optional', array());
-
-    $this->args = array();
-    $this->args['client_id'] = isset($janrain_capture_main['capture_client_id'])
-        ? $janrain_capture_main['capture_client_id']
+    $ver = variable_get('janrain_capture_ver', '1.0');
+    if($ver == '1.0') {
+      $janrain_capture_main = variable_get('janrain_capture_main', array());
+    } else {
+      $janrain_capture_main = variable_get('janrain_capture_main2', array());
+    }
+      $this->args = array();
+      $this->args['client_id'] = isset($janrain_capture_main['capture_client_id'])
+          ? $janrain_capture_main['capture_client_id']
+          : '';
+      $this->args['client_secret'] = isset($janrain_capture_main['capture_client_secret'])
+          ? $janrain_capture_main['capture_client_secret']
+          : '';
+      $this->captureAddr = !empty($janrain_capture_main['capture_address'])
+        ? $janrain_capture_main['capture_address']
         : '';
-    $this->args['client_secret'] = isset($janrain_capture_main['capture_client_secret'])
-        ? $janrain_capture_main['capture_client_secret']
-        : '';
-
-    $this->captureAddr = !empty($janrain_capture_main['capture_address'])
-      ? $janrain_capture_main['capture_address']
-      : '';
+      $this->captureAddr = str_replace("https://", "", $this->captureAddr);
   }
 
   /**
@@ -80,7 +83,7 @@ class JanrainCaptureApi {
     if ($json_data['stat'] == 'error') {
       $error = new stdClass();
       $error->code = $json_data['code'];
-      $error->error = $json_data['error'];
+      $error->error = $json_data['error'] . ": ". $json_data['error_description'];
       $this->reportError($error);
       return FALSE;
     }
@@ -158,8 +161,8 @@ class JanrainCaptureApi {
    *   Result containing error code and message
    */
   protected function reportError($result) {
-    watchdog('janrain_capture', 'Capture web API seems to be inaccessible due to "%error".', array('%error' => $result->code . ' ' . $result->error), WATCHDOG_WARNING);
-    drupal_set_message(t('Capture web API seems to be inaccessible because of error "%error".', array('%error' => $result->code . ' ' . $result->error)), 'error');
+    watchdog('janrain_capture', 'Capture web API seems to be inaccessible due to "%error".', array('%error' => $result->code . ' - ' . $result->error), WATCHDOG_WARNING);
+    drupal_set_message(t('Capture web API seems to be inaccessible because of error "%error".', array('%error' => $result->code . ' - ' . $result->error)), 'error');
   }
 
   /**

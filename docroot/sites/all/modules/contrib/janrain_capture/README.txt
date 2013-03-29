@@ -3,6 +3,7 @@ INTRODUCTION
 
 Authors:
 * Bryce Hamrick (bhamrick)
+* Jeremy Bradbury (JeremyJanrain)
 
 This plugin implements full Janrain Capture integration with Drupal. More
 information can be found at:

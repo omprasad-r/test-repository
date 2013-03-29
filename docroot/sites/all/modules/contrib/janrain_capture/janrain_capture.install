@@ -106,4 +106,8 @@ function janrain_capture_uninstall() {
   variable_del('janrain_capture_optional');
   variable_del('janrain_capture_fields');
   variable_del('janrain_capture_enforce');
+  db_delete('variable')
+    ->condition(db_or()
+      ->condition('name', "janrain_capture_share%", 'LIKE'))
+    ->execute();
 }

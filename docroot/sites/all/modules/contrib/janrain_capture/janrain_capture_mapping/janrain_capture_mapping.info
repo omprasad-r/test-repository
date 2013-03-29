@@ -7,9 +7,9 @@ files[] = tests/janrain_capture_mapping.test
 dependencies[] = entity
 dependencies[] = janrain_capture
 
-; Information added by drupal.org packaging script on 2012-11-27
-version = "7.x-1.6"
+; Information added by drupal.org packaging script on 2013-03-11
+version = "7.x-2.0-rc3"
 core = "7.x"
 project = "janrain_capture"
-datestamp = "1354060649"
+datestamp = "1363044014"
 
