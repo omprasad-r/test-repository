@@ -390,7 +390,7 @@ function install_gardens($hosting_site_name, $hosting_site_environment) {
 
     if ($op == GARDENS_SIGNUP_SITE_OPERATION_INSTALL || $op == GARDENS_SIGNUP_SITE_OPERATION_INSTALL_AND_CONFIGURE) {
       // Prepare the installation directories and files.
-      acquia_gardens_prepare_for_installation($site_directory, $hosting_site_name, $gardens_site_id, $domains);
+      acquia_gardens_prepare_for_installation($site_directory, $hosting_site_name, $hosting_site_environment, $gardens_site_id, $domains);
 
       // Install Drupal with the appropriate installation settings for the
       // Gardens site.
@@ -1129,11 +1129,14 @@ function _acquia_gardens_user_password() {
 function acquia_gardens_get_site_environment() {
   // Get the site environment from the hosting environment variable.
   $site_environment_variable = 'AH_SITE_ENVIRONMENT';
-  if (!empty($_ENV[$site_environment_variable])) {
-    $hosting_site_environment = $_ENV[$site_environment_variable];
-  }
-  else {
-    throw new Exception('AH_SITE_ENVIRONMENT variable not set.');
+  $hosting_site_environment = getenv($site_environment_variable);
+  if (empty($hosting_site_environment)) {
+    if (!empty($_ENV[$site_environment_variable])) {
+      $hosting_site_environment = $_ENV[$site_environment_variable];
+    }
+    else {
+      throw new Exception('AH_SITE_ENVIRONMENT variable not set.');
+    }
   }
   return $hosting_site_environment;
 }
