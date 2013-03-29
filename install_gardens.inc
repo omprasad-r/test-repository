@@ -969,8 +969,8 @@ if (!class_exists('DrupalFakeCache')) {
 // Rely on the external Varnish cache for page caching.
 \$conf['cache_class_cache_page'] = 'DrupalFakeCache';
 
-\$conf['gardens_site_id'] = '{$gardens_site_id}';
-\$conf['gardens_db_name'] = '{$site_nid}';
+\$conf['gardens_site_id'] = '{$site_nid}';
+\$conf['gardens_db_name'] = '{$gardens_site_id}';
 
 if (file_exists('{$settings_inc}')) {
   include('{$settings_inc}');
