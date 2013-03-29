@@ -198,13 +198,17 @@ function migrate_drush_command() {
   );
   $items['migrate-deregister'] = array(
     'description' => 'Remove all tracking of a migration',
-    'options' => array('orphans' => 'Remove tracking for any migrations whose implementing class no longer exists'),
+    'options' => array(
+      'orphans' => 'Remove tracking for any migrations whose implementing class no longer exists',
+      'group' => 'Remove tracking of a migration group, and any migrations assigned to it',
+    ),
     'arguments' => array(
       'migration' => 'Name of migration to deregister',
     ),
     'examples' => array(
       'migrate-deregister Article' => 'Deregister the Article migration',
       'migrate-deregister --orphans' => 'Deregister any no-longer-implemented migrations',
+      'migrate-deregister --group=myblog' => 'Deregister the myblog group and all migrations within it',
     ),
     'drupal dependencies' => array('migrate'),
   );
@@ -212,6 +216,11 @@ function migrate_drush_command() {
     'description' => 'Register any newly-defined migration classes',
     'drupal dependencies' => array('migrate'),
     'aliases' => array('mar'),
+  );
+  $items['migrate-register'] = array(
+    'description' => 'Register or reregister any statically-defined migrations',
+    'drupal dependencies' => array('migrate'),
+    'aliases' => array('mreg'),
   );
   $items['migrate-wipe'] = array(
     'description' => 'Delete all nodes from specified content types.',
@@ -438,14 +447,20 @@ function drush_migrate_mappings($args = NULL) {
         $dest_descriptions = array();
         if (method_exists($destination, 'fields')) {
           foreach ($destination->fields($migration) as $machine_name => $description) {
-            $dest_descriptions[$machine_name] = $description;
+            if (is_array($description)) {
+              $description = reset($description);
+            }
+            $dest_descriptions[$machine_name] = strip_tags($description);
           }
         }
         $source = $migration->getSource();
         $src_descriptions = array();
         if (method_exists($source, 'fields')) {
           foreach ($source->fields() as $machine_name => $description) {
-            $src_descriptions[$machine_name] = $description;
+            if (is_array($description)) {
+              $description = reset($description);
+            }
+            $src_descriptions[$machine_name] = strip_tags($description);
           }
         }
       }
@@ -791,6 +806,9 @@ function drush_migrate_rollback($args = NULL) {
     $options = array();
     if ($idlist = drush_get_option('idlist', FALSE)) {
       $options['idlist'] = $idlist;
+    }
+    if (drush_get_option('force', FALSE) == 1) {
+      $options['force'] = TRUE;
     }
     $limit = drush_get_option('limit');
     if ($limit) {
@@ -1228,31 +1246,40 @@ function drush_migrate_reset_status($args = NULL) {
 }
 
 /**
- * Deregister a given migration, or all orphaned migrations. Note that the
- * migration might no longer "exist" (the class implementation might be gone),
- * so we can't count on being able to instantiate it, or use migrate_migrations().
+ * Deregister a given migration, migration group, or all orphaned migrations.
+ * Note that the migration might no longer "exist" (the class implementation
+ * might be gone), so we can't count on being able to instantiate it, or use
+ * migrate_migrations().
  */
 function drush_migrate_deregister($args = NULL) {
   try {
     $orphans = drush_get_option('orphans');
-    if ($orphans) {
-      $migrations = array();
-      $result = db_select('migrate_status', 'ms')
-                    ->fields('ms', array('class_name', 'machine_name'))
-                    ->execute();
-      foreach ($result as $row) {
-        if (!class_exists($row->class_name)) {
-          $migrations[] = $row->machine_name;
-        }
-      }
+    $group = drush_get_option('group');
+    if ($group) {
+      MigrateGroup::deregister($group);
+      drush_log(dt("Deregistered group '!description' and all its migrations",
+        array('!description' => $group)), 'success');
     }
     else {
-      $migrations = explode(',', $args);
-    }
-    foreach ($migrations as $machine_name) {
-      drush_migrate_deregister_migration($machine_name);
-      drush_log(dt("Deregistered '!description' migration",
-        array('!description' => $machine_name)), 'success');
+      if ($orphans) {
+        $migrations = array();
+        $result = db_select('migrate_status', 'ms')
+                      ->fields('ms', array('class_name', 'machine_name'))
+                      ->execute();
+        foreach ($result as $row) {
+          if (!class_exists($row->class_name)) {
+            $migrations[] = $row->machine_name;
+          }
+        }
+      }
+      else {
+        $migrations = explode(',', $args);
+      }
+      foreach ($migrations as $machine_name) {
+        drush_migrate_deregister_migration($machine_name);
+        drush_log(dt("Deregistered '!description' migration",
+          array('!description' => $machine_name)), 'success');
+      }
     }
   }
   catch (MigrateException $e) {
@@ -1274,13 +1301,28 @@ function drush_migrate_deregister_migration($machine_name) {
   db_delete('migrate_status')
     ->condition('machine_name', $machine_name)
     ->execute();
+  db_delete('migrate_field_mapping')
+    ->condition('machine_name', $machine_name)
+    ->execute();
 }
 
 /**
- * Register any previously-unrecognized non-dynamic migrations.
+ * Auto-registration is no longer supported. This command should be removed
+ * entirely in a future point release.
+ *
+ * @deprecated
  */
 function drush_migrate_auto_register($args = NULL) {
-  migrate_autoregister();
+  drush_log(dt('The auto-registration feature has been removed. Migrations '
+    . 'must now be explicitly registered.'), 'error');
+}
+
+/**
+ * Register any migrations defined in hook_migrate_api().
+ */
+function drush_migrate_register($args = NULL) {
+  migrate_static_registration();
+  drush_log(dt('All statically defined migrations have been (re)registered.'), 'success');
 }
 
 /**

@@ -26,6 +26,8 @@ class DateMigrateExampleUnitTest extends DrupalWebTestCase {
    */
   function setUp() {
     parent::setUp('migrate', 'features', 'date', 'date_repeat', 'date_repeat_field', 'date_migrate_example');
+    // Make sure the migration is registered.
+    migrate_get_module_apis();
   }
 
   /**

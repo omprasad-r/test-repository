@@ -29,8 +29,12 @@ class MigrateFieldsEntityHandler extends MigrateDestinationHandler {
       $field_info = field_info_field($machine_name);
       $type = $field_info['type'];
 
-      $fields[$machine_name] = t('Field:') . ' ' . $instance['label'] .
-        ' (' . $field_info['type'] . ')';
+      if (user_access(MIGRATE_ACCESS_ADVANCED)) {
+        $fields[$machine_name] = $instance['label'] . ' (' . $field_info['type'] . ')';
+      }
+      else {
+        $fields[$machine_name] = $instance['label'];
+      }
 
       // Look for subfields
       $class_list = _migrate_class_list('MigrateFieldHandler');
@@ -402,6 +406,7 @@ class MigrateTaxonomyTermReferenceFieldHandler extends MigrateFieldHandler {
         $values = array_map('strtolower', $values);
       }
       foreach ($values as $value) {
+        $value = trim($value);
         if (isset($existing_terms[$value])) {
           $tids[] = $existing_terms[$value];
         }
@@ -478,7 +483,7 @@ abstract class MigrateFileFieldBaseHandler extends MigrateFieldHandler {
         $file_class = $mapping->getDefaultValue();
       }
     }
-    if (!isset($file_class)) {
+    if (empty($file_class)) {
       $file_class = 'MigrateFileUri';
     }
     $fields += call_user_func(array($file_class, 'fields'));
@@ -524,7 +529,7 @@ abstract class MigrateFileFieldBaseHandler extends MigrateFieldHandler {
     }
 
     $return = array();
-    $delta = 0;
+
     // Note that what $value represents depends on the file class -
     // MigrateFileUri expects a filespec/URI, MigrateFileFid expects a file ID,
     // etc.
@@ -538,7 +543,15 @@ abstract class MigrateFileFieldBaseHandler extends MigrateFieldHandler {
             $instance_arguments[$key] = $argument;
           }
           else {
-            $instance_arguments[$key] = $argument[$delta];
+            if (isset($argument[$delta])) {
+              $instance_arguments[$key] = $argument[$delta];
+            }
+            else {
+              $migration->saveMessage(
+        				t('No data for subfield %key at row %delta for field %field',
+                  array('%key' => $key, '%delta' => $delta, '%field' => $field_info['field_name'])),
+                Migration::MESSAGE_WARNING);
+            }
           }
         }
         // If the parent entity doesn't have an explicit uid, give ownership
@@ -556,7 +569,6 @@ abstract class MigrateFileFieldBaseHandler extends MigrateFieldHandler {
           $return[$language][] = $this->buildFieldArray($field_array, $instance_arguments, $delta);
         }
       }
-      $delta++;
     }
 
     return $return;

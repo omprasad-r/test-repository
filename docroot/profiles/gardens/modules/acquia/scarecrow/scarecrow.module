@@ -713,9 +713,10 @@ function scarecrow_menu_alter(&$items) {
     'admin/config/development/gardens-statsd' => 'scarecrow_is_gardens_admin',
   );
 
-  // The migrate_d2d UI module requires use of the Migrate dashboard - otherwise
-  // hide it (from wordpress_migrate users in particular).
-  if (!module_exists('migrate_d2d_ui')) {
+  // The migrate_d2d UI module requires use of the Migrate dashboard, as
+  // does migrate_umg - otherwise hide it (from wordpress_migrate users in
+  // particular).
+  if (!module_exists('migrate_d2d_ui') && !module_exists('migrate_umg')) {
     $access_callbacks['admin/content/import'] = FALSE;
   }
 
