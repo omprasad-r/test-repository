@@ -33,6 +33,14 @@ if (empty($parent_hosting_site_name) || strpos($hosting_site_name, $parent_hosti
 // site installs should run on this hosting site.  It will be passed as an argument
 // by cron to the parent process and passed through to this script.
 
+try {
+  $hosting_site_environment = acquia_gardens_get_site_environment();
+}
+catch (Exception $e) {
+  // This server should not try to install new sites.
+  syslog(LOG_ERR, 'gardens_installer_worker.php was invoked without the AH_SITE_ENVIRONMENT variable set.');
+  exit();
+}
 
 // Make sure all Gardens sites are initialized (i.e. have their sites dir).
 try {
@@ -49,14 +57,14 @@ try {
   // time) to immediately get the correct domains in place, without requiring
   // any manual intervention.
   if (!file_exists("/mnt/tmp/{$hosting_site_name}/server_initialized")) {
-    acquia_gardens_full_domain_sync();
+    acquia_gardens_full_domain_sync(NULL, $hosting_site_environment);
     touch("/mnt/tmp/{$hosting_site_name}/server_initialized");
   }
   // Determine whether we should trigger performance logging based on the
   // presence of a file.
   $performance_logging = file_exists("/mnt/tmp/{$hosting_site_name}/install_gardens_do_performance_logging");
   // Perform the actual initialization.
-  install_gardens_initialize($parent_hosting_site_name, FALSE, $performance_logging);
+  install_gardens_initialize($parent_hosting_site_name, $hosting_site_environment, FALSE, $performance_logging);
 }
 catch (Exception $e) {
   // Something went badly wrong, so bail out. We only want to raise a Nagios
@@ -99,7 +107,7 @@ else {
   // Attempt to install or configure a Gardens site associated with this
   // Hosting site, if there is at least one that needs work done on it.
   try {
-    install_gardens($hosting_site_name);
+    install_gardens($hosting_site_name, $hosting_site_environment);
   }
   catch (Exception $e) {
     // The system is designed to retry failed installations (and temporary

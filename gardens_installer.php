@@ -27,6 +27,8 @@ define('GARDENS_INSTALLER_TIMEOUT', 60);
  */
 define('GARDENS_INSTALLER_DELAY', 5);
 
+require_once('install_gardens.inc');
+
 $start = time();
 
 // Initialize logging.
@@ -42,8 +44,9 @@ if (empty($site) || !in_array($op, array('install', 'initialize')) || preg_match
 
 $install_worker_file = escapeshellarg(dirname(__FILE__) . '/gardens_installer_worker.php');
 
+$gardens_site_environment = acquia_gardens_get_site_environment();
 do {
   // Capturing output and return value would be pointless here.
-  exec("/usr/bin/php $install_worker_file $site $op >/dev/null &");
+  exec(sprintf('AH_SITE_ENVIRONMENT=%s /usr/bin/php %s %s %s >/dev/null &', $gardens_site_environment, $install_worker_file, $site, $op));
   sleep(GARDENS_INSTALLER_DELAY);
 } while (time() - $start < GARDENS_INSTALLER_TIMEOUT);
