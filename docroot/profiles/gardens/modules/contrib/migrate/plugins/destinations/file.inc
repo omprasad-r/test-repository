@@ -351,9 +351,11 @@ class MigrateFileUri extends MigrateFile {
     // Perform the copy operation, with a cleaned-up path.
     $this->sourcePath = self::urlencode($this->sourcePath);
     if (!@copy($this->sourcePath, $destination)) {
-      throw new MigrateException(t('The specified file %file could not be copied to ' .
-        '%destination.',
-        array('%file' => $this->sourcePath, '%destination' => $destination)));
+      $migration = Migration::currentMigration();
+      $migration->saveMessage(t('The specified file %file could not be copied to ' .
+              '%destination.',
+              array('%file' => $this->sourcePath, '%destination' => $destination)));
+      return FALSE;
     }
     else {
       return TRUE;
@@ -519,10 +521,10 @@ class MigrateDestinationFile extends MigrateDestinationEntity {
   public function fields($migration = NULL) {
     $fields = array();
     // First the core properties
-    $fields['fid'] = t('File: Existing file ID');
-    $fields['uid'] = t('File: Uid of user associated with file');
-    $fields['value'] = t('File: Representation of the source file (usually a URI)');
-    $fields['timestamp'] = t('File: UNIX timestamp for the date the file was added');
+    $fields['fid'] = t('Existing file ID');
+    $fields['uid'] = t('Uid of user associated with file');
+    $fields['value'] = t('Representation of the source file (usually a URI)');
+    $fields['timestamp'] = t('UNIX timestamp for the date the file was added');
 
     // Then add in anything provided by handlers
     $fields += migrate_handler_invoke_all('Entity', 'fields', $this->entityType, $this->bundle, $migration);
@@ -613,6 +615,9 @@ class MigrateDestinationFile extends MigrateDestinationEntity {
       // @todo: Support DESTINATION case
       $old_file = file_load($file->fid);
     }
+
+    // 'type' is the bundle property on file entities.
+    $file->type = $this->bundle;
 
     // Invoke migration prepare handlers
     $this->prepare($file, $row);

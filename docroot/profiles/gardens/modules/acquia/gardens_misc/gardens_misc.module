@@ -470,6 +470,11 @@ function gardens_misc_form_node_type_form_alter(&$form, $form_state) {
       unset($form['mast']['icon']['#options'][$icon]);
     }
   }
+
+  // For the time being, hide some of Janrain Capture's features.
+  if (module_exists('janrain_capture')) {
+    $form['janrain_capture_share']['#access'] = FALSE;
+  }
 }
 
 /**
@@ -3523,4 +3528,13 @@ function _gardens_misc_filter_utf8mb4_item(&$item) {
  */
 function gardens_misc_entity_presave($entity) {
   _gardens_misc_filter_utf8mb4_item($entity);
+}
+
+/**
+ * Implements hook_form_FORM_ID_alter().
+ */
+function gardens_misc_form_janrain_capture_settings_alter(&$form, $form_state) {
+  // For the time being, hide some of Janrain Capture's features.
+  $form['janrain_capture_ver']['#access'] = FALSE;
+  $form['janrain_capture_share']['#access'] = FALSE;
 }

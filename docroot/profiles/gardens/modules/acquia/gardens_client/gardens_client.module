@@ -1332,17 +1332,21 @@ function gardens_client_phone_home() {
 function gardens_client_get_site_identifier() {
   global $databases;
 
-  // For production and staging sites, the site identifier is the same as the
-  // DB name.
-  if (scarecrow_is_enabled()) {
-    $gsite = $databases['default']['default']['database'];
-    $nid = ltrim($gsite, 'g');
-    return $nid;
+  // The site identifier should be in the settings file.
+  $nid = variable_get('gardens_site_id', NULL);
+  if (empty($nid)) {
+    // For production and staging sites with no site id in the settings file,
+    // the site identifier is the same as the DB name.
+    if (scarecrow_is_enabled()) {
+      $gsite = $databases['default']['default']['database'];
+      $nid = ltrim($gsite, 'g');
+    }
+    // Allow developers testing locally to specify their site nid.
+    else {
+      $nid =  variable_get('acquia_gardens_site_identifier', FALSE);
+    }
   }
-  // Allow developers testing locally to specify their site nid.
-  else {
-    return variable_get('acquia_gardens_site_identifier', FALSE);
-  }
+  return $nid;
 }
 
 /**
@@ -1360,7 +1364,7 @@ function gardens_client_get_site_identifier() {
 function gardens_client_call_gardener($method, $data = array()) {
   @include_once('acquia_gardens_xmlrpc.inc');
   if (!function_exists('acquia_gardens_call')) {
-    $path	= DRUPAL_ROOT .'/../library';
+    $path = DRUPAL_ROOT .'/../library';
     @include_once("$path/acquia_gardens_xmlrpc.inc");
   }
   if (function_exists('acquia_gardens_call')) {
