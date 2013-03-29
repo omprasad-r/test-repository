@@ -35,6 +35,15 @@ $gardens_site_id = array_shift($argv);
 $domain = array_shift($argv);
 $domains = array($domain);
 
+try {
+  $hosting_site_environment = acquia_gardens_get_site_environment();
+}
+catch (Exception $e) {
+  // This server should not try to install new sites.
+  print 'hosting_install_gardens.php was invoked without the AH_SITE_ENVIRONMENT variable set.';
+  exit();
+}
+
 // If we are still getting installation failures after two minutes have passed,
 // we'll assume something went wrong.
 $max_duration = 120;
@@ -48,7 +57,7 @@ while (time() < $max_end_time) {
 
     // Prepare the directory for installation.
     $site_directory = acquia_gardens_site_directory($hosting_site_name, $gardens_site_id);
-    acquia_gardens_prepare_for_installation($site_directory, $hosting_site_name, $gardens_site_id, $domains);
+    acquia_gardens_prepare_for_installation($site_directory, $hosting_site_name, $hosting_site_environment, $gardens_site_id, $domains);
 
     // Run the external installation script, passing along any additional
     // parameters that were provided, and a random user password.

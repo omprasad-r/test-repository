@@ -126,23 +126,26 @@ require_once('library/acquia_gardens_xmlrpc.inc');
  * @param $hosting_site_name
  *   The machine-readable name (from Acquia Hosting) of the Hosting site to
  *   initialize for Gardens.
+ * @param $hosting_site_environment
+ *   The machine-readable environment (from Acquia Hosting) of the
+ *   Hosting site to initialize for Gardens.
  * @param $update_settings
  *   If TRUE, all settings.php files will be re-written.
  * @param $performance_logging
  *   If TRUE, extra performance data will be logged to syslog() while this
  *   Hosting site is being initialized.
  */
-function install_gardens_initialize($hosting_site_name, $update_settings = FALSE, $performance_logging = FALSE) {
+function install_gardens_initialize($hosting_site_name, $hosting_site_environment, $update_settings = FALSE, $performance_logging = FALSE) {
   // If for any reason we need to revert to the old "pull" method of retrieving
   // domains from the gardener, we can do it by adding this file to each tangle.
   // (The gardener would also have to be reconfigured to revert to the old
   // method.)
   if (!file_exists("/mnt/gfs/{$hosting_site_name}/files/install_gardens_use_pull_method")) {
-    return install_gardens_initialize_push($hosting_site_name, $update_settings, $performance_logging);
+    return install_gardens_initialize_push($hosting_site_name, $hosting_site_environment, $update_settings, $performance_logging);
   }
   if ($performance_logging) {
     $microtime = microtime(TRUE);
-    syslog(LOG_INFO, "install_gardens_initialize (performance log) $hosting_site_name $microtime: Starting to initialize Gardens sites");
+    syslog(LOG_INFO, "install_gardens_initialize (performance log) $hosting_site_name $hosting_site_environment $microtime: Starting to initialize Gardens sites");
   }
   $sites_directory = acquia_gardens_sites_directory($hosting_site_name);
   acquia_gardens_ensure_directory($sites_directory);
@@ -150,7 +153,7 @@ function install_gardens_initialize($hosting_site_name, $update_settings = FALSE
   $json = file_get_contents(_acquia_gardens_xmlrpc_server() ."/files/gardens/$hosting_site_name/active_domains_by_site.json.txt");
   if ($performance_logging) {
     $microtime = microtime(TRUE);
-    syslog(LOG_INFO, "install_gardens_initialize (performance log) $hosting_site_name $microtime: Finished downloading active_domains_by_site.json.txt");
+    syslog(LOG_INFO, "install_gardens_initialize (performance log) $hosting_site_name $hosting_site_environment $microtime: Finished downloading active_domains_by_site.json.txt");
   }
   if (empty($json)) {
     throw new Exception("Did not retrieve any data for active_domains_by_site.");
@@ -160,7 +163,7 @@ function install_gardens_initialize($hosting_site_name, $update_settings = FALSE
   foreach ($site_domains as $gardens_site_id => $domains) {
     $site_directory = acquia_gardens_site_directory($hosting_site_name, $gardens_site_id);
     if ($update_settings) {
-      acquia_gardens_ensure_settings_file($site_directory, $hosting_site_name, $gardens_site_id);
+      acquia_gardens_ensure_settings_file($site_directory, $hosting_site_name, $hosting_site_environment, $gardens_site_id);
     }
     foreach ($domains as $domain) {
       $valid_domains[$domain] = $site_directory;
@@ -180,7 +183,7 @@ function install_gardens_initialize($hosting_site_name, $update_settings = FALSE
   }
   if ($performance_logging) {
     $microtime = microtime(TRUE);
-    syslog(LOG_INFO, "install_gardens_initialize (performance log) $hosting_site_name $microtime: Finished ensuring symlinks");
+    syslog(LOG_INFO, "install_gardens_initialize (performance log) $hosting_site_name $hosting_site_environment $microtime: Finished ensuring symlinks");
   }
 
   // Remove domains from recently deleted sites. These are stored for a short
@@ -195,7 +198,7 @@ function install_gardens_initialize($hosting_site_name, $update_settings = FALSE
   $json = file_get_contents(_acquia_gardens_xmlrpc_server() . "/files/gardens/$hosting_site_name/recently_deleted_domains_by_site.json.txt");
   if ($performance_logging) {
     $microtime = microtime(TRUE);
-    syslog(LOG_INFO, "install_gardens_initialize (performance log) $hosting_site_name $microtime: Finished downloading recently_deleted_domains_by_site.json.txt");
+    syslog(LOG_INFO, "install_gardens_initialize (performance log) $hosting_site_name $hosting_site_environment $microtime: Finished downloading recently_deleted_domains_by_site.json.txt");
   }
   if (empty($json)) {
     // We want to know if this occurs, even though it is not a fatal error.
@@ -214,7 +217,7 @@ function install_gardens_initialize($hosting_site_name, $update_settings = FALSE
   }
   if ($performance_logging) {
     $microtime = microtime(TRUE);
-    syslog(LOG_INFO, "install_gardens_initialize (performance log) $hosting_site_name $microtime: Finished removing recently deleted site domains");
+    syslog(LOG_INFO, "install_gardens_initialize (performance log) $hosting_site_name $hosting_site_environment $microtime: Finished removing recently deleted site domains");
   }
 
   // AN-15310 only run this check once in about 20k times to minimize load on gluster.
@@ -234,7 +237,7 @@ function install_gardens_initialize($hosting_site_name, $update_settings = FALSE
     }
     if ($performance_logging) {
       $microtime = microtime(TRUE);
-      syslog(LOG_INFO, "install_gardens_initialize (performance log) $hosting_site_name $microtime: Finished removing temporary domains");
+      syslog(LOG_INFO, "install_gardens_initialize (performance log) $hosting_site_name $hosting_site_environment $microtime: Finished removing temporary domains");
     }
   }
 
@@ -245,20 +248,20 @@ function install_gardens_initialize($hosting_site_name, $update_settings = FALSE
     acquia_gardens_remove_site_domains($deleted_domains, $hosting_site_name);
     if ($performance_logging) {
       $microtime = microtime(TRUE);
-      syslog(LOG_INFO, "install_gardens_initialize (performance log) $hosting_site_name $microtime: Finished removing all deleted site domains");
+      syslog(LOG_INFO, "install_gardens_initialize (performance log) $hosting_site_name $hosting_site_environment $microtime: Finished removing all deleted site domains");
     }
   }
 
   if ($performance_logging) {
     $microtime = microtime(TRUE);
-    syslog(LOG_INFO, "install_gardens_initialize (performance log) $hosting_site_name $microtime: Finished running the install_gardens_initialize() function");
+    syslog(LOG_INFO, "install_gardens_initialize (performance log) $hosting_site_name $hosting_site_environment $microtime: Finished running the install_gardens_initialize() function");
   }
 }
 
-function install_gardens_initialize_push($hosting_site_name, $update_settings = FALSE, $performance_logging = FALSE) {
+function install_gardens_initialize_push($hosting_site_name, $hosting_site_environment, $update_settings = FALSE, $performance_logging = FALSE) {
   if ($performance_logging) {
     $microtime = microtime(TRUE);
-    syslog(LOG_INFO, "install_gardens_initialize (performance log) $hosting_site_name $microtime: Starting to initialize Gardens sites");
+    syslog(LOG_INFO, "install_gardens_initialize (performance log) $hosting_site_name $hosting_site_environment $microtime: Starting to initialize Gardens sites");
   }
   $sites_directory = acquia_gardens_sites_directory($hosting_site_name);
   acquia_gardens_ensure_directory($sites_directory);
@@ -268,7 +271,7 @@ function install_gardens_initialize_push($hosting_site_name, $update_settings = 
     $site_domains = acquia_gardens_call('get.active.domains.by.site', array($hosting_site_name));
     foreach ($site_domains as $gardens_site_id => $domains) {
       $site_directory = acquia_gardens_site_directory($hosting_site_name, $gardens_site_id);
-      acquia_gardens_ensure_settings_file($site_directory, $hosting_site_name, $gardens_site_id);
+      acquia_gardens_ensure_settings_file($site_directory, $hosting_site_name, $hosting_site_environment, $gardens_site_id);
     }
   }
 
@@ -278,13 +281,22 @@ function install_gardens_initialize_push($hosting_site_name, $update_settings = 
 
   // We want this to happen about 8 times per 24 hours.
   if ($num <= 400) {
-    acquia_gardens_full_domain_sync();
+    acquia_gardens_full_domain_sync(NULL, $hosting_site_environment);
   }
 }
 
-function acquia_gardens_full_domain_sync($cleanup_deleted = TRUE) {
+function acquia_gardens_full_domain_sync($cleanup_deleted = TRUE, $hosting_site_environment = NULL) {
   $script_dir = dirname(__FILE__);
-  exec('cd ' . $script_dir . '/docroot && ../drush/drush --include=../hosting-drush domain-sync --cleanup-deleted', $out, $ret);
+  if (empty($hosting_site_environment)) {
+    try {
+      $hosting_site_environment = acquia_gardens_get_site_environment();
+    }
+    catch (Exception $e) {
+      syslog(LOG_ERR, 'Failed to get hosting site environment in acquia_gardens_full_domain_sync');
+      exit();
+    }
+  }
+  exec(sprintf('cd %s/docroot && AH_SITE_ENVIRONMENT=%s ../drush/drush --include=../hosting-drush domain-sync --cleanup-deleted', $script_dir, $hosting_site_environment), $out, $ret);
   syslog(LOG_INFO, "Ran sync command with output: " . implode("\n", $out));
   if ($ret != 0) {
     throw new Exception ("Unable to run domain sync command");
@@ -336,8 +348,11 @@ function acquia_gardens_remove_site_domains($deleted_domains, $hosting_site_name
  * @param $hosting_site_name
  *   The machine-readable name (from Acquia Hosting) of the Hosting site whose
  *   Gardens sites will be installed or configured.
+ * @param $hosting_site_environment
+ *   The machine-readable name (from Acquia Hosting) of the Hosting
+ *   environment whose Gardens sites will be installed or configured.
  */
-function install_gardens($hosting_site_name) {
+function install_gardens($hosting_site_name, $hosting_site_environment) {
   // Request a random Gardens site to process. If there's more than one to
   // process, that's OK, because the next time this script gets called we will
   // get it then. (The reason for not trying to do more than one in the same
@@ -660,7 +675,7 @@ function install_gardens($hosting_site_name) {
         }
       }
       // Create a settings.php file.
-      acquia_gardens_ensure_settings_file($site_directory, $hosting_site_name, $gardens_site_id, TRUE);
+      acquia_gardens_ensure_settings_file($site_directory, $hosting_site_name, $hosting_site_environment, $gardens_site_id, TRUE);
       // Copy the files from the parent site.
       chdir("$current_directory/docroot");
       $site_domain = reset($domains);
@@ -772,12 +787,14 @@ function install_gardens($hosting_site_name) {
  *   Usually obtained by calling acquia_gardens_site_directory().
  * @param $hosting_site_name
  *   The hosting site (tangle) name where the Gardens site will be installed.
+ * @param $hosting_site_environment
+ *   The hosting environment where the Gardens site will be installed.
  * @param $gardens_site_id
  *   The Gardens site ID that will be installed.
  * @param $domains
  *   An array of domain names at which this site will be accessed.
  */
-function acquia_gardens_prepare_for_installation($site_directory, $hosting_site_name, $gardens_site_id, $domains) {
+function acquia_gardens_prepare_for_installation($site_directory, $hosting_site_name, $hosting_site_environment, $gardens_site_id, $domains) {
   // Create the site directory on the shared filesystem.
   acquia_gardens_ensure_directory($site_directory);
 
@@ -793,7 +810,7 @@ function acquia_gardens_prepare_for_installation($site_directory, $hosting_site_
   }
 
   // Create a settings.php file.
-  acquia_gardens_ensure_settings_file($site_directory, $hosting_site_name, $gardens_site_id);
+  acquia_gardens_ensure_settings_file($site_directory, $hosting_site_name, $hosting_site_environment, $gardens_site_id);
   // The installer wants the settings file to be writeable.
   $settings_file = "$site_directory/settings.php";
   if (acquia_gardens_fileperms($settings_file) != '0600' && !chmod($settings_file, 0600)) {
@@ -906,7 +923,15 @@ function acquia_gardens_ensure_directory($directory) {
  * @throws
  *   Exception on failure.
  */
-function acquia_gardens_ensure_settings_file($site_directory, $hosting_site_name, $gardens_site_id, $ensure_permissions = FALSE) {
+function acquia_gardens_ensure_settings_file($site_directory, $hosting_site_name, $hosting_site_environment, $gardens_site_id, $ensure_permissions = FALSE) {
+  $matches = array();
+  if (preg_match('/(\d+)$/', $gardens_site_id, $matches) == 1) {
+    $site_nid = $matches[1];
+  }
+  else {
+    // This should never ever happen.
+    throw new Exception(sprintf('Cannot determine the site node id from gardens site id %s', $gardens_site_id));
+  }
   // Create a settings.php file.
   //
   // The file_exists() check here prevents command-line installations from
@@ -921,8 +946,13 @@ function acquia_gardens_ensure_settings_file($site_directory, $hosting_site_name
   // and show them a simple message. For command-line scripts, we don't want to
   // redirect to the installer because it would stop the script from running,
   // so instead we throw an exception that can be caught.
-  if (!file_exists("/var/www/site-php/{$hosting_site_name}/D7-{$gardens_site_id}-settings.inc")) {
-    throw new Exception("Trying to create settings file but /var/www/site-php/{$hosting_site_name}/D7-{$gardens_site_id}-settings.inc hasn't been created by Hosting yet. This message is expected for a couple minutes after a new site starts installing.");
+  $settings_inc = "/var/www/site-php/{$hosting_site_name}/D7-{$hosting_site_environment}-{$gardens_site_id}-settings.inc";
+  if (!file_exists($settings_inc)) {
+    // Try the old naming scheme.
+    $settings_filename = "/var/www/site-php/{$hosting_site_name}/D7-{$gardens_site_id}-settings.inc";
+  }
+  if (!file_exists($settings_inc)) {
+    throw new Exception("Trying to create settings file but ${settings_inc} hasn't been created by Hosting yet. This message is expected for a couple minutes after a new site starts installing.");
   }
   $source = dirname(__FILE__) . "/docroot/sites/default/default.settings.php";
   $settings_file = "$site_directory/settings.php";
@@ -939,8 +969,11 @@ if (!class_exists('DrupalFakeCache')) {
 // Rely on the external Varnish cache for page caching.
 \$conf['cache_class_cache_page'] = 'DrupalFakeCache';
 
-if (file_exists('/var/www/site-php/{$hosting_site_name}/D7-{$gardens_site_id}-settings.inc')) {
-  include('/var/www/site-php/{$hosting_site_name}/D7-{$gardens_site_id}-settings.inc');
+\$conf['gardens_site_id'] = '{$gardens_site_id}';
+\$conf['gardens_db_name'] = '{$site_nid}';
+
+if (file_exists('{$settings_inc}')) {
+  include('{$settings_inc}');
 }
 elseif (!isset(\$_SERVER['SERVER_SOFTWARE']) && (php_sapi_name() == 'cli' || (is_numeric(\$_SERVER['argc']) && \$_SERVER['argc'] > 0))) {
   throw new Exception('No database connection file was found for site {$gardens_site_id}.');
@@ -1085,3 +1118,22 @@ function _acquia_gardens_user_password() {
   return $pass;
 }
 
+/**
+ * Gets the site environment from the hosting environment variable.
+ *
+ * The variable is AH_SITE_ENVIRONMENT.
+ * @return
+ *   A string containing the environment name.  If the environment has
+ *   not been set this function throws an exception.
+ */
+function acquia_gardens_get_site_environment() {
+  // Get the site environment from the hosting environment variable.
+  $site_environment_variable = 'AH_SITE_ENVIRONMENT';
+  if (!empty($_ENV[$site_environment_variable])) {
+    $hosting_site_environment = $_ENV[$site_environment_variable];
+  }
+  else {
+    throw new Exception('AH_SITE_ENVIRONMENT variable not set.');
+  }
+  return $hosting_site_environment;
+}
