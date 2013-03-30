@@ -1,0 +1,123 @@
+<?php
+/**
+ * @file
+ *
+ * Core hook implementations for UMG migration.
+ */
+
+/**
+ * Implementation of hook_menu().
+ */
+function migrate_umg_menu() {
+  $items = array();
+
+  $items['admin/content/import/umg_config'] = array(
+    'title' => 'UMG Configuration',
+    'type' => MENU_LOCAL_TASK,
+    'description' => 'General configuration options for UMG imports',
+    'page callback' => 'migrate_umg_configure',
+    'access arguments' => array(MIGRATE_ACCESS_BASIC),
+    'file' => 'migrate_umg.pages.inc',
+    'weight' => 0,
+  );
+
+  $items['admin/content/import/umg_add'] = array(
+    'title' => 'Add UMG Artist',
+    'type' => MENU_LOCAL_TASK,
+    'description' => 'Configure import of a given artist\'s content',
+    'page callback' => 'migrate_umg_add_artist',
+    'access arguments' => array(MIGRATE_ACCESS_BASIC),
+    'file' => 'migrate_umg.pages.inc',
+    'weight' => 1,
+  );
+
+  return $items;
+}
+
+/**
+ * Implements hook_cron().
+ */
+function migrate_umg_cron() {
+  // POC of automated remigration disabled until we resolve exactly how to
+  // implement it.
+  return;
+  $queue = DrupalQueue::get('YoutubeFeedQueue');
+  foreach (migrate_migrations() as $migration) {
+    if (is_a($migration, 'UMGVideoMigration')) {
+      $queue->createItem($migration->getMachineName());
+    }
+  }
+}
+
+/**
+ * Implements hook_cron_queue_info().
+ * @return array
+ */
+function migrate_umg_cron_queue_info() {
+  $queues = array();
+  $queues['YoutubeFeedQueue'] = array(
+    'worker callback' => 'migrate_umg_update_feed',
+    'time' => 60,
+  );
+  return $queues;
+}
+
+/**
+ * Run one migration process in update mode.
+ *
+ * @param $migration_name
+ *
+ * @return bool
+ */
+function migrate_umg_update_feed($migration_name) {
+  $migration = Migration::getInstance($migration_name);
+  $migration->setUpdate();
+  $result = $migration->processImport();
+  return $result == MigrationBase::RESULT_COMPLETED;
+}
+
+/**
+ * Retrieve the legacy database connection information.
+ *
+ * @return array
+ */
+function migrate_umg_connection() {
+  $connection = variable_get('migrate_umg_connection');
+  if ($connection) {
+    $connection = migrate_umg_decrypt($connection);
+  }
+  else {
+    $connection = array('host' => '', 'username' => '', 'password' => '',
+      'database' => '', 'driver' => 'mysql');
+  }
+  return $connection;
+}
+
+
+/**
+ * Encrypt an incoming value. Assumes the existence of the mcrypt PHP extension.
+ *
+ * @param string $value
+ * @return string The encrypted value.
+ */
+function migrate_umg_encrypt($value) {
+  $key = drupal_substr(variable_get('drupal_private_key', 'no_key'), 0, 32);
+  $iv_size = mcrypt_get_iv_size(MCRYPT_RIJNDAEL_256, MCRYPT_MODE_ECB);
+  $iv = mcrypt_create_iv($iv_size, MCRYPT_RAND);
+  $value = mcrypt_encrypt(MCRYPT_RIJNDAEL_256, $key, serialize($value), MCRYPT_MODE_ECB, $iv);
+  return $value;
+}
+
+/**
+ * Decrypt an incoming value.
+ *
+ * @param string $value
+ * @return array The decrypted value
+ */
+function migrate_umg_decrypt($value) {
+  $iv_size = mcrypt_get_iv_size(MCRYPT_RIJNDAEL_256, MCRYPT_MODE_ECB);
+  $iv = mcrypt_create_iv($iv_size, MCRYPT_RAND);
+  $key = drupal_substr(variable_get('drupal_private_key', 'no_key'), 0, 32);
+  $value = mcrypt_decrypt(MCRYPT_RIJNDAEL_256, $key, $value, MCRYPT_MODE_ECB, $iv);
+  return unserialize($value);
+}

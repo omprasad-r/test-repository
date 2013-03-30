@@ -1,0 +1,45 @@
+#!/usr/bin/php -q
+<?php
+
+/**
+ * This tool runs "git checkout" on all info files in the provided project. It
+ * will only work on projects that are currently running off of Git.
+ *
+ * The first argument passed to the script is the name of the project to
+ * process, e.g.:
+ *
+ * ./gitCheckoutProjectInfoFiles webform
+ *
+ * or (in the special case of Drupal core):
+ *
+ * ./gitCheckoutProjectInfoFiles drupal
+ */
+
+if (!isset($argv[1])) {
+  print "ERROR: This script requires the name of a project as its first parameter.\n";
+  exit;
+}
+$project = $argv[1];
+
+require_once('InfoFileChecker.inc');
+$docroot = realpath(dirname(__FILE__) . '/../docroot');
+$project_info_checker = new ProjectInfoChecker($docroot);
+$info_files = array_keys($project_info_checker->getInfoFileVersions());
+$git_checkout_files = array();
+foreach ($info_files as $file) {
+  // Add the info file to the list if it appears underneath the project
+  // directory in sites/all/modules (for regular projects) or anywhere else
+  // (for Drupal core).
+  if (($project == 'drupal' && strpos($file, "/sites/all/modules/") === FALSE) || ($project != 'drupal' && strpos($file, "/sites/all/modules/$project/") !== FALSE)) {
+    $git_checkout_files[] = $file;
+  }
+}
+
+foreach ($git_checkout_files as $file) {
+  $directory = dirname($file);
+  $filename = basename($file);
+  chdir($directory);
+  $command = "git checkout $filename";
+  print "Running \"$command\"\n";
+  shell_exec($command);
+}

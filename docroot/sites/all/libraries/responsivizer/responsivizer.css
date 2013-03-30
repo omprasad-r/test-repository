@@ -1,0 +1,95 @@
+/* @group Responsive */
+
+/* @group Modern browsers */
+
+body {
+  width: 100%;
+  overflow-x: hidden;
+}
+img {
+  max-width: 100%;
+  height: auto;
+}
+.responsive-flex {
+  width: 100%;
+}
+.responsive-flex .box {
+  padding-left: 0.4615em;
+  padding-right: 0.4615em;
+}
+.wrapper .block .responsive-menu {
+  float: none;
+}
+.wrapper .responsive-sidebar {
+  float: none;
+  margin-top: 2em;
+  width: auto;
+}
+.wrapper .responsive-sidebar.right {
+  border-left: 0 none;
+  margin-left: 0;
+  padding-left: 0;
+}
+.wrappr .responsive-sidebar.left {
+  border-right: 0 none;
+  margin-right: 0;
+  padding-right: 0;
+}
+.responsive-vertical .menu li {
+  float: none;
+}
+/* Keep form items from extending past the viewport edge. */
+textarea,
+select,
+input[type="color"],
+input[type="date"],
+input[type="datetime"],
+input[type="datetime-local"],
+input[type="email"],
+input[type="month"],
+input[type="number"],
+input[type="password"],
+input[type="search"],
+input[type="tel"],
+input[type="text"],
+input[type="time"],
+input[type="url"],
+input[type="week"],
+input[type="submit"] {
+  max-width: 100%;
+}
+
+/* @end */
+
+/* @group Small */
+
+@media screen and (max-width:480px) {
+  .media-item-thumbnail {
+    float: none;
+  }
+}
+
+/* @end */
+
+/* @group Small and medium */
+
+@media screen and (max-width:768px) {
+  /* @group Main menu */
+
+  #navigation .level-1 > .menu {
+    visibility: hidden !important;
+    display: none !important;
+  }
+  #navigation .pulldown-processed .more-indicator {
+    display: none;
+  }
+  #navigation .content > .menu > li > a {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+}
+
+/* @end */
+
+/* @end */

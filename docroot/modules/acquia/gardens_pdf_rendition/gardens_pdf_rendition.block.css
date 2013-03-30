@@ -1,0 +1,29 @@
+.gardens-pdf-rendition-file-container {
+}
+
+.gardens-pdf-rendition-thumbnail,
+.gardens-pdf-rendition-link,
+.gardens-pdf-rendition-filesize {
+  float: left;
+}
+
+.gardens-pdf-rendition-thumbnail {
+  width: 30%;
+  margin: 3px 3% 3px 0;
+}
+
+.gardens-pdf-rendition-link {
+  width: 63%;
+  margin: 9px 3% 0 0;
+}
+
+.gardens-pdf-rendition-filesize {
+  width: 63%;
+  margin: 9px 3% 0 0;
+}
+
+.gardens-pdf-rendition-description {
+}
+
+.gardens-pdf-rendition-generate {
+}

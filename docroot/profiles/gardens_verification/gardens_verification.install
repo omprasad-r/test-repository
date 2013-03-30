@@ -1,0 +1,317 @@
+<?php
+
+/**
+ * Implements hook_install().
+ */
+function gardens_verification_install() {
+  // Duplicate the Gardens installation step.
+  include_once DRUPAL_ROOT . '/profiles/gardens/gardens.install';
+  include_once DRUPAL_ROOT . '/profiles/gardens/gardens.profile';
+  gardens_install();
+
+// Disabled for now. The product template plus a few tweaks creates better
+// sample content than what we previously used below.
+
+/*
+  // Work around another caching bug. Hopefully we'll be able to remove this
+  // some point soon.
+  node_types_rebuild();
+
+  // Install the Campaign site template.
+  site_template_install_features('campaign');
+  site_template_finalize_template_selection();
+
+  // Add a few forums in which forum topics can be placed.
+  $forum_names = array('First forum', 'Second forum', 'Third forum');
+  foreach ($forum_names as $name) {
+    $forum = (object) array(
+      'name' => $name,
+      'parent' => array(0),
+      'vid' => variable_get('forum_nav_vocabulary', ''),
+    );
+    taxonomy_term_save($forum);
+  }
+
+  // Add some terms to the free tagging vocabulary.
+  $vocabularies = taxonomy_vocabulary_get_names();
+  $term_names = array('Apples', 'Bananas', 'Pears', 'Blueberries');
+  foreach ($term_names as $name) {
+    $term = (object) array(
+      'name' => $name,
+      'parent' => array(0),
+      'vid' => $vocabularies['tags']->vid,
+    );
+    taxonomy_term_save($term);
+  }
+
+  // Create a new content type.
+  $node_type = array(
+    'type' => 'custom',
+    'name' => st('Custom content type'),
+    'base' => 'node_content',
+    'description' => st('Custom content type to test all possible fields.'),
+    'custom' => 1,
+    'modified' => 1,
+    'locked' => 0,
+  );
+  $node_type = node_type_set_defaults($node_type);
+  node_type_save($node_type);
+
+  // Add field instances to this content type representing every possible
+  // combination of fields and widgets.
+  include_once drupal_get_path('module', 'field_ui') . '/field_ui.admin.inc';
+  foreach (array_keys(field_info_field_types()) as $field_type) {
+    foreach (field_ui_widget_type_options($field_type) as $widget_type => $widget_name) {
+      // First create a field.
+      $field_name = substr("{$field_type}_{$widget_type}", 0, 32);
+      $field = array(
+        'field_name' => $field_name,
+        'type' => $field_type,
+      );
+      if ($allowed_values = gardens_verification_get_allowed_values($field_type)) {
+        foreach ($allowed_values as $key => &$value) {
+          $value = "$key|$value";
+        }
+        $field['settings']['allowed_values'] = implode("\n", $allowed_values);
+      }
+      if (!field_info_field($field['field_name'])) {
+        $field = field_create_field($field);
+      }
+      // Then create the instance and associate it with our custom content
+      // type.
+      $instance = array(
+        'field_name' => $field_name,
+        'object_type' => 'node',
+        'bundle' => 'custom',
+        'label' => "$widget_name for $field_name",
+        'widget' => array('type' => $widget_type),
+      );
+      foreach (gardens_verification_get_default_values($field_type) as $key => $value) {
+        $instance['default_value'][0][$key] = $value;
+      }
+      if (!field_info_instance($instance['object_type'], $instance['field_name'], $instance['bundle'])) {
+        field_create_instance($instance);
+      }
+    }
+  }
+
+  include_once drupal_get_path('module', 'devel_generate') . '/devel_generate.inc';
+  foreach (node_type_get_types() as $type) {
+    // Generate a few nodes of each type.
+    $devel_generate_info = array(
+      'values' => array(
+        'node_types' => array($type->type => $type->type),
+        'num_nodes' => 3,
+        'max_comments' => 5,
+      ),
+    );
+    devel_generate_content($devel_generate_info);
+    // Create a SimpleView listing for the type, linked to from the secondary
+    // menu.
+    $simpleview = array(
+      'path' => "simpleview-for-{$type->type}",
+      'title' => "{$type->name} List",
+      'filter' => "node:{$type->type}",
+      'style' => 'teasers',
+      'sort' => 'oldest',
+      'rss' => 1,
+      'block' => 1,
+      'page_items' => 10,
+      'block_items' => 10,
+      'block_style' => 'titles',
+      'menu_link' => array(
+        'menu_name' => 'secondary-menu',
+      ),
+    );
+    site_template_create_simpleview($simpleview);
+  }
+*/
+}
+
+/**
+ * Returns appropriate allowed values based on a provided field type.
+ */
+function gardens_verification_get_allowed_values($field_type) {
+  switch ($field_type) {
+    case 'list':
+    case 'list_number':
+    case 'list_text':
+      return array(
+        'Some value',
+        'Some other value',
+        'Yet another value',
+      );
+      break;
+    case 'list_boolean':
+      return array(
+        'Some value',
+        'Some other value',
+      );
+      break;
+  }
+}
+
+/**
+ * Returns appropriate default values based on a provided field type.
+ */
+function gardens_verification_get_default_values($field_type) {
+  switch ($field_type) {
+    case 'list':
+    case 'list_number':
+    case 'list_text':
+    case 'list_boolean':
+      $allowed_values = gardens_verification_get_allowed_values($field_type);
+      return array('value' => array_rand($allowed_values));
+      break;
+  }
+}
+
+/**
+ * Enables at least $number blocks in all visible regions of the default theme.
+ *
+ * If $all_custom is set, then only custom blocks are added; otherwise, blocks
+ * provided by enabled modules can be added too.
+ */
+function gardens_verification_configure_all_blocks($number = 2, $all_custom = FALSE) {
+  $theme = variable_get('theme_default');
+  _block_rehash($theme);
+  $regions = array_keys(system_region_list($theme, REGIONS_VISIBLE));
+  foreach ($regions as $region) {
+    $block_counter = 0;
+    // Only act if the region doesn't already have at least two blocks.
+    $number_of_blocks = db_query("SELECT COUNT(*) FROM {block} WHERE theme = :theme AND region = :region AND status = 1", array(':theme' => $theme, ':region' => $region))->fetchField();
+    if ($number_of_blocks < $number) {
+      do {
+        $block_counter++;
+        // Select a random block that is currently disabled, and put it in the
+        // region.
+        $query = db_select('block', 'b');
+        $query->fields('b', array('module', 'delta'));
+        $query->condition('b.status', 0);
+        $query->condition('b.theme', $theme);
+        $query->orderRandom();
+        $query->range(0, 1);
+        $block = $query->execute()->fetchObject();
+        if (!empty($block) && !$all_custom) {
+          db_update('block')
+            ->fields(array(
+              'status' => 1,
+              'region' => $region,
+              'weight' => 10,
+            ))
+            ->condition('module', $block->module)
+            ->condition('delta', $block->delta)
+            ->condition('theme', $theme)
+            ->execute();
+        }
+        else {
+          // If no blocks were found, add a new custom one.
+          module_load_include('inc', 'devel_generate');
+          $block_title = "$region block $block_counter";
+          $delta = gardens_profile_add_box(devel_create_greeking(30), $block_title, filter_fallback_format());
+          gardens_profile_add_block('block', $delta, $theme, '1', '10', $region, 0, '', 0, $block_title);
+        }
+        $number_of_blocks++;
+      } while ($number_of_blocks < $number);
+    }
+  }
+}
+
+/**
+ * Configure a specific set of limited blocks for the default theme.
+ */
+function gardens_verification_configure_limited_blocks() {
+  $theme = variable_get('theme_default');
+  _block_rehash($theme);
+  // Define the blocks we want to place.
+  $region_blocks = array(
+    'preheader_first' => array(
+      'system' => array('user-menu'),
+    ),
+    'preheader_second' => array(
+      'system' => array('secondary-menu'),
+    ),
+    'header' => array(
+      'search' => array('form'),
+    ),
+    'navigation' => array(
+      'system' => array('main-menu'),
+    ),
+    'help' => array(
+      'system' => array('help'),
+    ),
+    // Deliberately not changing the banner region; we want to leave that as is
+    // in the Gardens install profile.
+    // 'banner' => array(),
+    'precontent_first' => array(
+      'blog' => array('recent'),
+    ),
+    'precontent_second' => array(
+      'forum' => array('active'),
+    ),
+    'precontent_third' => array(
+      'comment' => array('recent'),
+    ),
+    'content' => array(
+      'system' => array('main'),
+      'sqbs' => array('3'), // Poll list
+    ),
+    'sidebar_a' => array(
+      'gardens_client' => array('login'),
+      'system' => array('management'),
+    ),
+    'sidebar_b' => array(
+      'sqbs' => array(
+        '2', // Blog entry list
+        '7', // Custom content type list
+        '4', // Forum topic list
+      ),
+      'poll' => array('recent'),
+      'forum' => array('new'),
+    ),
+    'prefooter_first' => array(
+      'follow' => array('site'),
+    ),
+    'prefooter_second' => array(
+      'user' => array('online'),
+    ),
+    'prefooter_third' => array(
+      'user' => array('new'),
+    ),
+    'footer_first' => array(
+      'node' => array('syndicate'),
+    ),
+    'copyright' => array(
+      'system' => array('powered-by'),
+    ),
+  );
+
+  foreach ($region_blocks as $region => $blocks) {
+    // Disable all existing blocks in the region.
+    db_update('block')
+      ->fields(array(
+        'status' => 0,
+        'region' => '',
+      ))
+      ->condition('theme', $theme)
+      ->condition('region', $region)
+      ->execute();
+    // Now go through and enable each block in the correct order.
+    $weight = 0;
+    foreach ($blocks as $module => $deltas) {
+      foreach ($deltas as $delta) {
+        db_update('block')
+          ->fields(array(
+            'status' => 1,
+            'region' => $region,
+            'weight' => $weight,
+          ))
+          ->condition('module', $module)
+          ->condition('delta', $delta)
+          ->condition('theme', $theme)
+          ->execute();
+        $weight++;
+      }
+    }
+  }
+}

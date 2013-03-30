@@ -1,0 +1,10 @@
+#!/bin/bash
+
+# This script will find all files underneath the current directory that aren't
+# currently in SVN, and run "svn add" to add them to SVN. It's useful, for
+# example, after updating a module from drupal.org and making sure that all the
+# new files make it into our SVN repo.
+#
+# Use it carefully, though, and make sure you don't accidentally wind up adding
+# files you don't want to be adding to SVN.
+svn status | grep '^\?' | tr -d '?' | xargs svn add

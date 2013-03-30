@@ -1,0 +1,12 @@
+<?php
+/**
+ * @file
+ * Summary
+ */
+
+/**
+ * Implements hook_uninstall().
+ */
+function migrate_umg_uninstall() {
+  variable_del('migrate_umg_connection');
+}

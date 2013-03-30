@@ -1,0 +1,14 @@
+name = Taxonomy Access Control
+description = Access control for user roles based on taxonomy categories.
+dependencies[] = taxonomy (>=7.8)
+core = 7.x
+configure = admin/config/people/taxonomy_access
+
+files[] = taxonomy_access.test
+files[] = taxonomy_access_handler_field.inc
+
+version = "7.x-1.x-dev"
+project = ""
+datestamp = "1309225818"
+; url = http://git.drupal.org/project/taxonomy_access.git
+; commit = 9b6d358c420dced96e15d537111fc09fcf07881f

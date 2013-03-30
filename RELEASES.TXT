@@ -1,0 +1,402 @@
+******** Hotfixes to 1.29 *******
+DG-7601 (ALL) Fix gardens site installation to work with the cloud api.
+DG-7547 Upgrade to Janrain Capture 7.x-2.0 module
+
+******** 1.29 ********
+DG-7263  Only allow DBlog for 48 hours at a time
+DG-7089 301 redirects - Rn (ENT) doc
+DG-6925 wmg comment notify does not unsubscribe in all cases - Rn (ALL)
+DG-7283 UMG cannot add remote media - Rn (ALL)
+DG-6938 As site owner I want a clean subscription revert
+DG-6836 WMG sec hole as reg remains as a light box
+DG-7484 remove one example of feature module
+DG-5282 update multiform - RN (ALL) doc
+DG-6638 bulk moderation option (update to VBO) - Rn (ENT)
+DG-6654 FLH css change to footer links
+DG-6917 Check TB and others for vulnerable jquery code
+DG-7317 Reset button on exposed filters causes a redirect loop - Rn (ALL)
+DG-7402 Pfizer securepages roles on fresh install have the wrong array keys
+DG-7403 Add Field collection and Entity reference modules - Rn (ALL) DOC
+DG-1966 301 redirect to SMB - Rn (SMB) Doc
+DG-6948 prevent anon users from creation nodes w/o mollom - Rn (ALL)
+DG-7443 emoji does not import in mailhandler - Rn (ENT)
+# DG-7111 Support Drupal Gardens on hosting 1.63 (no gardens code)
+DG-7072 The gardens/gardener communication needs to be refactored to not depend on anything from the hosting code, and to ensure that all gardens/gardener communications are passing through a single module's functions
+DG-6842 Install / delete gardens sites as the tangle user, not as root, so that customers do not require root access
+DG-6640 Support UC certs for gardens/gardener
+DG-7490 Add approved text for DG-6415
+DG-6938 As site owner I want a clean subscription revert
+DG-7444 Add Lato and Liberation fonts
+
+******** Hotfixes to 1.28 *******
+DG-6685 WordPress Migration bug fix.
+DG-6876 Googoodolls migration.
+DG-7448 Update Mollom to 7.x-2.4
+DG-7361 Rotating banner external links.
+DG-7301 Janrain federate.
+DG-7420 Drupal core 7.20.
+DG-7096 Update migrate module.
+
+******** 1.28 ********
+DG-6777 Random doc tasks for sprint 80
+DG-6691 Don’t send empty files to AV scanner
+DG-6921 Statsd session counts should include site name
+DG-1970 Don’t shell out ThemeBuilder to get hostname
+DG-5571 Broken photo thumbnail on greenday.com - rn (ENT)
+DG-7009 Site duplication shouldn’t require drush4
+DG-5828 make_gardens.rb fails to run rsync
+DG-6580 add a cucumber xls formatter to gardens
+DG-6271 Proper gardens phone home for DG-6305
+
+******** Hotfixes to 1.27 *******
+DG-6452 (PFE) Address ssl/non-ssl login issues
+DG-6782 (PFE) Final commit for DG-6452
+DG-6780 (ALL) Node submit fails due to seo_ui and metatags
+DG-6800 (ALL) JavaScript errors in timeago module cause IE to fail.
+DG-6568 (ALL) Update Services to 3.3
+DG-4109 (ALL) Update Drush to 5.8; replace default Gardens drush
+DG-6901 (ALL) Update Drupal Core to 7.19 + performance patch
+DG-7005 (ALL) Update Drush sql-sync command to allow exclusions
+DG-7097 (WMG) Remove no_js check from registration form.
+DG-7071 (ALL) Make Drush getsite compatible with Drush 5.
+DG-7099 (ALL) Remove antivirus from universal music group.
+
+******** 1.27 ********
+DG-6149 Theming a flag would cause themebuilder to hang - rn (ALL)
+DG-6518 wmg comment notify does not unsubscribe in all cases - rn (ALL)
+DG-6373 Respect block config on theme save - rn (ALL)
+DG-6006 Add Facebook meta tags - rn (ALL)  -- DOC
+DG-6385 statsd new user registration
+DG-6471 Flood protection for user reg and forgotten password
+DG-6432 Improve file save performance
+DG-6570 External links config bugginess - rn (ALL)
+DG-5503 Site forums link in help menu does not go to help forums - rn (ALL)
+DG-6567 Themebuilder viewport metatag settings were lost - rn (ALL)
+DG-6645 Bogus user name caused by social login - rn (ENT)
+DG-4325 Reaper is not fully cleaning out old sites
+DG-5791 IE9 does not have WYSIWYG toolbars - (In review - 11/28)
+DG-6704 Gardens drush command cleanup
+DG-6676 Internal Drupal Gardens Documentation
+DG-6261 (PFE) Deploy module that automatically logs in a user based on a query string value
+
+******** Hotfixes for 1.26 *******
+DG-4703 (WMG) artist arena migrations
+DG-6396 (ALL) Accept all Mollom-unsure user registrations
+
+******** 1.26 ********
+# Gardens
+DG-6333 As QA, I want a jeninks.sh for the Drupal Gardens test setup
+ES-1337 Remove acquia_qa library from the cucumber tests
+DG-6268 (WMG) views rss feeds - RN (WMG)
+DG-6288 (ALL, SMB pro and above) Open Graph - RN (ALL)
+DG-6353 (Internal) properly whitelist wordpress migration
+DG-5277 (ALL) update xml sitemap module - RN (ALL)
+DG-5778 (ALL) gardens_misc.mast.css page not found when locale url prefix used
+DG-6354 (ALL) Clicking dismiss on internal popup does not auto dismiss
+DG-6109 (ALL) Warner stats for concurrent logins
+DG-5515 (ALL) Themebuilder sometimes fails for anonymous users
+DG-6405 (WMG) Auto enable clamAV for new and existing WMG sites
+DG-6365 (FLH) FLH - CSS Change To FLH Sites
+DG-6440 (ALL) Clean up php notices from seo_ui
+DG-6407 (All) Stop 500 error when editing xml sitemap w/ gardens features disabled - rn (ALL)
+DG-6263 (ALL) Restrict the aggregator - RN (ALL)
+DG-6413 (All) Clamav statsd
+DG-6429 (WMG) Site duplication failed
+DG-6406 (ALL) Fixing themebuilder metatag viewport notice when it's not set
+DG-5410 (ALL) Safeguarding views_load_more.js when AJAX is not included - RN (ALL)
+DG-6444 (ALL) statds documentation
+DG-6383 (ALL) statds of theme eleves
+DG-6454 Enable Audit trail for pfizer
+DG-6145 (ALL) restrict anon comments and content - RN (ALL)
+DG-3843 (ALL) Add the screen shot service to gardens sites.
+DG-5517 As QA, I want the "unclean theme builder exit tests" to be ported to cucumber/capybara
+DG-5587 As QA, I want the "theme builder crufty session" tests to be ported to cucumber/capybara
+DG-6355 As QA, I want the Drupal Gardens modules tests to only use a whitelist
+ES-1426 Fix failing Meta Tags test
+DG-6403 Bugs in MASt
+DG-6389 Add statsd for themebuilder enter/exit/publish
+DG-5864 update tests to use phantom.js 1.7
+DG-6475 As QA, I want the Drupal Gardens login redirect test to be ported to cucumber/capybara
+DG-6456 (SMB/Internal) Improve the performance of the gardens disk usage check.
+DG-6400 New Pfizer sites need config from selfdetaildev
+DG-6556 (All) New pathaliases conflicting with an existing alias or redirect rule will get a suffix
+DG-6566 (FLH) Remove the parent florida hospitals site link from the footer.
+
+******** Hotfixes for 1.25 *******
+DG-6378 (All) Revert DG-6374 and implement new redirect check
+DG-6374 (All) Fix redirect infinite loop check
+DG-6460 (Internal) user/register user/password checks
+DG-6468 (WMG) Unlink bulk_email from enterprise profiles
+DG-6509 (All) Prevent accidental deletion of Drupal accounts on WordPress rollback
+
+******** 1.25 ********
+DG-6031 Mollom update - RN (ALL)
+DG-6016 Full site replication - RN (ENT)
+DG-5837 Double scroll bar in FF - RN (ENT)
+DG-6084 Prevent Search Engines from crawling dev sites - RN (ENT)
+DG-6180 Block certain content types from mobile app creation - RN (ALL)
+DG-5984 Comment goodness clean up - RN (ALL)
+DG-5986 Comment goodness clean up - RN (ALL)
+DG-5766 simplified modules issue with tracker - RN (ALL)
+DG-4414 remove db_fetch_object from code base
+DG-5570 Repair Gardens make file and finish jenkins
+DG-5076 DSM for maint updates - RN (ENT)
+DG-5623 Color box styles clash - RN (ALL)
+DG-5960 Fix simpletests
+DG-5263 Gallery error when deleting or changing gallery setting - RN (ALL)
+DG-6118 sign up or login on newly created pfizer site - RN (ENT)
+DG-6134 update Drupal to 7.16 - RN (ALL)
+DG-6143 statsd on gardens - RN (ALL)
+DG-5573 (ALL) update media gallery to alpha8 - RN (ALL)
+DG-5780 (WMG) log bunchball actions properly - RN (WMG)
+DG-6027 (WMG) Set up ClamAV scanning of files - RN (ENT)
+DG-5872 (ALL) Add wordpress import. - RN (ALL)
+ES-1338 Move gardens TCM to cucumber scenarios
+DG-6048 disable view port metatags until responsivizer is done - RN (ALL)
+DG-6004 Can create a content type with an empty icon - RN (ALL)
+DG-5665 (ALL) add time ago to gardens and comment goodness - RN (ALL)
+DG-6219 Hide social login widget on mobile sign-in page for engage sites - RN (ENT)
+DG-6183 Whitelist MASt module.
+DG-4372 Search results still truncated
+DG-5559 Accidental Code push
+DG-6222 Remove video icon from MASt settings - rn (ALL)
+DG-6220 MASt - prevent taxonomy terms from getting squashed together in teaser output - rn (ALL)
+DG-6326 Button gradient is sideways on Firefox 16 or greater - rn (ALL)
+
+******** Hotfixes for 1.24 *******
+DG-6093 (Internal) Hide the pdf rendition module
+DG-5845 (WMG/Internal) add a drush function to change user names for Ning migration
+DG-6107 (Internal) Update the RELEASES.TXT to reflect hotfixes
+DG-6111 (PFE/All) Fix 500 Internal server errors on janrain field mapping edit page
+
+******** 1.24 ********
+DG-5687 (ALL) Mobile app on SMB gardens - RN (ALL)
+DG-5619 (Internal) Update drush to 5.7
+DG-5931 (Internal) Fix gardens make aggregator patch
+DG-5500 (ALL) Enable Ext_links_extra for everyone with external links - RN (ALL)
+DG-5290 (ALL) Update date module to the latest version - RN (ALL)
+DG-4048 (ALL) Media upload modal doesn’t auto-dismiss upon selecting another option
+DG-5672 (ALL) Expire session cookies in pfizer profile - RN (ALL)
+DG-5693 (PFE) Gardener initiated PDF rendition - RN (PFE)
+DG-5945 (ALL) update metatag to alpha 8 - RN (ALL)
+DG-5826 (ALL) Improve site performance when aggregator feeds are used
+DG-5634 (PFE) disable caching of ssl in the pfizer profile
+DG-5904 (Internal) remove pfizer profile on site export
+DG-6065 (Internal) Modules were incorrectly displaying on the configuration pages
+DG-6086 (Internal) remove switchthemes from gardens.make as we are not using it
+DG-6089 (Internal) Configuration description for mobile app services
+
+******** Hotfixes for 1.23 *******
+DG-5686 Clickable footer link for FPMG
+DG-5785 (All) Error orccured when submitting a flag action
+DG-5866 MASt module was not respecting field permissions
+DG-5959 Disable the iframe blocker
+DG-2272 (All) Themebuilder could not upload favicons or logos
+DG-3838 Add the Antivirus module to gardens codebase 
+DG-4622 (Internal) WMG user stats are not being collected
+DG-5961 (Internal) have RELEASES.txt match what is in code
+DG-5806 (WMG) Local logins on a MASt enabled sites throws an ajax error
+DG-5845 (WMG/Internal) Support Warner Ning Migrations to Gardens
+
+******** 1.23 ********
+DG-4167 Admin page for membership data - rn (WMG) 
+DG-4452 (WMG) Comment on entities - rn (ENT)
+DG-4553 (ENT) Need Streamlined Login to https://www.wmg-gardens.com/admin/gardens/mylogins
+DG-4624 (smb) Error deleting taxonomy terms - RN (ALL)
+DG-4748 release janrain capture for warner
+DG-4793 (WMG) Export user data 
+DG-4828 (PFE and others) External links extra fixes - RN as 5445 (ALL)
+DG-5075 (internal) Audit trail # needs to have a code review.
+DG-5204 (PFE) Engage for pfizer
+DG-5259 (all) update ctools to have the SA fix - RN (ALL)
+DG-5278 (all) Token - RN (ALL)
+DG-5280 (all) Plupload - RN (ALL)
+DG-5281 (all) Pathauto - RN (ALL)
+DG-5291 (all) Update Drupal core - RN (ALL)
+DG-5400 (wmg) Mobile app mAST release Sept 12th ish - rn (ENT)
+DG-5401 PDF rendition - rn (PFE)
+DG-5415 Add publish theme permission - rn (ALL)
+DG-5416 Add Flag module - RN (ALL)
+DG-5417 Add Flag_friend module - RN (WMG)
+DG-5419 Granular control over comments - rn (ALL)
+DG-5578 Fix to getsite command
+DG-5592 Adding documentation to source control
+DG-5826 (ALL) Add an index to aggregator_item to fix performance issues
+DG-5758 (internal) Fix update function for disabling responsive theming on smb
+DG-5813 (internal) Fix up the styling of the metatags available tokens dialog
+DG-5415 (Internal) Choosing a new base theme is not possible
+DG-5416 (Internal) Flag and Views cannot be made as dependent modules
+
+#QA Stories
+DG-5054 As QA, I want the Drupal Gardens fivestar test to be refactored
+DG-5124 As QA, I want the Drupal Gardens Theme builder color picker test to pass
+DG-5207 As QA, I want the simpletest runner to work on build-2
+DG-5220 As QA, I want the Drupal Gardens theme builder font test to pass again
+DG-5239 As QA, I want the webforms textfield test to be updated to the latest UI changes
+DG-5241 As QA, I want the Drupal Gardens theme builder background color tests to be ported to cucumber/capybara
+DG-5250 As QA, I want the capybara selenium driver to use a standard window size
+DG-5272 As QA, I want the failing Drupal Gardens gallery test to be fixed
+DG-5386 As QA, I want the Drupal Gardens WYSIWYG tests to be ported to cucumber/capybara
+DG-5418 As QA, I want the themebuilder DOM navigator tests to be ported to cucumber/capybara
+DG-5421 As QA, I want the Drupal Gardens instance setup to be fixed
+DG-5454 As QA, I want the Drupal gardens navigation system tests to be ported to cucumber/capybara
+DG-5590 Fix Font selection tests.
+ES-1339 fix php drush call
+
+******** Hotfixes to 1.22 *******
+DG-5575 Media Gallery + Oembed
+DG-5605 Disable responsive theming on SMB
+DG-5770 (Internal) Enable responsive theming for certain sites (should be a hotfix)
+DG-5828 (All) Add a responsive theme enablement backdoor for SMB gardens
+
+******* 1.22 *******
+DG-4812 (WMG) Finish in the ugliest way Bunchball
+DG-4747 Responsive themeing - RN (SMB,ENT)
+DG-4776 Gardener UX improvements - RN (ENT)
+DG-4703 (WMG) artist arena migrations
+DG-5139 (WMG) Update janrain capture to the 1.4 release - RN (ENT)
+DG-4766 (Internal) Add wmg tangle003 to gardens_drush.inc
+DG-3992 - Review this afternoon to see if it is done @ Content API scrum
+DG-3993 - Review this afternoon to see if it is done @ Content API scrum
+# DG-5086 - Is this included in the 5090 feature branch?
+# DG-5087 - Is this included in the 5090 feature branch?
+# DG-5088 - Is this included in the 5090 feature branch?
+# DG-5089 - Is this included in the 5090 feature branch?
+DG-5090 - MASt module
+DG-5205 - Mobile login page
+#DG-5206 - Is this included in the 5090 feature branch?
+#DG-5222 - Is this included in the 5090 feature branch?
+DG-5385 - This has its own branch not as far as I can tell in the 5090 branch
+DG-3994
+DG-4828 pfizer exit pages - RN (SMB,ENT)
+DG-5122 (pfe) Node Export
+DG-5258 (pfe) Site variables for pfizer
+DG-4723 make file changes - no production impact (Reviewed by KH)
+
+# BUGS
+DG-5336 Fix bunchball php error related to site dupe
+DG-3784 utf-8 chars can cause layout options not to stick
+DG-4614 users should not be able to enable webform module standalone - RN (SMB,ENT)
+DG-5248 WMG logged in users cron drush needs to run with the --url argument
+
+#QA Stories
+DG-4751 As QA, I want the Drupal Gardens test setup to support poltergeist
+DG-4773 As QA, I want the Drupal Gardens testing backdoor to use drush sql-dump and sql-cli
+DG-4880 As QA, I want the Drupal Gardens fivestar tests to use poltergeist
+DG-4897 As QA, I want the Drupal Gardens theme builder font size tests to be updated to the latest behavior changes
+DG-5042 As QA, I want the Drupal Gardens QA backdoor to drop tables before restoring a sql dump
+DG-5044 As QA, I want the Drupal Gardens instance setup folder permissions to be resolved
+DG-5115 Remove the old instance launcher from the repo
+DG-5141 Update our QA gems for the stage setup and tests
+ES-1288 Port JSUnit to use cucumber and integrate it within the integration + smoke test (yeah, yeah, missed that it was created as an ES- story)
+
+******* Hotfixes to 1.21 *******
+DG-5449 - Slow query identification
+DG-4771 - (internal) Update migration module
+DG-4446 - (internal) release changes for pfizer stage release
+DG-5073 - (internal) add read me doc for gardens tests
+DG-4744 - (PFE,FLH) Update domain_301_redirect to better handle poor network connectivity
+DG-4565 (Enterprise) Disable twitter alerts per-site and also via the gardener
+DG-4451 (SMB) DevCloud ad on export
+DG-5130 (Enterprise)301 conditional fix that was triggering dsm plus redirect language
+DG-4703 - (WMG) Support artist arena migrations 1st set
+
+******** 1.21 *******
+#Stories:
+DG-4145  (WMG) Bunchball rewards matrix - RN (ENT) Does this need to be merged?
+DG-4147  (WMG) Bunchball module security review. Does this need to be merged?
+DG-4148  (WMG) Bunchball performance. Does this need to be merged?
+DG-4168 (Internal) Track logged in users on warner clusters
+DG-4557 (ALL) blacklist antivirus modules
+DG-4511 (WMG) Release bunchball to wmg
+#DG-4445 (Enterprise Gardener) Site owners only see their own sites
+DG-4448 (WMG) Review and incorporate Janrain Capture field mapping configuration UI - RN (ENT)
+DG-4450 (WMG) Split Janrain Capture and Engage modules - RN (ENT)
+DG-4480 (WMG) Update location of Services and OAuth modules
+DG-4491 (WMG?)  As a mobile app user, I want an individual gardens site to work with OAuth
+#DG-4489 (ENT?) content API documentation no code release 
+#DG-4510 (ENT?) Gardener UX: Consolidate the site grid and site tabs - RN (ENT)
+DG-4701 (WMG) Allow both images and videos to be emailed in links and create the right content type - RN (ENT)
+
+#Bugs:
+DG-4719 Clean up the RELEASES.TXT
+DG-4556 (ALL) Better Error message when Themebuilder permissions are not properly set up - RN (ENT,SMB)
+DG-4737(FLH) Internal Drush uli does not work for logging into gardens sites
+DG-4682 (ALL) Simplified help no longer appears in drop down - RN (ENT,SMB)
+
+#QA:
+DG-4334 As QA, I want the Drupal Gardens theme builder test feature to be split up
+DG-4352 As QA, I want the Drupal Gardens webform tests to work with the latest UI changes
+DG-4370 As QA, I want the Drupal Gardens instance teardown to use AWS tags instead of cname records for killing domains by Acquia DNS
+DG-4400 As QA, I want the Drupal Gardens theme builder "DOM walker" test to work on jenkins
+DG-4401 As QA, I want the Drupal Gardens gallery tests to reflect the changes intoduced by DG-2660
+DG-4415 As QA, I want the webforms tests to use the correct css classes to work with form elements
+DG-4442 As QA, I want the failing Drupal Gardens gallery tests to use selenium
+DG-4536 As QA, I want the Drupal Gardens gallery tests to work when using the admin overlay
+DG-4537 As QA, I want the "Antivirus" and "Antivirus IEContentAnalyzer" to be on the Gardens blacklist
+DG-4596 As QA, I want the missing for the Drupal Gardens theme builder permissions tests to be implemented
+DG-4702 As QA, I want the Drupal Gardens instance setup to install a current version of drush
+
+******* Hotfixes to 1.20 *******
+DG-4602 - Migration code for fueled by ramen
+DG-4390 - Website Temporarily Unavailable When Manually Running Cron
+DG-4687 - Comments on nodes other than users are redirected to the front page after submission
+
+
+******* 1.20 *******
+
+#Stories:
+DG-4225 Mobile pages for enterprise
+DG-4050 Content manager role
+DG-4142 Bunchball install modules initial integration
+DG-4261 Janrain Capture module fixes for enterprise
+DG-4263 Janrain Capture for enterprise
+DG-4264 JanrainCapture & profile fields
+
+#Bugs:
+DG-2660 - Unable to delete media files
+DG-4121 - Can’t see Janrain widget on IOS - Enterprise
+DG-4244 - Email upload image name notification - Enterprise
+
+******* Hotfixes to 1.19 ********
+DG-4378 Clean up the RELEASES.TXT to be correct
+
+******* 1.19 *******
+DG-3986 Update oauth and service modules [Content API]
+DG-4180 Deleting/saving a page on SSL causes a new browser window to open RN - SMB, WMG, FLH
+DG-3939 Adding media content on IE could cause a javascript error - RN - SMB, WMG
+DG-4063 [Internal] Accessing an SSL/301 redirect site was not possible using drush uli
+DG-3802 Include and enable the comment_anywhere module RN - WMG
+DG-4026 The java script hover intent delay is too long RN - WMG
+#DG-4152 Migrate Extras Media should be scarecrowed # already in
+DG-4204 Update Javascript Libraries to 7.x-1.2 RN - SMB, WMG
+#DG-4168 As Gardens Eng I want to know how many logged in users are on an enterprise cluster # this is not complete and should be removed
+DG-4150 Add Janrain Capture module to gardens codebase RN - WMG
+DG-3943 Embedly code included in metatags
+DG-4231 Media thumbnail view unavailable under content tab
+DG-4154 Remove site maint role from all warner sites users except for the special wmgd2c user
+DG-3362 Update to mollom 2.0
+# DG-4131 Gardens staging docs point to production # already in as far as I can tell
+DG-2161 make gardens from a gardens make file
+DG-4345 Make entity cache disablement a no-op for warner
+DG-4320 Cannot add Media to media gallery
+DG-4359 Entity Cache should not be enabled on SMB installs until webform is fixed
+
+#DG-4064 Gardener: Password reset e-mails are empty RN - FLH
+
+# QA work (automation stories) -- Please use the component VALIDATION, so it shows up on the Eng Services rapid board.  THX.
+DG-4163
+DG-4184
+DG-4185
+DG-4308 Fix test-unit popping up + update some Gemfile for the tests
+DG-4233 Port over theme builder typekit tests
+DG-4333 Fix css class of file upload widget for webform test
+DG-4308 Gardens tests should pass for real and not mistakenly call Test::Unit
+DG-4310 update fog for launching test instances
+
+******* 1.18 *******
+Hotfix candidates
+#DG-4205 Gardener lazy loader RN - WMG
+#DG-4179 # Webform e-mail confirmation does not display the correct site title RN - FLH
+#DG-4230 # consider for a hotfix (disables entity cache) RN - SMB, FLH (mention DG-4057)
+

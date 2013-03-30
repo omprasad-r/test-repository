@@ -1,0 +1,7 @@
+<?php
+/**
+ * @file
+ * Code for the Florida Hospital News Room feature.
+ */
+
+include_once('florida_hospital_news_room.features.inc');

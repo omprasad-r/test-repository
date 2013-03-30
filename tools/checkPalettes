@@ -1,0 +1,144 @@
+#!/usr/bin/php -q
+<?php
+
+/**
+ * This tool compares palettes used in the base themes to the corresponding
+ * palettes declared in themebuilder itself, and reports any discrepancies
+ * in colors or order.
+ */
+
+require_once('ThemeChecker.inc');
+
+class PaletteChecker extends ThemeChecker {
+
+  /**
+   * Compare palettes declared in themes to the themebuilder common palettes.
+   */
+  public function identifyRejects() {
+    $themePalettes = $this->getThemePalettes();
+    $rejects = $this->compare($themePalettes);
+    return $rejects;
+  }
+
+  /**
+   * Return a list of theme directories inside docroot/themes/acquia.
+   */
+  private function getDirectories() {
+    $result = array();
+    exec('ls ' . $this->dir, $result);
+    if (empty($result)) {
+      throw new Exception("No themes found in " . $this->dir . ".");
+    }
+    return $result;
+  }
+
+  /**
+   * Return a list of palettes declared in themes.
+   */
+  private function getThemePalettes() {
+    require_once($this->dir . '/../../includes/bootstrap.inc');
+    require_once($this->dir . '/../../includes/common.inc');
+    $palettes = array();
+    $dirs = $this->getDirectories();
+    foreach ($dirs as $theme) {
+      $info = drupal_parse_info_file($this->dir . "/$theme/$theme.info");
+      if (empty($info)) {
+        throw new Exception(".info file not found for $theme.");
+      }
+      $palettes[$theme] = $info['palette'];
+    }
+    return $palettes;
+  }
+
+  /**
+   * Return a list of common palettes declared in themebuilder.
+   */
+  private function getCommonPalettes() {
+    $info = drupal_parse_info_file($this->dir . "/../../modules/acquia/themebuilder/themebuilder_compiler/palette.list");
+    $palettes = array();
+    // Return an array of palettes keyed by UUID for lookup.
+    foreach ($info['palette'] as $name => $palette) {
+      $palettes[$palette['id']] = $palette;
+      $palettes[$palette['id']]['name'] = $name;
+    }
+    return $palettes;
+  }
+
+  /**
+   * Compare theme palettes to their corresponding common themebuilder version.
+   */
+  public function compare($themePalettes) {
+    $commonPalettes = $this->getCommonPalettes();
+    $rejects = array();
+    foreach ($themePalettes as $theme => $themePalette) {
+      // Make sure this palette exists in the common list.
+      $id = $themePalette['id'];
+      if (isset($commonPalettes[$id])) {
+        $result = $this->comparePalettes($themePalette, $commonPalettes[$id]);
+        if (!empty($result)) {
+          $rejects[$id] = array(
+            'name' => $themePalette['name'],
+            'problem' => "Palette does not match.",
+            'palettes' => array(
+              'theme palette' => $themePalette,
+              'themebuilder palette' => $commonPalettes[$id],
+            ),
+          );
+        }
+      }
+      else {
+        $rejects[$id] = array('name' => $themePalette['name'], 'problem' => "Palette does not exist in base list.");
+      }
+    }
+    return $rejects;
+  }
+
+  /**
+   * Compare two palettes.
+   */
+  private function comparePalettes($palette1, $palette2) {
+    foreach ($palette1 as $key => $value) {
+      if (isset($palette2[$key])) {
+        if ($palette2[$key] == $value) {
+          unset($palette2[$key]);
+        }
+        else {
+          // If there are hex values and they match, it's okay.
+          if ($palette1[$key]['hex'] == $palette2[$key]['hex']) {
+            unset($palette2[$key]);
+          }
+        }
+      }
+      else {
+        $palette2[$key] = 'empty';
+      }
+    }
+    return $palette2;
+  }
+
+  /**
+   * Print information about any palette mismatches.
+   */
+  public function printRejects($rejects) {
+    if (count($rejects) > 0) {
+      foreach ($rejects as $id => $reject) {
+        print("Palette $id (" . $reject['name'] . "):\n");
+        print($reject['problem'] . "\n");
+        if ($reject['palettes']) {
+          print("Mismatch below:\n");
+          print_r($reject['palettes']);
+        }
+      }
+    }
+    else {
+      print("No palette issues found.\n");
+    }
+  }
+}
+
+$paletteChecker = new PaletteChecker($argv);
+$rejects = $paletteChecker->identifyRejects();
+$paletteChecker->printRejects($rejects);
+$returnCode = (count($rejects) === 0) ? 0 : -1;
+exit($returnCode);
+

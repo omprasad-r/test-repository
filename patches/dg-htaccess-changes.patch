@@ -1,0 +1,19 @@
+--- .htaccess	2011-05-25 16:23:35.000000000 -0400
++++ .htaccess	2011-08-08 14:07:05.000000000 -0400
+@@ -92,7 +95,15 @@
+   # uncomment the following:
+   # RewriteCond %{HTTP_HOST} ^www\.(.+)$ [NC]
+   # RewriteRule ^ http://%1%{REQUEST_URI} [L,R=301]
+-
++##GardensExcludeFromExportStart################################################
++  # Make robots go away on dev servers
++  RewriteCond %{ENV:AH_SITE_ENVIRONMENT} ^development  
++  RewriteCond %{REQUEST_FILENAME} .*/robots.txt$ [NC]
++  RewriteRule ^(.*)$ modules/acquia/robots-disallow.txt [L]
++  # Drupal Gardens sites should not use a leading www.
++  RewriteCond %{HTTP_HOST} ^www\.(.+\.(drupalgardens|wmg-gardens|fpmg-drupalgardens|edrupalgardens)\....)$ [NC]
++  RewriteRule ^ http://%1%{REQUEST_URI} [L,R=301]
++##################################################GardensExcludeFromExportEnd##
+   # Modify the RewriteBase if you are using Drupal in a subdirectory or in a
+   # VirtualDocumentRoot and the rewrite rules are not working properly.
+   # For example if your site is at http://example.com/drupal uncomment and

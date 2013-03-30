@@ -1,0 +1,15 @@
+.fpmg-footer .fpmg-footer-logo {
+  background-attachment: scroll;
+  background-color: transparent;
+  background-image: url("images/fpmg-footer-logo.png");
+  background-position: center center;
+  background-repeat: no-repeat;
+  background-size: auto 100%;
+  display: block;
+  font-size: 0;
+  margin: 0 auto;
+  height: 45px;
+  text-align: left;
+  text-indent: -9999px;
+  width: 281px;
+}

@@ -1,0 +1,7 @@
+<?php
+/**
+ * @file
+ * Code for the Florida Hospital Homepage feature.
+ */
+
+include_once('florida_hospital_homepage.features.inc');

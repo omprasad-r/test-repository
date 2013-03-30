@@ -1,0 +1,13 @@
+diff --git a/handlers/views_handler_field.inc b/handlers/views_handler_field.inc
+index a62ac79..bb08f76 100644
+--- a/handlers/views_handler_field.inc
++++ b/handlers/views_handler_field.inc
+@@ -1072,7 +1072,7 @@ If you would like to have the characters %5B and %5D please use the html entity
+       // Use strip tags as there should never be HTML in the path.
+       // However, we need to preserve special characters like " that
+       // were removed by check_plain().
+-      $path = strip_tags(html_entity_decode(strtr($path, $tokens)));
++      $path = strip_tags(html_entity_decode(strtr($path, $tokens), ENT_QUOTES));
+ 
+       if (!empty($alter['replace_spaces'])) {
+         $path = str_replace(' ', '-', $path);

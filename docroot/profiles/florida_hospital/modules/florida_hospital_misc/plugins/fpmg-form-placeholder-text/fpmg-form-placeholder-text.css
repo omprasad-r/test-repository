@@ -1,0 +1,22 @@
+/*
+ * CSS styles for placeholders.
+ */
+
+.block-search .form-text:-moz-placeholder {
+  font-style: italic;
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: 0.9em;
+  line-height: 1.5em;
+}
+.block-search .form-text::-webkit-input-placeholder {
+  font-style: italic;
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: 0.9em;
+  line-height: 1.5em;
+}
+.block-search .form-text:placeholder {
+  font-style: italic;
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: 0.9em;
+  line-height: 1.5em;
+}

@@ -1,0 +1,234 @@
+
+#toolbar {
+  background: #282828;
+}
+
+#toolbar .toolbar-left > ul {
+  float: left;
+}
+
+#toolbar .toolbar-right > ul {
+  float: right;
+}
+
+#toolbar .toolbar-right ul + ul {
+  border-right: 1px solid #666;
+}
+
+#toolbar a.toggle {
+  position: absolute;
+  right: 30px;
+  cursor: pointer;
+  text-indent: -9999px;
+  overflow: hidden;
+  width: 26px;
+  height: 25px;
+  z-index: 1;
+  top: 0;
+  background: url('images/toolbar_toggle.png') no-repeat left top transparent;
+}
+
+#toolbar a.toggle:focus,
+#toolbar a.toggle:hover {
+
+}
+
+#toolbar a.toggle-active {
+  background: url('images/toolbar_toggle.png') no-repeat -27px top transparent;
+}
+
+#toolbar a.toggle-active.toggle:focus,
+#toolbar a.toggle-active.toggle:hover {
+}
+
+#toolbar .toolbar-menu {
+  display: none;
+}
+
+.toolbar-drawer #toolbar .toolbar-menu {
+  display: block;
+  padding: 0 45px 0 0;
+}
+
+#toolbar div.toolbar-drawer {
+  display: none;
+  padding: 12px;
+}
+
+#toolbar div.toolbar-drawer.active-path {
+  display: block;
+}
+
+#toolbar div.toolbar-drawer.active-path.collapsed {
+  display: none;
+}
+
+#toolbar .toolbar-drawer .drawer {
+  display: none;
+}
+
+#toolbar .toolbar-drawer .drawer.active-path {
+  display: block;
+}
+
+#toolbar div.toolbar-menu ul li a {
+  border-radius: 0;
+  padding: 5px 15px;
+}
+
+#toolbar div.toolbar-menu ul li a.active:active,
+#toolbar div.toolbar-menu ul li a.active,
+#toolbar div.toolbar-menu ul li.active-trail a,
+#toolbar div.toolbar-menu ul li a:active {
+  background-color: #282828;
+  background-image: none;
+}
+
+#toolbar div.toolbar-menu ul li a.active:hover,
+#toolbar div.toolbar-menu ul li a.active:focus {
+  background-color: #282828;
+  background-image: none;
+}
+
+#toolbar div.toolbar-menu ul li a[drawer] {
+  background-image: url('images/toolbar_drawer_link_arrow.png');
+  background-repeat: no-repeat;
+  background-position: right center;
+  padding-right: 25px;
+}
+
+
+#toolbar div.toolbar-menu ul li a:hover,
+#toolbar div.toolbar-menu ul li a:focus {
+  background-color: #434343;
+}
+
+#toolbar div.toolbar-menu ul li a[drawer].active-path:hover,
+#toolbar div.toolbar-menu ul li a[drawer].active-path:active,
+#toolbar div.toolbar-menu ul li a[drawer].active-path,
+#toolbar div.toolbar-menu ul li.active-trail a[drawer] {
+  background-color: #282828;
+  background-image: url('images/toolbar_drawer_link_arrow.png');
+  background-repeat: no-repeat;
+  background-position: right center;
+  padding-bottom: 6px;
+  position: relative;
+  z-index: 1;
+}
+
+#toolbar .toolbar-drawer .drawer ul {
+  background-color: rgba(102,102,102,.4);
+  background-position: 6px center;
+  background-repeat: no-repeat;
+  border: 1px solid #000;
+  border-radius: 3px;
+  padding: 5px 0;
+  float: left;
+}
+
+#toolbar .toolbar-drawer .drawer ul:before {
+  background: url("images/toolbar_arrow.png") no-repeat right center transparent;
+  float: left;
+  font-size: 11px;
+  font-weight: bold;
+  margin: -5px 0;
+  padding: 5px 8px 5px 5px;
+  text-transform: uppercase;
+}
+
+.toolbar-add:before {
+  content: "Add";
+}
+
+.toolbar-gear:before {
+  content: "Manage";
+}
+
+.toolbar-list:before {
+  content: "Find";
+}
+
+.toolbar-graph:before {
+  content: "View";
+}
+
+.toolbar-wrench:before {
+  content: "Wrench";
+}
+
+.toolbar-puzzle:before {
+  content: "Puzzle";
+}
+
+#toolbar div.toolbar-menu ul#toolbar-help li a {
+  background-image: url('images/toolbar_help.png');
+  background-repeat: no-repeat;
+  background-position: 10px center;
+  padding-left: 32px;
+}
+
+#toolbar div.toolbar-menu ul#toolbar-help li a.active,
+#toolbar div.toolbar-menu ul#toolbar-help li a:active {
+  padding-left: 32px;
+  background-position: 10px center;
+  background-color: #434343;
+}
+
+#toolbar .toolbar-drawer .drawer ul + ul {
+  margin-left: 10px;
+}
+
+#toolbar .toolbar-drawer .drawer ul li {
+  overflow: visible;
+  padding: 0 8px;
+}
+
+#toolbar .toolbar-drawer .drawer ul li a {
+  color: #ccc;
+}
+
+#toolbar .toolbar-drawer .drawer ul li a:hover,
+#toolbar .toolbar-drawer .drawer ul li a:focus {
+  color: #fff;
+  text-decoration: underline;
+}
+
+#toolbar .toolbar-drawer .drawer ul li a.active {
+  color: #fff;
+  border-bottom: 2px solid #fff;
+  margin-bottom: -6px;
+  padding-bottom: 3px;
+}
+
+#toolbar .toolbar-drawer .drawer ul li a.active:hover,
+#toolbar .toolbar-drawer .drawer ul li a.active:focus {
+  text-decoration: none;
+}
+
+#toolbar .toolbar-drawer .drawer ul li + li {
+  border-left: 1px solid rgba(204,204,204,.4);
+}
+
+#toolbar-home .dashboard a span {
+  background: url('images/toolbar_dashboard.png') no-repeat center center transparent;
+  width: 17px;
+}
+
+#toolbar .drawer-links a {
+  padding-right: 10px;
+}
+
+#toolbar .toolbar-tooltips {
+  font-size: 11px;
+  padding: 12px;
+  display: none;
+}
+
+#toolbar .toolbar-drawer.active-path + .toolbar-tooltips {
+  display: block;
+  padding-top: 0;
+}
+
+#toolbar #toolbar-user li {
+  margin: 0;
+}

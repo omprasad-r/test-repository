@@ -1,0 +1,24 @@
+Index: commands/core/core.drush.inc
+===================================================================
+--- commands/core/core.drush.inc	(revision 32953)
++++ commands/core/core.drush.inc	(working copy)
+@@ -231,6 +231,19 @@
+   drush_include_engine('drupal', 'update', drush_drupal_major_version());
+   update_main();
+ 
++  // GARDENS PATCH: Before clearing caches, reset the module_list() static.
++  // This is needed in the case where the updates added or removed a module, so
++  // that e.g. the menu rebuild that occurs during the cache flush below
++  // happens with the correct module list. Drupal normally takes care of this
++  // itself when module_enable() or module_disable() is called, but in Drush,
++  // the code that actually performs the updates and the code in this function
++  // that clears the caches actually happen in different PHP threads, so it
++  // doesn't work. (It's also arguably a bit of a core bug that clearing all
++  // caches doesn't clear the module_list() static cache itself.)
++  // @todo: When updating to a modern version of Drush, check if this is still
++  //   necessary.
++  module_list(TRUE);
++
+   // Clear all caches. We just performed major surgery.
+   drush_drupal_cache_clear_all();
+ 

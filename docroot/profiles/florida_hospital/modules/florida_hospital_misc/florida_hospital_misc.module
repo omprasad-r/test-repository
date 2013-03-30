@@ -1,0 +1,390 @@
+<?php
+
+/**
+ * @file
+ * Miscellaneous functionality for Florida Hospital.
+ *
+ * Note: It is rarely (if ever) a good idea to put any code in this module! We
+ * are trying *not* to have customer-specific code in Gardens. Plus, it is not
+ * included on site export. Instead, use this module mainly just to enable
+ * other general-purpose modules in the Gardens codebase which the customer
+ * needs.
+ */
+
+/**
+ * Implements hook_disallowed_modules_alter().
+ *
+ * Allow Gardens Mail Media to be enabled per-site.
+ */
+function florida_hospital_misc_disallowed_modules_alter(&$modules) {
+  $modules = array_diff($modules, array('gardens_mail_media'));
+}
+
+/**
+ * Implements hook_visible_required_modules_alter().
+ *
+ * Unhide a couple of modules so that features doesn't complain about unmet dependencies.
+ */
+function florida_hospital_misc_visible_required_modules_alter(&$modules) {
+  $modules = array_merge($modules, array('ctools', 'file', 'file_entity', 'image', 'improved_text_trim', 'media', 'date', 'date_api',));
+}
+
+/**
+ * Implements hook_simplified_modules_hidden_dependencies_alter().
+ *
+ * Yet another measure to make sure dependencies are not hidden (for features).
+ */
+function florida_hospital_misc_simplified_modules_hidden_dependencies_alter(&$modules) {
+  $modules = array_diff($modules, array('ctools'));
+}
+
+/**
+ * Implements hook_themebuilder_palettes().
+ */
+function florida_hospital_misc_themebuilder_palettes() {
+  $palettes = array();
+  $palettes['Cancer'] = array(
+    'id' => "3c7c8ca0-621b-11e1-b86c0800200c9a66",
+    'author' => 'Purple Rock Scissors',
+    'a' => array(
+      'hex' => '540f62',
+    ),
+    'b' => array(
+      'hex' => '7fa049',
+    ),
+    'c' => array(
+      'hex' => 'a3bb53',
+    ),
+    'd' => array(
+      'hex' => '184c8c',
+    ),
+    'e' => array(
+      'hex' => '2382d4',
+    ),
+    'black' => array(
+      'hex' => '343434',
+    ),
+    'white' => array(
+      'hex' => 'FFFFFF',
+    ),
+  );
+
+  $palettes['Cardio'] = array(
+    'id' => 'e7aed7e0-621b-11e1-b86c0800200c9a66',
+    'author' => 'Purple Rock Scissors',
+    'a' => array(
+      'hex' => '5f1010',
+    ),
+    'b' => array(
+      'hex' => 'df9d02',
+    ),
+    'c' => array(
+      'hex' => 'f9b81c',
+    ),
+    'd' => array(
+      'hex' => '184c8c',
+    ),
+    'e' => array(
+      'hex' => '2382d4',
+    ),
+    'black' => array(
+      'hex' => '343434',
+    ),
+    'white' => array(
+      'hex' => 'FFFFFF',
+    ),
+  );
+
+  $palettes['OB/GYN'] = array(
+    'id' => 'cd1a51c0-6252-11e1-b86c-0800200c9a66',
+    'author' => 'Purple Rock Scissors',
+    'a' => array(
+      'hex' => '73132e',
+    ),
+    'b' => array(
+      'hex' => 'c74a5d',
+    ),
+    'c' => array(
+      'hex' => 'ed8594',
+    ),
+    'd' => array(
+      'hex' => '184c8c',
+    ),
+    'e' => array(
+      'hex' => '2382d4',
+    ),
+    'black' => array(
+      'hex' => '343434',
+    ),
+    'white' => array(
+      'hex' => 'FFFFFF',
+    ),
+  );
+
+  $palettes['Pediatrics'] = array(
+    'id' => 'd8ec2320-6252-11e1-b86c-0800200c9a66',
+    'author' => 'Purple Rock Scissors',
+    'a' => array(
+      'hex' => '2382d4',
+    ),
+    'b' => array(
+      'hex' => 'fdbb30',
+    ),
+    'c' => array(
+      'hex' => 'fccc68',
+    ),
+    'd' => array(
+      'hex' => '184c8c',
+    ),
+    'e' => array(
+      'hex' => '2382d4',
+    ),
+    'black' => array(
+      'hex' => '343434',
+    ),
+    'white' => array(
+      'hex' => 'FFFFFF',
+    ),
+  );
+
+  $palettes['Primary'] = array(
+    'id' => 'e75fc880-6252-11e1-b86c-0800200c9a66',
+    'author' => 'Purple Rock Scissors',
+    'a' => array(
+      'hex' => '164783',
+    ),
+    'b' => array(
+      'hex' => '0076c0',
+    ),
+    'c' => array(
+      'hex' => '55bceb',
+    ),
+    'd' => array(
+      'hex' => '184c8c',
+    ),
+    'e' => array(
+      'hex' => '2382d4',
+    ),
+    'black' => array(
+      'hex' => '343434',
+    ),
+    'white' => array(
+      'hex' => 'FFFFFF',
+    ),
+  );
+
+  $palettes['Surgery'] = array(
+    'id' => 'efa34300-6252-11e1-b86c-0800200c9a66',
+    'author' => 'Purple Rock Scissors',
+    'a' => array(
+      'hex' => '115e66',
+    ),
+    'b' => array(
+      'hex' => 'aba2c1',
+    ),
+    'c' => array(
+      'hex' => '8a7a9e',
+    ),
+    'd' => array(
+      'hex' => '184c8c',
+    ),
+    'e' => array(
+      'hex' => '2382d4',
+    ),
+    'black' => array(
+      'hex' => '343434',
+    ),
+    'white' => array(
+      'hex' => 'FFFFFF',
+    ),
+  );
+
+  $palettes['Corporate'] = array(
+    'id' => 'f562f8d0-6252-11e1-b86c-0800200c9a66',
+    'author' => 'Purple Rock Scissors',
+    'a' => array(
+      'hex' => '164783',
+    ),
+    'b' => array(
+      'hex' => '0076c0',
+    ),
+    'c' => array(
+      'hex' => '55bceb',
+    ),
+    'd' => array(
+      'hex' => '184c8c',
+    ),
+    'e' => array(
+      'hex' => '2382d4',
+    ),
+    'black' => array(
+      'hex' => '343434',
+    ),
+    'white' => array(
+      'hex' => 'FFFFFF',
+    ),
+  );
+
+  return $palettes;
+}
+
+/**
+ * Implements hook_themebuilder_palettes_alter().
+ */
+function florida_hospital_misc_themebuilder_palettes_alter(&$palettes) {
+  // Disallow all non-FH palettes.
+  $palettes = florida_hospital_misc_themebuilder_palettes();
+}
+
+/**
+ * Implements hook_library().
+ */
+function florida_hospital_misc_library() {
+  $path = drupal_get_path('module', 'florida_hospital_misc');
+  // Register the debug jQuery plugin as a library.
+  $libraries['fpmg_footer_logo'] = array(
+    'title' => 'Site-wide footer logo.',
+    'website' => 'http://www.drupalgardens.com',
+    'version' => '1.03',
+    'js' => array(
+      $path . '/plugins/fpmg-footer-logo/fpmg-footer-logo.js' => array('group' => JS_THEME, 'every_page' => TRUE,),
+    ),
+    'css' => array(
+      $path . '/plugins/fpmg-footer-logo/fpmg-footer-logo.css' => array('group' => CSS_THEME, 'every_page' => TRUE,),
+    ),
+  );
+  $libraries['fpmg_page_banner'] = array(
+    'title' => 'Returns the configured page section label for a given section path and wraps the text in a stack structure.',
+    'website' => 'http://www.drupalgardens.com',
+    'version' => '1.01',
+    'js' => array(
+      $path . '/plugins/fpmg-page-banner/fpmg-page-banner.js' => array('group' => JS_THEME, 'every_page' => TRUE,),
+    ),
+  );
+  $libraries['fpmg_page_section_stacker'] = array(
+    'title' => 'Invokes the pageBanner plugin that inserts a page section banner above the content area.',
+    'website' => 'http://www.drupalgardens.com',
+    'version' => '1.03',
+    'js' => array(
+      $path . '/plugins/fpmg-page-section-stacker/fpmg-page-section-stacker.js' => array('group' => JS_THEME, 'every_page' => TRUE,),
+    ),
+  );
+  $libraries['fpmg_contact_link'] = array(
+    'title' => 'Pulls the contact and promo link buttons outside of its sidebar.',
+    'website' => 'http://www.drupalgardens.com',
+    'version' => '1.03',
+    'js' => array(
+      $path . '/plugins/fpmg-contact-link/fpmg-contact-link.js' => array('group' => JS_THEME, 'every_page' => TRUE,),
+    ),
+    'css' => array(
+      $path . '/plugins/fpmg-contact-link/fpmg-contact-link.css' => array('group' => CSS_THEME, 'every_page' => TRUE,),
+    ),
+  );
+  $libraries['fpmg_main_menu_cloner'] = array(
+    'title' => 'Creates a clone of the main menu in the footer of the site.',
+    'website' => 'http://www.drupalgardens.com',
+    'version' => '1.02',
+    'js' => array(
+      $path . '/plugins/fpmg-main-menu-cloner/fpmg-main-menu-cloner.js' => array('group' => JS_THEME, 'every_page' => TRUE,),
+    ),
+    'css' => array(
+      $path . '/plugins/fpmg-main-menu-cloner/fpmg-main-menu-cloner.css' => array('group' => CSS_THEME, 'every_page' => TRUE,),
+    ),
+  );
+  $libraries['fpmg_social_sharing'] = array(
+    'title' => 'Creates social sharing links in the breadcrumb region.',
+    'website' => 'http://www.drupalgardens.com',
+    'version' => '1.03',
+    'js' => array(
+      $path . '/plugins/fpmg-social-sharing/fpmg-social-sharing.js' => array('group' => JS_THEME, 'every_page' => TRUE,),
+    ),
+    'css' => array(
+      $path . '/plugins/fpmg-social-sharing/fpmg-social-sharing.css' => array('group' => CSS_THEME, 'every_page' => TRUE,),
+    ),
+  );
+  $libraries['custom_select'] = array(
+    'title' => 'Provides styling hooks for HTML select form items.',
+    'website' => 'http://www.drupalgardens.com',
+    'version' => '1.01',
+    'js' => array(
+      $path . '/plugins/custom-select/custom-select.js' => array('group' => JS_THEME, 'every_page' => TRUE,),
+    ),
+  );
+  $libraries['fpmg_medical_team_page'] = array(
+    'title' => 'Places the h1 tag on a medical team member page inside the bio-wrapper.',
+    'website' => 'http://www.drupalgardens.com',
+    'version' => '1.01',
+    'js' => array(
+      $path . '/plugins/fpmg-medical-team-page/fpmg-medical-team-page.js' => array('group' => JS_THEME, 'every_page' => TRUE,),
+    ),
+  );
+  $libraries['fpmg_media_item'] = array(
+    'title' => 'Formats and styles the blog view.',
+    'website' => 'http://www.drupalgardens.com',
+    'version' => '1.02',
+    'js' => array(
+      $path . '/plugins/fpmg-media-item/fpmg-media-item.js' => array('group' => JS_THEME, 'every_page' => TRUE,),
+    ),
+    'css' => array(
+      $path . '/plugins/fpmg-media-item/fpmg-media-item.css' => array('group' => CSS_THEME, 'every_page' => TRUE,),
+    ),
+  );
+  $libraries['fpmg_page_title_breadcrumb'] = array(
+    'title' => 'Appends the page title to the breadcrumb.',
+    'website' => 'http://www.drupalgardens.com',
+    'version' => '1.02',
+    'js' => array(
+      $path . '/plugins/fpmg-page-title-breadcrumb/fpmg-page-title-breadcrumb.js' => array('group' => JS_THEME, 'every_page' => TRUE,),
+    ),
+  );
+  $libraries['fpmg_form_placeholder_text'] = array(
+    'title' => 'Adds placeholder text to forms.',
+    'website' => 'http://www.drupalgardens.com',
+    'version' => '1.01',
+    'js' => array(
+      $path . '/plugins/fpmg-form-placeholder-text/fpmg-form-placeholder-text.js' => array('group' => JS_THEME, 'every_page' => TRUE,),
+    ),
+    'css' => array(
+      $path . '/plugins/fpmg-form-placeholder-text/fpmg-form-placeholder-text.css' => array('group' => CSS_THEME, 'every_page' => TRUE,),
+    ),
+  );
+  $libraries['fpmg_center_rotating_banner'] = array(
+    'title' => 'Centers the rotating banner when it is too large for the window.',
+    'website' => 'http://www.drupalgardens.com',
+    'version' => '1.01',
+    'js' => array(
+      $path . '/plugins/fpmg-center-rotating-banner/fpmg-center-rotating-banner.js' => array('group' => JS_THEME, 'every_page' => TRUE,),
+    ),
+  );
+  $libraries['fpmg_responsivizer'] = array(
+    'title' => 'Adjust page layout for small screens.',
+    'website' => 'http://www.drupalgardens.com',
+    'version' => '1.00',
+    'js' => array(
+      $path . '/plugins/fpmg-responsivizer/fpmg-responsivizer.js' => array('group' => JS_THEME, 'every_page' => TRUE,),
+    ),
+    'css' => array(
+      $path . '/plugins/fpmg-responsivizer/fpmg-responsivizer.css' => array('group' => CSS_THEME, 'every_page' => TRUE,),
+    ),
+  );
+  return $libraries;
+}
+
+/**
+ * Implements hook_javascript_libraries_available_alter().
+ */
+function florida_hospital_misc_javascript_libraries_available_alter(&$groups) {
+  $groups['Theme plugins']['library'][] = 'fpmg_footer_logo';
+  $groups['Theme plugins']['library'][] = 'fpmg_page_banner';
+  $groups['Theme plugins']['library'][] = 'fpmg_page_section_stacker';
+  $groups['Theme plugins']['library'][] = 'fpmg_contact_link';
+  $groups['Theme plugins']['library'][] = 'fpmg_main_menu_cloner';
+  $groups['Theme plugins']['library'][] = 'fpmg_social_sharing';
+  $groups['Theme plugins']['library'][] = 'custom_select';
+  $groups['Theme plugins']['library'][] = 'fpmg_medical_team_page';
+  $groups['Theme plugins']['library'][] = 'fpmg_media_item';
+  $groups['Theme plugins']['library'][] = 'fpmg_page_title_breadcrumb';
+  $groups['Theme plugins']['library'][] = 'fpmg_form_placeholder_text';
+  $groups['Theme plugins']['library'][] = 'fpmg_center_rotating_banner';
+  $groups['Theme plugins']['library'][] = 'fpmg_responsivizer';
+}

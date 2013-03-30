@@ -1,5 +1,0 @@
-name = Analytics variables test
-description = Support module for testing Analytics variables.
-package = Testing
-core = 7.x
-hidden = TRUE

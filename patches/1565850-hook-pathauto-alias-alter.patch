@@ -1,0 +1,40 @@
+diff --git a/pathauto.inc b/pathauto.inc
+index 9f98eec..5262358 100644
+--- a/pathauto.inc
++++ b/pathauto.inc
+@@ -355,6 +355,17 @@ function pathauto_create_alias($module, $op, $source, $data, $type = NULL, $lang
+     }
+   }
+ 
++  // Allow other modules to alter the pattern.
++  $context = array(
++    'module' => $module,
++    'op' => $op,
++    'source' => $source,
++    'data' => $data,
++    'type' => $type,
++    'language' => &$language,
++  );
++  drupal_alter('pathauto_pattern', $pattern, $context);
++
+   // Replace any tokens in the pattern. Uses callback option to clean replacements. No sanitization.
+   $alias = token_replace($pattern, $data, array(
+     'sanitize' => FALSE,
+@@ -375,15 +386,8 @@ function pathauto_create_alias($module, $op, $source, $data, $type = NULL, $lang
+   $alias = pathauto_clean_alias($alias);
+ 
+   // Allow other modules to alter the alias.
+-  $context = array(
+-    'module' => $module,
+-    'op' => $op,
+-    'source' => &$source,
+-    'data' => $data,
+-    'type' => $type,
+-    'language' => &$language,
+-    'pattern' => $pattern,
+-  );
++  $context['source'] = &$source;
++  $context['pattern'] = $pattern;
+   drupal_alter('pathauto_alias', $alias, $context);
+ 
+   // If we have arrived at an empty string, discontinue.

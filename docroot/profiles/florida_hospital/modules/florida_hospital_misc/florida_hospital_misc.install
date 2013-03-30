@@ -1,0 +1,378 @@
+<?php
+
+/**
+ * Implements hook_install().
+ */
+function florida_hospital_misc_install() {
+  variable_set('gardens_misc_ga_tracking_code', 'UA-27235159-1');
+
+  // Set the default value of the viewport metatag to enabled.
+  variable_set('themebuilder_metatag_viewport_default_enabled', TRUE);
+
+  // Enable theming plugins. These are small collections of front end code
+  // that build elements in the theme.
+  _florida_hospital_misc_enable_theming_plugins();
+}
+
+/**
+ * Enable theming plugins.
+ */
+function _florida_hospital_misc_enable_theming_plugins() {
+  $path = drupal_get_path('module', 'florida_hospital_misc');
+  include_once($path . '/includes/enableThemingPlugins.inc');
+  // Define the plugins. These are currently specific to Florida Hospitals.
+  $plugins = array(
+    'florida_hospital_misc-fpmg_footer_logo' => array(
+      'library' => 'fpmg_footer_logo',
+      'module' => 'florida_hospital_misc',
+    ),
+    'florida_hospital_misc-fpmg_page_banner' => array(
+      'library' => 'fpmg_page_banner',
+      'module' => 'florida_hospital_misc',
+    ),
+    'florida_hospital_misc-fpmg_page_section_stacker' => array(
+      'library' => 'fpmg_page_section_stacker',
+      'module' => 'florida_hospital_misc',
+    ),
+    'florida_hospital_misc-fpmg_contact_link' => array(
+      'library' => 'fpmg_contact_link',
+      'module' => 'florida_hospital_misc',
+    ),
+    'florida_hospital_misc-fpmg_main_menu_cloner' => array(
+      'library' => 'fpmg_main_menu_cloner',
+      'module' => 'florida_hospital_misc',
+    ),
+    'gardens_features-formalize' => array(
+      'library' => 'formalize',
+      'module' => 'gardens_features',
+    ),
+    'florida_hospital_misc-fpmg_social_sharing' => array(
+      'library' => 'fpmg_social_sharing',
+      'module' => 'florida_hospital_misc',
+    ),
+    'florida_hospital_misc-custom_select' => array(
+      'library' => 'custom_select',
+      'module' => 'florida_hospital_misc',
+    ),
+    'florida_hospital_misc-fpmg_medical_team_page' => array(
+    	'library' => 'fpmg_medical_team_page',
+    	'module' => 'florida_hospital_misc',
+    ),
+    'florida_hospital_misc-fpmg_media_item' => array(
+    	'library' => 'fpmg_media_item',
+    	'module' => 'florida_hospital_misc',
+    ),
+    'florida_hospital_misc-fpmg_page_title_breadcrumb' => array(
+    	'library' => 'fpmg_page_title_breadcrumb',
+    	'module' => 'florida_hospital_misc',
+    ),
+    'florida_hospital_misc-fpmg_form_placeholder_text' => array(
+    	'library' => 'fpmg_form_placeholder_text',
+    	'module' => 'florida_hospital_misc',
+    ),
+    'florida_hospital_misc-fpmg_center_rotating_banner' => array(
+    	'library' => 'fpmg_center_rotating_banner',
+    	'module' => 'florida_hospital_misc',
+    ),
+  );
+  // Enable the plugins.
+  florida_hospital_misc_enable_theming_plugins($plugins);
+}
+
+/**
+ * Add editor role
+ */
+function florida_hospital_misc_create_content_manager_role() {
+  $data['role_name'] = 'content manager';
+  // Editors can create, edit and delete all content types.
+  $node_permissions = array();
+  foreach (array_keys(node_type_get_types()) as $type) {
+    $node_permissions = array_merge($node_permissions, array_keys(node_list_permissions($type)));
+  }
+  $content_creator_permissions = florida_hospital_misc_content_creator_permissions();
+  $designer_permissions = florida_hospital_misc_base_site_designer_permissions();
+  $data['role_permissions'] = array_unique(array_merge($node_permissions, $content_creator_permissions, $designer_permissions));
+
+  florida_hospital_misc_add_basic_role($data['role_name'], $data['role_permissions']);
+}
+
+/**
+ * Creates a basic role.
+ *
+ * @param $name
+ *   The name of the role.
+ * @param $permissions
+ *   An array of permissions to assign the role. Only those permissions which
+ *   actually exist are granted, since currently, user_role_grant_permissions()
+ *   does not handle non-existent permissions well; see, for example,
+ *   http://drupal.org/node/737816).
+ *
+ * @return
+ *   The role ID of the new role.
+ */
+function florida_hospital_misc_add_basic_role($name, $permissions) {
+  $role = new stdClass();
+  $role->name = $name;
+  // As long as the role name comes after "A" in the alphabet, setting a weight
+  // of 1 tends to put it by default between the low level (anonymous and
+  // authenticated) and high level (administrator and site maintainer) roles,
+  // which is where we usually want it.
+  $role->weight = 1;
+  user_role_save($role);
+  // Only grant permissions that exist.
+  $permissions = array_intersect($permissions, array_keys(module_invoke_all('permission')));
+  user_role_grant_permissions($role->rid, $permissions);
+}
+
+/**
+ * Returns an array of basic permissions to give to "content creator" roles.
+ *
+ * This does not return permissions for any specific type of content; that
+ * is up to the calling function to merge in.
+ */
+function florida_hospital_misc_content_creator_permissions() {
+  $permissions = array(
+    'edit own comments',
+    'delete own comments',
+    'edit own follow links',
+    'bypass domain 301 redirect',
+    'view media',
+    'edit media',
+    'access content overview',
+    'access content',
+    'view own unpublished content',
+    'view revisions',
+    'revert revisions',
+    'access overlay',
+    'administer url aliases',
+    'create url aliases',
+    'vote on polls',
+    'cancel own vote',
+    'inspect all votes',
+    'save draft',
+    'search content',
+    'use advanced search',
+    'customize shortcut links',
+    'switch shortcut sets',
+    /* access administration pages creates an empty Structure menu item, but
+     * without it, Configuration is no longer available and the help link
+     * disappears from the toolbar, so it is required. */
+    'access administration pages',
+    'view the administration theme',
+    'access toolbar',
+    'access user profiles',
+  );
+  if (module_exists('taxonomy')) {
+    foreach (taxonomy_get_vocabularies() as $vocabulary) {
+      $permissions[] = 'edit terms in ' . $vocabulary->vid;
+    }
+  }
+  $safe_html_format_id = variable_get('gardens_safe_html_format');
+  if (!empty($safe_html_format_id)) {
+    $permissions[] = filter_permission_name(filter_format_load($safe_html_format_id));
+  }
+  return $permissions;
+}
+/**
+ *
+ */
+function florida_hospital_misc_base_site_designer_permissions() {
+    $permissions = array(
+      'administer themes',
+      'access themebuilder styles tab',
+      'access themebuilder brand tab',
+    );
+    return $permissions;
+  }
+
+/**
+ * Add FPMG Google Analytics code for each site.
+ */
+function florida_hospital_misc_update_11110() {
+  variable_set('gardens_misc_ga_tracking_code', 'UA-27235159-1');
+}
+
+/**
+ * Updates on trunk after the 1.13 release start at 11140.
+ */
+
+/**
+ * Enable theming plugins.
+ */
+function florida_hospital_misc_update_11140() {
+  _florida_hospital_misc_enable_theming_plugins();
+}
+
+/**
+ * Enable the domain_301_redirect module.
+ */
+function florida_hospital_misc_update_11141() {
+  module_enable(array('domain_301_redirect'), FALSE);
+}
+
+/**
+ * Enable SSL for all authenticated users
+ */
+function florida_hospital_misc_update_11170() {
+  module_load_install('florida_hospital');
+  florida_hospital_securepages_authenticated();
+}
+
+/**
+ * Create a content manager role.
+ */
+function florida_hospital_misc_update_11190() {
+  // Add an Editor role
+  if (!user_role_load_by_name('content manager')) {
+    florida_hospital_misc_create_content_manager_role();
+  }
+}
+
+/**
+ * Enable audit trail and gardens_enterprise_misc modules.
+ */
+function florida_hospital_misc_update_11191() {
+  module_enable(array('audit_trail', 'gardens_enterprise_misc'), FALSE);
+}
+
+/**
+ * Enable Site Guard module.
+ */
+function florida_hospital_misc_update_11192() {
+  if (!module_exists('site_guard')) {
+    module_enable(array('site_guard'), FALSE);
+  }
+}
+
+/**
+ * Set the stage name for the gardens_statsd module.
+ */
+function florida_hospital_misc_update_11193() {
+  variable_set('gardens_statsd_stage', 'fpmg-egardens');
+}
+
+/**
+ * Set the default value of the viewport metatag to enabled.
+ */
+function florida_hospital_misc_update_11194() {
+  variable_set('themebuilder_metatag_viewport_default_enabled', TRUE);
+}
+
+/**
+ * Fix up FH based themes.
+ *
+ * 1.56 FH based themes could get an automatic theme update to fix the Firefox
+ * gradient bug noted in DG-6365.
+ */
+function florida_hospital_misc_update_11195() {
+  // Get the current theme data.
+  global $theme_key;
+  $theme_key = variable_get('theme_default', 'minima');
+
+  $semaphore = themebuilder_compiler_get_semaphore();
+  try {
+    $theme = themebuilder_compiler_get_current_theme();
+  }
+  catch (Exception $e) {
+    $theme = FALSE;
+  }
+
+  // Base theme data for the current theme.
+  $base_theme = $theme ? $theme->getBaseThemeName() : FALSE;
+
+  // We are only fixing up fh_base themes.
+  if ($base_theme === 'fh_base') {
+    $style_css_fixing = FALSE;
+
+    // Automatic theme update is limited offer! Too old themes might need
+    // additional user attention, also make sure this update will not try to run
+    // in the future.
+    if ($theme->getVersion() === '1.56' && themebuilder_compiler_get_theme_version($base_theme) === '1.57') {
+      // Set the version in the theme's info file.
+      $info = $theme->assets_new['info']->getContents();
+      $info['version'] = '1.57';
+      $theme->assets_new['info']->setContents($info);
+
+      $theme->assets_new['info']->write($theme->getPath() . '/' . $theme->getName() . '.info');
+
+      $style_css_fixing = TRUE;
+
+      // Clear cached .info data.
+      system_rebuild_theme_data();
+    }
+    elseif (in_array($theme->getVersion(), array('1.54', '1.55'))) {
+      // The style.css did not change in FH base themes 1.54 and 1.55 so in
+      // those cases we could copy the style.css to provide some additional
+      // fixing.
+      $style_css_fixing = TRUE;
+    }
+
+    if ($style_css_fixing) {
+      // Overwrite style.css with the base theme's.
+      copy('profiles/florida_hospital/themes/fh_base/style.css', $theme->getPath() . '/style.css');
+      // Force the aggregator to rebuild the CSS bundles.
+      drupal_clear_css_cache();
+    }
+  }
+  themebuilder_compiler_release_semaphore($semaphore);
+}
+
+/**
+ * Update themes using fh_base to use the new footer link styles.
+ *
+ * This also removes some JavaScript code that adjusted the width of footer menu
+ * columns, trying to set the width of columns into appropriate sizes based on
+ * their content.
+ */
+function florida_hospital_misc_update_11196() {
+  // Get the current theme data.
+  global $theme_key;
+  $theme_key = variable_get('theme_default', 'minima');
+
+  $semaphore = themebuilder_compiler_get_semaphore();
+  try {
+    $theme = themebuilder_compiler_get_current_theme();
+  }
+  catch (Exception $e) {
+    $theme = FALSE;
+  }
+
+  // Base theme data for the current theme.
+  $base_theme = $theme ? $theme->getBaseThemeName() : FALSE;
+
+  // We are only fixing up fh_base themes.
+  if ($base_theme === 'fh_base') {
+    $style_css_fixing = FALSE;
+
+    // Automatic theme update is limited offer! Too old themes might need
+    // additional user attention, also make sure this update will not try to run
+    // in the future.
+    if ($theme->getVersion() === '1.57' && themebuilder_compiler_get_theme_version($base_theme) === '1.58') {
+      // Set the version in the theme's info file.
+      $info = $theme->assets_new['info']->getContents();
+      $info['version'] = '1.58';
+      $theme->assets_new['info']->setContents($info);
+
+      $theme->assets_new['info']->write($theme->getPath() . '/' . $theme->getName() . '.info');
+
+      $style_css_fixing = TRUE;
+
+      // Clear cached .info data.
+      system_rebuild_theme_data();
+    }
+    elseif (in_array($theme->getVersion(), array('1.54', '1.55', '1.56'))) {
+      // The style.css did not change in FH base themes 1.54, 1.55, and 1.56 so
+      // in those cases we copy the style.css to provide some additional fixes.
+      $style_css_fixing = TRUE;
+    }
+
+    if ($style_css_fixing) {
+      // Overwrite style.css with the base theme's.
+      copy('profiles/florida_hospital/themes/fh_base/style.css', $theme->getPath() . '/style.css');
+      // Force the aggregator to rebuild the CSS bundles.
+      drupal_clear_css_cache();
+    }
+  }
+  themebuilder_compiler_release_semaphore($semaphore);
+}
+

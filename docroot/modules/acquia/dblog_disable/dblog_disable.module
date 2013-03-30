@@ -1,0 +1,25 @@
+<?php
+
+/**
+ * Implements hook_cron().
+ */
+function dblog_disable_cron() {
+  // Default threshold is 48 hours
+  $seconds_dblog_enabled = REQUEST_TIME - variable_get('dblog_disable_timestamp');
+  if ($seconds_dblog_enabled > variable_get('dblog_disable_threshold', (60 * 60 * 48))
+      && module_exists('dblog')) {
+    // At this time, we only know of our own install profiles that depend on dblog,
+    // so we avoid the expensive dependency check here.
+    module_disable(array('dblog'), FALSE);
+    variable_del('dblog_disable_timestamp');
+  }
+}
+
+/**
+ * Implements hook_modules_enabled().
+ */
+function dblog_disable_modules_enabled($modules) {
+  if (in_array('dblog', $modules)) {
+    variable_set('dblog_disable_timestamp', REQUEST_TIME);
+  }
+}

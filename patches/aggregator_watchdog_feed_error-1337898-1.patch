@@ -1,0 +1,28 @@
+From e734cf383b112156f367fd3975c52402c9c0658c Mon Sep 17 00:00:00 2001
+From: Jesse Beach <splendidnoise@gmail.com>
+Date: Thu, 10 Nov 2011 13:01:12 -0500
+Subject: [PATCH] Issue #1337898 by jessebeach: change aggregator feed fetch watchdog and DSM messages to reference the feed url instead of the feed title
+
+Signed-off-by: Jesse Beach <splendidnoise@gmail.com>
+---
+ core/modules/aggregator/aggregator.fetcher.inc |    4 ++--
+ 1 files changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/core/modules/aggregator/aggregator.fetcher.inc b/core/modules/aggregator/aggregator.fetcher.inc
+index 831ea78..7927587 100644
+--- a/core/modules/aggregator/aggregator.fetcher.inc
++++ b/core/modules/aggregator/aggregator.fetcher.inc
+@@ -53,8 +53,8 @@ function aggregator_aggregator_fetch($feed) {
+       $feed->http_headers = $result->headers;
+       break;
+     default:
+-      watchdog('aggregator', 'The feed from %site seems to be broken due to "%error".', array('%site' => $feed->title, '%error' => $result->code . ' ' . $result->error), WATCHDOG_WARNING);
+-      drupal_set_message(t('The feed from %site seems to be broken because of error "%error".', array('%site' => $feed->title, '%error' => $result->code . ' ' . $result->error)));
++      watchdog('aggregator', 'The feed from %url seems to be broken, due to "%error".', array('%url' => $feed->url, '%error' => $result->code . ' ' . $result->error), WATCHDOG_WARNING);
++      drupal_set_message(t('The feed from %url seems to be broken, because of error "%error".', array('%url' => $feed->url, '%error' => $result->code . ' ' . $result->error)));
+   }
+ 
+   return $feed->source_string === FALSE ? FALSE : TRUE;
+-- 
+1.7.3.4
+

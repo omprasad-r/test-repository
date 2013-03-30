@@ -1,0 +1,121 @@
+Index: ../docroot/sites/all/modules/domain_301_redirect/domain_301_redirect.module
+===================================================================
+--- ../docroot/sites/all/modules/domain_301_redirect/domain_301_redirect.module	(revision 42150)
++++ ../docroot/sites/all/modules/domain_301_redirect/domain_301_redirect.module	(working copy)
+@@ -64,14 +64,55 @@
+     if (!preg_match('|^https?://|', $domain_301_redirect_domain)) {
+       $domain_301_redirect_domain = 'http://' . $domain_301_redirect_domain;
+     }
+-    $parsed_domain = parse_url($domain_301_redirect_domain, PHP_URL_HOST);
+-    if ($domain_301_redirect_enabled && !empty($domain_301_redirect_domain) && $parsed_domain != $_SERVER['HTTP_HOST'] && !user_access('bypass domain 301 redirect')) {
++    $domain_parts = parse_url($domain_301_redirect_domain);
++    $parsed_domain = $domain_parts['host'];
++    $parsed_domain .= !empty($domain_parts['port']) ? ':' . $domain_parts['port'] : '';
++    if ($domain_301_redirect_enabled 
++        && !empty($domain_301_redirect_domain) 
++        && $parsed_domain != $_SERVER['HTTP_HOST'] 
++        && !user_access('bypass domain 301 redirect')
++        && domain_301_redirect_may_redirect()) {
+       drupal_goto($domain_301_redirect_domain . $_SERVER['REQUEST_URI'], array(), 301);
+     }
+   }
+ }
+ 
+ /**
++ * Determine if a page is configured to redirect.
++ * 
++ * Uses logic copied from block.module to handle either all pages except those listed
++ * or all pages listed.
++ */
++function domain_301_redirect_may_redirect() {
++  $applicability = (int) variable_get('domain_301_redirect_applicability');
++  if ($pages = trim((string) variable_get('domain_301_redirect_pages'))) {
++    // Convert path to lowercase. This allows comparison of the same path
++    // with different case. Ex: /Page, /page, /PAGE.
++    $pages = drupal_strtolower($pages);
++    // Convert the Drupal path to lowercase
++    $path = drupal_strtolower(drupal_get_path_alias($_GET['q']));
++    // Compare the lowercase internal and lowercase path alias (if any).
++    $page_match = drupal_match_path($path, $pages);
++    if ($path != $_GET['q']) {
++      $page_match = $page_match || drupal_match_path($_GET['q'], $pages);
++    }
++    // When $applicability has a value of 0 (BLOCK_VISIBILITY_NOTLISTED),
++    // the redirect is applied on all pages except those listed in $pages.
++    // When set to 1 (BLOCK_VISIBILITY_LISTED), it is applied only on those
++    // pages listed in $pages.
++    $page_match = !($applicability xor $page_match);
++  }
++  elseif ($applicability == BLOCK_VISIBILITY_LISTED) {
++    $page_match = FALSE;
++  }
++  else {
++    $page_match = TRUE;
++  }
++  
++  return $page_match;
++}
++
++/**
+  * Implementation hook_cron().
+  */
+ function domain_301_redirect_cron() {
+Index: ../docroot/sites/all/modules/domain_301_redirect/domain_301_redirect.admin.inc
+===================================================================
+--- ../docroot/sites/all/modules/domain_301_redirect/domain_301_redirect.admin.inc	(revision 42150)
++++ ../docroot/sites/all/modules/domain_301_redirect/domain_301_redirect.admin.inc	(working copy)
+@@ -29,6 +29,37 @@
+       '#options' => array(0 => t('Disabled'), 3600 => t('1 hour'), 7200 => t('2 hours'), 10800 => t('3 hours'), 21600 => t('6 hours'), 43200 => t('12 hours'), 86400 => t('1 day')),
+       '#default_value' => variable_get('domain_301_redirect_check_period', 60 * 60 * 3), // default of 3 horus
+   );
++  
++  // Per-path configuration settings to apply the redirect to specific paths.
++  $form['applicability']['path'] = array(
++      '#type' => 'fieldset',
++      '#title' => t('Pages'),
++      '#collapsible' => TRUE,
++      '#collapsed' => FALSE,
++      '#weight' => 0,
++  );
++  
++  $options = array(
++    BLOCK_VISIBILITY_NOTLISTED => t('All pages except those listed'),
++    BLOCK_VISIBILITY_LISTED => t('Only the listed pages'),
++  );
++  $description = t("Specify pages by using their paths. Enter one path per line. The '*' character is a wildcard. Example paths are %blog for the blog page and %blog-wildcard for every personal blog. %front is the front page.", array('%blog' => 'blog', '%blog-wildcard' => 'blog/*', '%front' => '<front>'));
++  
++  $title = t('Pages');
++  
++  $form['applicability']['path']['domain_301_redirect_applicability'] = array(
++      '#type' => 'radios',
++      '#title' => t('Redirect on specific pages'),
++      '#options' => $options,
++      '#default_value' => variable_get('domain_301_redirect_applicability', BLOCK_VISIBILITY_NOTLISTED),
++  );
++  $form['applicability']['path']['domain_301_redirect_pages'] = array(
++      '#type' => 'textarea',
++      '#title' => '<span class="element-invisible">' . $title . '</span>',
++      '#default_value' => variable_get('domain_301_redirect_pages'),
++      '#description' => $description,
++  );
++  
+   return system_settings_form($form);
+ }
+ 
+@@ -46,7 +77,7 @@
+         $domain = 'http://' . $domain;
+       }
+       $domain_parts = parse_url($domain);
+-      $domain = $domain_parts['scheme'] . '://' . $domain_parts['host'];
++      $domain = $domain_parts['scheme'] . '://' . $domain_parts['host'] . (!empty($domain_parts['port']) ? ':' . $domain_parts['port'] : '');
+       form_set_value($form['domain_301_redirect_domain'], $domain, $form_state);
+ 
+       if (!domain_301_redirect_check_domain($domain)) {
+@@ -54,4 +85,5 @@
+       }
+     }
+   }
+-}
+\ No newline at end of file
++}
++

@@ -1,0 +1,10 @@
+name = Filter tips dialog
+description = Moves the filter tips page into a modal dialog.
+core = 7.x
+dependencies[] = dialog
+
+version = ""
+project = ""
+datestamp = "1303175635"
+; url = http://git.drupal.org/project/filter_tips_dialog.git
+; commit = bb0d490dba8be9456a1b27cee86f642b23ba45db

@@ -1,0 +1,11 @@
+#!/bin/bash
+
+# This script will find all files that SVN thinks should be underneath the
+# current directory but that aren't in your local SVN checkout, and run
+# "svn rm" to remove them from SVN. It's useful, for example, after updating a
+# module from drupal.org and making sure that all the files that don't exist
+# anymore are removed from our SVN repo.
+#
+# Use it carefully, though, and make sure you don't accidentally wind up
+# removing files you don't want to remove from SVN.
+svn status | grep '^!' | tr -d '!' | xargs svn rm

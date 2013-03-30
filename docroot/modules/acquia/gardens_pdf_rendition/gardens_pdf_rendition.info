@@ -1,0 +1,3 @@
+name = PDF Page Snapshot
+description = Adds the ability to render any page or node as PDF
+core = 7.x

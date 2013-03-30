@@ -1,0 +1,59 @@
+Index: scripts/run-tests.sh
+===================================================================
+RCS file: /cvs/drupal/drupal/scripts/run-tests.sh,v
+retrieving revision 1.43
+diff -u -p -r1.43 run-tests.sh
+--- scripts/run-tests.sh	13 Nov 2010 13:54:58 -0000	1.43
++++ scripts/run-tests.sh	18 Jan 2011 17:36:35 -0000
+@@ -149,6 +149,10 @@ All arguments are long options.
+   --color     Output text format results with color highlighting.
+ 
+   --verbose   Output detailed assertion messages in addition to summary.
++  
++  --exclude   A comma separated list of test classes to not run (i.e. php scripts/run-tests.sh --url http://gardens.trunk --all --exclude XMLSitemapUnitTest).
++
++  --exclude-group A comma separated list of test groups to not run (i.e., php scripts/run-tests.sh --url http://gardens.trunk --all --exclude-group "XML sitemap").
+ 
+   <test1>[,<test2>[,<test3> ...]]
+ 
+@@ -197,6 +201,8 @@ function simpletest_script_parse_args() 
+     'test-id' => NULL,
+     'execute-batch' => FALSE,
+     'xml' => '',
++    'exclude' => '',
++    'exclude-group' => '',
+   );
+ 
+   // Override with set values.
+@@ -232,6 +238,13 @@ function simpletest_script_parse_args() 
+     }
+   }
+ 
++  if ($args['exclude']) {
++    $args['exclude'] = explode(',', $args['exclude']);
++  }
++  if ($args['exclude-group']) {
++    $args['exclude-group'] = explode(',', $args['exclude-group']);
++  }
++  
+   // Validate the concurrency argument
+   if (!is_numeric($args['concurrency']) || $args['concurrency'] <= 0) {
+     simpletest_script_print_error("--concurrency must be a strictly positive integer.");
+@@ -451,6 +464,17 @@ function simpletest_script_get_test_list
+     }
+   }
+ 
++  if ($args['exclude']) {
++    $test_list = array_diff($test_list, $args['exclude']);
++  }
++  if ($args['exclude-group']) {
++    foreach ($args['exclude-group'] as $group_name) {
++      if (isset($groups[$group_name])) {
++        $test_list = array_diff($test_list, array_keys($groups[$group_name]));
++      }
++    }
++  }
++
+   if (empty($test_list)) {
+     simpletest_script_print_error('No valid tests were specified.');
+     exit;

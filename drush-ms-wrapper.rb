@@ -70,12 +70,11 @@ if __FILE__ == $0
   options.drush = "drush/drush.php --alias-path=#{drushrc_dir}"
   options.dry_run = false
   options.nice = false
-  options.force = false
 
  
   OptionParser.new do |opts|
     opts.banner = "Usage: drush-ms.rb [options]"
-    opts.on("-c", "--dc [[always:][root:]COMMAND]", "Drush command to run (required)") do |v|
+    opts.on("-c", "--dc [[root: ]COMMAND]", "Drush command to run (required)") do |v|
       options.drush_cmds << v
     end
     opts.on("-v", "--[no-]verbose", "Run verbosely") do |v|
@@ -91,11 +90,8 @@ if __FILE__ == $0
       options.drush = v
     end
     opts.on("-n", "--[no-]nice", 'Run "nice" ') do |v|
-      options.nice = v
-    end
-    opts.on("-f", "--force", 'Run commands even for a site without a DB connection or that seem not to be installed') do |v|
-      options.force = v
-    end
+    options.nice = v
+  end
     opts.on( '-h', '--help', 'Display this screen' ) do
       puts opts
       exit
@@ -127,7 +123,7 @@ if __FILE__ == $0
   `export COLUMNS=$(tput cols)` if (ENV['COLUMNS'].nil?)
     
 
-  if options.force || is_installed?(domain)
+  if is_installed?(domain)
     # Execute each command in order, collecting all output, but marking the
     # overall result as an 'error' if any of the executed commands lead to an
     # error.

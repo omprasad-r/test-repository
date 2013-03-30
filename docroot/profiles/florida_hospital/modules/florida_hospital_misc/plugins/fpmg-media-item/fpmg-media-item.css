@@ -1,0 +1,8 @@
+/*
+ *  Styles specific to the Health Blog page
+ */
+
+.media-item-thumbnail {
+  float: left;
+  margin-right: 1.3846em;
+}

@@ -1,0 +1,28 @@
+<?php
+
+/**
+ * Puts the links in the sitemap to the zip queue.
+ *
+ * @param stdClass $account
+ *   Owner of the zip file. This user will get a notification email when the
+ *   zip file is ready.
+ */
+function gardens_pdf_rendition_sitemap_queue($account = NULL) {
+  $account = $account ? $account : $GLOBALS['user'];
+  $preferredlang = user_preferred_language($account)->language;
+  $paths = db_query('SELECT loc, type FROM {xmlsitemap} WHERE status = 1 AND language IN (:languages) ORDER BY priority DESC, id ASC', array(
+    ':languages' => $preferredlang == LANGUAGE_NONE ? array(LANGUAGE_NONE) : array(LANGUAGE_NONE, $preferredlang),
+  ))->fetchAll();
+
+  gardens_pdf_rendition_zip_paths(array_map('gardens_pdf_rendition_sitemap_map_paths', $paths), $account);
+}
+
+/**
+ * Helper function to map xmlsitemap's frontpage link to the site default.
+ */
+function gardens_pdf_rendition_sitemap_map_paths($path) {
+  if ($path->type == 'frontpage' && $path->loc == '') {
+    return variable_get('site_frontpage', 'node');
+  }
+  return $path->loc;
+}

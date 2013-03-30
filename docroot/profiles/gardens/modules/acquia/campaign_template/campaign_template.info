@@ -1,8 +1,0 @@
-; $Id$
-name = Campaign template
-description = Provides a template for a campaign website.
-core = 7.x
-files[] = campaign_template.module
-files[] = campaign_template.inc
-dependencies[] = site_template
-hidden = TRUE

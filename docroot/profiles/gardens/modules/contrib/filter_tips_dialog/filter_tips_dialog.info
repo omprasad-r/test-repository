@@ -1,4 +1,0 @@
-name = Filter tips dialog
-description = Moves the filter tips page into a modal dialog.
-core = 7.x
-dependencies[] = dialog

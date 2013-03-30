@@ -1,0 +1,67 @@
+<?php
+
+/**
+ * Implements hook_schema().
+ */
+function gardens_pdf_rendition_schema() {
+  $schema = array();
+
+  $schema['gardens_pdf_rendition'] = array(
+    'fields' => array(
+      'path' => array(
+        'type' => 'varchar',
+        'length' => 255,
+        'not null' => TRUE,
+      ),
+      'timestamp' => array(
+        'type' => 'int',
+        'size' => 'normal',
+        'not null' => TRUE,
+        'default' => 0,
+      ),
+      's3imglink' => array(
+        'type' => 'text',
+        'size' => 'medium',
+        'not null' => TRUE,
+      ),
+      's3imgresname' => array(
+        'type' => 'text',
+        'size' => 'medium',
+        'not null' => TRUE,
+      ),
+      's3link' => array(
+        'type' => 'text',
+        'size' => 'medium',
+        'not null' => TRUE,
+      ),
+      's3resname' => array(
+        'type' => 'text',
+        'size' => 'medium',
+        'not null' => TRUE,
+      ),
+      'pdfsize' => array(
+        'type' => 'int',
+        'size' => 'normal',
+        'not null' => TRUE,
+      ),
+      'inprogress' => array(
+        'type' => 'int',
+        'size' => 'tiny',
+        'not null' => TRUE,
+        'default' => 1,
+      ),
+      'imginprogress' => array(
+        'type' => 'int',
+        'size' => 'tiny',
+        'not null' => TRUE,
+        'default' => 1,
+      ),
+    ),
+    'primary key' => array('path'),
+    'keys' => array(
+      'tst' => array('timestamp'),
+    ),
+  );
+
+  return $schema;
+}

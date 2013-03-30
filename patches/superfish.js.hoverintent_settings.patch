@@ -1,0 +1,26 @@
+--- superfish.js.bak	2012-05-21 09:32:44.476930521 -0400
++++ superfish.js	2012-05-21 09:33:01.013195312 -0400
+@@ -45,8 +45,12 @@
+ 					.filter('li:has(ul)').removeClass(o.pathClass);
+ 			});
+ 			sf.o[s] = sf.op = o;
++
++                        var hoverArg0 = o.disableHI ? over : {over: over, out: out, sensitivity: o.HISensitivity, interval: o.HIInterval, timeout: o.HITimeout},
++                            hoverArg1 = o.disableHI ? out : null;
++                        
+ 			
+-			$('li:has(ul)',this)[($.fn.hoverIntent && !o.disableHI) ? 'hoverIntent' : 'hover'](over,out).each(function() {
++			$('li:has(ul)',this)[($.fn.hoverIntent && !o.disableHI) ? 'hoverIntent' : 'hover'](hoverArg0, hoverArg1).each(function() {
+ 				if (o.autoArrows) addArrow( $('>a:first-child',this) );
+ 			})
+ 			.not('.'+c.bcClass)
+@@ -91,6 +95,9 @@
+ 		autoArrows	: true,
+ 		dropShadows : true,
+ 		disableHI	: false,		// true disables hoverIntent detection
++                HISensitivity   : 2,   // HoverIntent sensitivity
++                HIInterval      : 300, // HoverIntent interval
++                HITimeout       : 500, // HoverIntent timeout
+ 		onInit		: function(){}, // callback functions
+ 		onBeforeShow: function(){},
+ 		onShow		: function(){},

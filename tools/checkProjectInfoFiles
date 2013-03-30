@@ -1,0 +1,16 @@
+#!/usr/bin/php -q
+<?php
+
+/**
+ * This tool checks modules (and some themes) in the appropriate parts of the
+ * Gardens codebase to make sure that all projects which came from git or CVS
+ * have the correct information in their .info files.
+ */
+
+require_once('InfoFileChecker.inc');
+$docroot = realpath(dirname(__FILE__) . '/../docroot');
+$project_info_checker = new ProjectInfoChecker($docroot);
+$errors = $project_info_checker->checkFiles();
+$project_info_checker->printErrors($errors);
+$return_code = (count($errors) === 0) ? 0 : -1;
+exit($return_code);

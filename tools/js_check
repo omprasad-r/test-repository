@@ -1,0 +1,353 @@
+#!/usr/bin/php
+<?php
+
+/**
+ * This tool is used to check for errors in JavaScript that result from
+ * aggregating an incomplete file.  It is currently unknown the exact cause of
+ * the issue, but when it happens it can break major functionality of the
+ * associated website.
+ *
+ * This tool inspects the aggregated JavaScript files for sites (either only
+ * the live ones or all sites on a gardens tangle) and tests each one for
+ * corruption.  if corruption is found some form of report is made, depending
+ * on the specific command line options.  If no options are used, the corrupt
+ * files are written to standard out, making it easy to chain this with other
+ * tools like rm, cp, etc. using xargs.
+ */
+
+/**
+ * The JavaScriptErrorDetector class encapsulates the functionality of the
+ * error detector in a private namespace.
+ */
+class JavaScriptErrorDetector {
+  /**
+   * Indicates whether the tool should be more verbose in its output.
+   */
+  private $verbose = FALSE;
+
+  /**
+   * Indicates whether sites with the JavaScript errors should be listed or
+   * whether a more exhaustive search should be conducted.
+   */
+  private $listOnly = FALSE;
+
+  /**
+   * Indicates whether the issues should be logged in syslog.
+   */
+  private $log = FALSE;
+
+  /**
+   * Returns an array of paths to only live sites.
+   *
+   * @param {Boolean} $all_sites
+   *   If TRUE, all sites will be returned; otherwise only live sites.
+   * @return {Array}
+   *   An array containing the site directories.
+   */
+  public function get_sites($all_sites) {
+    $grep =  "| egrep -v 'wmg-gardens|gardenssite|acquia-sites'";
+    $command = sprintf("find /mnt/www/html/tangle[0-9][0-9][1-9]/docroot/sites  -maxdepth 1 -type l %s", ($all_sites ? '' : $grep));
+    $output = array();
+    exec($command, $output, $return);
+    if ($return == 0) {
+      return $output;
+    }
+  }
+
+  /**
+   * Checks the site associated with the specified directory to see if there
+   * are corrupted JavaScript files.
+   *
+   * @param {String} $site_dir
+   *   The absolute path to the site directory.
+   * @return {Boolean}
+   *   TRUE if there are no JavaScript files that are broken; FALSE otherwise.
+   */
+  public function check_site($site_dir, $minutes) {
+    $result = TRUE;
+    $subpath = 'files/js';
+    $dir = sprintf('%s/%s', $site_dir, $subpath);
+    if (!file_exists($dir) || !is_dir($dir)) {
+      return $result;
+    }
+    // Instead of reading a directory of files, use find to identify recently modified ones.
+    $command = sprintf('/usr/bin/find %s -name "*.js*" -type f -mmin -%s ', $dir, $minutes);
+    exec($command, $output, $command_result);
+    foreach($output as $js_file) {
+      $contents = $this->get_file_contents($js_file);
+      $info = array();
+      if (!$this->js_contents_valid($contents, $info)) {
+	$result = FALSE;
+	if ($this->listOnly) {
+	  printf("%s\n", basename($site_dir));
+	  break;
+	}
+	else {
+	  printf("%s", $js_file);
+	  if ($this->verbose) {
+	    $file_info = stat($js_file);
+	    printf("\t(created %s) %s", date('n/j/Y G:i:s',
+              $file_info['ctime']), implode('; ', $info));
+            }
+	  print("\n");
+	  if ($this->log) {
+	    syslog(LOG_ERR, sprintf('Broken javascript detected on site %s - %s',
+              basename($site_dir), $js_file));
+	  }
+        }
+      }
+    }
+    return $result;
+  }
+
+  /**
+   * Returns the file contents from the specified file path.
+   *
+   * If the file is gz compressed, the file contents will be uncompressed
+   * before being returned.
+   *
+   * @param {String} $path
+   *   The path to the file.
+   * @return {String}
+   *   The contents of the file.
+   */
+  private function get_file_contents($path) {
+    $contents = '';
+    // See if this is gzipped...
+    $info = pathinfo($path);
+    if (!empty($info['extension']) && $info['extension'] == 'gz') {
+      $command = sprintf('gzip -dc %s', $path);
+      $output = array();
+      exec($command, $output, $result);
+      if (!$result) {
+        $contents = implode("\n", $output);
+      }
+      elseif ($this->verbose) {
+        printf("Error - could not read file %s\n", $path);
+      }
+    }
+    else {
+      $contents = file_get_contents($path);
+    }
+    return $contents;
+  }
+
+  /**
+   * Determines whether the specified JavaScript file contents are broken.
+   *
+   * @param {String} $content
+   *   The JavaScript content to check.
+   * @param {Array} $info
+   *   If provided, more information about the broken file will be returned.
+   * @param {Boolean}
+   *   TRUE if the file content is OK, FALSE if it is broken.
+   */
+  private function js_contents_valid($content, &$info = NULL) {
+    $result = TRUE;
+    $len = strlen($content);
+    if ($len <= 1) {
+      $result = FALSE;
+      if (isset($info)) {
+        $info[] = sprintf('Contents too small (%s characters)', $len);
+      }
+    }
+    $pos = strpos($content, chr(0));
+    if ($pos !== FALSE) {
+      $result = FALSE;
+      if (isset($info)) {
+        $info[] = sprintf('Invalid character at %s', $pos);
+      }
+    }
+    return $result;
+  }
+
+  /**
+   * Sets the verbose flag to the specified value.
+   *
+   * @param {Boolean} $verbose
+   *   Whether verbose mode should be enabled.
+   */
+  public function setVerbose($verbose) {
+    $this->verbose = (TRUE === $verbose);
+  }
+
+  /**
+   * Sets the error checker to only list broken sites rather that identifying
+   * each broken JavaScript file.
+   */
+  public function onlyListBrokenSites() {
+    $this->listOnly = TRUE;
+  }
+
+  /**
+   * Sends mail.
+   *
+   * This is used when the --mail option is employed to send a summary if any
+   * of the sites are broken.
+   *
+   * @param {String} $to
+   *   The email address to send the mail to.
+   * @param {String} $subject
+   *   The subject of the mail to send.
+   * @param {String} $body
+   *   The body of the email to send.
+   */
+  public function sendMail($to, $subject, $body) {
+    $body_filename = tempnam('/mnt/tmp', 'js_mail');
+    if ($body_filename !== FALSE) {
+      file_put_contents($body_filename, $body);
+      $command = sprintf('mailx -s "%s" %s < %s', $subject, $to, $body_filename);
+      $output = array();
+      exec($command, $output, $return);
+      unlink($body_filename);
+    }
+  }
+
+  /**
+   * Sets the error detector to log information about the broken sites and
+   * files to syslog.
+   */
+  public function logBrokenSites() {
+    $this->log = TRUE;
+  }
+
+  public function help($command_name) {
+    $help = <<<EOT
+NAME
+    ${command_name} - check for broken aggregated JavaScript files in site directories
+
+SYNOPSIS
+    ${command_name} [OPTION]...
+
+DESCRIPTION
+    List the full paths to any broken aggregated JavaScript files, or simply
+    list the set of sites that contain broken aggregated JavaScript files if
+    the --list option is used.
+
+    -h, --help
+        Show this message
+
+    -l, --list
+        Only list the sites that have broken JavaScript, not the actual broken
+        files
+
+    --live
+        Only check live sites (those with custom domains).  By default all
+        sites are checked
+
+    --log
+        Logs information about each broken JavaScript file to syslog
+
+    --mail [EMAIL]
+        Mail a summary to the specified email address if broken JavaScript is
+        detected
+
+    --minutes [# of minutes]
+        The number of minutes representing the maximum age of files that are
+        checked.  If a file was created 5 minutes ago and the minutes
+        paramater is set to 10 the file will be checked.  The default is 120
+        minutes.
+
+    --test
+        Test the mail capability by mailing a list of every site that is
+        checked whether they have broken JavaScript or not
+
+    -v, --verbose
+        Provide more information, such as the name of the site and the file
+        timestamp
+
+Exit status:
+    0    if OK,
+    1    if JavaScript errors were detected
+
+EOT;
+    print($help);
+  }
+
+  /**
+   * The main entry point and a convenient controller of the
+   * JavaScriptErrorDetector class.
+   *
+   * Other controllers can easily be written, though this is a convenient one,
+   * and perhaps the only one that is necessary.
+   *
+   * @param {Array} $argv
+   *   An array of command line options, the first element of which is the
+   *   command that was executed.
+   * @param {int} $argc
+   *   The number of command line arguments.
+   */
+  public static function main($argv, $argc) {
+    $test = FALSE;
+    $verbose = FALSE;
+    $all_sites = TRUE;
+    $detector = new JavaScriptErrorDetector();
+    // The number of minutes that represents the threshold for which
+    // files are inspected.  By default only inspect files that were
+    // created within the last 2 hours.
+    $minutes = 120;
+
+    // Interpret the command line options.
+    for ($i = 1; $i < $argc; $i++) {
+      switch ($argv[$i]) {
+        case '-h':
+        case '--help':
+          $detector->help($argv[0]);
+          exit(0);
+
+        case '-l':
+        case '--list':
+          $detector->onlyListBrokenSites();
+	  break;
+
+        case '--live':
+          $all_sites = FALSE;
+	  break;
+
+        case '--log':
+          $detector->logBrokenSites(TRUE);
+          break;
+
+        case '--mail':
+	  $mail_to = $argv[++$i];
+	  break;
+
+        case '--test':
+          $test = TRUE;
+          break;
+
+        case '--minutes':
+	  $minutes = $argv[++$i];
+	  break;
+
+        case '-v':
+        case '--verbose':
+          $verbose = TRUE;
+          $detector->setVerbose($verbose);
+          break;
+      }
+    }
+
+    // Get the sites and run the check.
+    $site_dirs = $detector->get_sites($all_sites);
+    $count = 0;
+    $summary = array();
+    foreach ($site_dirs as $dir) {
+      if (!$detector->check_site($dir, $minutes) || $test) {
+        $count++;
+	$summary[] = basename($dir);
+      }
+    }
+    if ($verbose) {
+      printf("%s sites have broken files.\n", $count);
+    }
+    if ($count > 0 && !empty($mail_to)) {
+      $detector->sendMail($mail_to, 'Broken JavaScript detected', sprintf("These sites had broken javascript:\n%s\n", implode("\n", $summary)));
+    }
+    exit($count == 0 ? 0 : 1);
+  }
+}
+
+// Minimal code that invokes the error check.
+global $argv, $argc;
+JavaScriptErrorDetector::main($argv, $argc);

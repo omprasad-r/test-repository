@@ -1,8 +1,0 @@
-; $Id$
-name = Site Template
-description = Manages site templates and features on Gardens sites.
-core = 7.x
-files[] = site_template.module
-files[] = site_template.inc
-dependencies[] = scarecrow
-hidden = TRUE

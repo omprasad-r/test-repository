@@ -1,0 +1,4 @@
+name = Drupal Gardens toolbar prototype
+description = Reorganizes the toolbar and adds collapsible menus
+core = 7.x
+files[] = toolbar_prototype.module

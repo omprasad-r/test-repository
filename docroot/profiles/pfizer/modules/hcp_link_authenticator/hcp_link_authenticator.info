@@ -1,0 +1,6 @@
+name = HCP Link Authentication
+description = Authenticates a priviledged user via a URL token authentication scheme.
+package = pfizer
+core = 7.x
+files[] = hcp_link_authenticator.module
+

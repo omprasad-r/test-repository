@@ -1,0 +1,64 @@
+<?php
+/**
+ * @file
+ * Authenticates a priviledged user via a URL token authentication scheme.
+ */
+
+/**
+ * Implements hook_menu().
+ */
+function hcp_link_authenticator_menu() {
+  $items = array();
+
+  $items['hcp-link/%'] = array(
+    'title' => 'Link',
+    'page callback' => 'hcp_link_authenticator_link',
+    'page arguments' => array(1),
+    'access arguments' => array('access content'),
+    'type' => MENU_CALLBACK,
+    'file' => 'includes/hcp_link_authenticator.token.inc'
+  );
+
+  $items['admin/config/people/hcp-link-auth'] = array(
+    'title' => 'HCP Authentication',
+    'description' => 'Configure settings for the HCP authentication system.',
+    'page callback' => 'drupal_get_form',
+    'page arguments' => array('hcp_link_authenticator_settings_form'),
+    'access arguments' => array('administer site configuration'),
+  );
+
+  return $items;
+}
+
+/**
+ * Generates the admin settings form.
+ */
+function hcp_link_authenticator_settings_form($form, &$form_state) {
+  $form = array();
+
+  $form['settings'] = array(
+    '#type' => 'fieldset',
+    '#title' => t('Settings'),
+    '#collapsible' => TRUE,
+    '#collapsed' => FALSE,
+  );
+
+  $form['settings']['hcp_link_authenticator_central_link'] = array(
+    '#type' => 'textfield',
+    '#title' => t('Central link'),
+    '#description' => t("The main URL of the portal's site, e.g., http://pfizer.com/."),
+    '#default_value' => variable_get('hcp_link_authenticator_central_link'),
+    '#required' => TRUE,
+  );
+
+  $form['settings']['hcp_link_passphrase_central_link'] = array(
+    '#type' => 'textfield',
+    '#title' => t('Passphrase'),
+    '#description' => t('The passphrase used for the communication process between the server and the client.'),
+    '#default_value' => variable_get('hcp_link_passphrase_central_link'),
+    '#required' => TRUE,
+  );
+
+  return system_settings_form($form);
+}
+

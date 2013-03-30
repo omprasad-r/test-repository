@@ -1,0 +1,61 @@
+diff --git a/file_entity/file_entity.admin.inc b/file_entity/file_entity.admin.inc
+index 047cb15..7a2d03c 100644
+--- a/file_entity/file_entity.admin.inc
++++ b/file_entity/file_entity.admin.inc
+@@ -8,8 +8,14 @@
+ /**
+  * Displays the file type admin overview page.
+  */
+-function file_entity_list_types_page() {
+-  $types = file_info_file_types();
++function file_entity_list_types_page($type = NULL) {
++  if (isset($type)) {
++    $info = file_info_file_types($type);
++    $types = $info ? array($type => $info) : array();
++  }
++  else {
++    $types = file_info_file_types();
++  }
+   $entity_info = entity_get_info('file');
+   $field_ui = module_exists('field_ui');
+   $header = array(
+diff --git a/file_entity/file_entity.module b/file_entity/file_entity.module
+index 0516080..0c51188 100644
+--- a/file_entity/file_entity.module
++++ b/file_entity/file_entity.module
+@@ -31,12 +31,18 @@ function file_entity_menu() {
+     'title' => 'File types',
+     'description' => 'Manage files used on your site.',
+     'page callback' => 'file_entity_list_types_page',
++    'page arguments' => array(NULL),
+     'access arguments' => array('administer site configuration'),
+     'file' => 'file_entity.admin.inc',
+   );
+   $items['admin/config/media/file-types/manage/%'] = array(
+-    'title' => 'Manage file types',
+-    'description' => 'Manage files used on your site.',
++    'title' => 'Configure file type',
++    'title callback' => 'file_entity_type_page_title',
++    'title arguments' => array(5),
++    'page callback' => 'file_entity_list_types_page',
++    'page arguments' => array(5),
++    'access arguments' => array('administer site configuration'),
++    'file' => 'file_entity.admin.inc',
+   );
+ 
+   // Attach a "Manage file display" tab to each file type in the same way that
+@@ -363,6 +369,14 @@ function file_entity_file_formatter_file_image_settings($form, &$form_state, $se
+ }
+ 
+ /**
++ * Title callback for a file type.
++ */
++function file_entity_type_page_title($type) {
++  $info = file_info_file_types($type);
++  return $info['label'];
++}
++
++/**
+  * Menu access callback for the 'view mode file display settings' pages.
+  *
+  * Based on _field_ui_view_mode_menu_access(), but the Field UI module might not

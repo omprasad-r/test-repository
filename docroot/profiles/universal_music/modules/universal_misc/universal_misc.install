@@ -1,0 +1,82 @@
+<?php
+
+/**
+ * Implements hook_install().
+ */
+function universal_misc_install() {
+  // Set the default value of the viewport metatag to enabled.
+  variable_set('themebuilder_metatag_viewport_default_enabled', TRUE);
+
+  // Enable the Modernizr library by marking it as enabled in the javascript_libraries
+  // module. We don't want to simply call drupal_add_library in hook_init because
+  // we want to grant site builders the option to turn Modernizr off from the
+  // javascript_libraries UI.
+  $javascript_libraries_config = variable_get('javascript_libraries_drupal_libraries', array());
+  $javascript_libraries_config['gardens_features-modernizr'] = array(
+    'library' => 'modernizr',
+    'module' => 'gardens_features',
+  );
+  variable_set('javascript_libraries_drupal_libraries', $javascript_libraries_config);
+
+  // Configure the roles that can be attributed as authors of mobile-posted
+  // content.
+  $mast_roles = _universal_misc_mast_role_settings();
+  variable_set('mast_settings_roles', $mast_roles);
+}
+
+/**
+ * Implements hook_enable().
+ */
+function universal_misc_enable() {
+  // Enable the gardens-flash CKEditor plugin to fix the % width bug.
+  _universal_misc_enable_gardens_wmode_plugin();
+  // Enable the advanced layout module.
+  module_enable(array('themebuilder_advanced_layout'), FALSE);
+}
+
+/**
+ * Returns the user roles that are allowed to post content via the mobile app.
+ */
+function _universal_misc_mast_role_settings() {
+  $roles = array(
+    'administrator',
+    'site maintainer',
+    'professional member',
+  );
+  $result = db_select('role', 'r')
+    ->fields('r', array('rid'))
+    ->condition('r.name', $roles, 'IN')
+    ->execute()
+    ->fetchAllKeyed();
+  return drupal_map_assoc(array_keys($result));
+}
+
+/**
+ * Enable the gardens-wmode CKEditor plugin for all formats.
+ */
+function _universal_misc_enable_gardens_wmode_plugin() {
+  // Bail out if the wysiwyg module isn't installed.
+  if (!db_table_exists('wysiwyg')) {
+    return;
+  }
+
+  $result = db_query("SELECT format, settings FROM {wysiwyg} WHERE editor = :editor;", array(':editor' => 'ckeditor'));
+  foreach ($result as $config) {
+    // The settings array is stored in serialized format.
+    $config->settings = unserialize($config->settings);
+    // Turn the gardens-wmode CKEditor plugin on.
+    if (!isset($config->settings['buttons']['drupal']['gardens-wmode']) || $config->settings['buttons']['drupal']['gardens-wmode'] != 1) {
+      $config->settings['buttons']['drupal']['gardens-wmode'] = 1;
+
+      // Resave the settings array to the database.
+      db_update('wysiwyg')
+        ->fields(array(
+          'settings' => serialize($config->settings),
+        ))
+        ->condition('format', $config->format)
+        ->condition('editor', 'ckeditor')
+        ->execute();
+    }
+  }
+}
+

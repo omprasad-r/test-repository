@@ -1,0 +1,784 @@
+<?php
+
+define('GARDENS_PDF_RENDITION_NETRC_STRING', 'aws.gardens.pdf.client');
+define('GARDENS_PDF_RENDITION_S3_BUCKET', '');
+define('GARDENS_PDF_RENDITION_S3_KEEP_TIME', 3600 * 24 * 365);
+
+/**
+ * Implements hook_permission().
+ */
+function gardens_pdf_rendition_permission() {
+  return array(
+    'gardens pdf rendition generate' => array(
+      'title' => t('Generate PDF from current webpage'),
+    ),
+    'gardens pdf rendition view' => array(
+      'title' => t('View most recent PDF of the page'),
+    ),
+  );
+}
+
+/**
+ * Implements hook_menu().
+ */
+function gardens_pdf_rendition_menu() {
+  $items = array();
+
+  $items['gardens/pdf/%/%'] = array(
+    'title' => 'Gardens PDF generation callback',
+    'page callback' => 'gardens_pdf_rendition_page',
+    'page arguments' => array(2, 3),
+    'access arguments' => array('gardens pdf rendition generate'),
+    'type' => MENU_CALLBACK,
+  );
+
+  return $items;
+}
+
+/**
+ * Implements hook_theme().
+ */
+function gardens_pdf_rendition_theme() {
+  $themes = array();
+
+  $themes['gardens_pdf_rendition_block'] = array(
+    'variables' => array(
+      'thumbnail_image' => '',
+      'pdf_generation_timestamp' => '',
+      'pdf_link' => '',
+      'pdf_size' => '',
+      'link_to_regeneration' => '',
+      'in_progress' => FALSE,
+      'data_available' => TRUE,
+    ),
+    'template' => 'gardens-pdf-rendition-block',
+  );
+
+  $themes['gardens_pdf_rendition_in_progress_block'] = array(
+    'variables' => array(),
+    'template' => 'gardens-pdf-rendition-in-progress-block',
+  );
+
+  return $themes;
+}
+
+/**
+ * Implements hook_block_info().
+ */
+function gardens_pdf_rendition_block_info() {
+  $items = array();
+
+  $items['gardens_pdf_rendition'] = array(
+    'info' => t('PDF page snapshot'),
+    'cache' => DRUPAL_CACHE_PER_PAGE | DRUPAL_CACHE_PER_ROLE,
+  );
+
+  return $items;
+}
+
+/**
+ * Implements hook_block_view().
+ */
+function gardens_pdf_rendition_block_view($delta = '') {
+  global $user;
+  drupal_add_css(drupal_get_path('module', 'gardens_pdf_rendition') . '/gardens_pdf_rendition.block.css');
+  $subject = '';
+  $content = '';
+
+  switch ($delta) {
+    case 'gardens_pdf_rendition':
+      if (user_access('gardens pdf rendition view')) {
+        $subject = t('PDF page snapshot');
+        if (_gardens_pdf_rendition_can_anonymous_access_page($_GET['q'])) {
+          $menu_item = menu_get_item();
+          $path = $menu_item['href'];
+          _gardens_pdf_rendition_check_image($path);
+          $data = db_query('SELECT * FROM {gardens_pdf_rendition} WHERE path = :path', array(
+            ':path' => $path,
+          ))->fetchAssoc();
+          $link_to_regeneration = ($user->uid > 0) && user_access('gardens pdf rendition generate') ?
+            url('gardens/pdf/' . urlencode($_GET['q']) . '/' . drupal_get_token('gardens_pdf_rendition'), array(
+              'query' => array(
+                'destination' => $_GET['q'],
+              ),
+            )) : NULL;
+          $content = $data ? array(
+            '#theme' => 'gardens_pdf_rendition_block',
+            '#thumbnail_image' => $data['s3imglink'],
+            '#pdf_generation_timestamp' => format_date($data['timestamp'], 'short'),
+            '#pdf_link' => $data['s3link'],
+            '#pdf_size' => format_size($data['pdfsize']),
+            '#link_to_regeneration' => $link_to_regeneration,
+            '#in_progress' => $data['inprogress'] || $data['imginprogress'],
+          ) : array(
+            '#theme' => 'gardens_pdf_rendition_block',
+            '#link_to_regeneration' => $link_to_regeneration,
+            '#data_available' => FALSE,
+          );
+        }
+        else {
+          $content = t('The current page is not accessible to anonymous users, PDF rendition is disabled.');
+        }
+      }
+      break;
+  }
+
+  return ($subject && $content) ? array(
+    'subject' => $subject,
+    'content' => $content,
+  ) : array();
+}
+
+/**
+ * Implements hook_node_operations().
+ */
+function gardens_pdf_rendition_node_operations() {
+  return array(
+    // TODO permission check here
+    'gardens_pdf_rendition' => array(
+      'label' => t('Create PDF snapshot'),
+      'callback' => 'gardens_pdf_rendition_node_mass_send',
+      'callback arguments' => array(),
+    ),
+  );
+}
+
+/**
+ * Implements hook_cron_queue_info().
+ */
+function gardens_pdf_rendition_cron_queue_info() {
+  $queues = array();
+
+  $queues['gardens_pdf_zip'] = array(
+    'worker callback' => '_gardens_pdf_rendition_cron_queue_zip_worker',
+    'time' => 60,
+  );
+
+  return $queues;
+}
+
+/**
+ * Implements hook_cron().
+ */
+function gardens_pdf_rendition_cron() {
+  // Copied the queue-reset code from system.module.  We can't afford the overhead
+  // of running all of system_cron every 5 minutes.
+  db_update('queue')
+    ->fields(array(
+      'expire' => 0,
+    ))
+    ->condition('expire', 0, '<>')
+    ->condition('expire', REQUEST_TIME, '<')
+    ->execute();
+}
+
+/**
+ * Puts a list of paths into a queue, makes PDFs from each and zips them together.
+ *
+ * @param array $paths
+ *   List of Drupal paths (as handled by url()).
+ * @param stdClass $account
+ *   User account to notify via mail.
+ *
+ * @see url()
+ */
+function gardens_pdf_rendition_zip_paths(array $paths, $account) {
+  DrupalQueue::get('gardens_pdf_zip', TRUE)
+    ->createItem(array(
+      'paths' => $paths,
+      'state' => 0,
+      'account' => $account,
+    ));
+}
+
+/**
+ * Worker callback for the 'gardens_pdf_zip' queue.
+ *
+ * @param array $task
+ */
+function _gardens_pdf_rendition_cron_queue_zip_worker(array $task) {
+  switch ($task['state']) {
+    case 0; // Task has just created.
+      gardens_pdf_rendition_process_paths(array_filter($task['paths'], '_gardens_pdf_rendition_can_anonymous_access_page'));
+      $task['state']++;
+      break;
+    case 1; // Screenshot service is processing the pages. Check if they are ready.
+      $unprocessed = db_query('SELECT path FROM {gardens_pdf_rendition} WHERE path IN (:paths) AND inprogress <> 0', array(
+        ':paths' => $task['paths'],
+      ))->fetchCol();
+      if ($unprocessed) {
+        array_map('_gardens_pdf_rendition_check_image', $unprocessed);
+      }
+      $unprocessed = db_query('SELECT path FROM {gardens_pdf_rendition} WHERE path IN (:paths) AND inprogress <> 0', array(
+        ':paths' => $task['paths'],
+      ))->fetchCol();
+      if (!$unprocessed) {
+        $task['state']++;
+      }
+      break;
+    case 2; // Download files to a temporary location
+      if (empty($task['download'])) {
+        $task['download']['token'] = _gardens_pdf_rendition_random_name(40);
+        $query = db_query('SELECT s3link, path FROM {gardens_pdf_rendition} WHERE path IN (:paths)', array(
+          ':paths' => $task['paths'],
+        ));
+        $task['download']['filesleft'] = $query->fetchCol(0);
+        $task['download']['filespaths'] = $query->fetchCol(1);
+        $task['download']['finishedfiles'] = array();
+      }
+
+      if ($task['download']['filesleft']) {
+        $current_file = array_shift($task['download']['filesleft']);
+        $current_path = array_shift($task['download']['filespaths']);
+        $pdf_filename = _gardens_pdf_rendition_get_filename_from_uri($current_path) . '.pdf';
+        if ($location = _gardens_pdf_rendition_download_file_to_a_temporary_location($current_file, $task['download']['token'], $pdf_filename)) {
+          $task['download']['finishedfiles'][] = $location;
+        }
+        else {
+          $task['download']['filesleft'][] = $current_file;
+          $task['download']['filespaths'][] = $current_path;
+        }
+      }
+      else {
+        $task['state']++;
+      }
+      break;
+    case 3; // Last stage. Grab the PDFs and export them
+      $temporary_directory = rtrim(variable_get('gardens_pdf_rendition_temp_dir', 'public://gardens_temp/'), '/') . "/{$task['download']['token']}/";
+      $archive = $temporary_directory . _gardens_pdf_rendition_get_filename_from_uri() . '.zip';
+      if (_gardens_pdf_rendition_create_zip_archive($task['download']['finishedfiles'], $archive)) {
+        $file_count = count($task['download']['finishedfiles']);
+        $authurl = gardens_pdf_rendition_upload_to_s3($archive);
+        if ($authurl) {
+          drupal_mail('gardens_pdf_rendition', 'zipdone', $task['account']->mail, user_preferred_language($task['account']), array(
+            'url' => $authurl,
+          ), '"PDF Site Snapshot Service" <' . variable_get('site_mail', ini_get('sendmail_from')) . '>');
+          $thumbnail_image = gardens_pdf_rendition_get_thumbnail();
+          gardens_pdf_rendition_notify_gardener($archive, $authurl, $file_count, $thumbnail_image);
+          _gardens_pdf_rendition_remove_temporary_directory($temporary_directory);
+        }
+      }
+      else {
+        break;
+      }
+      return;
+  }
+
+  // This section creates a hard dependency on a SQL queue implementation.  It's
+  // not ideal, but given we only have SQL queue at the moment, it's better than
+  // allowing more than one queue job of this type to exist in the queue.
+  db_transaction();
+  // Make sure that the item we're about to add is the only one remaining in the
+  // pdf queue. Given the nature of this job, it's not ok to have more than one
+  // item in the queue at any point.  If a process dies between creating and deleting,
+  // then we end up with 2 jobs.  The remaining job deletion if a job is already
+  // deleted is harmless.
+  db_delete('queue')
+    ->condition('name', 'gardens_pdf_zip')
+    ->execute();
+  DrupalQueue::get('gardens_pdf_zip', TRUE)
+      ->createItem($task);
+}
+
+/**
+ * Generate a filename from the base url.
+ *
+ * @param string $uri
+ *   Full absolute url or relative url, if empty the current base url will be
+ *   used.
+ *
+ * @return string
+ *   Zip filename.
+ */
+function _gardens_pdf_rendition_get_filename_from_uri($uri = NULL) {
+  global $base_url;
+
+  if ($uri === NULL) {
+    $uri = $base_url;
+  }
+
+  // Remove "http://" and "https://" prefixes.
+  $filename = preg_replace('#^http[s]?://#', '', $uri);
+
+  // Replace every non alhanumeric characters.
+  $filename = preg_replace('#[^\w]+#', '_', $filename);
+
+  // Drop trailing underscores.
+  $filename = rtrim($filename, '_');
+
+  // Add some randomness to ensure filename is unique. Timestamp may not be
+  // sufficiently unique at this point.
+  return $filename . '_' . _gardens_pdf_rendition_random_name();
+}
+
+/**
+ * Get pdf rendition thumbnail from the frontpage.
+ *
+ * @return bool|string
+ *   Thumbnail url or FALSE.
+ */
+function gardens_pdf_rendition_get_thumbnail() {
+  $frontpage_path = variable_get('site_frontpage', 'node');
+  _gardens_pdf_rendition_check_image($frontpage_path);
+  return _gardens_pdf_rendition_get_thumbnail_from_db($frontpage_path);
+}
+
+/**
+ * Get the thumbnail url from the db if exists, FALSE otherwise.
+ *
+ * @param string $path
+ *   Path to get the request for.
+ *
+ * @return mixed
+ *   db_query() result
+ */
+function _gardens_pdf_rendition_get_thumbnail_from_db($path) {
+  return db_query('SELECT s3imglink FROM {gardens_pdf_rendition} WHERE imginprogress <> 1 AND path = :path', array(':path' => $path))->fetchField();
+}
+
+/**
+ * Remove temporary directory and all files not recursively.
+ *
+ * @param string $directory
+ *   Temporary directory to remove.
+ *
+ * @return bool
+ *   TRUE if deleting the directory was successfull, otherwise FALSE.
+ */
+function _gardens_pdf_rendition_remove_temporary_directory($directory) {
+  $directory = drupal_realpath($directory);
+  $files = glob("{$directory}/*");
+
+  $success = TRUE;
+  foreach ($files as $file) {
+    $result = unlink($file);
+    $success = $success && $result;
+  }
+
+  $result = rmdir($directory);
+  $success = $success && $result;
+
+  return $success;
+}
+
+/**
+ * Notify the gardener on completion of a site's PDF renditions.
+ *
+ * @param $local_file
+ * @param $url
+ * @param $file_count
+ * @param $thumbnail
+ */
+function gardens_pdf_rendition_notify_gardener($local_file, $url, $file_count, $thumbnail) {
+  $info = new stdClass();
+  $info->url = $url;
+  $info->size = filesize($local_file);
+  $info->timestamp = REQUEST_TIME;
+  $info->nid = ltrim($GLOBALS['databases']['default']['default']['database'], 'g');
+  // @TODO - not sure yet how best to get this.
+  $info->pagecount = $file_count;
+  $info->thumbnail = $thumbnail;
+
+  gardens_client_call_gardener('pdf.info', $info);
+}
+
+/**
+ * Implements hook_mail().
+ */
+function gardens_pdf_rendition_mail($key, &$message, $params) {
+  $subject = '';
+  $body = '';
+  $langcode = $message['language']->language;
+  switch ($key) {
+    case 'zipdone';
+      $message['subject'] = t('Your PDF Site Snapshot is ready!', array(), array(
+        'langcode' => $langcode,
+      ));
+      $message['body'][] = t('Your PDF Site Snapshot for @url is ready to download. Click the link below and uncompress the zip file, so you can access the PDF files for each of your site pages:', array('@url' => variable_get('gardens_misc_standard_domain')));
+      $message['body'][] = $params['url'];
+      $message['body'][] = t('If you need to regenerate a PDF for a single page, see <a href="http://www.drupalgardens.com/documentation/enterprise/pdf">Creating PDF files</a> in the Drupal Gardens online help.');
+      break;
+  }
+}
+
+/**
+ * Creates a zip file from a list of files.
+ *
+ * @param array $filelist
+ *   List of files. Use absolute path, but in the zip file only the basename of
+ *   the files will be used.
+ * @param string $archive
+ *   Path to the resulting archive.
+ *
+ * @return bool
+ *   Whether the creation of the zip is succeeded or not.
+ */
+function _gardens_pdf_rendition_create_zip_archive(array $filelist, $archive) {
+  $zip = new ZipArchive();
+  $zip->open(drupal_realpath($archive), ZipArchive::CREATE);
+
+  foreach ($filelist as $file) {
+    $zip->addFile(drupal_realpath($file), basename($file));
+  }
+
+  $zip->close();
+
+  return file_exists($archive);
+}
+
+/**
+ * Downloads a url to a temporary directory created with $token.
+ *
+ * @param $url
+ *   URL to download.
+ * @param $token
+ *   Random string.
+ * @param $tmp_filename
+ *
+ * @return bool|string
+ *   The absolute path to the downloaded file or FALSE on failure.
+ */
+function _gardens_pdf_rendition_download_file_to_a_temporary_location($url, $token, $tempfilename) {
+  $tempdir = variable_get('gardens_pdf_rendition_temp_dir', 'public://gardens_temp/');
+  if (!$tempdir) {
+    watchdog('gardenspdf', 'The variable file_temporary_path is not set!', array(), WATCHDOG_WARNING);
+    return FALSE;
+  }
+
+  $tempdir = rtrim($tempdir, '/') . "/$token";
+
+  if (!is_dir($tempdir) && !mkdir($tempdir, 0775, TRUE)) {
+    watchdog('gardenspdf', 'Cannot create directory: @directory', array(
+      '@directory' => $tempdir,
+    ), WATCHDOG_WARNING);
+    return FALSE;
+  }
+
+  $fullpath = "{$tempdir}/{$tempfilename}";
+
+  if (!_gardens_pdf_rendition_download_file($fullpath, $url)) {
+    watchdog('gardenspdf', 'Failed to download file: @url to @path', array(
+      '@url' => $url,
+      '@path' => $fullpath,
+    ), WATCHDOG_WARNING);
+    return FALSE;
+  }
+
+  return $fullpath;
+}
+
+/**
+ * Downloads a file to a given path.
+ *
+ * @param $filepath
+ *   Path to download to.
+ * @param $url
+ *   URL to download.
+ *
+ * @return bool
+ *   Whether the download succeeded or not.
+ */
+function _gardens_pdf_rendition_download_file($filepath, $url) {
+  static $bufsize = 0x2000;
+
+  $return = TRUE;
+
+  $furl = fopen($url, 'rb');
+  if ($furl) {
+    $f = fopen($filepath, 'wb');
+
+    if ($f) {
+      while (!feof($furl)) {
+        fwrite($f, fread($furl, $bufsize), $bufsize);
+      }
+    }
+    else {
+      $return = FALSE;
+    }
+
+    fclose($f);
+  }
+  else {
+    $return = FALSE;
+  }
+
+  fclose($furl);
+
+  return $return;
+}
+
+/**
+ * Queues a list of nodes for processing with the pdf rendition service.
+ *
+ * @param array $nids
+ *   List of node ids.
+ */
+function gardens_pdf_rendition_node_mass_send(array $nids) {
+  $paths = array();
+  $nodes = array_map('node_load', $nids);
+  foreach ($nodes as $node) {
+    $uri = node_uri($node);
+    $paths[] = $uri['path'];
+  }
+
+  gardens_pdf_rendition_process_paths($paths);
+}
+
+/**
+ * Page callback to schedule a page for PDF generation.
+ *
+ * @param $path
+ *   Path to render.
+ * @param $token
+ *   Safety token to defend against CSRF attacks.
+ */
+function gardens_pdf_rendition_page($path, $token) {
+  if (drupal_valid_token($token, 'gardens_pdf_rendition')) {
+    gardens_pdf_rendition_process_paths(array(urldecode($path)));
+    if (isset($_GET['destination']) && $_GET['destination']) {
+      drupal_goto($_GET['destination']);
+    }
+    else {
+      drupal_json_output(TRUE);
+    }
+  }
+  else {
+    drupal_access_denied();
+  }
+}
+
+/**
+ * Puts the given paths to the processing queue and marks them "in progress"
+ * in the database.
+ *
+ * @param array $paths
+ *   List of Drupal paths.
+ */
+function gardens_pdf_rendition_process_paths(array $paths) {
+  foreach ($paths as $path) {
+    _gardens_pdf_make_image_service_request($path, 'pdf', TRUE);
+    _gardens_pdf_make_image_service_request($path, 'png', TRUE);
+  }
+}
+
+/**
+ * Checks if an image/pdf which is being generated is done or not.
+ *
+ * @param $path
+ *   Path to check.
+ */
+function _gardens_pdf_rendition_check_image($path) {
+  $data = db_query('SELECT inprogress, imginprogress FROM {gardens_pdf_rendition} WHERE path = :path', array(
+    ':path' => $path,
+  ))->fetchAssoc();
+
+  if ($data) { // The path is in the database
+    if (($data['inprogress'] || $data['imginprogress']) && lock_acquire('gardens_pdf_rendition')) {
+      if ($data['inprogress']) { // PDF generation is in progress
+        _gardens_pdf_make_image_service_request($path, 'pdf');
+      }
+      if ($data['imginprogress']) { // Thumbnail generation is in progress
+        _gardens_pdf_make_image_service_request($path, 'png');
+      }
+      lock_release('gardens_pdf_rendition');
+    }
+  }
+}
+
+/**
+ * Makes a request to the rendition service and processes the response.
+ *
+ * @param string $path
+ *   Path to render.
+ * @param string $type
+ *   Type of the output. Can be 'pdf' or 'png'.
+ * @param bool $refresh
+ *   Force refresh.
+ *
+ * @return bool|int
+ *   The db_merge() return value (which stores the update information in the db)
+ *   or FALSE on failure.
+ */
+function _gardens_pdf_make_image_service_request($path, $type, $refresh = FALSE) {
+  $args = implode('&', array(
+    'url=' . urlencode(url($path, array('absolute' => TRUE))),
+    'refresh=' . ($refresh ? 'true' : 'false'),
+    'size=' . '1280',
+    'blocking=' . 'false',
+    'fullpage=' . ($type == 'pdf' ? 'true' : 'false'),
+    'filetype=' . $type,
+  ));
+
+  $inprogress = ($type == 'pdf') ? 'inprogress' : 'imginprogress';
+
+  $request_url = 'http://snapshot.acquia.com/snap?' . $args;
+  $resp = drupal_http_request($request_url);
+
+  switch ($resp->code) {
+    case 200:
+      // Request complete, upload file to S3, update db
+      $tmp = tempnam(sys_get_temp_dir(), 'gardenspdf') . '.' . $type;
+      file_put_contents($tmp, $resp->data);
+      $s3url = gardens_pdf_rendition_upload_to_s3($tmp);
+      $resname = basename($tmp);
+      $filesize = filesize($tmp);
+      unlink($tmp);
+
+      if (!$s3url) {
+        watchdog('gardenspdf', 'S3 upload failed. Aborting database update.', array(), WATCHDOG_WARNING);
+        drupal_set_message(t('S3 upload failed'), 'error');
+        return FALSE;
+      }
+
+      $resfields = $type == 'pdf' ? array(
+        's3link' => $s3url,
+        's3resname' => $resname,
+        'pdfsize' => $filesize,
+      ) : array(
+        's3imglink' => $s3url,
+        's3imgresname' => $resname,
+      );
+      return db_merge('gardens_pdf_rendition')
+        ->key(array('path' => $path))
+        ->fields(array(
+          'path' => $path,
+          $inprogress => 0,
+        ) + $resfields)
+        ->execute();
+      break;
+    case 201:
+      // fallthrough
+    case 202:
+      // Request in progress, update db
+      return db_merge('gardens_pdf_rendition')
+        ->insertFields(array(
+          's3imglink' => '',
+          's3imgresname' => '',
+          's3link' => '',
+          's3resname' => '',
+          'pdfsize' => 0,
+        ))
+        ->key(array('path' => $path))
+        ->fields(array(
+          $inprogress => 1,
+          'timestamp' => REQUEST_TIME,
+        ))
+        ->execute();
+      break;
+  }
+
+  watchdog('gardenspdf', 'Error processing path: %path, code: %code, message: %status, request url: %url', array(
+    '%path' => $path,
+    '%code' => $resp->code,
+    '%status' => $resp->status_message,
+    '%url' => $request_url,
+  ), WATCHDOG_WARNING);
+
+  return FALSE;
+}
+
+/**
+ * Uploads a file to S3.
+ *
+ * @param string $path
+ *   Path to file.
+ *
+ * @return bool|string
+ *   The authenticated url or FALSE on failure.
+ */
+function gardens_pdf_rendition_upload_to_s3($path) {
+  module_load_include('php', 'gardens_pdf_rendition', 'S3');
+  $creds = _gardens_pdf_rendition_get_creds();
+  if (!$creds) {
+    watchdog('gardenspdf', 'Unable to get S3 creditentials', array(), WATCHDOG_ERROR);
+    return FALSE;
+  }
+  $resource_name = basename($path);
+  $s3 = new S3($creds['login'], $creds['password']);
+  $bucket = variable_get('gardens_pdf_rendition_s3_bucket', GARDENS_PDF_RENDITION_S3_BUCKET);
+
+  if (!$s3->getBucket($bucket)) {
+    if (!$s3->putBucket($bucket)) {
+      watchdog('gardenspdf', 'Unable to create S3 bucket', array(), WATCHDOG_WARNING);
+      return FALSE;
+    }
+  }
+
+  $object = $s3->putObjectFile($path, $bucket, $resource_name);
+  return $object ?
+    $s3->getAuthenticatedURL($bucket, $resource_name, GARDENS_PDF_RENDITION_S3_KEEP_TIME, FALSE, FALSE) :
+    FALSE;
+}
+
+/**
+ * Loads the S3 creditentials from the netrc file.
+ *
+ * @return array|bool
+ *   Array with creditentials (keys are "login" and "password") or FALSE on
+ *   failure.
+ */
+function _gardens_pdf_rendition_get_creds() {
+  // Including a namespaced copy of the netrc lib to help with some weird file
+  // inclusion and double-declaration errors.
+  module_load_include('php', 'gardens_pdf_rendition', 'netrc');
+  $site_info = variable_get('acquia_hosting_site_info');
+  // Use the tangle user's netrc file.
+  $netrc = $site_info ? gpdf_netrc_read("/home/{$site_info['name']}/.netrc") : gpdf_netrc_read();
+  if (empty($netrc[GARDENS_PDF_RENDITION_NETRC_STRING])) {
+    return FALSE;
+  }
+  return $netrc[GARDENS_PDF_RENDITION_NETRC_STRING];
+}
+
+/**
+ * Checks if a page is accessible by anonymous.
+ *
+ * @param string $path
+ *   Path to check.
+ *
+ * @return bool
+ */
+function _gardens_pdf_rendition_can_anonymous_access_page($path) {
+  global $user;
+  $origuser = $user;
+
+  if ($path == '') {
+    $path = variable_get('site_frontpage', 'node');
+  }
+
+  drupal_save_session(FALSE);
+  $user = user_load(0);
+  drupal_static_reset('menu_get_item');
+  $item = menu_get_item($path);
+  $access = $item['access'];
+
+  $user = $origuser;
+  drupal_save_session(TRUE);
+  drupal_static_reset('menu_get_item');
+
+  return $access;
+}
+
+/**
+ * Generates a random string containing letters and numbers.
+ *
+ * The string will always start with a letter. The letters may be upper or
+ * lower case. This method is better for restricted inputs that do not
+ * accept certain characters. For example, when testing input fields that
+ * require machine readable values (i.e. without spaces and non-standard
+ * characters) this method is best.
+ *
+ * @param $length
+ *   Length of random string to generate.
+ * @return
+ *   Randomly generated string.
+ */
+function _gardens_pdf_rendition_random_name($length = 8) {
+  $values = array_merge(range(65, 90), range(97, 122), range(48, 57));
+  $max = count($values) - 1;
+  $str = chr(mt_rand(97, 122));
+  for ($i = 1; $i < $length; $i++) {
+    $str .= chr($values[mt_rand(0, $max)]);
+  }
+  return $str;
+}

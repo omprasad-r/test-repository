@@ -1,0 +1,80 @@
+diff --git a/docroot/modules/acquia/gardens_misc/gardens_misc.module b/docroot/modules/acquia/gardens_misc/gardens_misc.module
+index 5d2b29e..dc2f2eb 100644
+--- a/docroot/modules/acquia/gardens_misc/gardens_misc.module
++++ b/docroot/modules/acquia/gardens_misc/gardens_misc.module
+@@ -194,6 +194,20 @@ function gardens_misc_block_info_alter(&$blocks, $theme, $code_blocks) {
+       $blocks['block_everything']['site_slogan']['pages'] = '<front>';
+     }
+   }
++
++  // If TAC is enabled, ensure all blocks are set to at least cache by role so
++  // that the cached version doesn't cause an access bypass.
++  if (module_exists('taxonomy_access')) {
++    foreach ($blocks as $name => &$module) {
++      foreach ($module as &$block) {
++        if (isset($block['cache']) && $block['cache'] !== DRUPAL_CACHE_CUSTOM && $block['cache'] !== DRUPAL_NO_CACHE) {
++          if (($block['cache'] & DRUPAL_CACHE_PER_PAGE || $block['cache'] & DRUPAL_CACHE_GLOBAL) && !($block['cache'] & DRUPAL_CACHE_PER_USER)) {
++            $block['cache'] = $block['cache'] | DRUPAL_CACHE_PER_ROLE;
++          }
++        }
++      }
++    }
++  }
+ }
+ 
+ /**
+diff --git a/docroot/modules/acquia/site_export/SiteExport.inc b/docroot/modules/acquia/site_export/SiteExport.inc
+index e9e3eb1..ff975c2 100644
+--- a/docroot/modules/acquia/site_export/SiteExport.inc
++++ b/docroot/modules/acquia/site_export/SiteExport.inc
+@@ -81,6 +81,7 @@ class SiteExport {
+       'index.php',
+       '.htaccess',
+       'sites/all/modules/views_bulk_operations/actions/script.action.inc',
++      'modules/block/block.module',
+     );
+     $edited_files = array();
+     foreach ($files_to_strip_lines_from as $file) {
+diff --git a/docroot/modules/acquia/site_export/export_exclude.txt b/docroot/modules/acquia/site_export/export_exclude.txt
+index 6a40ec5..f560ca9 100644
+--- a/docroot/modules/acquia/site_export/export_exclude.txt
++++ b/docroot/modules/acquia/site_export/export_exclude.txt
+@@ -5,3 +5,4 @@ settings.php
+ index.php
+ .htaccess
+ sites/all/modules/views_bulk_operations/actions/script.action.inc
++modules/block/block.module
+diff --git a/docroot/modules/block/block.module b/docroot/modules/block/block.module
+index ee90278..be2d0bc 100644
+--- a/docroot/modules/block/block.module
++++ b/docroot/modules/block/block.module
+@@ -853,7 +853,16 @@ function _block_render_blocks($region_blocks) {
+   // Block caching is not compatible with node access modules. We also
+   // preserve the submission of forms in blocks, by fetching from cache only
+   // if the request method is 'GET' (or 'HEAD').
++##GardensExcludeFromExportStart################################################
++  // Remove the limitation of block cache being disbabled when any node_access modules are installed. This allows us
++  // to still have block caching with TAC enabled.
++  /*
++##################################################GardensExcludeFromExportEnd##
+   $cacheable = !count(module_implements('node_grants')) && ($_SERVER['REQUEST_METHOD'] == 'GET' || $_SERVER['REQUEST_METHOD'] == 'HEAD');
++##GardensExcludeFromExportStart################################################
++  */
++  $cacheable = $_SERVER['REQUEST_METHOD'] == 'GET' || $_SERVER['REQUEST_METHOD'] == 'HEAD';
++##################################################GardensExcludeFromExportEnd##
+   foreach ($region_blocks as $key => $block) {
+     // Render the block content if it has not been created already.
+     if (!isset($block->content)) {
+diff --git a/gardens.make b/gardens.make
+index 9407cae..1633027 100644
+--- a/gardens.make
++++ b/gardens.make
+@@ -198,6 +198,8 @@ projects[drupal][patch][] = "http://drupal.org/files/comment-author-deleted-1451
+ projects[drupal][patch][] = "http://drupal.org/files/1161708-field_invoke-trouble-19-D7-do-not-test.patch"
+ ; Small perf fix for blocks, needed for the patch in #1460766. Can be removed once committed to d7.
+ projects[drupal][patch][] = "http://drupal.org/files/block-perf-fix-d7-917490-37.patch"
++; Removes block cache/node_access restriction, provides a workaround for TAC.
++projects[drupal][patch][] = "https://raw.github.com/gist/3156b07389feaa98358a/cce8c2428c6011eca294ea17e4c1bc7f007da1c4/dg-blockcache-tac-workaround.patch"
+ 
+ ; Installation profile: gardens
+ ; ---------------------------------------

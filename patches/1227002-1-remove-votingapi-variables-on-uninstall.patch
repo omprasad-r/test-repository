@@ -1,0 +1,33 @@
+diff --git a/votingapi.install b/votingapi.install
+index 9e0ecf4..032f6e7 100644
+--- a/votingapi.install
++++ b/votingapi.install
+@@ -50,6 +50,21 @@ function votingapi_schema() {
+ }
+ 
+ /**
++ * Implements hook_uninstall().
++ */
++function votingapi_uninstall() {
++  // Delete variables created by voteapi module.
++  $variables = array(
++    'votingapi_last_cron',
++    'votingapi_anonymous_window',
++    'votingapi_calculation_schedule',
++  );
++  foreach ($variables as $variable) {
++    variable_del($variable);
++  }
++}
++
++/**
+  * The most recent update removed for version-to-version compatibility.
+  */
+ function votingapi_update_last_removed() {
+@@ -69,4 +84,4 @@ function votingapi_update_7201() {
+   db_change_field('votingapi_cache', 'content_id', 'entity_id', array('type' => 'int', 'unsigned' => TRUE, 'not null' => TRUE, 'default' => 0));
+ 
+   return t('Updated VotingAPI table structure.');
+-}
+\ No newline at end of file
++}

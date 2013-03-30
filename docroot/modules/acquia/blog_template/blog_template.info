@@ -1,0 +1,7 @@
+; $Id$
+name = Blog template
+description = Provides a template for a blog website.
+core = 7.x
+files[] = blog_template.module
+dependencies[] = site_template
+hidden = TRUE

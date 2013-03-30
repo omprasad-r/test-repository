@@ -1,0 +1,18 @@
+<?php
+
+/**
+ * Implements hook_enable().
+ */
+function dblog_disable_enable() {
+  if (module_exists('dblog') && is_null(variable_get('dblog_disable_timestamp', NULL))) {
+    variable_set('dblog_disable_timestamp', REQUEST_TIME);
+  }
+}
+
+/**
+ * Implements hook_uninstall().
+ */
+function dblog_disable_uninstall() {
+  variable_del('dblog_disable_timestamp');
+  variable_del('dblog_disable_threshold');
+}

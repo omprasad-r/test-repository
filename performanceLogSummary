@@ -1,0 +1,563 @@
+#!/usr/bin/php -q
+<?php
+
+/**
+ * This script generates a nice summary of performance data that can be
+ * captured by setting the variable 'themebuilder_log_level' to 'TRACE',
+ * 'TIMING', or 'ALL'.  Don't forget in the database this value is a
+ * serialized PHP string so if you are setting it by hand, use 's:5:"TRACE";',
+ * 's:6:"TIMING";', or 's:3:"ALL";'.
+ *
+ * After setting this value, clear the cache on your site.  The performance
+ * information will be written to the apache error.log file or to the syslog
+ * file, depending on server configuration.
+ *
+ * Once you capture the data, simply run it through this script for a summary:
+ *   performanceLogSummary -f <logfile>
+ */
+
+performance_log_munger_execute();
+
+/**
+ * Reads the command line arguments and prints a summary of the log data.
+ */
+function performance_log_munger_execute() {
+  $options = getOpt('f:h:');
+  $filename = $options['f'];
+  $host = $options['h'];
+  if (!isset($filename)) {
+    print("Error - no filename specified.  Specify a filename using the -f [filename] option.\n");
+    return;
+  }
+  if (!isset($host)) {
+    print("Error - no host specified.  Specify a host using the -h [hostname] option.\n");
+  }
+  $logData = new PerformanceLogMunger($filename, $host);
+  $summary = $logData->generateSummary();
+  $errors = $logData->getErrors();
+  if (!empty($errors)) {
+    printf("\n----- Errors detected in file %s------\n%s\n",
+      $filename, join("\n", $errors));
+  }
+
+  printf("\n------ Performance summary for host %s starting on %s -------\n\n",
+    $logData->getHostname(), $logData->getStartDate());
+  $logData->printTimeSummary($summary);
+
+  printf("\n\n------Trace data-------\n\n");
+  $logData->printLogData($summary);
+}
+
+/**
+ * This class is responsible for reading, parsing, and interpreting the log data.
+ */
+class PerformanceLogMunger {
+  /**
+   * Used for summarizing the data.  The times are aggregated, so really only
+   * the time associated with the last instance of the call is important for
+   * the summary.
+   */
+  private $callCount = array();
+  private $times = array();
+  private $host;
+  private $startDate;
+  private $errors = array();
+
+  /**
+   * Creates a new instance of the PerformanceLogMunger class with data from
+   * the specified filename.
+   *
+   * @param $filename
+   *   The name of the file that contains the log data.
+   */
+  public function __construct($filename, $host) {
+    if (!file_exists($filename)) {
+      throw new Exception("File $filename does not exist.");
+    }
+    $this->host = $host;
+    $this->contents = $this->getLinesContainingHost(file_get_contents($filename));
+  }
+
+  private function getLinesContainingHost($content) {
+    $lines = explode("\n", $content);
+    $result = array();
+    $host = $this->host;
+    $len = count($lines);
+    for ($i = 0; $i < $len; $i++) {
+      if (strlen($lines[$i]) > strlen("($host)") && strpos("($host)", $lines[$i]) != -1) {
+        $newLine = preg_replace('/ \(' . $host . '\)/', '', $lines[$i]);
+        $result[] = $newLine;
+      }
+    }
+    return $result;
+  }
+
+  /**
+   * Returns the hostname that this logging data came from.
+   */
+  public function getHostname() {
+    return $this->host;
+  }
+
+  /**
+   * Returns the start date from the data.
+   */
+  public function getStartDate() {
+    return $this->startDate;
+  }
+
+  /**
+   * Returns errors that were detected during the parsing of the data.
+   */
+  public function getErrors() {
+    return $this->errors;
+  }
+
+  /**
+   * Parses the log data and creates a summary.
+   */
+  public function generateSummary() {
+    $requests = $this->getRequestSets();
+    $summary = array();
+    foreach ($requests as $request) {
+      $summary = array_merge($summary, $this->generateRequestSummary($request));
+    }
+    return $summary;
+  }
+
+  /**
+   * Breaks the log data into individual requests.  This is important because
+   * Drupal's timer_start data is reset on every request.  If we don't do
+   * this, on sommaries that span multiple requests we will find negative
+   * times reported.
+   *
+   * @return
+   *   An array with each element representing a single request.  Each element
+   *   of the array is an array of lines in the log file representing the
+   *   trace data for that request.
+   */
+  private function getRequestSets() {
+    $requests = array();
+    $lines = $this->contents;
+    $len = count($lines);
+    $offset = 0;
+    $finished = FALSE;
+    do {
+      $startLine = $this->findStartOfRequest($lines, $offset);
+      $endLine = $this->findEndOfRequest($lines, $startLine);
+      
+      if ($startLine < 0 || $endLine < 0) {
+        // We are done.
+        $finished = TRUE;
+      }
+      else {
+        $request = array();
+        for ($i = $startLine; $i <= $endLine; $i++) {
+          $request[] = $lines[$i];
+        }
+        $requests[] = $request;
+        $offset = $endLine + 1;
+      }
+    } while (!$finished);
+    return $requests;
+  }
+
+  /**
+   * Finds the start of the request that follows the line represented by the
+   * specified offset.
+   *
+   * @param {array} $lines
+   *   An array containing all lines in the raw data.
+   * @param {int} $offset
+   *   The offset into the lines representing the index of the line to start
+   *   the search from.
+   * @return
+   *   An integer representing the index of the line that represents the start
+   *   of a request following the offset.  If there are no requests starting
+   *   after the offset, -1 is returned.
+   */
+  private function findStartOfRequest($lines, $offset) {
+    $len = count($lines);
+    for ($i = $offset; $i < $len; $i++) {
+      if (strpos($lines[$i], 'Trace: request') > -1 &&
+        strpos($lines[$i], ' entered.') > -1) {
+        return $i;
+      }
+    }
+    return -1;
+  }
+
+  /**
+   * Finds the end of the request that follows the line represented by the
+   * specified offset.
+   *
+   * @param {array} $lines
+   *   An array containing all lines in the raw data.
+   * @param {int} $offset
+   *   The offset into the lines representing the index of the line to start
+   *   the search from.
+   * @return
+   *   An integer representing the index of the line that represents the end
+   *   of a request following the offset.  If there are no requests ending
+   *   after the offset, -1 is returned.
+   */
+  private function findEndOfRequest($lines, $offset) {
+    if ($offset >=0) {
+      $len = count($lines);
+      for ($i = $offset; $i < $len; $i++) {
+        if (strpos($lines[$i], 'Trace: request') > -1 &&
+          strpos($lines[$i], ' exited.') > -1) {
+          return $i;
+        }
+      }
+    }
+    return -1;
+  }
+
+  /**
+   * Returns summary information for the request represented by the specified
+   * set of raw data lines.
+   *
+   * @param {array} $lines
+   *   The raw data associated with a request.
+   * @return
+   *   An array of objects representing the summary of the associated request.
+   */
+  private function generateRequestSummary($lines) {
+    $this->times = array();
+    $summary = array();
+    foreach ($lines as $line) {
+      $matches = array();
+      preg_match('/^.*((Trace:|Timing:).*)$/', $line, $matches);
+      if (count($matches) >= 2) {
+        $obj = $this->takeApart($matches[1]);
+        if (isset($obj)) {
+          $requestInfo = $this->getMetadata($line);
+          $obj->date = $requestInfo->date;
+          $obj->host = $requestInfo->host;
+          if (!$this->startDate) {
+            $this->host = $obj->host;
+            $this->startDate = $obj->date;
+          }
+          // TODO: We should insert the base url into the log data so we can
+          // extract data for a single website.  For now we can simply use
+          // grep.
+          $summary[] = $obj;
+        }
+      }
+    }
+    $summary = $this->indentObjects($summary);
+    $this->calculateTimes($summary);
+    return $summary;
+  }
+
+  public function getMetadata($line) {
+    $result = new stdClass();
+    $result->date = 'unknown time';
+    $result->host = 'unknown host';
+    $matches = array();
+    preg_match('/^\[(.*)\] \[.*\] \[client (.*)\]/', $line, $matches);
+    if (count($matches) !== 3) {
+      preg_match('/(\S+ \S+ \S+) (\S+) /', $line, $matches);
+    }
+    if (count($matches) == 3) {
+      $result->date = $matches[1];
+      $result->host = $matches[2];
+    }
+    return $result;
+  }
+
+  /**
+   * Takes the specified line aparat and generates an object that summarizes
+   * the data in the line.
+   *
+   * @param $line
+   *   The interesting part of a line from the log file.
+   * @return
+   *   An object representing the data in the line of logged information.
+   */
+  private function takeApart($line) {
+    $this->callCount;
+    $result = NULL;
+    $matches = array();
+    preg_match('/^Timing: (?:request |function )?(.*) took (.*) seconds/', $line, $matches);
+    if (count($matches) === 3) {
+      $result = new stdClass();
+      $result->type = 'time';
+      $result->code = $matches[1];
+      // Is this a line of code?
+      $result->isCodeLine = $this->isLineOfCode($result->code);
+      $timeSpent = round(floatval($matches[2]), 3);
+      $result->time = $timeSpent - $this->timeSoFar($matches[1]);
+      $this->times[$matches[1]] = $timeSpent;
+    }
+    else {
+      preg_match('/^Trace: (?:request|function) (.*) (exited|entered)\./', $line, $matches);
+      if (count($matches) === 3) {
+        $result = new stdClass();
+        $result->type = 'trace';
+        $result->code = $matches[1];
+        $result->direction = ($matches[2] === 'entered' ? 1 : -1);
+      }
+    }
+    if ((isset($result->direction) && $result->direction === 1) ||
+      (isset($result->isCodeLine) && $result->isCodeLine === true)) {
+      // Keep track of the # of calls.
+      if (!isset($this->callCount[$result->code])) {
+        $this->callCount[$result->code] = 0;
+      }
+      $this->callCount[$result->code]++;
+    }
+
+    return $result;
+  }
+
+  /**
+   * Determines whether the specified code id represents a line of code or a
+   * function.
+   *
+   * @param {String} $code
+   *   The code id.
+   * @return {boolean}
+   *   true if the code id refers to a line of code; false if it is a function.
+   */
+  private function isLineOfCode($code) {
+    $matches = array();
+    preg_match('/^.*:(\d*)$/', $code, $matches);
+    $result = (count($matches) === 2);
+    return $result;
+  }
+
+  /**
+   * Indicates the amount of time spent so far in the code block identified by
+   * the specified key.
+   *
+   * Because the results returned from Drupal's timer_stop command aggregates
+   * the data for multiple executions, this is required to calculate the
+   * correct amount of time.  Note that the lines must be processed in order
+   * if this is to return the correct results.
+   *
+   * @param {String} key
+   *   The key representing the function name or code block id.
+   * @return
+   *   The time spent in the associated block of code so far.
+   */
+  private function timeSoFar($key) {
+    $result = 0.0;
+    if (isset($this->times[$key])) {
+      $result = $this->times[$key];
+    }
+    return $result;
+  }
+
+  /**
+   * Indents the specified objects to indicate the call stack at any point in
+   * the data.
+   *
+   * @param {Object array} $objs
+   *   The objects representing the parsed log data.
+   */
+  private function indentObjects(&$objs) {
+    $result = array();
+    $level = 0;
+    $stack = array();
+    $len = count($objs);
+    for ($i = 0; $i < $len; $i++) {
+      $stackLevel = count($stack) - 1;
+      if ($objs[$i]->type === 'time') {
+        $objs[$i]->level = $level;
+      }
+      else {
+        if ($stackLevel >= 0 && $stackLevel < count($stack) && 
+          $objs[$i]->direction === 1 && $objs[$i]->code === $stack[$stackLevel]['code']) {
+          // This can happen if you accidentally close the function with
+          // log_trace_enter rather than log_trace_exit.  Easy to do.
+          $this->reportError(sprintf('Error: Likely missing a call to themebuilder_log_trace_exit in %s', $objs[$i]->code));
+          $objs[$i]->direction = -1;
+        }
+        if ($objs[$i]->direction === -1) {
+          // Exiting a level of execution.
+          $last = array_pop($stack);
+          while ($level >= 0 && $last['code'] != $objs[$i]->code) {
+            // This can happen if you forget to close the function with
+            // log_trace_exit.
+            $this->reportError(sprintf('Error: Likely missing a call to themebuilder_log_trace_exit in %s', $last['code']));
+            
+            // Insert a new object into the hierarchy to make the levels correct.
+            $newObj = new stdClass();
+            $newObj->type = 'trace';
+            $newObj->code = $last['code'];
+            $newObj->direction = -1;
+            $newObj->level = $level--;
+            $result[] = $newObj;
+            $last = array_pop($stack);
+          }
+          $objs[$i]->level = $level - 1;
+        }
+        else {
+          // Entering a deeper level of execution.
+          $stack[] = array('code' => $objs[$i]->code, 'time' => 0.0);
+          $objs[$i]->level = $level;
+        }
+        $level += $objs[$i]->direction;
+        $level = max(0, $level);
+      }
+      $result[] = $objs[$i];
+    }
+    return $result;
+  }
+
+  /**
+   * Associate proper times to each object in the log summary.  The timeSelf
+   * field has to be calculated.
+   *
+   * @param {Object array}
+   *   The summary objects.  Note that the objects must have indentation
+   *   information in order for this method to work properly.
+   */
+  private function calculateTimes(&$objs) {
+    $len = count($objs);
+    $overall = new stdClass();
+    $overall->time = 0.0;
+    $stack = array($overall);
+    for ($i = 0; $i < $len; $i++) {
+      $debug = false;
+      $stackLevel = count($stack) - 1;
+      switch ($objs[$i]->type) {
+        case 'time':
+          if ($stackLevel >= 0) {
+            if ($objs[$i]->code === $stack[$stackLevel]->code) {
+              $objs[$i]->timeSelf = round($objs[$i]->time - $stack[$stackLevel]->time, 3);
+              if ($stackLevel > 0) {
+                $stack[$stackLevel - 1]->time += $objs[$i]->time;
+              }
+            }
+            else {
+              $objs[$i]->timeSelf = round($objs[$i]->time, 3);
+              if (!$objs[$i]->isCodeLine) {
+                // Only add the time to the parent if it is associated with a
+                // function.  The line of code time reports are informational
+                // only.  Don't double count them.
+                $stack[$stackLevel]->time += $objs[$i]->timeSelf;
+              }
+            }
+          }
+          break;
+        case 'trace':
+          if ($objs[$i]->direction === 1) {
+            // Entering a deeper level of execution.
+            $track = new stdClass();
+            $track->time = 0.0;
+            $track->code = $objs[$i]->code;
+            $stack[] = $track;
+          }
+          else {
+            // Exiting a level of execution;
+            $last = array_pop($stack);
+            $objs[$i]->timeSelf = round($last->time, 3);
+          }
+          break;
+      }
+    }
+  }
+
+  /**
+   * Prints the performance logging detail.
+   */
+  public function printLogData($summary) {
+    foreach ($summary as $obj) {
+      $this->printObject($obj);
+    }
+  }
+
+  /**
+   * Prints an individual logging summary object.
+   *
+   * @param $obj
+   *   The logging summary object to print.
+   */
+  private function printObject($obj) {
+    $tab = '  ';
+    $output = '';
+    for ($i = 0; $i < $obj->level; $i++) {
+      $output .= $tab;
+    }
+    switch ($obj->type) {
+      case 'trace':
+        $output .= sprintf('%s %s',
+          ($obj->direction === 1 ? 'Entered ' : 'Exited '), $obj->code);
+        break;
+      case 'time':
+        $output .= sprintf('%3.3f seconds (%3.3f seconds inclusive): %s',
+          $obj->timeSelf, $obj->time, $obj->code);
+        break;
+      default:
+        $output .= sprintf('Unknown object type %s', $obj->type);
+    }
+    if ($obj->level === 0) {
+      $output .= sprintf(' [%s]', $obj->date);
+    }
+    print("$output\n");
+  }
+
+  /**
+   * Prints a summary that shows functions that have taken the most time at
+   * the top.
+   */
+  public function printTimeSummary($summary) {
+    $total = 0.0;
+    $objs = $summary;
+    $len = count($objs);
+    $timingObjs = array();
+
+    // Start by aggregating the times for the same function call.  The time
+    // will represent the amount of time spent within that particular function
+    // or method, not the amount of time spent in calls made from that method.
+    // Note that this only works if all of the calls have been outfitted with
+    // logging.  Otherwise the time will be attributed to the calling
+    // function.
+    for ($i = $len - 1; $i >= 0; $i--) {
+      $obj = $objs[$i];
+      if ($obj->type === 'time') {
+        if (isset($timingObjs[$obj->code])) {
+          $timingObj = $timingObjs[$obj->code];
+          // We already have one of these.
+          $timingObj->timeSelf += $obj->timeSelf;
+          $timingObj->time += $obj->time;
+        }
+        else {
+          $timingObj = clone $obj;
+          $timingObjs[$obj->code] = $timingObj;
+        }
+      }
+    }
+
+    // Generate output.
+    $items = array();
+    $len = count($timingObjs);
+    foreach ($timingObjs as $code => $obj) {
+      $items[] = sprintf('%3.3f seconds (%3.3f total seconds): %s%s',
+        $obj->timeSelf, $obj->time, $obj->code,
+	$this->callCount[$obj->code] > 1 ? sprintf(' (called %d times)', $this->callCount[$obj->code]) : '');
+      if (!$obj->isCodeLine) {
+        $total += $obj->timeSelf;
+      }
+
+    }
+    rsort($items, SORT_NUMERIC);
+    print(implode("\n", $items));
+    printf("\n----------------\nTotal time: %3.3f seconds\n", $total);
+  }
+
+  /**
+   * Reports the specified error condition.  The error will only be reported once.
+   *
+   * @param {String} $error
+   *   The error to report.
+   */
+  private function reportError($error) {
+    if (!in_array($error, $this->errors)) {
+      $this->errors[] = $error;
+    }
+  }
+}

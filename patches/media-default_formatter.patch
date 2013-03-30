@@ -1,0 +1,13 @@
+diff --git a/includes/media.fields.inc b/includes/media.fields.inc
+index a1887e3..93c4d75 100644
+--- a/includes/media.fields.inc
++++ b/includes/media.fields.inc
+@@ -17,7 +17,7 @@ function media_field_info() {
+         'file_extensions' => media_variable_get('file_extensions'),
+       ),
+       'default_widget' => 'media_generic',
+-      'default_formatter' => 'media_large',
++      'default_formatter' => 'media',
+     ),
+   );
+ }

@@ -1,0 +1,271 @@
+#!/usr/bin/php -q
+<?php
+
+/**
+ * This tool downloads temporary copies of certain projects' .tar.gz files from
+ * drupal.org and uses them to put proper data in each project's info files.
+ *
+ * Call it with no arguments to process all relevant core and contrib projects.
+ *
+ * Call it with the name of a project to process only that one, e.g.:
+ *
+ * ./fixProjectInfoFiles webform
+ *
+ * or (in the special case of Drupal core):
+ *
+ * ./fixProjectInfoFiles drupal
+ */
+date_default_timezone_set('UTC');
+require_once('InfoFileChecker.inc');
+global $argv;
+$options = getopt("d:");
+
+// Remove options from argv... see http://www.php.net/manual/en/function.getopt.php#100573
+$pruneargv = array();
+foreach ($options as $option => $value) {
+  foreach ($argv as $key => $chunk) {
+    $regex = '/^'. (isset($option[1]) ? '--' : '-') . $option . '/';
+    if ($chunk == $value && $argv[$key-1][0] == '-' || preg_match($regex, $chunk)) {
+      array_push($pruneargv, $key);
+    }
+  }
+}
+while ($key = array_pop($pruneargv)) unset($argv[$key]);
+array_shift($argv);
+$arg = reset($argv);
+
+// Create a temporary directory we can work in.
+$tempdir = sys_get_temp_dir() . '/fixProjectInfoFiles.' . time();
+if (!is_dir($tempdir)) {
+  mkdir($tempdir);
+}
+
+$drupal_root = realpath(dirname(__FILE__) . '/../docroot');
+$docroot = isset($options['d']) ? realpath(dirname(__FILE__) . '/../' . $options['d']) : $drupal_root;
+// Store all the projects we might work with (and for contrib, their info files).
+$projects = array();
+$info_files = array();
+$project_info_checker = new ProjectInfoChecker($drupal_root, $docroot);
+$info_file_versions = $project_info_checker->getInfoFileVersions();
+foreach ($info_file_versions as $file => $version) {
+  // For now we just look in sites/all/modules for contrib modules.
+  if (preg_match('/\/sites\/all\/modules\/([^\/]+)\//', $file, $matches)) {
+    $projects[$matches[1]] = $version;
+    $info_files[$matches[1]][] = $file;
+  }
+  // Make sure to include core. It would be too painful to get all the info
+  // files here, and we only need that anyway for -dev versions, so for now we
+  // just don't support that for core.
+  if (preg_match('/\/modules\/system\//', $file)) {
+    $projects['drupal'] = $version;
+  }
+}
+
+// If a particular project was requested on the command line, only process
+// that.
+if ($arg) {
+  $projects = array_intersect_key($projects, array($arg => ''));
+}
+
+// These are all the projects that are running off of HEAD. For projects with
+// d.o tarballs, provide the version name (e.g. 7.x-1.x-dev). For git checkouts
+// without tarballs, provide the branch name (e.g. 7.x-1.x).
+$head_versions = array(
+  'dialog' => '7.x-1.x-dev',
+  'htmlpurifier' => '7.x-1.x-dev',
+  'mast' => '7.x-1.x-dev',
+  'redirect' => '7.x-1.x-dev',
+  'remote_stream_wrapper' => '7.x-1.x-dev',
+  'rotating_banner' => '7.x-1.x-dev',
+  'save_draft' => '7.x-1.x-dev',
+  'securepages' => '7.x-1.x-dev',
+  'server_variables' => '7.x-1.x',
+  'taxonomy_access' => '7.x-1.x-dev',
+  'webform_alt_ui' => '7.x-1.x-dev',
+  'views_rss' => '7.x-2.x-dev',
+  'views_rss_itunes' => '7.x-1.x-dev',
+);
+
+// For certain projects, we use a git checkout even though it corresponds to a
+// proper release on d.o - we do this if we need to apply patches that affect
+// the info file, because the patch will not apply against a version of the
+// info file that includes the packaging info.
+$special_git_checkouts = array(
+  'fivestar' => '7.x-2.0-alpha2',
+  'node_export' => '7.x-3.0',
+  'comment_goodness' => '7.x-1.3',
+);
+
+// Desired dates for projects that are running a dev version. For projects that
+// have no dev version (i.e. sandboxes or github projects), provide the
+// timestamp of the current commit. This can be found by running
+// $ git log -1 --pretty=format:%at
+$dev_dates = array(
+  'comment_goodness' => '1334940677',
+  'dialog' => '4/25/2011',
+  'filter_tips_dialog' => '1303175635',
+  'fivestar' => '1332954347',
+  'follow' => '2/3/2011',
+  'htmlpurifier' => '1298619391',
+  'mast' => '11/13/2012',
+  'node_export' => '1345435979',
+  'redirect' => '7/27/2011',
+  'remote_stream_wrapper' => '9/8/2011',
+  'rotating_banner' => '3/31/2011',
+  'save_draft' => '1304465480',
+  'securepages' => '1318275995',
+  'server_variables' => '1325285810',
+  'taxonomy_access' => '1309225818',
+  'webform_alt_ui' => '7/20/2011',
+  'views_rss' => '5/10/2012',
+  'views_rss_itunes' => '7/26/2012',
+);
+
+function download_project($name, $version) {
+  global $tempdir, $docroot;
+  // This project is expected to have a dev tarball on drupal.org.
+  // Build the URL to the project.
+  $filename = "$name-$version.tar.gz";
+  $url = "http://ftp.drupal.org/files/projects/$filename";
+  print "Processing $url...\n";
+
+  // Download and untar it.
+  $local_tarfile = "$tempdir/$filename";
+  $out = array();
+  $return_code = 0;
+  exec("curl -s -f $url -o $local_tarfile", $out, $return_code);
+  unset($out);
+  if ($return_code != 0) {
+    return FALSE;
+  }
+
+  shell_exec("tar xfz $local_tarfile -C $tempdir");
+
+  // Copy all the project's info files to the docroot.
+  if ($name == 'drupal') {
+    $source = "$tempdir/$name-$version";
+    $destination = $docroot;
+  }
+  else {
+    $source = "$tempdir/$name";
+    $destination = "$docroot/sites/all/modules/$name";
+  }
+  shell_exec("rsync --archive --include \"*/\" --include \"*.info\" --exclude \"*\" $source/ $destination/");
+
+  return TRUE;
+}
+
+foreach ($projects as $name => $version) {
+  // Check if we are working with a dev version; if so, do some special checks.
+  $dev_version = FALSE;
+  if ($version == 'HEAD') {
+    $dev_version = TRUE;
+    if (isset($head_versions[$name])) {
+      $version = $head_versions[$name];
+    }
+    else {
+      print "******************************************\n";
+      print "WARNING! No version information for $name!\n";
+      print "******************************************\n";
+    }
+  }
+  if ($project_info_checker->isDevVersion($version)) {
+    if ($name == 'drupal') {
+      print "******************************************************************************\n";
+      print "WARNING! Running Drupal core on a dev version is not supported by this script!\n";
+      print "******************************************************************************\n";
+    }
+    $dev_version = TRUE;
+  }
+
+  if (isset($dev_dates[$name]) && is_numeric($dev_dates[$name])) {
+    $is_official_project = isset($special_git_checkouts[$name]);
+    // This is a git checkout of a project with no -dev tarball on d.o. Append
+    // the correct information to all the .info files in the project.
+    foreach ($info_file_versions as $path => $value) {
+      // Find all the .info files inside this git checkout.
+      if (preg_match('/\/sites\/all\/modules\/' . $name . '\//', $path)) {
+        // Remove any existing values for the properties we want to add.
+        $contents = file($path);
+        foreach ($contents as $key => $line) {
+          foreach (array('version', 'datestamp', 'project', '; url', '; commit') as $property) {
+            if (strpos($line, $property) === 0) {
+              unset($contents[$key]);
+            }
+          }
+        }
+        // Re-index the array
+        $contents = array_values($contents);
+        $len = count($contents);
+        if (substr($contents[$len-1], count($contents[$len-1]) - 1, 1) != "\n") {
+          $contents[$len-1] .= "\n";
+        }
+        $version_string = isset($head_versions[$name]) ? $head_versions[$name] : $special_git_checkouts[$name];
+        $contents[] = 'version = "' . $version_string . '"' . "\n";
+        if ($is_official_project) {
+          $contents[] = 'core = "7.x"' . "\n";
+        }
+        // The "project" value is supposed to refer to an official drupal.org
+        // project namespace (drupal.org/project/x), but if this git checkout
+        // does not correspond to an official d.o tarball, then it has no
+        // official namespace. Using an empty string will keep update.module
+        // from trying to fetch project information from drupal.org.
+        $project_string = $is_official_project ? $name : '';
+        $contents[] = 'project = "' . $project_string . '"' . "\n";
+        $contents[] = 'datestamp = "' . $dev_dates[$name] . '"' . "\n";
+        // People will want to know where to find this project, so add
+        // comments to the .info file with the git information they need.
+        if (!$is_official_project && $origin = $project_info_checker->getGitOrigin($path)) {
+          $contents[] = '; url = ' . $origin . "\n";
+        }
+        if (!$is_official_project && $commit = $project_info_checker->getGitCommit($path)) {
+          $contents[] = '; commit = ' . $commit . "\n";
+        }
+        file_put_contents($path, $contents);
+      }
+    }
+  }
+  else {
+    if (!download_project($name, $version)) {
+      // Download failed.
+      // The most likely reason is that git gave back a tag and revision
+      // difference.
+      if (!download_project($name, preg_replace('/~[\d]$/i', '', $version))) {
+        // Download failed again. Exiting.
+        print "Download failed for {$name}-{$version}\n";
+        continue;
+      }
+    }
+
+    // If we're running a dev version, a datestamp should be specified above, and
+    // we copy that into the info file (replacing the one we got from drupal.org,
+    // which will be the most recent dev version of the project, not necessarily
+    // the one we're running in Gardens).
+    if ($dev_version) {
+      if (isset($dev_dates[$name])) {
+        $datestamp = strtotime($dev_dates[$name]);
+        if (!empty($info_files[$name])) {
+          foreach ($info_files[$name] as $file) {
+            $contents = file_get_contents($file);
+            $contents = preg_replace('/datestamp = "[0-9]+"/', "datestamp = \"$datestamp\"", $contents);
+            file_put_contents($file, $contents);
+          }
+        }
+        else {
+          print "********************************************************\n";
+          print "WARNING! No info files were found for dev project $name!\n";
+          print "********************************************************\n";
+        }
+      }
+      else {
+        print "******************************************************************************\n";
+        print "WARNING! No datestamp information for $name, even though it is a -dev project!\n";
+        print "******************************************************************************\n";
+      }
+    }
+  }
+}
+
+// Delete the temporary directory.
+$command = "rm -f -r $tempdir";
+shell_exec($command);

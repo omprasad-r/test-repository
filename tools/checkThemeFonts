@@ -1,0 +1,137 @@
+#!/usr/bin/php -q
+<?php
+
+/**
+ * This tool finds all of the font strings being used in our base themes and
+ * compares them to the font strings known by the themebuilder.  If a font
+ * string exists in a base font that is not known to the themebuilder, the
+ * themebuilder will not show which font is associated with the corresponding
+ * element(s).  Before checking in style changes, this tool should indicate
+ * "No issues found."
+ *
+ * Just run the tool.  It will find the base themes and report any
+ * inconsistencies, along with a list of valid fonts.
+ */
+
+require_once('ThemeChecker.inc');
+
+class ThemeFontParser extends ThemeChecker {
+
+  public function identifyRejects() {
+    $fontsUsed = $this->getUsedFonts();
+    $rejects = $this->compare($fontsUsed);
+    return $rejects;
+  }
+
+  public function getUsedFonts() {
+    $result = array();
+    $grep_result = array();
+    $command = 'grep -n font-family ' . $this->dir . '/*/*.css';
+    exec($command, $grep_result);
+    foreach ($grep_result as $line) {
+      $font_info = $this->takeApart($line);
+      if (isset($font_info)) {
+        $result[] = $font_info;
+      }
+    }
+    return $result;
+  }
+
+  /**
+   * Takes the specified line aparat and generates an object that summarizes
+   * the data in the line.
+   *
+   * @param $line
+   *   The interesting part of a line from the log file.
+   */
+  private function takeApart($line) {
+    $result = NULL;
+    $matches = array();
+    preg_match('/^(.*)(?:\s*)font-family:(?:\s*)(.*)(?:\s*);(?:\s*)/', $line, $matches);
+    if (count($matches) === 3) {
+      $result = new stdClass();
+      $result->location = $matches[1];
+      $result->fontString = $this->normalizeFontValue($matches[2]);
+    }
+    return $result;
+  }
+
+  /**
+   * If the font value is not normalized, small inconsistencies will make it
+   * such that the selected font will not appear in the font-family drop down
+   * menu.
+   *
+   * @param $font
+   *   A string representing the font family.
+   *
+   * @return
+   *   The normalized representation of the font value.
+   */
+  private function normalizeFontValue($font) {
+    $result = array();
+    $font_array = explode(',', $font);
+    foreach ($font_array as $font_string) {
+      $font_string = str_replace('"', '', $font_string);
+      $font_string = str_replace("'", '', $font_string);
+      $result[] = trim($font_string);
+    }
+    return implode(',', $result);
+  }
+
+  public function getKnownFonts() {
+    $knownFonts = array('auto',
+      'Arial,Helvetica,sans-serif',
+      'Helvetica Neue,Helvetica,Arial,sans-serif',
+      'Helvetica Neue Bold, Helvetica, Arial, sans-serif',
+      'Courier New,Courier,monospace',
+      'Times New Roman,Times,serif',
+      'Palatino,Times New Roman,serif',
+      'Lucida Sans,Lucida Grande,Lucida,sans-serif',
+      'Bradley Hand ITC,Apple Chancery,URW Chancery L,cursive',
+      'Georgia,New Century Schoolbook,Nimbus Roman No9 L,serif',
+      'Monaco,Bitstream Vera Sans Mono,Lucida Console,Terminal,monospace');
+    for ($i = 0; $i < count($knownFonts); $i++) {
+      $knownFonts[$i] = $this->normalizeFontValue($knownFonts[$i]);
+    }
+    return $knownFonts;
+  }
+
+  public function compare($fonts) {
+    $knownFonts = $this->getKnownFonts();
+    $builtInFonts = array();
+    for ($i = 0; $i < count($knownFonts); $i++) {
+      $builtInFonts[$this->normalizeFontValue($knownFonts[$i])] = TRUE;
+    }
+    $rejects = array();
+    foreach ($fonts as $font) {
+      if ($builtInFonts[$font->fontString] !== TRUE) {
+        $rejects[] = $font;
+      }
+    }
+    return $rejects;
+  }
+
+  public function printRejects($rejects) {
+    if (count($rejects) > 0) {
+      for ($i = 0; $i < count($rejects); $i++) {
+        $font = $rejects[$i];
+        print($font->location . '  ' . $font->fontString . "\n");
+      }
+      print("\n\nValid fonts:\n");
+      $knownFonts = $this->getKnownFonts();
+      for ($i = 0; $i < count($knownFonts); $i++) {
+        print($knownFonts[$i] . "\n");
+      }
+    }
+    else {
+      print("No font issues found.\n");
+    }
+  }
+}
+
+$fontParser = new ThemeFontParser($argv);
+$rejects = $fontParser->identifyRejects();
+$fontParser->printRejects($rejects);
+$returnCode = (count($rejects) === 0) ? 0 : -1;
+exit($returnCode);
+

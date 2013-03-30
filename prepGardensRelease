@@ -1,0 +1,205 @@
+#!/usr/bin/php -q
+<?php
+include_once('tools/lib/release.inc');
+date_default_timezone_set('EST');
+
+/**
+ * Returns a help message for this script.
+ */
+function prep_gardens_release_help_message() {
+  $message = <<<EOF
+
+Prepares a Gardens branch for release.
+
+This script is designed to run on a Gardens branch and create a release tag
+from the tip of that branch that is ready to be deployed. In particular, it
+does the following:
+
+ 1. Checks all Gardens themes in the branch to make sure they do not have
+    improper fonts or palettes.
+ 2. Checks Gardens project info files to make sure they have correct version
+    information.
+ 3. Runs "SVN copy" to create a new tag (in the Acquia engineering repository)
+    from the tip of the branch. This will be the next available tag, organized
+    by date (for example, "tags/20100503.2" for the second release tag created
+    on May 3, 2010).
+ 4. Prints out to the screen the Hosting commands that would need to be run to
+    push the code live (but does not actually run them).
+
+The following options are supported:
+
+ --release-branch [branch]  The SVN branch to release from.  If provided, it can
+                            either be a full SVN URL, or the name of a branch
+                            within the "gardens" subdirectory of the
+                            Acquia engineering repository (e.g., 'gardens-beta-7').
+                            If not provided, the current SVN checkout's branch is
+                            used.
+                            **WARNING** Regardless of which parameter you pass in
+                            here, the checks described above (which determine if
+                            the branch is ready for release) will be run on the
+                            *current* SVN checkout you are running this script
+                            from. So only use this parameter if you know what you
+                            are doing, since otherwise it might lead you to release
+                            a branch that isn't actually verified to be ready.
+ --commit-message [msg]     The text of the SVN commit message for the new tag
+                            (should be enclosed in quotes). If not provided, an
+                            informative default message is used.
+ --username [username]      svn username (optional)
+ --password [password]      svn password (optional)
+ --dry-run                  Prints all commands to the screen, but does not actually
+                            create the new tag in the Acquia SVN repository.
+ --force                    Force the script to complete, even if some of the checks
+                            fail.
+ --help                     Prints this help text and exits.
+
+EOF;
+
+  return $message;
+}
+
+try {
+  // Get optional command line parameters.
+  $parameters = array(
+    'release-branch' => NULL, // Defaults to the branch where this script was run from.
+    'commit-message' => 'Gardens release ' . date('r'),
+    'dry-run' => FALSE,
+    'force' => FALSE,
+    'username' => NULL,
+    'password' => NULL,
+    'help' => FALSE,
+  );
+  while ($arg = array_shift($_SERVER['argv'])) {
+    if (preg_match('/--(\S+)/', $arg, $matches)) {
+      if ($matches[1] == 'help') {
+        // Print the help message and immediately quit.
+        print prep_gardens_release_help_message();
+        exit;
+      }
+      elseif ($matches[1] == 'dry-run') {
+        $parameters['dry-run'] = TRUE;
+      }
+      elseif ($matches[1] == 'force') {
+        $parameters['force'] = TRUE;
+      }
+      elseif (array_key_exists($matches[1], $parameters)) {
+        $parameters[$matches[1]] = array_shift($_SERVER['argv']);
+      }
+    }
+  }
+  // Create variables for each parameter, e.g. $release_branch and $commit_message.
+  foreach ($parameters as $key => $value) {
+    $variable_name = str_replace('-', '_', $key);
+    $$variable_name = $value;
+  }
+  $initial_message = "Preparing Gardens release";
+  if ($dry_run) {
+    $initial_message .= " (DRY RUN)";
+  }
+  print "\n$initial_message...\n\n";
+
+  // Make sure Gardens themes don't have any problems.
+  print "Checking all Gardens themes for issues with palettes and improper fonts...\n";
+  system('./tools/checkThemeFonts', $error);
+  if ($error) {
+    $message = 'There was a problem with Gardens theme fonts. See above for more details.';
+    if ($parameters['force']) {
+      print $message;
+    }
+    else {
+      throw new Exception($message);
+    }
+  }
+  system('./tools/checkPalettes', $error);
+  if ($error) {
+    $message = 'There was a problem with Gardens theme palettes. See above for more details.';
+    if ($parameters['force']) {
+      print $message;
+    }
+    else {
+      throw new Exception($message);
+    }
+  }
+  print "\n";
+
+  // Make sure Gardens projects don't have any problems with their info files.
+  print "Checking Gardens projects for problems with their info files...\n";
+  system('./tools/checkProjectInfoFiles', $error);
+  if ($error) {
+    $message = 'There was a problem with Gardens project info files. See above for more details.';
+    if ($parameters['force']) {
+      print $message;
+    }
+    else {
+      throw new Exception($message);
+    }
+  }
+  print "\n";
+
+  // Get the branch and tag we will release from.
+  print "Preparing an SVN command to create the release tag...\n";
+  if (!isset($release_branch)) {
+    // The branch comes from the local checkout by default.
+    $branch = acquia_gardens_release_require_svn_info('url',NULL, $username, $password);
+  }
+  else {
+    // It's possible to pass either a full URL or a branch name on the command
+    // line. 
+    $scheme = parse_url($release_branch, PHP_URL_SCHEME);
+    $branch = $scheme ? $release_branch : acquia_gardens_release_get_svn_url("$release_branch");
+    // No point going further if the branch doesn't exist.
+    if (!acquia_gardens_release_svn_url_exists($branch, $username, $password)) {
+      throw new Exception("The Gardens release branch $branch does not exist.");
+    }
+  }
+  $tag_name = acquia_gardens_release_get_next_available_svn_tag_name($username, $password);
+  $relative_tag_path = "tags/$tag_name";
+  $tag = acquia_gardens_release_get_svn_url($relative_tag_path);
+
+  // Create the release tag.
+  $svn_args = acquia_gardens_release_get_svn_args($username, $password);
+  $command = escapeshellcmd("svn $svn_args copy $branch $tag -m \"$commit_message\"");
+  if (!$dry_run) {
+    print "Executing the following command...\n";
+  }
+  print "$command\n";
+  if (!$dry_run) {
+    print shell_exec($command);
+  }
+
+  // Nag the user if they try to release from trunk.
+  if (strpos($branch, '/trunk') !== FALSE) {
+    print "\n";
+    print "****************************************************\n";
+    print "WARNING!\n";
+    print "This release tag was created off of trunk.\n";
+    print "Normally, you want to release from a branch instead.\n";
+    print "Only proceed if you know what you are doing.\n";
+    print "****************************************************\n";
+  }
+
+  // Print out commands for pushing the code live.
+  $tangles = acquia_gardens_release_get_tangles();
+  if ($dry_run) {
+    print "\nTo push the code live:\n1. RERUN THIS COMMAND WITHOUT THE --dry-run OPTION (so that the above release tag is actually created)\n2. Go to a Hosting checkout directory, switch to the correct stage, and run commands like this:\n\n";
+  }
+  else {
+    print "\nIf the above command was successful, you can push the code live by going to a Hosting checkout directory, switching to the correct stage, and running commands like this:\n\n";
+  }
+  print "To put the code on the production (Gardens) SVN repository:\n";
+  $command = acquia_gardens_release_get_update_svn_command($relative_tag_path);
+  $command = "./" . $command;
+  print "$command\n\n";
+  print "To actually deploy the code after it is on the production (Gardens) SVN repository:\n";
+  foreach (array('', '_up') as $suffix) {
+    foreach ($tangles as $tangle) {
+    // We deploy code to the upgrade tangles also.
+      print "  php fields-provision.php --set-site-svn-path $tangle$suffix:$relative_tag_path\n";
+    }
+  }
+  print "\n(This assumes you want to push the code to the " . count($tangles) . " tangles listed above. You can modify the commands in the obvious way to use a different set of tangles.)\n";
+}
+catch (Exception $e) {
+  acquia_gardens_release_abort($e->getMessage());
+}
+
+

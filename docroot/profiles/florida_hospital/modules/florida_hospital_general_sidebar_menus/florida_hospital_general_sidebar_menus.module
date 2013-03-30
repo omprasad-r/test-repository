@@ -1,0 +1,7 @@
+<?php
+/**
+ * @file
+ * Code for the Florida Hospital General Sidebar Menus feature.
+ */
+
+include_once('florida_hospital_general_sidebar_menus.features.inc');

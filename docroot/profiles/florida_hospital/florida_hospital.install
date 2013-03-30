@@ -1,0 +1,98 @@
+<?php
+
+/**
+ * Implements hook_install().
+ */
+function florida_hospital_install() {
+  // Copy the fh_base theme to acq_my_theme, and use it by default.
+  $default_theme_name = themebuilder_compiler_copy_theme('fh_base', 'My theme');
+  gardens_misc_replace_default_theme($default_theme_name);
+
+  // Remove the "Powered by" and user menu blocks from all themes.
+  $powered_by = db_and()
+    ->condition('module', 'system')
+    ->condition('delta', 'powered-by');
+  $user_menu = db_and()
+    ->condition('module', 'system')
+    ->condition('delta', 'user-menu');
+  $or = db_or();
+  $or->condition($powered_by);
+  $or->condition($user_menu);
+
+  $query = db_update('block')
+    ->fields(array(
+      'status' => 0,
+      'region' => BLOCK_REGION_NONE,
+    ))
+    ->condition($or);
+  $query->execute();
+
+  // Move the search form block to the header region.
+  db_update('block')
+    ->fields(array(
+      'status' => 1,
+      'region' => 'header',
+    ))
+    ->condition('module', 'search')
+    ->condition('delta', 'form')
+    ->condition('theme', 'acq_my_theme')
+    ->execute();
+
+  // Create a block with a link to the contact page.
+  $body = l('Reach our practice', 'contact-us');
+  $delta = gardens_profile_add_box($body, 'Contact link', variable_get('gardens_safe_html_format', filter_fallback_format()));
+  gardens_profile_add_block('block', $delta, 'acq_my_theme', '1', '10', 'sidebar_a', 0, '', 0, 'contact link');
+
+  // Create a block a block for promotions.
+  $body = "";
+  $delta = gardens_profile_add_box($body, 'Promotions block', variable_get('gardens_safe_html_format', filter_fallback_format()));
+  gardens_profile_add_block('block', $delta, 'acq_my_theme', '1', '11', 'sidebar_a', 0, '', 0, 'promo');
+
+  // Add Facebook/Twitter links in the header by default
+  gardens_profile_add_block('follow', 'site', 'acq_my_theme', '1', '0', 'header');
+  // Define links for the block.
+  $links = array();
+  $link = new stdClass();
+  $link->name = 'facebook';
+  // There aren't really any sensible defaults for the facebook and twitter accounts
+  // across all sites that I'm aware of.  They'll need to be configured per site in
+  // any case.
+  $link->url = 'http://www.facebook.com/';
+  $link->weight = -2;
+  $links['facebook'] = $link;
+  $link = new stdClass();
+  $link->name = 'twitter';
+  $link->url = 'http://twitter.com/';
+  $link->weight = -1;
+  $links['twitter'] = $link;
+
+  foreach ($links as $link) {
+    follow_link_save($link);
+  }
+  // Change the default title of the RSS link
+  db_update('follow_links')
+    ->condition('path', 'rss.xml')
+    ->fields(array(
+      'title' => 'RSS',
+    ))
+    ->execute();
+
+  // Enable SSL for all authenticated users.
+  florida_hospital_securepages_authenticated();
+}
+
+/**
+ * Enable SSL for all authenticated users
+ */
+function florida_hospital_securepages_authenticated() {
+  $roles = variable_get('securepages_roles', array());
+  $roles[DRUPAL_AUTHENTICATED_RID] = DRUPAL_AUTHENTICATED_RID;
+  variable_set('securepages_roles', $roles);
+  $pages = explode("\n", variable_get('securepages_pages', ''));
+  $pages = array_filter(array_map('trim', array_unique(array_merge($pages, array('gardens-login', 'openid/authenticate', 'user', 'user/login', 'user/register')))));
+  variable_set('securepages_pages', implode("\n", $pages));
+  $ignore = explode("\n", variable_get('securepages_ignore', ''));
+  $ignore = array_diff($ignore, array('user', 'user/login', 'user/register'));
+  $ignore = array_filter(array_map('trim', array_unique(array_merge($ignore, array('gardener/login', 'gardener/register', 'user/logout')))));
+  variable_set('securepages_ignore', implode("\n", $ignore));
+}

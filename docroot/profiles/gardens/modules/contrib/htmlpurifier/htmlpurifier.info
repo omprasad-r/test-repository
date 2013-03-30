@@ -1,8 +1,0 @@
-name = "HTML Purifier"
-description = "Filter that removes malicious HTML and ensures standards compliant output."
-core = 7.x
-files[] = htmlpurifier.install
-files[] = htmlpurifier.module
-files[] = htmlpurifier.admin.inc
-files[] = HTMLPurifier_DefinitionCache_Drupal.php
-configure = admin/config/content/htmlpurifier

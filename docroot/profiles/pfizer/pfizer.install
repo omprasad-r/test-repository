@@ -1,0 +1,73 @@
+<?php
+
+/**
+ * Implements hook_install().
+ */
+function pfizer_install() {
+  // Enable SSL for all authenticated users.
+  pfizer_securepages_authenticated();
+}
+
+/**
+ * Enable SSL for all authenticated users and set defaults for Pfizer.
+ */
+function pfizer_securepages_authenticated() {
+  // Hardcoded list of admin-level roles for now.
+  $roles = variable_get('securepages_roles', array());
+  $added_roles = array(11 => 11, 16 => 16, 21 => 21);
+  $roles = (is_array($roles) ? $roles + $added_roles : $added_roles);
+  variable_set('securepages_roles', $roles);
+  $pages = explode("\n", variable_get('securepages_pages', ''));
+  // remove user/login and register so that we can re-add them with the wildcard,
+  // in case there was a previously configured value for this. We need the wildcard
+  // to cover a couple of ajax paths.
+  $pages = array_diff($pages, array('user/login', 'user/register'));
+  $pages = array_filter(array_map('trim', array_unique(array_merge($pages, array('gardens-login', 'openid/authenticate', 'user', 'user/login*', 'user/register*', 'user/reset/*', 'user/password*')))));
+  variable_set('securepages_pages', implode("\n", $pages));
+  $ignore = explode("\n", variable_get('securepages_ignore', ''));
+  $ignore = array_diff($ignore, array('user', 'user/login', 'user/register'));
+  $ignore = array_filter(array_map('trim', array_unique(array_merge($ignore, array('gardener/login', 'gardener/register', 'user/logout')))));
+  variable_set('securepages_ignore', implode("\n", $ignore));
+}
+
+/**
+ * Enable gardens_site_variables module.
+ */
+function pfizer_update_7001() {
+  module_enable(array('gardens_site_variables'));
+}
+
+/**
+ * Enable local logins for pfizer sites and update securepages config to handle
+ * password reset links correctly.
+ */
+function pfizer_update_7002() {
+  scarecrow_allow_local_user_logins();
+  // Reset the securepages config.
+  pfizer_securepages_authenticated();
+}
+
+/**
+ * Enable Site Guard module.
+ */
+function pfizer_update_7003() {
+  if (!module_exists('site_guard')) {
+    module_enable(array('site_guard'), FALSE);
+  }
+}
+
+/**
+ * Set the stage name for the gardens_statsd module.
+ */
+function pfizer_update_7004() {
+  variable_set('gardens_statsd_stage', 'enterprise-g1');
+}
+
+/**
+ * Enable Audit Trail module.
+ */
+function pfizer_update_7005() {
+  if (!module_exists('audit_trail')) {
+    module_enable(array('audit_trail'), FALSE);
+  }
+}

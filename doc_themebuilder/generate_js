@@ -1,0 +1,23 @@
+#!/bin/bash
+
+# This script is used to generate JavaScript documentation for the
+# themebuilder.  In order to use this script you must download the
+# jsdoc-toolkit (http://code.google.com/p/jsdoc-toolkit) and install
+# that.  Also set a 'JSDOC_TOOLKIT' environment variable contains the
+# path to jsdoc-toolkit.
+
+# Not all of the JavaScript code in the themebuilder is being
+# documented.  We have a blacklist that indicates the files that
+# should not be documented.  These files are omitted because they are
+# not owned by Acquia and therefore would have to be forked to include
+# the necessary documentation tags or because they are tests that
+# pollute the global namespace.
+
+# This script should be executed from the directory that contains the
+# script and should run without warnings.  The resulting documentation
+# will be written to the 'js_docs' directory at
+# the top of the workspace.
+
+export JSDOC_TOOLKIT=./tools/jsdoc-toolkit
+find ../docroot/modules/acquia/themebuilder -name "*.js"|grep -v --file=./js_blacklist.txt -|xargs java -jar $JSDOC_TOOLKIT/jsrun.jar $JSDOC_TOOLKIT/app/run.js -a -d=./js_docs -p -t=$JSDOC_TOOLKIT/templates/jsdoc
+

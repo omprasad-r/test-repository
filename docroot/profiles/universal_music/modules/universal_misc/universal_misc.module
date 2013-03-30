@@ -1,0 +1,100 @@
+<?php
+
+/**
+ * @file
+ * Miscellaneous functionality for UMG.
+ *
+ * Note: It is rarely (if ever) a good idea to put any code in this module! We
+ * are trying *not* to have customer-specific code in Gardens. Plus, it is not
+ * included on site export. Instead, use this module mainly just to enable
+ * other general-purpose modules in the Gardens codebase which the customer
+ * needs.
+ */
+
+
+/**
+ * Implements hook_disallowed_modules_alter().
+ *
+ * Allow Janrain, Gardens moderation and Gardens site variables to be enabled.
+ */
+function universal_misc_disallowed_modules_alter(&$modules) {
+  $modules = array_diff($modules, array(
+    'gardens_moderation',
+    'gardens_mail_media',
+    'gardens_site_variables',
+    'comment_on_anything',
+    'janrain_client',
+    'janrain_login',
+    'janrain_capture',
+    'janrain_capture_ui',
+    'janrain_capture_mapping',
+    'mast',
+    'flag_friend',
+    'flag_friend_access',
+    'views_data_export',
+    // These are hidden submodules but we need them here in case simplified
+    // modules gets disabled.
+    'views_rss',
+    'views_rss_core',
+    'views_rss_itunes',
+  ));
+}
+
+/**
+ * Implements hook_simplified_modules_hidden_submodules().
+ */
+function universal_misc_simplified_modules_hidden_submodules() {
+  return array(
+    // Prevent the Views RSS and Views RSS Core modules from appearing on the
+    // Modules page, but turn them on automatically whenever Views (which they
+    // depend on) is enabled.
+    'views_rss',
+    'views_rss_core',
+    'views_rss_itunes',
+  );
+}
+
+/**
+ * Implements hook_init().
+ */
+function universal_misc_init() {
+  // Variables forced for UMG.
+  // Make sure the views data export temporary file location is in gluster.  gardens_temp
+  // conveniently is already handled in site export also (is used by mailhandler).
+  $GLOBALS['conf']['views_data_export_directory'] = 'public://gardens_temp';
+}
+
+/**
+ * Implements hook_simplified_modules_hidden_dependencies().
+ */
+function universal_misc_simplified_modules_hidden_dependencies() {
+  return array(
+    // Hide the gardens site variables module as a hidden dependency.
+    'gardens_site_variables',
+  );
+}
+
+/**
+ * Implements hook_library().
+ */
+function universal_misc_library() {
+  $path = drupal_get_path('module', 'universal_misc');
+  // Register the debug jQuery plugin as a library.
+  $libraries['prevent_multiple_clicks'] = array(
+    'title' => 'Prevents multiple clicks in comment forms.',
+    'website' => 'http://www.drupalgardens.com',
+    'version' => '1.00',
+    'js' => array(
+      $path . '/plugins/prevent-multiple-clicks/prevent-multiple-clicks.js' => array('group' => JS_THEME, 'every_page' => TRUE,),
+    ),
+  );
+  return $libraries;
+}
+
+/**
+ * Implements hook_javascript_libraries_available_alter().
+ */
+function universal_misc_javascript_libraries_available_alter(&$groups) {
+  $groups['Theme plugins']['library'][] = 'prevent_multiple_clicks';
+}
+

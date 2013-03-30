@@ -1,0 +1,35 @@
+<?php
+
+/**
+ * Implementation of hook_requirements().
+ */
+function akamai_requirements($phase) {
+  $requirements = array();
+  $t = get_t();
+
+  $requirements['SoapClient']['title'] = $t('SoapClient class');
+  if (!class_exists('SoapClient') ) {
+    $requirements['SoapClient']['value'] = $t('Not installed');
+    $requirements['SoapClient']['severity'] = REQUIREMENT_ERROR;
+    $requirements['SoapClient']['description'] = $t('The SoapClient library is not installed. Either install the php-soap extension, or otherwise make the library available to PHP.');
+  }
+  else {
+    $requirements['SoapClient']['value'] = $t('Installed');
+    $requirements['SoapClient']['severity'] = REQUIREMENT_OK;
+
+  }
+  return $requirements;
+}
+
+/**
+ * Update hook for upgrading to Drupal 7.
+ */
+function akamai_update_7000() {
+  db_update('variable')->fields(array('name' => 'akamai_basepath'))->condition('name', 'AkamaiCC_basepath')->execute();
+  db_update('variable')->fields(array('name' => 'akamai_username'))->condition('name', 'AkamaiCC_name')->execute();
+  db_update('variable')->fields(array('name' => 'akamai_password'))->condition('name', 'AkamaiCC_pwd')->execute();
+  db_update('variable')->fields(array('name' => 'akamai_action'))->condition('name', 'AkamaiCC_action')->execute();
+  db_update('variable')->fields(array('name' => 'akamai_domain'))->condition('name', 'AkamaiCC_domain')->execute();
+  db_update('variable')->fields(array('name' => 'akamai_wsdl'))->condition('name', 'AkamaiCC_soap_wsdl')->execute();
+  db_update('variable')->fields(array('name' => 'akamai_email'))->condition('name', 'AkamaiCC_email')->execute();
+}

@@ -1,0 +1,386 @@
+<?php
+
+function toolbar_prototype_theme($existing, $type, $theme, $path) {
+  $items['toolbar_prototype_drawer_section'] = array(
+    'render element' => 'element',
+  );
+  return $items;
+}
+
+function toolbar_prototype_theme_registry_alter(&$theme_registry) {
+  if (isset($theme_registry['toolbar'])) {
+    $theme_registry['toolbar']['template'] = 'toolbar_prototype';
+    $theme_registry['toolbar']['path'] = drupal_get_path('module', 'toolbar_prototype');
+  }
+}
+
+function toolbar_prototype_module_implements_alter(&$implementations, $hook) {
+  if ($hook == 'page_alter') {
+    $group = $implementations['toolbar_prototype'];
+    unset($implementations['toolbar_prototype']);
+    $implementations['toolbar_prototype'] = $group;
+  }
+}
+
+function toolbar_prototype_page_alter(&$page) {
+  $page['page_top']['toolbar']['#pre_render'] = array('toolbar_prototype_pre_render');
+}
+
+function toolbar_prototype_pre_render($toolbar) {
+  $toolbar = array_merge($toolbar, toolbar_prototype_view());
+  $toolbar['toolbar_drawer'] = array_merge($toolbar['toolbar_drawer'], toolbar_prototype_fill_drawer());
+  $toolbar['tooltips'] = toolbar_prototype_tooltips($toolbar);
+
+  return $toolbar;
+}
+
+function toolbar_prototype_view() {
+  global $user;
+
+  $trails = array();
+  foreach(menu_get_active_trail() as $trail) {
+    $trails[] = $trail['href'];
+  }
+
+  $module_path = drupal_get_path('module', 'toolbar');
+  $path = drupal_get_path('module', 'toolbar_prototype');
+  $build = array(
+    '#theme' => 'toolbar',
+    '#attached'=> array(
+      'js' => array(
+        $module_path . '/toolbar.js',
+        $path . '/toolbar_prototype.js',
+        array(
+          'data' => array('tableHeaderOffset' => 'Drupal.toolbar.height'),
+          'type' => 'setting'
+        ),
+      ),
+      'css' => array(
+        $module_path . '/toolbar.css',
+        $path . '/toolbar_prototype.css',
+      ),
+      'library' => array(array('system', 'jquery.cookie')),
+    ),
+  );
+
+  if ($user->uid) {
+    $links = array(
+      'account' => array(
+        'title' => t('<strong>@username</strong>', array('@username' => format_username($user))),
+        'href' => 'user',
+        'html' => TRUE,
+        'attributes' => array('title' => t('User account')),
+        'description' => t('View or edit your user account'),
+      ),
+      'logout' => array(
+        'title' => t('Log out'),
+        'href' => 'user/logout',
+        'description' => t('Log out of this site'),
+      ),
+    );
+    if (arg(0) == 'user') {
+      $links['account']['attributes']['class'][] = 'active';
+    }
+  }
+  else {
+     $links = array(
+      'login' => array(
+        'title' => t('Log in'),
+        'href' => 'user',
+        'description' => t('Log in to this site'),
+      ),
+    );
+  }
+  $build['toolbar_right']['toolbar_user'] = array(
+    '#theme' => 'links__toolbar_user',
+    '#links' => $links,
+    '#attributes' => array('id' => 'toolbar-user'),
+  );
+
+  // This is only for the prototype.
+  if (module_exists('scarecrow')) {
+    $links = array(
+      'mysites' => array(
+        'title' => t('My sites'),
+        'href' => scarecrow_get_gardener_url() . '/mysites',
+        'html' => TRUE,
+        'attributes' => array('title' => t('My sites')),
+        'description' => t('Go to your My sites page on Drupal Gardens'),
+      ),
+    );
+    $build['toolbar_right']['toolbar_mysites'] = array(
+      '#theme' => 'links',
+      '#links' => $links,
+      '#attributes' => array('id' => 'toolbar-mysites'),
+    );
+  }
+
+  $links = array(
+    'help' => array(
+      'title' => t('Help'),
+      'href' => 'admin/help',
+      'html' => TRUE,
+      'attributes' => array('title' => t('Help')),
+      'description' => t('Get help on various topics'),
+    ),
+  );
+  $build['toolbar_right']['toolbar_help'] = array(
+    '#theme' => 'links',
+    '#links' => $links,
+    '#attributes' => array('id' => 'toolbar-help'),
+  );
+
+  // Add a "home" link.
+  $link = array(
+    'home' => array(
+      'title' => '<span class="home-link">Home</span>',
+      'href' => '<front>',
+      'html' => TRUE,
+      'attributes' => array('title' => t('Home')),
+      'description' => t('Return to your home page'),
+    ),
+    'dashboard' => array(
+      'title' => '<span class="dashboard-link">Dashboard</span>',
+      'href' => 'admin/dashboard',
+      'html' => TRUE,
+      'attributes' => array('title' => t('Dashboard')),
+      'description' => t('The dashboard shows administrative tasks for your site'),
+    ),
+  );
+  $build['toolbar_left']['toolbar_home'] = array(
+    '#theme' => 'links',
+    '#links' => $link,
+    '#attributes' => array('id' => 'toolbar-home'),
+  );
+
+  $links = array(
+    'content' => array(
+      'title' => t('Content'),
+      'href' => 'admin/content',
+      'html' => TRUE,
+      'attributes' => array('title' => t('Content'), 'drawer' => 'content-drawer'),
+      '#paths' => array(
+        'admin/content',
+        'node/add',
+      ),
+      'description' => t('Content is what is on your site'),
+    ),
+    'people' => array(
+      'title' => t('People'),
+      'href' => 'admin/people',
+      'html' => TRUE,
+      'attributes' => array('title' => t('People'), 'drawer' => 'people-drawer'),
+      '#paths' => array(
+        'admin/people',
+      ),
+      'description' => t('People are your users'),
+    ),
+    'site' => array(
+      'title' => t('Site'),
+      'href' => 'admin/config',
+      'html' => TRUE,
+      'attributes' => array('title' => t('Site'), 'drawer' => 'site-drawer'),
+      '#paths' => array(
+        'admin/reports',
+        'admin/config',
+        'admin/modules',
+        'admin/structure',
+      ),
+      'description' => t('Site is administrative tasks'),
+    ),
+    'appearance' => array(
+      'title' => t('Appearance'),
+      'href' => 'admin/appearance',
+      'html' => TRUE,
+      'attributes' => array('title' => t('Appearance'), 'id' => 'toolbar-link-admin-appearance'),
+      '#paths' => array(
+        'admin/appearance',
+      ),
+      'description' => t('Launch the ThemeBuilder'),
+    ),
+  );
+  foreach($links as $key => $link) {
+    foreach($link['#paths'] as $path) {
+      if (in_array($path, $trails)) {
+        $links[$key]['attributes']['class'][] = 'active';
+      }
+    }
+  }
+
+  $build['toolbar_left']['toolbar_menu'] = array(
+    '#theme' => 'links',
+    '#links' => $links,
+    '#attributes' => array('id' => 'toolbar-menu', 'class' => array('drawer-links')),
+  );
+
+  // Add an anchor to be able to toggle the visibility of the drawer.
+  $build['toolbar_toggle'] = array(
+    '#theme' => 'toolbar_toggle',
+    '#collapsed' => _toolbar_is_collapsed(),
+    '#attributes' => array('class' => array('toggle')),
+  );
+
+  return $build;
+}
+
+function toolbar_prototype_fill_drawer() {
+  $drawer = array();
+
+  // Created the content drawer
+  $item = menu_get_item('node/add');
+  $content = system_admin_menu_block($item);
+  $drawer['content-drawer'] = array(
+    '#theme' => 'toolbar_prototype_drawer_section',
+    '#attributes' => array('id' => 'content-drawer'),
+    '#paths' => array(
+      'admin/content',
+      'node/add',
+    ),
+  );
+  $drawer['content-drawer']['add'] =  array(
+    '#theme' => 'links',
+    '#links' => $content,
+    '#attributes' => array('class' => 'toolbar-add'),
+  );
+
+  $drawer['content-drawer']['list'] =  array(
+    '#theme' => 'links',
+    '#links' => array(
+      'content' => menu_get_item('admin/content'),
+      'comments' => menu_get_item('admin/content/comment'),
+      'media' => menu_get_item('admin/content/media'),
+    ),
+    '#attributes' => array('class' => 'toolbar-list'),
+  );
+
+  // Create the people drawer
+  $drawer['people-drawer'] = array(
+    '#theme' => 'toolbar_prototype_drawer_section',
+    '#attributes' => array('id' => 'people-drawer'),
+    '#paths' => array(
+      'admin/people',
+    ),
+  );
+
+  // See DG-1352.  Only allow invite or create new users for admin, not both.
+  $add_user_path = (scarecrow_force_openid() ? 'admin/people/invite' : 'admin/people/create');
+  $drawer['people-drawer']['people'] = array(
+    '#theme' => 'links',
+    '#links' => array(
+      'people' => menu_get_item($add_user_path),
+    ),
+    '#attributes' => array('class' => 'toolbar-add'),
+  );
+  $drawer['people-drawer']['permissions'] = array(
+    '#theme' => 'links',
+    '#links' => array(
+      'permissions' => menu_get_item('admin/people/permissions'),
+      'roles' => menu_get_item('admin/people/permissions/roles'),
+    ),
+    '#attributes' => array('class' => 'toolbar-gear'),
+  );
+  $drawer['people-drawer']['list'] = array(
+    '#theme' => 'links',
+    '#links' => array(
+      'people' => menu_get_item('admin/people'),
+    ),
+    '#attributes' => array('class' => 'toolbar-list'),
+  );
+
+  // Create the site drawer
+  $item = menu_get_item('admin/structure');
+  $content = system_admin_menu_block($item);
+
+  $drawer['site-drawer'] = array(
+    'structure' => array(
+      '#theme' => 'links',
+      '#links' => $content,
+      '#attributes' => array('class' => 'toolbar-gear'),
+    ),
+    'modules' => array(
+      '#theme' => 'links',
+      '#links' => array(
+        'modules' => menu_get_item('admin/modules'),
+        'settings' => menu_get_item('admin/config'),
+      ),
+//      '#attributes' => array('class' => 'toolbar-puzzle'),
+    ),
+//    'settings' => array(
+//      '#theme' => 'links',
+//      '#links' => array(
+//        'settings' => menu_get_item('admin/config'),
+//      ),
+//      '#attributes' => array('class' => 'toolbar-wrench'),
+//    ),
+    'reports' => array(
+      '#theme' => 'links',
+      '#links' => array(
+        'reports' => menu_get_item('admin/reports'),
+      ),
+      '#attributes' => array('class' => 'toolbar-graph'),
+    ),
+    '#theme' => 'toolbar_prototype_drawer_section',
+    '#attributes' => array('id' => 'site-drawer'),
+    '#paths' => array(
+      'admin/reports',
+      'admin/config',
+      'admin/modules',
+      'admin/structure',
+    ),
+  );
+
+  $trails = array();
+  foreach(menu_get_active_trail() as $trail) {
+    $trails[] = $trail['href'];
+  }
+
+  // Prepare the drawer links CSS classes.
+  $toolbar_drawer_classes = array(
+    'toolbar-drawer',
+    'clearfix',
+  );
+
+  foreach($drawer as $key => $drawer_section) {
+    foreach($drawer_section['#paths'] as $path) {
+      if (in_array($path, $trails)) {
+        $drawer[$key]['#attributes']['class'][] = 'active';
+        $toolbar_drawer_classes[] = 'active';
+      }
+    }
+  }
+
+  $drawer['toolbar_drawer_classes'] = implode(' ', $toolbar_drawer_classes);
+
+  return $drawer;
+}
+
+function theme_toolbar_prototype_drawer_section($vars) {
+  $element = $vars['element'];
+  $classes = isset($element['#attributes']['class']) ? 'drawer ' . implode(' ', $element['#attributes']['class']) : 'drawer';
+  $output = '<div id="' . $element['#attributes']['id'] . '" class="' . $classes . '">';
+  $output .= drupal_render_children($element);
+  $output .= '</div>';
+  return $output;
+}
+
+function toolbar_prototype_tooltips($toolbar) {
+  $tooltips = array('default' => t('This is your administrative toolbar'));
+  toolbar_prototype_gather_tooltips($toolbar, $tooltips);
+  $settings = array('toolbar' => array('tooltips' => $tooltips));
+
+  drupal_add_js($settings, 'setting');
+  return TRUE;
+}
+
+function toolbar_prototype_gather_tooltips($parent, &$settings) {
+  $tooltips = array();
+  foreach(element_children($parent) as $child_key) {
+    if (isset($parent[$child_key]['#links'])) {
+      foreach($parent[$child_key]['#links'] as $key => $link) {
+        $path = isset($link['path']) ? url($link['path']) : 'href' . url($link['href']);
+        $settings[$path] = $link['description'];
+      }
+    }
+    toolbar_prototype_gather_tooltips($parent[$child_key], $settings);
+  }
+}

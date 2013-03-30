@@ -1,0 +1,21 @@
+/* @group Regions */
+
+/* @group Dropdown */
+
+.menu-dropdown .menu .expanded + li {
+  margin-left: 0; /* LTR */
+}
+.menu-dropdown .menu .expanded a {
+  padding-right: 27px; /* LTR */
+}
+.menu-dropdown .menu .menu a {
+  padding: 8px 1.1429em; /* LTR */
+}
+.menu-dropdown .menu li > a > .more-indicator {
+  left: 5px;
+  right: auto;
+}
+
+/* @end */
+
+/* @end */

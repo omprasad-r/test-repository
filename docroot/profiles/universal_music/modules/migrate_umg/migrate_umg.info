@@ -1,0 +1,17 @@
+name = "UMG migration"
+description = "UMG artist site migration"
+package = "Other"
+core = 7.x
+
+dependencies[] = migrate
+dependencies[] = migrate_extras
+dependencies[] = migrate_ui
+dependencies[] = date_migrate
+
+files[] = migrate_umg.migrate.inc
+files[] = news.inc
+files[] = news_story_type.inc
+files[] = photos.inc
+files[] = release.inc
+files[] = gallery.inc
+files[] = video.inc

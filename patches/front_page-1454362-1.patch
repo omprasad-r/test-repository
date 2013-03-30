@@ -1,0 +1,27 @@
+From 14efc3bb27db51cbe8e4f6cc424dac0377bad8fa Mon Sep 17 00:00:00 2001
+From: Jesse Beach <splendidnoise@gmail.com>
+Date: Mon, 19 Mar 2012 18:40:33 -0400
+Subject: [PATCH] Issue #1454362 by jessebeach: renamed front_page to
+ domain_301_redirect
+
+Signed-off-by: Jesse Beach <splendidnoise@gmail.com>
+---
+ domain_301_redirect.module |    2 +-
+ 1 files changed, 1 insertions(+), 1 deletions(-)
+
+diff --git a/domain_301_redirect.module b/domain_301_redirect.module
+index a8e3dfc..1d2e16b 100644
+--- a/domain_301_redirect.module
++++ b/domain_301_redirect.module
+@@ -44,7 +44,7 @@ function domain_301_redirect_menu() {
+ /**
+  * Implements hook_permission().
+  */
+-function front_page_permission() {
++function domain_301_redirect_permission() {
+   return array(
+       'bypass domain 301 redirect' => array(
+           'title' => t('Bypass domain 301 redirect'),
+-- 
+1.7.8.2
+

@@ -1,0 +1,147 @@
+--- /var/www/d.o/media/includes/media.pages.inc	2012-06-04 17:34:55.900289489 -0400
++++ includes/media.pages.inc	2012-06-04 17:37:03.392294047 -0400
+@@ -65,16 +65,9 @@ function media_page_multiedit($files) {
+  */
+ function media_page_delete($file) {
+   drupal_set_title(t('<em>Delete @type</em> @title', array('@type' => ($file->type != FILE_TYPE_NONE ? $file->type : ''), '@title' => $file->filename)), PASS_THROUGH);
+-  // Don't bother showing the form if the item is in use, since we won't allow
+-  // them to delete it anyway.
+-  $references = file_usage_list($file);
+-  if (!empty($references)) {
+-    return t('The file %title is in use and cannot be deleted.', array('%title' => $file->filename));
+-  }
+-  else {
+-    $files = array($file->fid => $file);
+-    return drupal_get_form('media_multiple_delete_confirm', $files, '<front>', 'media/' . $file->fid);
+-  }
++
++  $files = array($file->fid => $file);
++  return drupal_get_form('media_multiple_delete_confirm', $files, '<front>', 'media/' . $file->fid);
+ }
+ 
+ /**
+@@ -84,6 +77,10 @@ function media_multiple_delete_confirm($
+   $form['files'] = array('#tree' => TRUE);
+   $form['file_titles'] = array('#theme' => 'item_list');
+   foreach ($files as $fid => $value) {
++    // Warn the user if any of the selected files are in use.
++    $file = is_object($value) ? $value : file_load($fid);
++    media_file_usage_warning($file);
++
+     $title = db_query('SELECT filename FROM {file_managed} WHERE fid = :fid', array(':fid' => $fid))->fetchField();
+     $form['files'][$fid] = array(
+       '#type' => 'value',
+@@ -122,7 +119,7 @@ function media_multiple_delete_confirm_s
+     foreach ($files as $fid) {
+       $file = file_load($fid);
+       $files[$fid] = $file;
+-      $results[$fid] = file_delete($file);
++      $results[$fid] = file_delete($file, TRUE);
+     }
+     // The result of file_delete can be an array if the file is in use, or TRUE/FALSE.
+     foreach ($results as $fid => $result) {
+@@ -226,7 +223,7 @@ function media_add_upload_submit($form,
+   $file->display = TRUE;
+ 
+   // Change the file status from temporary to permanent.
+-  _media_save_file_permanently($file);
++  _media_save_file_permenently($file);
+ 
+   // Determine what URI scheme this file should use.
+   $scheme = !empty($params['uri_scheme']) && file_stream_wrapper_valid_scheme($params['uri_scheme']) ? $params['uri_scheme'] : file_default_scheme();
+@@ -291,7 +288,7 @@ function media_add_upload_multiple_submi
+ 
+       $file = file_uri_to_object($destination);
+       file_save($file);
+-      _media_save_file_permanently($file);
++      _media_save_file_permenently($file);
+ 
+       $saved_files[] = $file;
+     }
+@@ -323,13 +320,17 @@ function media_edit($form, $form_state,
+   $form['#attributes']['class'][] = 'media-image-left';
+   $form['#attributes']['class'][] = 'media-edit-form';
+ 
+-  $form['preview'] = file_view_file($file, 'media_preview');
++  // Add a preview area, meant to float left in a sidebar.
++  $form['preview'] = array();
+   $form['preview']['#weight'] = -10;
+-  $form['preview']['#suffix'] = '<div class="no-overflow">';
++  $form['preview']['#theme_wrappers'][] = 'container';
++  $form['preview']['#attributes']['class'][] = 'sidebar';
++  $form['preview']['preview'] = file_view_file($file, 'media_preview');
+ 
+   // Add the buttons.
+   $form['actions'] = array('#type' => 'actions');
+-  $form['actions']['#prefix'] = '</div>';
++  $form['actions']['#theme_wrappers'][] = 'container';
++  $form['actions']['#attributes']['class'][] = 'buttons';
+   $form['actions']['delete'] = array(
+     '#type' => 'submit',
+     '#value' => t('Delete'),
+@@ -434,3 +435,65 @@ function media_add_remote($form, &$form_
+ 
+   return $form;
+ }
++
++/**
++ * Helper function to warn a user if the file marked for deletion
++ * is used by any entity on the site. 
++ * 
++ * @param Object $file
++ *  A file object created by file_load().
++ */
++function media_file_usage_warning($file) {
++  if (empty($file) || !is_object($file)) {
++    return;
++  }
++
++  $references = file_usage_list($file);
++  if (!empty($references)) {
++    $usages = array();
++    $entities = array();
++    $other = FALSE;
++    $entity_types = entity_get_info();
++    foreach ($references as $data) {
++      // Lets assume that only entities are used in the file usage table.
++      foreach ($data as $type => $ids) {
++        if (array_key_exists($type, $entity_types)) {
++          foreach ($ids as $id => $count) {
++            $entities[$type][$id] = TRUE;
++          }
++        }
++        else {
++          $other = TRUE;
++        }
++      }
++    }
++    foreach ($entities as $type => $ids) {
++      $loaded_entities = entity_load($type, array_keys($ids));
++      if (count($loaded_entities) != count($ids)) {
++        $other = TRUE;
++      }
++      foreach ($loaded_entities as $entity) {
++        $url = entity_uri($type, $entity);
++        $usages[] = l(filter_xss(entity_label($type, $entity)), $url['path'], $url['options']);
++      }
++    }
++    if ($usages) {
++      if ($other) {
++        drupal_set_message(t('The file %title is used in !entities and others. Deleting this file could cause problems.', array(
++          '%title' => $file->filename,
++          '!entities' => implode(', ', $usages),
++        )), 'warning');
++      }
++      else {
++        drupal_set_message(t('The file %title is used in !entities. Deleting this file could cause problems.', array(
++          '%title' => $file->filename,
++          '!entities' => implode(', ', $usages),
++        )), 'warning');
++      }
++    }
++    else {
++      drupal_set_message(t('The file %title is in use. Deleting this file could cause problems.',
++          array('%title' => $file->filename)), 'warning');
++    }
++  }
++}

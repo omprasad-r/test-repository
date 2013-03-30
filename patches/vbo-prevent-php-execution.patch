@@ -1,0 +1,26 @@
+diff --git a/actions/script.action.inc b/actions/script.action.inc
+index 192e9e2..2f35411 100644
+--- a/actions/script.action.inc
++++ b/actions/script.action.inc
+@@ -1,6 +1,10 @@
+ <?php
+ 
+ function views_bulk_operations_script_action_info() {
++##GardensExcludeFromExportStart################################################
++// Make it impossible on Gardens sites to execute PHP scripts via VBO.
++return array();
++##################################################GardensExcludeFromExportEnd##
+   if (!module_exists('actions_permissions') && !user_access('administer site configuration')) return array();
+   return array('views_bulk_operations_script_action' => array(
+     'type' => 'entity',
+@@ -10,6 +14,10 @@ function views_bulk_operations_script_action_info() {
+ }
+ 
+ function views_bulk_operations_script_action($entity, $context) {
++##GardensExcludeFromExportStart################################################
++// Make it impossible on Gardens sites to execute PHP scripts via VBO.
++return;
++##################################################GardensExcludeFromExportEnd##
+   if (!module_exists('actions_permissions') && !user_access('administer site configuration')) {
+     global $user;
+     $msg = 'An attempt to execute arbitrary PHP script action by user <a href="user/!uid">%user</a> was blocked because of lack of permission.';

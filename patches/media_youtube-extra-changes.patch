@@ -1,0 +1,29 @@
+diff --git a/media_youtube.module b/media_youtube.module
+index 2282169..493152e 100644
+--- a/media_youtube.module
++++ b/media_youtube.module
+@@ -100,6 +100,24 @@ function media_youtube_media_parse($embed_code) {
+ }
+ 
+ /**
++ * Implements hook_form_FORM_ID_alter().
++ *
++ * Adds a link to the YouTube video below the preview thumbnail in the media
++ * edit form.
++ */
++function media_youtube_form_media_edit_alter(&$form, &$form_state) {
++  // @todo Integrate this better into media or media_internet module.
++  $media = $form_state['build_info']['args'][0];
++  if ($media->filemime == 'video/youtube' && isset($form['preview'][0])) {
++    if (!isset($form['preview'][0]['#suffix'])) {
++      $form['preview'][0]['#suffix'] = '';
++    }
++    $url = drupal_realpath($media->uri);
++    $form['preview'][0]['#suffix'] .= l($url, $url);
++  }
++}
++
++/**
+  * Implements hook_media_format_form_prepare_alter().
+  */
+ function media_youtube_media_format_form_prepare_alter(&$form, &$form_state, $media) {

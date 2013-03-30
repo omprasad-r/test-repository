@@ -1,0 +1,7 @@
+; $Id$
+name = Gardens verification
+description = Start with a pre-populated Gardens site designed to facilitate cross-browser testing.
+core = 7.x
+files[] = gardens_verification.install
+files[] = gardens_verification.profile
+dependencies[] = devel_generate

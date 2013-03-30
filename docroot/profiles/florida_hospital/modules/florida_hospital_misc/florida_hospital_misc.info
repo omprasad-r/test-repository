@@ -1,0 +1,5 @@
+name = Miscellaneous Florida Hospital functionality
+description = A holding pen for things which only belong on Florida Hospital sites.
+core = 7.x
+package = Drupal Gardens
+hidden = TRUE

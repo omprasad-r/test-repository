@@ -1,0 +1,16 @@
+name = UMG Enterprise Gardens
+description = Contains features and modules only intended for use by Universal Music Group.
+core = 7.x
+distribution_name = Drupal Gardens
+; This profile should never be installed as a base profile: we allow the gardens
+; profile to be installed fully first before switching to this one where needed.
+hidden=TRUE
+
+files[] = universal_music.profile
+
+; Default custom modules.
+dependencies[] = universal_misc
+dependencies[] = audit_trail
+dependencies[] = gardens_enterprise_misc
+dependencies[] = site_guard
+dependencies[] = gardens_statsd

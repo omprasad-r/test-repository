@@ -1,0 +1,7 @@
+name = Role indicators
+description = Provides markup to indicate user roles and roles that can access restricted content.
+core = 7.x
+dependencies[] = taxonomy_access
+
+files[] = role_indicators_handler_field_term_grants.inc
+stylesheets[all][] = role_indicators.css

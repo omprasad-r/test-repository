@@ -1,0 +1,40 @@
+/*
+ * Positioning for social sharing links
+ */
+.social-sharing-links {
+  float: right;
+}
+.social-sharing-links p {
+  float: left;
+  font-size: 1.25em;
+  margin: 1px 10px 1px 0;
+  padding: 0;
+}
+.social-sharing-links .fb-like {
+  float: right;
+  margin: 0 7px;
+  width: 121px;
+}
+.social-sharing-links .twitter-share-button {
+  float: left;
+  margin-right: 7px;
+  padding: 0;
+}
+.social-sharing-links .g-plusone {
+  float: left;
+  margin-right: 7px;
+  padding: 0;
+}
+
+/* Custom CSS class to insure the breadcrumbs and links will
+float properly */
+.col.social-sharing-links-present {
+  float: left;
+  width: auto;
+}
+
+/* Moves the Facebook "Like" and "Send" dialogs to the left so
+that there are no issues with page size due to the float right */
+.fb_edge_widget_with_comment span.fb_edge_comment_widget {
+  left: -265px !important;
+}

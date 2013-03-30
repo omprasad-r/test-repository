@@ -1,0 +1,69 @@
+<?php
+define('THUMBGEN_TYPE_PNG', 0);
+define('THUMBGEN_TYPE_JPG', 1);
+
+function thumbgen_init(){
+  global $user;
+  if ($user->uid==0 && drupal_valid_token($REQUEST['token'])){
+    $user->uid = 2;
+  }
+}
+
+function thumbgen_generate_get_xvfb_wrapper() {
+  // TODO: We should consider exposing this to administrators.
+  return '/usr/bin/xvfb-run';
+}
+
+function thumbgen_generate_get_python_command() {
+  // TODO: Expose to administrators - they may need to set the path.
+  return 'python';
+}
+
+/**
+ * Generate a thumbnail image from the specified url.
+ *
+ * @param String $url
+ *   The url of the page to create a thumbnail image of.
+ * @param String $filename
+ *   The path and name of the file to write the thumbnail into.
+ * @param int $width
+ *   The width of the desired thumbnail image.
+ * @param int $height
+ *   The height of the desired thumbnail image.
+ */
+function thumbgen_generate_thumbnail($url, $filename, $width = 200, $height = 150) {
+  $full_width = 1200;  // The full width of the browser window to use for the capture.
+  $token = drupal_get_token('generate/screenshot');
+  $url .= '&token=' . $token;
+
+  themebuilder_compiler_set_user_theme(2,themebuilder_compiler_get_current_theme_name());
+  
+  $script_path = drupal_realpath(drupal_get_path('module', 'thumbgen') . '/client.py');
+  $args = array(
+    $script_path,
+    $url,
+    '-o',
+    $filename,
+    '-w',
+    $width,
+    '-h',
+    $height,
+    '-f',
+    $full_width
+  );
+
+  $args = array($script_path, 'shoot', '10012', $url, $filename);
+  $command = escapeshellcmd(thumbgen_generate_get_python_command());
+  foreach($args as $arg) {
+    $command .= ' ' . escapeshellarg($arg);
+  }
+
+  $output = array();
+  $return_val = -1;
+  $output = system($command, $return_val);
+  if ($return_val != 0) {
+    throw new Exception('failed to gen: ' . $filename . ' :: ' . $command . $output);
+    // TODO: The creation of the thumbnail failed.
+    $x = 3;
+  }
+}

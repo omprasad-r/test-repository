@@ -1,0 +1,14 @@
+html.js .block-contact-link,
+html.js .block-promo {
+  display: none;
+}
+.block-contact-link h2,
+.block-promo h2 {
+  display: none;
+}
+.block-promo p {
+  margin: 0;
+}
+.sidebar .region ~ .block {
+  margin-top: 0;
+}

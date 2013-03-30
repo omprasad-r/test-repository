@@ -1,0 +1,7 @@
+; $Id$
+name = Thumbnail generator
+description = Generates a thumbnail image of a web page.
+core = 7.x
+package = Other
+files[] = thumbgen.module
+hidden = TRUE

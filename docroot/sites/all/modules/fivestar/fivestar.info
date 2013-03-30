@@ -1,0 +1,14 @@
+name = Fivestar
+description = Enables fivestar ratings on content, users, etc.
+package = Voting
+core = 7.x
+dependencies[] = votingapi
+files[] = test/fivestar.base.test
+files[] = test/fivestar.field.test
+files[] = views/fivestar.views.inc
+files[] = views/fivestar_views_handler_field_value.inc
+
+version = "7.x-2.0-alpha2"
+core = "7.x"
+project = "fivestar"
+datestamp = "1332954347"

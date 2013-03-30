@@ -1,0 +1,26 @@
+Index: pathauto.test
+===================================================================
+--- pathauto.test	(revision 37173)
++++ pathauto.test	(working copy)
+@@ -318,18 +318,18 @@
+     $this->assertNoEntityAlias('node', $node);
+ 
+     // Check that Pathauto does not create an alias of '/modules'.
+-    $node->title = 'Modules';
++    $node = $this->drupalCreateNode(array('title' => 'Modules', 'type' => 'page'));
+     node_save($node);
+     $this->assertNoEntityAlias('node', $node);
+ 
+     // Check that Pathauto does not create an alias of '/index.php'.
+-    $node->title = 'index.php';
++    $node = $this->drupalCreateNode(array('title' => 'index.php', 'type' => 'page'));
+     node_save($node);
+     $this->assertNoEntityAlias('node', $node);
+ 
+     // Check that a safe value gets an automatic alias. This is also a control
+     // to ensure the above tests work properly.
+-    $node->title = 'Safe value';
++    $node = $this->drupalCreateNode(array('title' => 'Safe value', 'type' => 'page'));
+     node_save($node);
+     $this->assertEntityAlias('node', $node, 'safe-value');
+   }

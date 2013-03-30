@@ -1,0 +1,6 @@
+name = PDF Site Snapshot
+description = Adds the ability to render full site as PDF
+core = 7.x
+
+dependencies[] = gardens_pdf_rendition
+dependencies[] = xmlsitemap
