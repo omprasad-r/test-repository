@@ -176,7 +176,7 @@ function wordpress_migrate_import_form($form, &$form_state) {
     '#options' => $options,
     '#description' => t(''),
     '#ajax' => array(
-      'wrapper' => 'edit-settings',
+      'wrapper' => 'wordpress-migrate-import-form',
       'callback' => 'wordpress_migrate_post_type_change',
       'method' => 'replace',
     ),
@@ -694,7 +694,7 @@ function wordpress_migrate_vocabularies($node_type) {
 }
 
 function wordpress_migrate_post_type_change($form, $form_state) {
-  return $form['settings'];
+  return $form;
 }
 
 /**
