@@ -6,3 +6,9 @@ files[] = htmlpurifier.module
 files[] = htmlpurifier.admin.inc
 files[] = HTMLPurifier_DefinitionCache_Drupal.php
 configure = admin/config/content/htmlpurifier
+
+version = "7.x-1.x-dev"
+project = ""
+datestamp = "1298619391"
+; url = http://git.drupal.org/project/htmlpurifier.git
+; commit = 72f28273bb6e4616ed9f223bae2dc393f01dc5b2

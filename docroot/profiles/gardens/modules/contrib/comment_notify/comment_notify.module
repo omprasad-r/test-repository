@@ -465,7 +465,7 @@ function _comment_notify_mailalert($comment) {
 
   // Do they explicitly want this? Or is it default to send to users?
   // Is the comment author not the node author? Do they have access? Do they have an email (e.g. anonymous)?
-  if (((!empty($author->comment_notify_settings->node_notify) && $author->comment_notify_settings->node_notify == 1) || (comment_notify_variable_registry_get('node_notify_default_mailalert') == 1 && empty($author->comment_notify_settings->node_notify))) && $user->uid != $author->uid && node_access('view', $node, $author) && !empty($author->mail)) {
+  if (((!empty($author->comment_notify_settings->node_notify) && $author->comment_notify_settings->node_notify == 1) || (comment_notify_variable_registry_get('node_notify_default_mailalert') == 1 && !isset($author->comment_notify_settings->node_notify))) && $user->uid != $author->uid && node_access('view', $node, $author) && !empty($author->mail)) {
     // Get the author's language.
     $language = user_preferred_language($author);
     $raw_values = array(

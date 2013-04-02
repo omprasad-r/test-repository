@@ -8,13 +8,3 @@ function migrate_extras_init() {
     }
   }
 }
-
-/*
- * Implementation of hook_migrate_api().
- */
-function migrate_extras_migrate_api() {
-  $api = array(
-    'api' => 2,
-  );
-  return $api;
-}

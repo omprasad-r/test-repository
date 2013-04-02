@@ -1,0 +1,4 @@
+name = Gardens Health
+description = An API for reporting system health and information.
+core = 7.x
+files[] = 'GardensHealthReport.class.inc'

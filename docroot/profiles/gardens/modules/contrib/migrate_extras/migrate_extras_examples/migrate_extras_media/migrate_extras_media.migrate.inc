@@ -45,7 +45,7 @@ class MigrateExampleMediaImageMigration extends XMLMigration {
     $this->addFieldMapping('source_dir')
          ->defaultValue(drupal_get_path('module', 'migrate_extras_media') . '/source_files');
     // The 'value' of the media destination is mapped to the source field
-    // representing the media itself - in this case, a filename relateive to
+    // representing the media itself - in this case, a filename relative to
     // source_dir.
     $this->addFieldMapping('value', 'filename')
          ->xpath('filename');
@@ -131,7 +131,7 @@ class MigrateExampleMediaNodeMigration extends XMLMigration {
     parent::__construct();
     $this->description = t('Example migration into the Media module');
     $this->dependencies =
-      array('MigrateExampleMediaImage', 'MigrateExampleMediaImage');
+      array('MigrateExampleMediaImage', 'MigrateExampleMediaVideo');
 
     $this->map = new MigrateSQLMap($this->machineName,
       array(

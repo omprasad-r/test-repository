@@ -1,0 +1,13 @@
+.gardens_health_report_status {
+  padding: 0.5em;
+}
+
+.gardens_health_report_pass {
+  padding-left: 35px;
+  background: #C0E3BC url('/misc/message-24-ok.png') 0.5em 5px no-repeat;
+}
+
+.gardens_health_report_fail {
+  padding-left: 35px;
+  background: #E3BCBC url('/misc/message-24-error.png') 0.5em 5px no-repeat;
+}

@@ -45,7 +45,7 @@ class MigrateDestinationEntityAPI extends MigrateDestinationEntity {
    * @param string $entity_type
    *   A Drupal entity type.
    */
-  static public function getKeySchema($entity_type = NULL) {
+  public function getKeySchema($entity_type = NULL) {
     // Migrate UI invokes $destination->getKeySchema() without any parameters.
     if (!$entity_type) {
       if (isset($this)) {
@@ -180,7 +180,7 @@ class MigrateDestinationEntityAPI extends MigrateDestinationEntity {
         $entity->{$this->id} = $row->migrate_map_destid1;
       }
     }
-    else {
+    elseif ($migration->getSystemOfRecord() == Migration::SOURCE) {
       unset($entity->{$this->id});
     }
 

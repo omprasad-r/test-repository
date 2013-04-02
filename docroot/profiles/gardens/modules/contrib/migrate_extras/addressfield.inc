@@ -42,6 +42,29 @@ class MigrateAddressFieldHandler extends MigrateFieldHandler {
     $this->registerTypes(array('addressfield'));
   }
 
+  /**
+   * Provide subfields for the addressfield columns.
+   */
+  public function fields() {
+    // Declare our arguments to also be available as subfields.
+    $fields = array(
+      'administrative_area' => t('The administrative area of this address (i.e. State/Province)'),
+      'sub_administrative_area' => t('The sub administrative area of this address'),
+      'locality' => t('The locality of this address (i.e. City)'),
+      'dependent_locality' => t('The dependent locality of this address'),
+      'postal_code' => t('The postal code of this address'),
+      'thoroughfare' => t('The thoroughfare of this address (i.e. Street address)'),
+      'premise' => t('The premise of this address (i.e. Apartment / Suite number)'),
+      'sub_premise' => t('The sub_premise of this address'),
+      'organisation_name' => t('Contents of a primary OrganisationName element in the xNL XML'),
+      'name_line' => t('Contents of a primary NameLine element in the xNL XML'),
+      'first_name' => t('Contents of the FirstName element of a primary PersonName element in the xNL XML'),
+      'last_name' => t('Contents of the LastName element of a primary PersonName element in the xNL XML'),
+      'data' => t('Additional data for this address'),
+    );
+    return $fields;
+  }
+
   public function prepare($entity, array $field_info, array $instance, array $values) {
     $arguments = array();
     if (isset($values['arguments'])) {
