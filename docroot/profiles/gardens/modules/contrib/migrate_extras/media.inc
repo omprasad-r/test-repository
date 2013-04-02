@@ -66,6 +66,18 @@ class MigrateDestinationMedia extends MigrateDestinationFile {
             'wysiwyg' => 1,
           ),
         );
+        // Get the height and width parameters if present
+        preg_match('|width=[\'"]([^\'"]+)[\'"]|i', $matches[0], $width);
+        preg_match('|height=[\'"]([^\'"]+)[\'"]|i', $matches[0], $height);
+        // image width
+        if ($width) {
+          $image_info['attributes']['width'] = $width[1];
+        }
+        // image height
+        if ($height) {
+          $image_info['attributes']['height'] = $height[1];
+        }
+
         $result = '[[' . drupal_json_encode($image_info) . ']]';
       }
     }
