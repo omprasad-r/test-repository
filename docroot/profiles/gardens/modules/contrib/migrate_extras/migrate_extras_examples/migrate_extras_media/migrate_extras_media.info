@@ -14,3 +14,10 @@ features[node][] = "migrate_extras_media_example"
 files[] = migrate_extras_media.migrate.inc
 name = "Migrate Extras Media"
 package = "Migrate Examples"
+
+; Information added by drupal.org packaging script on 2012-11-29
+version = "7.x-2.5+2-dev"
+core = "7.x"
+project = "migrate_extras"
+datestamp = "1354194581"
+

@@ -10,3 +10,10 @@ name = "Migrate Extras Pathauto Example"
 package = "Migrate Examples"
 project = "migrate_extras_pathauto_example"
 version = "7.x-2.1-beta1"
+
+; Information added by drupal.org packaging script on 2012-11-29
+version = "7.x-2.5+2-dev"
+core = "7.x"
+project = "migrate_extras"
+datestamp = "1354194581"
+
