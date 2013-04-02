@@ -6,19 +6,19 @@ function dialog_user_menu() {
   $items['user/login/%dialog_js'] = array(
     'page callback' => 'dialog_user_ajax_callback',
     'page arguments' => array(1, 2),
-    'access callback' => TRUE,
+    'access callback' => 'user_is_anonymous',
     'type' => MENU_CALLBACK,
   );
   $items['user/register/%dialog_js'] = array(
     'page callback' => 'dialog_user_ajax_callback',
     'page arguments' => array(1, 2),
-    'access callback' => TRUE,
+    'access callback' => 'user_register_access',
     'type' => MENU_CALLBACK,
   );
   $items['user/password/%dialog_js'] = array(
     'page callback' => 'dialog_user_ajax_callback',
     'page arguments' => array(1, 2),
-    'access callback' => TRUE,
+    'access callback' => 'user_is_anonymous',
     'type' => MENU_CALLBACK,
   );
   return $items;
