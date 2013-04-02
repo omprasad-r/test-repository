@@ -1,0 +1,5 @@
+name = DBlog Disable
+description = Automatically disable the database log after a specified time period.
+
+core = 7.x
+package = Administration

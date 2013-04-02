@@ -1,0 +1,75 @@
+<?php
+
+/**
+ * Implements hook_menu().
+ */
+function gardens_health_menu() {
+  return array(
+    'admin/reports/gardens-health' => array(
+      'title' => 'Gardens Health',
+      'description' => 'Gardens Health Reports and Status Checks.',
+      'page callback' => 'gardens_health_report',
+      'access callback' => 'gardens_health_report_access',
+    ),
+  );
+}
+
+/**
+ * Access callback for the health report dashboard.
+ */
+function gardens_health_report_access() {
+  global $user;
+
+  return $user->uid == 1;
+}
+
+/**
+ * Page callback for the health report dashboard.
+ */
+function gardens_health_report() {
+  $output = array(
+    '#attached' => array(
+      'css' => array(drupal_get_path('module', 'gardens_health') . '/gardens_health.css'),
+    ),
+  );
+
+  foreach (module_invoke_all('gardens_health_report') as $report) {
+    $output[] = array(
+      '#theme' => 'html_tag',
+      '#tag' => 'h2',
+      '#value' => t($report->getName()),
+    );
+
+    switch ($report->checkStatus()) {
+      case GARDENS_HEALTH_STATUS_PASS:
+        $message = $report->message_pass;
+        $class = "gardens_health_report_pass";
+        break;
+      case GARDENS_HEALTH_STATUS_FAIL:
+        $message = $report->message_fail;
+        $class = "gardens_health_report_fail";
+        break;
+      default:
+        $message = $report->message_error;
+        $class = "gardens_health_report_error";
+        break;
+    }
+
+    $output[] = array(
+      '#theme' => 'html_tag',
+      '#tag' => 'div',
+      '#attributes' => array('class' => array('gardens_health_report_status', $class)),
+      '#value' => t($message),
+    );
+
+    $info = $report->getMessages();
+    if (!empty($info)) {
+      $output[] = array(
+        '#theme' => 'item_list',
+        '#items' => $info,
+      );
+    }
+  }
+
+  return $output;
+}
