@@ -469,3 +469,10 @@ function warner_misc_update_11155() {
     }
   }
 }
+
+/**
+ * Enable imagecache_token module
+ */
+function warner_misc_update_11156() {
+  module_enable(array('imagecache_token'));
+}
