@@ -469,3 +469,10 @@ function warner_misc_update_11155() {
     }
   }
 }
+
+/**
+ * Enable the front_page module
+ */
+function warner_misc_update_11156() {
+  module_enable(array('front_page'));
+}
