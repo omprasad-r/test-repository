@@ -14,3 +14,5 @@ dependencies[] = audit_trail
 dependencies[] = gardens_enterprise_misc
 dependencies[] = site_guard
 dependencies[] = gardens_statsd
+dependencies[] = imagecache_external
+dependencies[] = oembed_thumbnail_token

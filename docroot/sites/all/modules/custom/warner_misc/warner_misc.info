@@ -25,3 +25,5 @@ dependencies[] = domain_301_redirect
 dependencies[] = comment_on_anything
 dependencies[] = getid3
 dependencies[] = antivirus
+dependencies[] = imagecache_external
+dependencies[] = oembed_thumbnail_token

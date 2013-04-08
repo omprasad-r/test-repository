@@ -1,0 +1,6 @@
+name = oEmbed Thumbnail Token
+description = Provide tokens for oEmbed field thumbnails
+package = oEmbed
+dependencies[] = oembedcore
+dependencies[] = imagecache_external
+core = 7.x

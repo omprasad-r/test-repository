@@ -469,3 +469,10 @@ function warner_misc_update_11155() {
     }
   }
 }
+
+/**
+ * Enable imagecache_external and oembed_thumbnail_token module.
+ */
+function warner_misc_update_11156() {
+  module_enable(array('imagecache_external', 'oembed_thumbnail_token'));
+}

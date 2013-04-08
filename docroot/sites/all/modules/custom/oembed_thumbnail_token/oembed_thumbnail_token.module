@@ -1,0 +1,126 @@
+<?php
+
+/**
+ * Implements of hook_token_info().
+ */
+function oembed_thumbnail_token_token_info() {
+  $styles_tokens = array();
+
+  foreach (image_styles() as $style => $desc) {
+    $styles_tokens["ombed-thumbnail_{$style}"] = array(
+      'name' => $style,
+      'description' => t("oEmbed thumbnail using image style @s", array("@s" => $style)),
+    );
+  }
+
+  return array(
+    'types' => array(
+      'oembed-thumbnail' => array(
+        'name' => 'oEmbed thumbnail',
+        'description' => 'oEmbed thumbnail',
+        'needs-data' => 'media',
+      ),
+    ),
+    'tokens' => array(
+      'oembed-thumbnail' => $styles_tokens,
+    ),
+  );
+}
+
+/**
+ * Implements of hook_token_info_alter().
+ */
+function oembed_thumbnail_token_token_info_alter(&$data) {
+  foreach (field_info_fields() as $field) {
+    if ($field['type'] == 'media') {
+      if (isset($field['bundles'])) {
+        foreach ($field['bundles'] as $entity => $bundles) {
+          if (isset($data['tokens'][$entity])) {
+            $data['tokens'][$entity][$field['field_name']]['type'] = 'oembed-thumbnail';
+          }
+        }
+      }
+    }
+  } 
+}
+
+/**
+ * Implements hook_tokens().
+ */
+function oembed_thumbnail_token_tokens($type, $tokens, array $data = array(), array $options = array()) {
+  $replacements = array();
+  
+  // Iterate the fields
+  foreach (field_info_fields() as $field) {
+    // Use media fields
+    if ($field['type'] == 'media') {
+      // See if we have a token match on this field
+      if ($matches = token_find_with_prefix($tokens, $field['field_name'])) {
+        // Iterate the token matches
+        foreach ($matches as $match => $token) {
+          // Determine the image style
+          $style = str_replace('ombed-thumbnail_', '', $match);
+          // Extract the entity
+          if (isset($data[$type]) && ($entity = $data[$type])) {
+            // Extract the files for this field
+            if (isset($entity->{$field['field_name']})) {
+              if ($files = field_get_items($type, $entity, $field['field_name'])) {
+                // Iterate each file
+                foreach ($files as $file) {
+                  // Make sure a file ID is set
+                  if (isset($file['fid']) && $file['fid']) {
+                    // Append the thumbnail image URL
+                    if ($url = oembed_thumbnail_token_thumbnail_style_path($file['fid'], $style)) {
+                      $replacements[$token][] = $url; 
+                    }
+                  }
+                }
+                // Flatten the replacements
+                // @todo: Better way to handle multiple urls?
+                $replacements[$token] = implode(', ', $replacements[$token]);
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+
+  return $replacements;
+}
+
+/**
+ * Generate an image path for an oEmbed file thumbnail.
+ * 
+ * @param $fid
+ *   The oEmbed file ID.
+ * @param $style
+ *   The image style to use on the thumbnail.
+ * @return
+ *   An absolute local URL, which can be used inside IMG and META tags,
+ *   or NULL if the path could not be generated.
+ */
+function oembed_thumbnail_token_thumbnail_style_path($fid, $style) {
+  // Load the file
+  if ($file = file_load($fid)) {
+    // See if this is an oEmbed file
+    if (file_uri_scheme($file->uri) == 'oembed') {
+      // Create a wrapper
+      if ($wrapper = file_stream_wrapper_get_instance_by_uri($file->uri)) {
+        // Fetch the oEmbed data
+        if ($embed = oembedcore_oembed_data($wrapper->interpolateUrl())) {
+          // See if we have a thumbnail
+          if (isset($embed->thumbnail_url) && $embed->thumbnail_url) {
+            // Generate a local path for the external thumbnail image
+            if ($path = imagecache_external_generate_path($embed->thumbnail_url, $style)) {
+              // Convert the path to use the image style
+              return image_style_url($style, $path);
+            }
+          }
+        }
+      }
+    }
+  }
+  
+  return NULL;
+}
