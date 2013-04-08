@@ -4,10 +4,11 @@
  * Implements of hook_token_info().
  */
 function oembed_thumbnail_token_token_info() {
-  $styles_tokens = array();
+  $tokens = array();
 
+  // Add a token for each available image style
   foreach (image_styles() as $style => $desc) {
-    $styles_tokens["ombed-thumbnail_{$style}"] = array(
+    $tokens["ombed-thumbnail_{$style}"] = array(
       'name' => $style,
       'description' => t("oEmbed thumbnail using image style @s", array("@s" => $style)),
     );
@@ -22,7 +23,7 @@ function oembed_thumbnail_token_token_info() {
       ),
     ),
     'tokens' => array(
-      'oembed-thumbnail' => $styles_tokens,
+      'oembed-thumbnail' => $tokens,
     ),
   );
 }
@@ -31,10 +32,15 @@ function oembed_thumbnail_token_token_info() {
  * Implements of hook_token_info_alter().
  */
 function oembed_thumbnail_token_token_info_alter(&$data) {
+  // Iterate all available fields
   foreach (field_info_fields() as $field) {
+    // Only use media fields
     if ($field['type'] == 'media') {
+      // Check the available entities/bundles
       if (isset($field['bundles'])) {
+        // Iterate each entity
         foreach ($field['bundles'] as $entity => $bundles) {
+          // Set this entity's media field to use our tokens
           if (isset($data['tokens'][$entity])) {
             $data['tokens'][$entity][$field['field_name']]['type'] = 'oembed-thumbnail';
           }
