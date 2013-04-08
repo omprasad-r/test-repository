@@ -17,8 +17,8 @@ if (function_exists('drush_main') || drupal_is_cli()) {
 
 // @todo DG-7864: get one or both of these values out of the .ini file. For now
 // we'll hard-code them in each customer repo.
-$site_suffix = "example.acquia-test.com";
-$gardener_url = "http://gardener.example.acquia-test.com";
+$site_suffix = "wmg-gardens.com";
+$gardener_url = "http://www.wmg-gardens.com";
 
 
 
