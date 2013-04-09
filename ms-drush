@@ -229,7 +229,7 @@ function drush_gardens_prepare($args) {
   $json = json_encode($active_domains);
   // @todo: Fix this code, for now it is simulating how the old code worked that grabbed the text file to minimize interruption.
 
-  //$json = file_get_contents(_acquia_gardens_xmlrpc_server() ."/files/gardens/$hosting_site_name/active_domains_by_site.json.txt");
+  //$json = file_get_contents(_acquia_gardens_gardener_url() ."/files/gardens/$hosting_site_name/active_domains_by_site.json.txt");
   if (empty($json)) {
     throw new Exception("Did not retrieve any data for active_domains_by_site.");
   }

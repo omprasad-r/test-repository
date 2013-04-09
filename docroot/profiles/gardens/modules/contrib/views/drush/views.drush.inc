@@ -1,10 +1,11 @@
 <?php
+
 /**
  * @file
  * Drush integration of views.
  *
- * * drush cache-clear views - Clears the views specific caches.
- * * views-revert - Drush command to revert views overridden in the system.
+ * drush cache-clear views - Clears the views specific caches.
+ * views-revert - Drush command to revert views overridden in the system.
  */
 
 /**
@@ -54,7 +55,7 @@ function views_drush_command() {
   $items['views-dev'] = array(
     'callback' => 'views_development_settings',
     'drupal dependencies' => array('views'),
-    'description' => 'Setup the views settings to a more developer oriented value..',
+    'description' => 'Set the Views settings to more developer-oriented values.',
     'bootstrap' => DRUSH_BOOTSTRAP_DRUPAL_FULL,
     'aliases' => array('vd'),
   );
@@ -268,6 +269,7 @@ function views_development_settings() {
   variable_set('views_ui_show_listing_filters', TRUE);
   variable_set('views_ui_show_master_display', TRUE);
   variable_set('views_ui_show_advanced_column', TRUE);
+  variable_set('views_ui_always_live_preview', FALSE);
   variable_set('views_ui_always_live_preview_button', TRUE);
   variable_set('views_ui_show_preview_information', TRUE);
   variable_set('views_ui_show_sql_query', TRUE);
@@ -275,6 +277,7 @@ function views_development_settings() {
   variable_set('views_show_additional_queries', TRUE);
   variable_set('views_devel_output', TRUE);
   variable_set('views_devel_region', 'message');
+  variable_set('views_ui_display_embed', TRUE);
   $message = dt("Setup the new views settings.");
   drush_log($message, 'success');
 }
@@ -613,8 +616,8 @@ function _drush_views_import_eval($code) {
   return $view;
 }
 
-/*
-* Helper function to enable / disable views
+/**
+ * Helper function to enable / disable views
  * @param $viewnames: array of viewnames to process
  * @param $status: TRUE to disable or FALSE to enable the view
  */
@@ -639,8 +642,7 @@ function _views_drush_changestatus($viewnames = array(), $status = NULL) {
       variable_set('views_defaults', $views_status);
       views_invalidate_cache();
       drush_log(dt("Views cache was cleared"), 'ok');
-      menu_rebuild();
-      drush_log(dt("Menu cache was cleared"), 'ok');
+      drush_log(dt("Menu cache is set to be rebuilt on the next request."), 'ok');
     }
   }
 }

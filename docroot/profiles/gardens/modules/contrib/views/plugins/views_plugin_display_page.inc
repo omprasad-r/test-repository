@@ -1,4 +1,5 @@
 <?php
+
 /**
  * @file
  * Contains the page display plugin.
@@ -217,6 +218,10 @@ class views_plugin_display_page extends views_plugin_display {
       return drupal_not_found();
     }
 
+    if (!empty($this->view->build_info['denied'])) {
+      return drupal_access_denied();
+    }
+
     $this->view->get_breadcrumb(TRUE);
 
 
@@ -246,9 +251,12 @@ class views_plugin_display_page extends views_plugin_display {
       ),
     );
 
-    $path = strip_tags('/' . $this->get_option('path'));
+    $path = strip_tags($this->get_option('path'));
     if (empty($path)) {
-      $path = t('None');
+      $path = t('No path is set');
+    }
+    else {
+      $path = '/' . $path;
     }
 
     $options['path'] = array(
@@ -292,7 +300,6 @@ class views_plugin_display_page extends views_plugin_display {
    * Provide the default form for setting options.
    */
   function options_form(&$form, &$form_state) {
-    parent::options_form($form, $form_state);
     // It is very important to call the parent function here:
     parent::options_form($form, $form_state);
 
@@ -371,7 +378,6 @@ class views_plugin_display_page extends views_plugin_display {
           );
         }
         $form['menu']['weight'] = array(
-          '#suffix' => '</div>',
           '#title' => t('Weight'),
           '#type' => 'textfield',
           '#default_value' => isset($menu['weight']) ? $menu['weight'] : 0,
@@ -380,6 +386,7 @@ class views_plugin_display_page extends views_plugin_display {
         );
         $form['menu']['context'] = array(
           '#title' => t('Context'),
+          '#suffix' => '</div>',
           '#type' => 'checkbox',
           '#default_value' => !empty($menu['context']),
           '#description' => t('Displays the link in contextual links'),
@@ -471,12 +478,8 @@ class views_plugin_display_page extends views_plugin_display {
           form_error($form['path'], t('"%" may not be used for the first segment of a path.'));
         }
 
-        // automatically remove '/' from path.
-        $form_state['values']['path'] = trim($form_state['values']['path'], '/');
-
-        // remove trailing spaces
-        $form_state['values']['path'] = trim($form_state['values']['path']);
-
+        // automatically remove '/' and trailing whitespace from path.
+        $form_state['values']['path'] = trim($form_state['values']['path'], '/ ');
         break;
       case 'menu':
         $path = $this->get_option('path');

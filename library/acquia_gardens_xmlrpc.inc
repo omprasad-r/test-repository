@@ -19,7 +19,6 @@ class AcquiaGardensRpcCommunicationException extends AcquiaGardensRpcException {
  */
 class AcquiaGardensRpcApiException extends AcquiaGardensRpcException {}
 
-
 /**
  * Make an XML-RPC call to the Acquia Gardens master server.
  *
@@ -35,18 +34,15 @@ class AcquiaGardensRpcApiException extends AcquiaGardensRpcException {}
  */
 function acquia_gardens_call($method, $data = array(), $server = NULL) {
   $creds = _acquia_gardens_xmlrpc_creds('gardener');
-
-  if (empty($creds['hostname'])) {
-    $creds['hostname'] = _acquia_gardens_xmlrpc_server();
-  }
   return acquia_gardens_xmlrpc_call('acquia.gardens.'. $method, $data, $creds['hostname'], $creds['username'], $creds['password']);
 }
 
 /**
  * Returns RPC credentials stored in the filesystem.
  *
- * These creds will be stored in /mnt/gfs/nobackup/gardens_xmlrpc_creds.ini using
- * normal INI format, e.g.
+ * The cred file location will match the directory structure of an AH site:
+ * /mnt/www/html/[site]/docroot will have a credential file at
+ * /mnt/gfs/[site]/nobackup/gardens_xmlrpc_creds.ini, using normal INI format:
  *
  * [gardener]
  * hostname = "http://gardener.[stage].acquia-sites.com"
@@ -61,12 +57,16 @@ function acquia_gardens_call($method, $data = array(), $server = NULL) {
  */
 function _acquia_gardens_xmlrpc_creds($site) {
   static $gardens_xmlrpc_creds = array();
+  static $site_name;
+
   if (empty($gardens_xmlrpc_creds)) {
-    $gardens_xmlrpc_creds = parse_ini_file("/mnt/gfs/nobackup/gardens_xmlrpc_creds.ini", TRUE);
+    $lib_dir = dirname(__FILE__);
+    $site_name = preg_replace('@(.*/([^/]*)/library$)@', '$2', $lib_dir);
+    $gardens_xmlrpc_creds = parse_ini_file("/mnt/gfs/$site_name/nobackup/gardens_xmlrpc_creds.ini", TRUE);
   }
 
   if (empty($gardens_xmlrpc_creds[$site])) {
-    watchdog('gardens_xmlrpc', 'Unable to locate RPC credentials.', array(), WATCHDOG_ERROR);
+    throw new AcquiaGardensRpcException ("XMLRPC credential file not found in at /mnt/gfs/$site_name/nobackup/gardens_xmlrpc_creds.ini");
   }
 
   return $gardens_xmlrpc_creds[$site];
@@ -76,16 +76,15 @@ function _acquia_gardens_xmlrpc_creds($site) {
  * Returns the hostname of the Acquia Gardens master server (i.e., the
  * Gardener).
  */
-function _acquia_gardens_xmlrpc_server() {
-  static $server_name, $stage, $domain;
+function _acquia_gardens_gardener_url() {
+  static $url;
 
-  if (!isset($stage)) {
-    // Get the stage from the local server name, and use it to find the
-    // appropriate Gardener to talk to.
-    $hostname = trim(`hostname`);
-    list($server_name, $stage, $domain) = explode('.', $hostname, 3);
+  if (empty($url)) {
+    $creds = _acquia_gardens_xmlrpc_creds('gardener');
+    $url = $creds['hostname'];
   }
-  return "https://gardener.$stage.acquia-sites.com";
+
+  return $url;
 }
 
 /**
