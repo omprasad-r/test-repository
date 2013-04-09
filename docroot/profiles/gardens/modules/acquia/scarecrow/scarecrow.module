@@ -1250,41 +1250,10 @@ function scarecrow_get_gardener_url($base_root = NULL) {
   if (isset($gardener_url)) {
     return $gardener_url;
   }
+  $xmlrpc_library_path = dirname(DRUPAL_ROOT) . '/library/acquia_gardens_xmlrpc.inc';
+  require_once $xmlrpc_library_path;
 
-  // Otherwise, try to determine a URL automatically. Note that since the
-  // installer saves the above variable to the database, this code is only
-  // expected to run during installation (i.e., it is essentially just used to
-  // determine a default value for the textfield in the installer's site
-  // configuration form). Furthermore, it is usually unnecessary even then,
-  // since the Gardens auto-installation obtains the correct URL to use during
-  // installation by making an XML-RPC request to the Gardener to query for it.
-  // But it doesn't hurt to keep it around.
-  $hostname = parse_url(isset($base_root) ? $base_root : $GLOBALS['base_root'], PHP_URL_HOST);
-  $components = explode('.', $hostname);
-  // For URLs like mysite.drupalgardens.com or mysite.preview.drupalgardens.com
-  // the Gardener URL comes from taking off the "mysite" prefix.
-  if (preg_match('/\.drupalgardens.com$/', $hostname)) {
-    array_shift($components);
-    $gardener_hostname = implode('.', $components);
-  }
-  // Development hosting servers have a special, ugly-looking Gardener URL.
-  elseif (preg_match('/\.acquia-sites\.com$/', $hostname)) {
-    // Our testing with Jenkins launches a server instance with a .acquia-sites url
-    // pattern. In this case, we actually don't have a real domain to redirect to
-    // so we want to return an emtpy string as if no URL existed at all.
-    // @see https://backlog.acquia.com/browse/AN-24210
-    if (variable_get('acquia_gardens_local_user_accounts')) {
-      return '';
-    }
-    array_shift($components);
-    $gardener_hostname = 'gardener.' . implode('.', $components);
-  }
-  // If we reach this, we are presumably on a local development machine, so
-  // there is no reasonable default value for the Gardener.
-  else {
-    return '';
-  }
-  return "https://$gardener_hostname";
+  return _acquia_gardens_gardener_url();
 }
 
 /**

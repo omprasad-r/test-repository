@@ -150,7 +150,7 @@ function install_gardens_initialize($hosting_site_name, $hosting_site_environmen
   $sites_directory = acquia_gardens_sites_directory($hosting_site_name);
   acquia_gardens_ensure_directory($sites_directory);
   // Assuming allow_url_fopen as On to get remote files.
-  $json = file_get_contents(_acquia_gardens_xmlrpc_server() ."/files/gardens/$hosting_site_name/active_domains_by_site.json.txt");
+  $json = file_get_contents(_acquia_gardens_gardener_url() ."/files/gardens/$hosting_site_name/active_domains_by_site.json.txt");
   if ($performance_logging) {
     $microtime = microtime(TRUE);
     syslog(LOG_INFO, "install_gardens_initialize (performance log) $hosting_site_name $hosting_site_environment $microtime: Finished downloading active_domains_by_site.json.txt");
@@ -195,7 +195,7 @@ function install_gardens_initialize($hosting_site_name, $hosting_site_environmen
   // the slower, more robust method below; this faster method only exists so
   // that people who delete a Gardens site will have it appear to be deleted
   // right away.
-  $json = file_get_contents(_acquia_gardens_xmlrpc_server() . "/files/gardens/$hosting_site_name/recently_deleted_domains_by_site.json.txt");
+  $json = file_get_contents(_acquia_gardens_gardener_url() . "/files/gardens/$hosting_site_name/recently_deleted_domains_by_site.json.txt");
   if ($performance_logging) {
     $microtime = microtime(TRUE);
     syslog(LOG_INFO, "install_gardens_initialize (performance log) $hosting_site_name $hosting_site_environment $microtime: Finished downloading recently_deleted_domains_by_site.json.txt");
