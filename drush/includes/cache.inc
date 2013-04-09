@@ -322,6 +322,9 @@ class DrushFileCache implements DrushCacheInterface {
   }
 
   function getMultiple(&$cids) {
+    // Never cache
+    return array();
+
     try {
       $cache = array();
       foreach ($cids as $cid) {
@@ -347,6 +350,9 @@ class DrushFileCache implements DrushCacheInterface {
   }
 
   function set($cid, $data, $expire = DRUSH_CACHE_PERMANENT, array $headers = NULL) {
+    // Don't cache anything!
+    return FALSE;
+
     $created = time();
 
     $cache = new stdClass;
