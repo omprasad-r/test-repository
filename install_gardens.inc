@@ -946,8 +946,12 @@ function acquia_gardens_ensure_settings_file($site_directory, $hosting_site_name
   // and show them a simple message. For command-line scripts, we don't want to
   // redirect to the installer because it would stop the script from running,
   // so instead we throw an exception that can be caught.
-  $settings_inc = "/var/www/site-php/{$hosting_site_name}/D7-{$hosting_site_environment}-{$gardens_site_id}-settings.inc";
+  //
+  // The glob() below is used to account for a gardener who had suffixed their
+  // database names to identify them in a particular environment.
+  $settings_inc = array_pop(glob("/var/www/site-php/{$hosting_site_name}/D7-{$hosting_site_environment}-{$gardens_site_id}*settings.inc"));
   if (!file_exists($settings_inc)) {
+    syslog(LOG_ERR, "Gardens install unable to glob() $settings_inc for $gardens_site_id");
     // Try the old naming scheme.
     $settings_inc = "/var/www/site-php/{$hosting_site_name}/D7-{$gardens_site_id}-settings.inc";
   }
