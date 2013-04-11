@@ -8,7 +8,7 @@ function oembed_thumbnail_token_token_info() {
 
   // Add a token for each available image style
   foreach (image_styles() as $style => $desc) {
-    $tokens["ombed-thumbnail_{$style}"] = array(
+    $tokens["oembed-thumbnail_{$style}"] = array(
       'name' => $style,
       'description' => t("oEmbed thumbnail using image style @s", array("@s" => $style)),
     );
@@ -65,7 +65,7 @@ function oembed_thumbnail_token_tokens($type, $tokens, array $data = array(), ar
         // Iterate the token matches
         foreach ($matches as $match => $token) {
           // Determine the image style
-          $style = str_replace('ombed-thumbnail_', '', $match);
+          $style = str_replace('oembed-thumbnail_', '', $match);
           // Extract the entity
           if (isset($data[$type]) && ($entity = $data[$type])) {
             // Extract the files for this field
