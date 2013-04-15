@@ -247,12 +247,14 @@ function gardens_misc_load_plugins() {
 }
 
 function gardens_misc_page_alter(&$page) {
-  // Add the global tracking code.
-  $script1 = gardens_misc_get_tracking_code_include_ga();
-  $script2 = gardens_misc_get_tracking_code_track_pageview();
-  if ($script1 && $script2) {
-    drupal_add_js($script1, array('type' => 'inline', 'scope' => 'footer'));
-    drupal_add_js($script2, array('type' => 'inline', 'scope' => 'footer'));
+  if (variable_get('gardens_misc_include_google_analytics', TRUE)) {
+    // Add the global tracking code.
+    $script1 = gardens_misc_get_tracking_code_include_ga();
+    $script2 = gardens_misc_get_tracking_code_track_pageview();
+    if ($script1 && $script2) {
+      drupal_add_js($script1, array('type' => 'inline', 'scope' => 'footer'));
+      drupal_add_js($script2, array('type' => 'inline', 'scope' => 'footer'));
+    }
   }
 }
 
