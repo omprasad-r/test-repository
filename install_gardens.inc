@@ -352,14 +352,17 @@ function acquia_gardens_remove_site_domains($deleted_domains, $hosting_site_name
  *   The machine-readable name (from Acquia Hosting) of the Hosting
  *   environment whose Gardens sites will be installed or configured.
  */
-function install_gardens($hosting_site_name, $hosting_site_environment) {
+function install_gardens($hosting_site_name, $hosting_site_environment, $parent_hosting_site_name = '') {
+  if (empty($parent_hosting_site_name)) {
+    $parent_hosting_site_name = $hosting_site_name;
+  }
   // Request a random Gardens site to process. If there's more than one to
   // process, that's OK, because the next time this script gets called we will
   // get it then. (The reason for not trying to do more than one in the same
   // function call is that we need to load parts of the Drupal codebase for
   // each one, and I don't trust Drupal's static caches enough to do that for
   // multiple sites sharing the same codebase.)
-  $gardens_site_info = acquia_gardens_call('get.site.to.process', array($hosting_site_name));
+  $gardens_site_info = acquia_gardens_call('get.site.to.process', array($parent_hosting_site_name));
   if (empty($gardens_site_info)) {
     // No sites to process, so nothing to do here.
     return;
