@@ -695,10 +695,12 @@ function drush_hosting_domain_config($site_id, $domains = '') {
 function drush_hosting_domain_sync() {
   drush_hosting_include_install_gardens();
   $hosting_site_name = _drush_hosting_get_hosting_site_name();
+  $hosting_site_group = _drush_hosting_get_hosting_site_group();
   
-  $active_domains = acquia_gardens_call('get.active.domains.by.site', array($hosting_site_name));
+  $active_domains = acquia_gardens_call('get.active.domains.by.site', array($hosting_site_group));
+
   syslog(LOG_INFO, "Got " . count($active_domains) . " domains from the gardener");
-  $valid_domains = acquia_gardens_ensure_domains($active_domains, _drush_hosting_get_hosting_site_name());
+  $valid_domains = acquia_gardens_ensure_domains($active_domains, $hosting_site_name);
   // These are slower operations we may not want to run so frequently.
   if (drush_get_option('cleanup-deleted')) {
     $deleted = array();
@@ -772,6 +774,20 @@ function _drush_hosting_get_hosting_site_name() {
 
   // Filter for an optional "_up" or "up" to map update environments
   return preg_replace('/_?up$/', '', $hosting_site_name);
+}
+
+/**
+ * Returns the hosting site group.
+ *
+ * @todo this "API" doesn't seem reliable. We need to find a more permanent
+ * solution for deriving the AH site group when there is no drush site context.
+ */
+function _drush_hosting_get_hosting_site_group() {
+  $hosting_site_name = basename(dirname(realpath(DRUPAL_ROOT)));
+
+  $hosting_site_group = file_get_contents(sprintf('/var/www/site-php/%s/ah-site-group', $hosting_site_name));
+
+  return !empty($hosting_site_group) ? $hosting_site_group : $hosting_site_name;
 }
 
 /**
