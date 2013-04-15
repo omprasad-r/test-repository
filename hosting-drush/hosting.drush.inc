@@ -769,13 +769,9 @@ function drush_hosting_localhost_curl($path) {
  */
 function _drush_hosting_get_hosting_site_name() {
   $hosting_site_name = basename(dirname(realpath(DRUPAL_ROOT)));
-  // Gardens tangle names (by convention) never use _.  So an _ is a separator
-  // used only for a staging tangle.
-  $pos = strrpos($hosting_site_name, '_');
-  if ($pos !== FALSE && $pos > 0) {
-    $hosting_site_name = substr($hosting_site_name, 0, $pos);
-  }
-  return $hosting_site_name;
+
+  // Filter for an optional "_up" or "up" to map update environments
+  return preg_replace('/_?up$/', '', $hosting_site_name);
 }
 
 /**
