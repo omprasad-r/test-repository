@@ -56,39 +56,44 @@ function warner_misc_stats_access($hash) {
  * Allow Janrain, Gardens moderation and Gardens site variables to be enabled.
  */
 function warner_misc_disallowed_modules_alter(&$modules) {
+  // Modules that come with the distro and are disallowed by default but should
+  // be allowed here.
   $modules = array_diff($modules, array(
     'gardens_moderation',
     'gardens_mail_media',
     'gardens_site_variables',
-    'comment_on_anything',
     'janrain_client',
     'janrain_login',
-    'janrain_capture',
-    'janrain_capture_ui',
-    'janrain_capture_mapping',
-    'bunchball',
-    // It's debatable whether all these bunchball submodules need including here.
-    // They are included for consistency in case Warner disable simplified_modules.
-    'bunchball_entities',
-    'bunchball_fivestar',
-    'bunchball_groups',
-    'bunchball_nitro',
-    'bunchball_poll',
-    'bunchball_user_interaction',
-    'bunchball_user_roles',
-    'bunchball_webform',
-    'bunchball_queue',
-    'request_queue',
     'mast',
-    'flag_friend',
-    'flag_friend_access',
-    'views_data_export',
-    // These are hidden submodules but we need them here in case simplified
-    // modules gets disabled.
-    'views_rss',
-    'views_rss_core',
-    'views_rss_itunes',
   ));
+
+  // Modules that are not in the distro but are add-ons in this codebase and
+  // should not show up in the UI.
+  $modules += array(
+    'bulk_email',
+    'coppa_lite',
+    'feeds',
+    'feeds_import',
+    'feeds_news',
+    'feeds_ui',
+    'mailhandler',
+    'mailhandler_default',
+    'mailhandler_php_imap',
+    'mailhandler_tokenauth', // Cannot be removed from disallowed - unmet dependency
+    'mailhandler_medialink',
+    'mailhandler_sendto_auth',
+    'mailhandler_singlemailbox',
+    'mail_media',
+    'job_scheduler',
+    'member_api',
+    'uuid',
+    'uuid_services',
+    'uuid_services_example',
+    'shield',
+    'site_guard',
+    'views_rss_dc',
+    'getid3',
+  );
 }
 
 /**
