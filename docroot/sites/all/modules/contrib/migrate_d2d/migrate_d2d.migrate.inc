@@ -63,13 +63,6 @@ abstract class DrupalMigration extends DynamicMigration {
   protected $formatMappings = array();
 
   /**
-   * Track whether or not we've already displayed an encryption warning
-   *
-   * @var bool
-   */
-  protected static $showEncryptionWarning = TRUE;
-
-  /**
    * Required arguments:
    *
    * source_connection - Connection key for the DatabaseConnection holding the
@@ -117,24 +110,8 @@ abstract class DrupalMigration extends DynamicMigration {
     parent::__construct($this->arguments['group']);
     $this->sourceConnection = $this->arguments['source_connection'];
     if (!empty($group_arguments['source_database'])) {
-      $source_database = $group_arguments['source_database'];
-      // Ensure value is encrypted.
-      if (is_array($source_database)) {
-        $serialized_source = serialize($source_database);
-        $encrypted_source = $this->encrypt($serialized_source);
-        $group_arguments['source_database'] = $encrypted_source;
-        db_merge('migrate_group')
-          ->key(array('name' => $group->getName()))
-          ->fields(array(
-              'arguments' => serialize($group_arguments),
-          ))
-          ->execute();
-      }
-      else {
-        $decrypted_source = $this->decrypt($group_arguments['source_database']);
-        $source_database = unserialize($decrypted_source);
-      }
-      Database::addConnectionInfo($this->sourceConnection, 'default', $source_database);
+      Database::addConnectionInfo($this->sourceConnection, 'default',
+                                  $group_arguments['source_database']);
     }
     if (!empty($this->arguments['source_type'])) {
       $this->sourceType = $this->arguments['source_type'];
@@ -159,69 +136,6 @@ abstract class DrupalMigration extends DynamicMigration {
     else {
       $this->formatMappings = $this->version->getDefaultFormatMappings();
     }
-  }
-
-  /**
-   * Encrypt an incoming value. Detects for existence of the Drupal 'Encrypt'
-   *  module or the mcrypt PHP extension.
-   *
-   * @param string $value
-   * @return string The encrypted value.
-   */
-  protected function encrypt($value) {
-    if (module_exists('encrypt')) {
-      $value = encrypt($value);
-    }
-    else if (extension_loaded('mcrypt')) {
-      // Mimic encrypt module to ensure compatibility
-      $key = drupal_substr(variable_get('drupal_private_key', 'no_key'), 0, 32);
-      $iv_size = mcrypt_get_iv_size(MCRYPT_RIJNDAEL_256, MCRYPT_MODE_ECB);
-      $iv = mcrypt_create_iv($iv_size, MCRYPT_RAND);
-      $value = mcrypt_encrypt(MCRYPT_RIJNDAEL_256, $key, $value, MCRYPT_MODE_ECB, $iv);
-
-      $encryption_array['text'] = $value;
-      $encryption_array['method'] = 'mcrypt_rij_256'; // For forward compatibility with encrypt module
-      $encryption_array['key_name'] = 'drupal_private_key'; // For forward compatibility with encrypt module
-      $value = serialize($encryption_array);
-    }
-    else {
-      if (self::$showEncryptionWarning) {
-        MigrationBase::displayMessage(t('Your database credentials are not encrypted. Ensure the Encrypt Drupal module or mcrypt PHP extension is installed for this functionality.'), 'warning');
-        self::$showEncryptionWarning = FALSE;
-      }
-    }
-    return $value;
-  }
-
-  /**
-   * Decrypt an incoming value.
-   *
-   * @param string $value
-   * @return string The encrypted value
-   */
-  protected function decrypt($value) {
-    if (module_exists('encrypt')) {
-      $value = decrypt($value);
-    }
-    else if (extension_loaded('mcrypt')) {
-      // Mimic encrypt module to ensure compatibility
-      $encryption_array = unserialize($value);
-      $method = $encryption_array['method']; // Not used right now
-      $text = $encryption_array['text'];
-      $key_name = $encryption_array['key_name']; // Not used right now
-
-      $iv_size = mcrypt_get_iv_size(MCRYPT_RIJNDAEL_256, MCRYPT_MODE_ECB);
-      $iv = mcrypt_create_iv($iv_size, MCRYPT_RAND);
-      $key = drupal_substr(variable_get('drupal_private_key', 'no_key'), 0, 32);
-      $value = mcrypt_decrypt(MCRYPT_RIJNDAEL_256, $key, $text, MCRYPT_MODE_ECB, $iv);
-    }
-    else {
-      if (self::$showEncryptionWarning) {
-        MigrationBase::displayMessage(t('Your database credentials are not encrypted. Ensure the Encrypt Drupal module or mcrypt PHP extension is installed for this functionality.'), 'warning');
-        self::$showEncryptionWarning = FALSE;
-      }
-    }
-    return $value;
   }
 
   /**
@@ -372,11 +286,14 @@ abstract class DrupalVersion {
    *  Type of entity ('node', 'user', etc.) for which to retrieve field info.
    * @param $bundle
    *  Bundle within the entity type (e.g., 'article', 'blog', etc.).
+   * @param $include_body
+   *  Treat a node body as if it were a custom field (for supporting
+   *  content_profile).
    *
    * @return array
    *  An array keyed by field name, with field labels as the values.
    */
-  public function getSourceFields($entity_type, $bundle) {
+  public function getSourceFields($entity_type, $bundle, $include_body = FALSE) {
     $this->populateSourceFieldInfo($entity_type, $bundle);
     $fields = array();
     foreach ($this->sourceFieldInfo as $field_name => $info) {

@@ -72,8 +72,9 @@ class DrupalVersion5 extends DrupalVersion {
    *
    * @param $entity_type
    * @param $bundle
+   * @param $include_body
    */
-  protected function populateSourceFieldInfo($entity_type, $bundle) {
+  protected function populateSourceFieldInfo($entity_type, $bundle, $include_body = FALSE) {
     if ($entity_type == 'user') {
       // Get core profile fields.
       $this->profileFields();
@@ -335,8 +336,9 @@ class DrupalVersion5 extends DrupalVersion {
    *
    * @param $row
    * @param $entity_id
+   * @param $include_body
    */
-  public function getProfileValues($row, $entity_id) {
+  public function getProfileValues($row, $entity_id, $include_body = FALSE) {
     if (Database::getConnection('default', $this->arguments['source_connection'])
           ->schema()->tableExists('profile_values')) {
       migrate_instrument_start('DrupalVersion5::getProfileValues');

@@ -48,8 +48,9 @@ class DrupalVersion7 extends DrupalVersion {
    *
    * @param $entity_type
    * @param $bundle
+   * @param $include_body
    */
-  protected function populateSourceFieldInfo($entity_type, $bundle) {
+  protected function populateSourceFieldInfo($entity_type, $bundle, $include_body = FALSE) {
     if (empty($this->sourceFieldInfo)) {
       migrate_instrument_start('DrupalVersion7::sourceFieldInfo');
 
@@ -129,6 +130,7 @@ class DrupalVersion7 extends DrupalVersion {
    *
    * @param $row
    * @param $entity_id
+   * @param $include_body
    */
   public function getSourceValues($row, $entity_id) {
     // Load up field data for dynamically mapped fields

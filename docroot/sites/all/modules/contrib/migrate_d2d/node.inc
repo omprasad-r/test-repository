@@ -174,7 +174,7 @@ abstract class DrupalNodeMigration extends DrupalMigration {
     migrate_instrument_start('DrupalNodeMigration::createStub');
     $node = new stdClass;
     $node->title = t('Stub');
-    $node->body = t('Stub body');
+    $node->body = array(LANGUAGE_NONE => array(array("value" => t('Stub body'))));
     $node->type = $this->destination->getBundle();
     $node->uid = 1;
     node_save($node);

@@ -74,6 +74,10 @@ abstract class DrupalUserMigration extends DrupalMigration {
       $this->sourceFields['roles'] = array('label' => t('Roles'));
     }
 
+    if (!isset($this->sourceOptions['track_changes'])) {
+      $this->sourceOptions['track_changes'] = TRUE;
+    }
+
     $this->source = new MigrateSourceSQL($this->query(), $this->sourceFields,
       NULL, $this->sourceOptions);
 
@@ -88,17 +92,6 @@ abstract class DrupalUserMigration extends DrupalMigration {
       ),
       DrupalDestinationUser::getKeySchema()
     );
-
-    // We don't have a proper last-changed timestamp on users, access is the
-    // best we can do.
-    // @todo: Doesn't work in a straight-forward way, because access is 0 for
-    // accounts that haven't been logged in. Disabled until we come up with a
-    // good solution
-/*    $this->highwaterField = array(
-      'name' => 'access',
-      'alias' => 'u',
-      'type' => 'int',
-    );*/
 
     // Most mappings are straight-forward
     $this->addSimpleMappings(array('pass', 'mail', 'theme', 'signature',
@@ -161,7 +154,6 @@ abstract class DrupalUserMigration extends DrupalMigration {
              ->select('users', 'u')
              ->fields('u')
              ->condition('u.uid', 0, '>');
-//             ->orderBy('access');
     return $query;
   }
 
@@ -176,21 +168,30 @@ abstract class DrupalUserMigration extends DrupalMigration {
       return FALSE;
     }
 
-    // If this email address already exists, just map to the existing uid
-    // and don't allow it to be deleted.
-    $new_uid = db_select('users', 'u')
-               ->fields('u', array('uid'))
-               ->condition('mail', $row->mail)
-               ->execute()
-               ->fetchField();
-    // If we haven't mapped the admin account based on email address, map it
-    // directly to the destination admin account.
-    if (!$new_uid && $row->uid == 1) {
-      $new_uid = 1;
+    // On initial import, if this email address already exists, just map to the
+    // existing uid and don't allow it to be deleted. When updating, we can
+    // take the existing uid from the map instead of querying for it. Make sure
+    // when updating an imported user that we don't apply this logic.
+    if (empty($row->migrate_map_destid1)) {
+      $new_uid = db_select('users', 'u')
+                 ->fields('u', array('uid'))
+                 ->condition('mail', $row->mail)
+                 ->execute()
+                 ->fetchField();
+      // If we haven't mapped the admin account based on email address, map it
+      // directly to the destination admin account.
+      if (!$new_uid && $row->uid == 1) {
+        $new_uid = 1;
+      }
     }
-    if ($new_uid) {
+    elseif ($row->migrate_map_needs_update == MigrateMap::STATUS_IGNORED &&
+            $row->migrate_map_rollback_action == MigrateMap::ROLLBACK_PRESERVE) {
+      $new_uid = $row->migrate_map_destid1;
+    }
+
+    if (!empty($new_uid)) {
       $this->map->saveIDMapping($row, array($new_uid), MigrateMap::STATUS_IGNORED,
-        MigrateMap::ROLLBACK_PRESERVE);
+        MigrateMap::ROLLBACK_PRESERVE, $row->migrate_map_hash);
       $this->rollbackAction = MigrateMap::ROLLBACK_PRESERVE;
       return FALSE;
     }
@@ -205,7 +206,6 @@ abstract class DrupalUserMigration extends DrupalMigration {
 
     // Pick up profile data.
     $this->version->getSourceValues($row, $row->uid);
-
     // Populate the source roles
     if ($this->roleMigration) {
       $result = Database::getConnection('default', $this->sourceConnection)
@@ -217,6 +217,7 @@ abstract class DrupalUserMigration extends DrupalMigration {
         $row->roles[] = $role_row->rid;
       }
     }
+
     return TRUE;
   }
 
