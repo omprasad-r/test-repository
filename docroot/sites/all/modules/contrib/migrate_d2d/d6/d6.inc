@@ -72,8 +72,9 @@ class DrupalVersion6 extends DrupalVersion {
    *
    * @param $entity_type
    * @param $bundle
+   * @param $include_body
    */
-  protected function populateSourceFieldInfo($entity_type, $bundle) {
+  protected function populateSourceFieldInfo($entity_type, $bundle, $include_body = FALSE) {
     if ($entity_type == 'user') {
       // Get core profile fields.
       $this->profileFields();
@@ -85,11 +86,28 @@ class DrupalVersion6 extends DrupalVersion {
     elseif ($entity_type != 'node') {
       return;
     }
-    elseif (empty($this->sourceFieldInfo)) {
+    else {
       migrate_instrument_start('DrupalVersion6::sourceFieldInfo');
 
       $this->entityType = $entity_type;
       $this->bundle = $bundle;
+      // Standalone nodes handle the body through the core migration, but for
+      // content_profile nodes we need to deal with it here.
+      if ($include_body) {
+        $label = Database::getConnection('default', $this->arguments['source_connection'])
+                         ->select('node_type', 'nt')
+                         ->fields('nt', array('body_label'))
+                         ->condition('type', $bundle)
+                         ->condition('has_body', 1)
+                         ->execute()
+                         ->fetchField();
+        if ($label) {
+          // To hopefully uniquify the machine name, use the content_profile
+          // node type.
+          $this->sourceFieldInfo['field_' . $bundle . '_body'] = array('label' => $label,
+                                                         'type' => 'body');
+        }
+      }
 
       // Get each field attached to this type.
       if (Database::getConnection('default', $this->arguments['source_connection'])
@@ -116,6 +134,7 @@ class DrupalVersion6 extends DrupalVersion {
             'columns' => $columns,
             'multiple' => $row->multiple,
             'db_storage' => $row->db_storage,
+            'bundle' => $bundle,
           );
         }
       }
@@ -174,31 +193,45 @@ class DrupalVersion6 extends DrupalVersion {
       // Load up field data for dynamically mapped fields
       foreach ($this->sourceFieldInfo as $field_name => $field_info) {
         if ($field_info['type'] != 'taxonomy_term') {
-          // Fields in the base (content_type_foo) CCK table will have been
-          // incorporated into the base query, so just look for the
-          // shared/multiple field cases
-          $table = "content_$field_name";
-          if ($schema->tableExists($table)) {
-            $query = Database::getConnection('default', $this->arguments['source_connection'])
-                     ->select($table, 'f')
-                     ->fields('f')
-                     ->condition('vid', $revision_id);
-            // There isn't always a delta,
-            // @see http://drupal.org/node/1715244
-            if ($schema->fieldExists($table, 'delta')) {
-              $query->orderBy('delta');
+          if ($field_info['type'] == 'body') {
+            // Special handling to accomodate content_profile bodies.
+            $body = Database::getConnection('default', $this->arguments['source_connection'])
+                                   ->select('node_revisions', 'nr')
+                                   ->fields('nr', array('body'))
+                                   ->condition('vid', $revision_id)
+                                   ->execute()
+                                   ->fetchField();
+            if ($body) {
+              $row->$field_name = $body;
             }
-            $result = $query->execute();
-            foreach ($result as $field_row) {
-              $i = 0;
-              foreach ($this->sourceFieldInfo[$field_name]['columns'] as $display_name => $column_name) {
-                if ($i++ == 0) {
-                  $index = $field_name;
+          }
+          else {
+            // Fields in the base (content_type_foo) CCK table will have been
+            // incorporated into the base query, so just look for the
+            // shared/multiple field cases
+            $table = "content_$field_name";
+            if ($schema->tableExists($table)) {
+              $query = Database::getConnection('default', $this->arguments['source_connection'])
+                       ->select($table, 'f')
+                       ->fields('f')
+                       ->condition('vid', $revision_id);
+              // There isn't always a delta,
+              // @see http://drupal.org/node/1715244
+              if ($schema->fieldExists($table, 'delta')) {
+                $query->orderBy('delta');
+              }
+              $result = $query->execute();
+              foreach ($result as $field_row) {
+                $i = 0;
+                foreach ($this->sourceFieldInfo[$field_name]['columns'] as $display_name => $column_name) {
+                  if ($i++ == 0) {
+                    $index = $field_name;
+                  }
+                  else {
+                    $index = $display_name;
+                  }
+                  $row->{$index}[] = $field_row->$column_name;
                 }
-                else {
-                  $index = $display_name;
-                }
-                $row->{$index}[] = $field_row->$column_name;
               }
             }
           }
@@ -221,6 +254,13 @@ class DrupalVersion6 extends DrupalVersion {
             $fix_field_names = array();
             $field_found = FALSE;
             foreach ($this->sourceFieldInfo as $field_name => $info) {
+              // All fields are stored in sourceFieldInfo. If there are
+              // multiple non-core profile node types, we need to specify
+              // which one each field belongs to.
+              if (isset($info['bundle']) && $info['bundle'] != $type) {
+                continue;
+              }
+
               if (isset($info['columns']) && !$info['multiple'] && $info['db_storage']) {
                 $i = 0;
                 foreach ($info['columns'] as $display_name => $column_name) {
@@ -294,7 +334,7 @@ class DrupalVersion6 extends DrupalVersion {
       $type_name = substr($name, $index);
       $this->profileTypes[] = $type_name;
       // Populates sourceFieldInfo directly
-      $this->populateSourceFieldInfo('node', $type_name);
+      $this->populateSourceFieldInfo('node', $type_name, TRUE);
     }
 
     // If the profile node type is defined by a feature, the content_profile
@@ -316,7 +356,7 @@ class DrupalVersion6 extends DrupalVersion {
           if (!in_array($type_name, $this->profileTypes)) {
             $this->profileTypes[] = $type_name;
             // Populates sourceFieldInfo directly
-            $this->populateSourceFieldInfo('node', $type_name);
+            $this->populateSourceFieldInfo('node', $type_name, TRUE);
           }
         }
       }
@@ -353,9 +393,22 @@ class DrupalVersion6 extends DrupalVersion {
                ->condition('uid', $entity_id)
                ->condition('value', '', '<>');
       $query->innerJoin('profile_fields', 'f', 'v.fid=f.fid');
-      $query->fields('f', array('name'));
+      $query->fields('f', array('name', 'type'));
       $result = $query->execute();
       foreach ($result as $data_row) {
+        switch ($data_row->type) {
+          case 'checkbox':
+            switch (trim(strtolower($data_row->value))) {
+              case 'n':
+                $data_row->value = 0;
+                break;
+              case 'y':
+                $data_row->value = 1;
+                break;
+              default:
+                break;
+            }
+        }
         $row->{$data_row->name} = $data_row->value;
       }
 

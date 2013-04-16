@@ -806,6 +806,7 @@ class MigrateD2DWizard extends MigrateUIWizard {
    */
   protected function reviewForm(&$form_state) {
     $this->groupArguments = array(
+      'encrypted_arguments' => array('source_database'),
       'source_version' => $this->sourceVersion,
       'source_connection' => $this->groupName . '_legacy',
       'source_database' => $this->database,
