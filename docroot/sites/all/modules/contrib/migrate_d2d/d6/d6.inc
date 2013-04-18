@@ -408,6 +408,15 @@ class DrupalVersion6 extends DrupalVersion {
               default:
                 break;
             }
+            break;
+          case 'date':
+            // Dates may be serialized arrays.
+            if (strpos($data_row->value, 'a:') === 0) {
+              $date_array = unserialize($data_row->value);
+              $data_row->value = $date_array['year'] . '-' . $date_array['month']
+                . '-' . $date_array['day'];
+            }
+            break;
         }
         $row->{$data_row->name} = $data_row->value;
       }
