@@ -25,6 +25,7 @@ function mailhandler_default_default_mailhandler_mailbox() {
     'extraimap' => '',
     'limit' => '0',
     'encoding' => 'UTF-8',
+    'flag_after_read' => 1,
     'delete_after_read' => 0,
     'fromheader' => 'From',
     'security' => '0',

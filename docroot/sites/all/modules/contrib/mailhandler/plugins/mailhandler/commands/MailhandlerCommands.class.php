@@ -22,7 +22,7 @@ abstract class MailhandlerCommands {
    * @param $object
    *   Node object of the node being built for submission.
    */
-  public function parse(&$message, $source) {
+  public function parse(&$message, $source, $client) {
     return;
   }
 
@@ -44,10 +44,17 @@ abstract class MailhandlerCommands {
     return array();
   }
 
-    /**
+  /**
    * Build configuration form.
    */
   public function configForm(&$form, &$form_state, $config) {
+    return;
+  }
+
+  /**
+   * Build source form.
+   */
+  public function sourceForm(&$form, $source_config) {
     return;
   }
 }

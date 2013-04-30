@@ -26,12 +26,6 @@ function mailhandler_default_feeds_importer_default() {
     'parser' => array(
       'plugin_key' => 'MailhandlerParser',
       'config' => array(
-        'default_commands' => 'status: 1',
-        'commands_failed_auth' => 'status: 0',
-        'command_plugin' => array(
-          'MailhandlerCommandsDefault' => 'MailhandlerCommandsDefault',
-          'MailhandlerCommandsHeaders' => 'MailhandlerCommandsHeaders',
-        ),
         'authenticate_plugin' => 'MailhandlerAuthenticateDefault',
         'available_commands' => 'status',
       ),
