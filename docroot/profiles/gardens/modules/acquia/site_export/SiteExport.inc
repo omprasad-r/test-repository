@@ -343,6 +343,7 @@ class SiteExport {
       'profiles/gardens/modules/gardens/gardens_statsd/gardens_statsd.module',
       'modules/aggregator/aggregator.pages.inc',
       'modules/block/block.module',
+      'profiles/gardens/modules/contrib/mollom/mollom.module',
     );
     foreach (module_implements('gardens_site_export_strip') as $module) {
       $files = array_merge($files, module_invoke($module, 'gardens_site_export_strip'));
