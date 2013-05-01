@@ -107,7 +107,7 @@ else {
   // Attempt to install or configure a Gardens site associated with this
   // Hosting site, if there is at least one that needs work done on it.
   try {
-    install_gardens($hosting_site_name, $hosting_site_environment);
+    install_gardens($hosting_site_name, $hosting_site_environment, $parent_hosting_site_name);
   }
   catch (Exception $e) {
     // The system is designed to retry failed installations (and temporary

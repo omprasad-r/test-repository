@@ -34,7 +34,7 @@ class AcquiaGardensRpcApiException extends AcquiaGardensRpcException {}
  */
 function acquia_gardens_call($method, $data = array(), $server = NULL) {
   $creds = _acquia_gardens_xmlrpc_creds('gardener');
-  return acquia_gardens_xmlrpc_call('acquia.gardens.'. $method, $data, $creds['hostname'], $creds['username'], $creds['password']);
+  return acquia_gardens_xmlrpc_call('acquia.gardens.'. $method, $data, $creds['url'], $creds['username'], $creds['password']);
 }
 
 /**
@@ -45,7 +45,7 @@ function acquia_gardens_call($method, $data = array(), $server = NULL) {
  * /mnt/gfs/[site]/nobackup/gardens_xmlrpc_creds.ini, using normal INI format:
  *
  * [gardener]
- * hostname = "http://gardener.[stage].acquia-sites.com"
+ * url = "http://gardener.[stage].acquia-sites.com"
  * username = "acquiagardensrpc"
  * password = "[password]"
  *
@@ -53,7 +53,7 @@ function acquia_gardens_call($method, $data = array(), $server = NULL) {
  *  The name of the acquia site to retrieve, e.g. 'gardener'.
  *
  * @return Array
- *  An array ('hostname', 'username' and 'password') of the RPC configuration.
+ *  An array ('url', 'username' and 'password') of the RPC configuration.
  */
 function _acquia_gardens_xmlrpc_creds($site) {
   static $gardens_xmlrpc_creds = array();
@@ -61,7 +61,7 @@ function _acquia_gardens_xmlrpc_creds($site) {
 
   if (empty($gardens_xmlrpc_creds)) {
     $lib_dir = dirname(__FILE__);
-    $site_name = preg_replace('@(.*/([^/]*)/library$)@', '$2', $lib_dir);
+    $site_name = basename(dirname($lib_dir));
     $gardens_xmlrpc_creds = parse_ini_file("/mnt/gfs/$site_name/nobackup/gardens_xmlrpc_creds.ini", TRUE);
   }
 
@@ -73,15 +73,14 @@ function _acquia_gardens_xmlrpc_creds($site) {
 }
 
 /**
- * Returns the hostname of the Acquia Gardens master server (i.e., the
- * Gardener).
+ * Returns the url of the Gardener.
  */
 function _acquia_gardens_gardener_url() {
   static $url;
 
   if (empty($url)) {
     $creds = _acquia_gardens_xmlrpc_creds('gardener');
-    $url = $creds['hostname'];
+    $url = $creds['url'];
   }
 
   return $url;
@@ -96,7 +95,7 @@ function _acquia_gardens_gardener_url() {
  *   Either a single parameter or an array of parameters to send as part of
  *   the XML-RPC request.
  * @param $server
- *   The hostname of the server to contact. This is currently assumed to have
+ *   The url of the server to contact. This is currently assumed to have
  *   'xmlrpc.php' in its document root (i.e., it is assumed to be running
  *   Drupal and not be installed in a subdirectory).
  * @param $username
