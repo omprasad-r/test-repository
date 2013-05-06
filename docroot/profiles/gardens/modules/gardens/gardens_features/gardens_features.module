@@ -769,6 +769,8 @@ function gardens_features_simplified_modules_hidden_submodules() {
     'xmlsitemap_node',
     'xmlsitemap_taxonomy',
     'metatag_opengraph',
+    'metatag_panels',
+    'metatag_views',
   );
 }
 
