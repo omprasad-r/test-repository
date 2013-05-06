@@ -11,7 +11,9 @@ function metatag_features_export($data, &$export, $module_name = '', $type = 'me
   $pipe = array();
 
   foreach ($data as $name) {
-    $export['features'][$type][$name] = metatag_config_load($name);
+    if (metatag_config_load($name)) {
+      $export['features'][$type][$name] = $name;
+    }
   }
 
   $export['dependencies']['metatag'] = 'metatag';
@@ -51,10 +53,8 @@ function metatag_features_export_render($module_name, $data, $export = NULL) {
  * Implements hook_features_revert().
  */
 function metatag_features_revert($module) {
-  $function = "{$module}_metatag_export_default";
-  $feature_conf = $function();
-  if ($default_config = features_get_default('metatag')) {
-    foreach (array_keys($default_config) as $config) {
+  if ($feature_conf = features_get_default('metatag', $module)) {
+    foreach (array_keys($feature_conf) as $config) {
       if ($conf = metatag_config_load($config)) {
         db_delete('metatag_config')->condition('instance', $config)->execute();
       }
@@ -77,4 +77,11 @@ function metatag_features_export_options() {
     $options[$key] = $key;
   };
   return $options;
+}
+
+/**
+ * Implements hook_features_rebuild().
+ */
+function metatag_features_rebuild($module) {
+  metatag_features_revert($module);
 }

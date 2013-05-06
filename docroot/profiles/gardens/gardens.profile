@@ -359,6 +359,7 @@ function gardens_installer_custom_submit($form, &$form_state) {
     $GLOBALS['install_state']['parameters']['profile'] = $profile_name;
     // ... rebuild module data.
     system_list_reset();
+    registry_rebuild();
     system_rebuild_module_data();
     if (db_query("SELECT 1 FROM {system} WHERE type = 'module' AND name = :name", array(':name' => $profile_name))->fetchField()) {
       // Make sure we pick up any themes included in the profile directory.

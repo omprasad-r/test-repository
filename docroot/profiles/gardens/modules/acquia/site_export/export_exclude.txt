@@ -4,9 +4,9 @@ CVS
 settings.php
 index.php
 .htaccess
-sites/all/modules/views_bulk_operations/actions/script.action.inc
-sites/all/modules/gardens_statsd/gardens_statsd.install
-sites/all/modules/gardens_statsd/gardens_statsd.module
+profiles/gardens/modules/contrib/views_bulk_operations/actions/script.action.inc
+profiles/gardens/modules/gardens/gardens_statsd/gardens_statsd.install
+profiles/gardens/modules/gardens/gardens_statsd/gardens_statsd.module
 modules/aggregator/aggregator.pages.inc
 modules/block/block.module
-sites/all/modules/antivirus/antivirus.module
+profiles/gardens/modules/contrib/mollom/mollom.module

@@ -1274,11 +1274,6 @@ function scarecrow_disallowed_modules() {
     'php',
     'simpletest',
     'comment_goodness',
-    // @todo Delete the Styles project from the Gardens code-base.
-    'styles',
-    'file_styles',
-    'styles_ui',
-    'thumbgen',
     'update',
     // This module is part of Views but is not meant to be part of the Gardens
     // experience (we let people export views via the normal procedure, but
@@ -1311,10 +1306,12 @@ function scarecrow_disallowed_modules() {
     // haven't tested this submodule at all so there is no reason to expose it
     // to Gardens users.
     'token_actions',
-    // These two modules got added with a metatag update but we have not tested
+    // These four modules got added with a metatag update but we have not tested
     // these modules so far so they are not to be enabled for the time being.
     'metatag_context',
     'metatag_dc',
+    'metatag_panels',
+    'metatag_views',
     // These modules are included with Dialog API.
     'dialog_example',
     'dialog_comment',
@@ -1323,20 +1320,11 @@ function scarecrow_disallowed_modules() {
     'oembed',
     'oembedfield',
     'oembedprovider',
-    // Typekit is no longer used in Gardens and can be removed from the
-    // filesystem after the 1.03 release.
-    'typekit',
     // These modules are included with Date but not part of Gardens.
     'date_migrate',
     'date_migrate_example',
     'date_tools',
     'date_context',
-    // Customer-specific modules.
-    'florida_hospital_misc',
-    'warner_misc',
-    'emphaticrock',
-    // Services-based API for managing users, not available in SMB.
-    'member_api',
     // Services, oAuth, etc. may only be enabled as part of the member API or
     // MASt modules - not available on their own.
     'services',
@@ -1348,37 +1336,11 @@ function scarecrow_disallowed_modules() {
     'xcal_format',
     'oauth_common',
     'oauth_common_providerui',
-    // COPPA Enforcement - new users must provide date-of-birth on registration,
-    // registration fails if too young.  Not available in SMB.
-    'coppa_lite',
-    // Bulk email password reset. Not available in SMB
-    'bulk_email',
-    // Needed for the Enterprise Mailhandler implementation.  Release plan to SMB
-    // not yet known.
-    'feeds',
-    'feeds_import',
-    'feeds_news',
-    'feeds_ui',
-    // Needed for the Enterprise Mailhandler implementation.  Release plan to SMB
-    // not yet known.
-    'mailhandler',
-    'mailhandler_default',
-    'mailhandler_php_imap',
-    'mailhandler_tokenauth', // Cannot be removed from disallowed - unmet dependency
-    'mailhandler_medialink',
-    'mailhandler_sendto_auth',
-    'mailhandler_singlemailbox',
-    'mail_media',
+
     'gardens_mail_media',
-    // Feeds dependency:
-    'job_scheduler',
-    // SSL support. Not available in SMB since we don't support https there.
-    'securepages',
-    'webform_ssl',
     // Gardens Media module - Currently not feature complete for SMB
     'gardens_media',
     'gardens_statsd',
-    'akamai',
     // Moderation and site variables only allowed for Warner, see
     // warner_misc_disallowed_modules_alter()
     'gardens_moderation',
@@ -1388,18 +1350,6 @@ function scarecrow_disallowed_modules() {
     'agrcache',
     // This is an API-type module for use with MASt. Should not be visible.
     'original_author',
-    // Bunchball is unavailable in SMB. Including all bunchball modules here in
-    // case users disable simplified_modules.
-    'bunchball',
-    'bunchball_entities',
-    'bunchball_fivestar',
-    'bunchball_groups',
-    'bunchball_nitro',
-    'bunchball_poll',
-    'bunchball_user_interaction',
-    'bunchball_user_roles',
-    'bunchball_webform',
-    'bunchball_queue',
     // We don't need the module enabled; instead modify the settings.php to
     // include the memcache.inc file
     'memcache',
@@ -1409,38 +1359,8 @@ function scarecrow_disallowed_modules() {
     // Enabling for Enterprise customers only
     'janrain_client',
     'janrain_login',
-    'janrain_capture',
-    'janrain_capture_ui',
-    'janrain_capture_mapping',
-    'comment_on_anything',
-    // Required primarily for bunchball - fairly harmless but no need to show it.
-    'request_queue',
-    // Node import/export-related modules: scarecrowed for all except Pfizer initially
-    'node_export_dependency',
-    'node_export_features',
-    'node_export_feeds',
-    'node_export_relation',
-    'node_export',
-    'uuid',
-    'uuid_services',
-    'uuid_services_example',
-    'flag_friend',
-    'flag_friend_access',
-    // Currently only available for Pfizer
-    'gardens_pdf_rendition',
-    'gardens_pdf_rendition_sitemap',
-    // Currently only for Warner until a solution is figured out for SMB/gardener data.
-    'views_data_export',
-    // May only be enabled or disabled via the Site Guard module's UI.
-    'shield',
-    // Site Guard module is currently only available for Enterprise customers.
-    'site_guard',
-    // Only enabled for Warner
-    'views_rss',
-    'views_rss_core',
-    'views_rss_dc',
-    'views_rss_itunes',
-    'getid3',
+    // Mollom debugging.
+    'syslog_advanced',
   );
 
   // In development and staging environments, let users enable modules that
@@ -1458,7 +1378,6 @@ function scarecrow_disallowed_modules() {
   }
   else {
     $in_development = array(
-      'toolbar_prototype',
       'xhprof',
       'xhprof_mongodb',
       // Support for WordPress and Drupal migrations, not ready for prime-time.
@@ -2151,4 +2070,37 @@ function scarecrow_form_domain_301_redirect_admin_form_alter(&$form, $form_state
   $form['domain_301_redirect_domain']['#description'] = t('Enter the domain that you want to redirect your site to. E.g., http://www.example.com.');
   $form['domain_301_redirect_check_period']['#title'] = t('Domain validation interval');
   $form['domain_301_redirect_check_period']['#description'] = t('Select the interval between domain validation checks. If the domain no longer validates, redirection will be disabled.');
+}
+
+/**
+ * Implements hook_modules_enabled().
+ */
+function scarecrow_modules_enabled($modules) {
+  if (in_array('syslog_advanced', $modules)) {
+    if (($allowed = variable_get('syslog_advanced_allowed')) === NULL) {
+      $allowed = array();
+    }
+    if (empty($allowed['mollom'])) {
+      $allowed['mollom'] = array(
+        WATCHDOG_EMERGENCY => 1,
+        WATCHDOG_ALERT => 1,
+        WATCHDOG_CRITICAL => 1,
+        WATCHDOG_ERROR => 1,
+        WATCHDOG_WARNING => 1,
+        WATCHDOG_NOTICE => 1,
+        WATCHDOG_INFO => 1,
+        WATCHDOG_DEBUG => 1,
+      );
+      variable_set('syslog_advanced_allowed', $allowed);
+    }
+    if (variable_get('syslog_advanced_identity') === NULL) {
+      variable_set('syslog_advanced_identity', variable_get('syslog_identity', 'drupal'));
+    }
+    if (variable_get('syslog_advanced_facility') === NULL) {
+      variable_set('syslog_advanced_facility', variable_get('syslog_facility', defined('LOG_LOCAL0') ? LOG_LOCAL0 : LOG_USER));
+    }
+    if (variable_get('syslog_advanced_format') === NULL) {
+      variable_set('syslog_advanced_format', variable_get('syslog_format', '!base_url|!timestamp|!type|!ip|!request_uri|!referer|!uid|!link|!message'));
+    }
+  }
 }
