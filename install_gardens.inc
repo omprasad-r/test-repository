@@ -35,6 +35,7 @@ define('GARDENS_SIGNUP_SITE_STATUS_INSTALLING', 'installing');
 /**
  * Status constant indicating that a Gardens site has been installed, but not
  * yet assigned to a particular customer.
+ * This status was deprecated as part of DG-8020.
  */
 define('GARDENS_SIGNUP_SITE_STATUS_INSTALLED', 'installed');
 
@@ -77,6 +78,7 @@ define('GARDENS_SIGNUP_SITE_STATUS_COMPLETED', 'completed');
 /**
  * Operation constant indicating that a Gardens site should be installed but
  * not configured for a particular customer.
+ * This operation was deprecated as part of DG-8020.
  */
 define('GARDENS_SIGNUP_SITE_OPERATION_INSTALL', 'install');
 
@@ -382,7 +384,6 @@ function install_gardens($hosting_site_name, $hosting_site_environment, $parent_
     // Bail out in the event that the Gardener thinks we should do something
     // for this site but we have no idea how to do it.
     $expected_operations = array(
-      GARDENS_SIGNUP_SITE_OPERATION_INSTALL,
       GARDENS_SIGNUP_SITE_OPERATION_INSTALL_AND_CONFIGURE,
       GARDENS_SIGNUP_SITE_OPERATION_CONFIGURE,
       GARDENS_SIGNUP_SITE_OPERATION_DUPLICATE,
@@ -391,7 +392,7 @@ function install_gardens($hosting_site_name, $hosting_site_environment, $parent_
       throw new Exception("GardensError: AN-22794 - A Gardens site requested an invalid operation and could not be processed GardensError: site id: $gardens_site_id; hosting account: $hosting_site_name; original site status \"{$gardens_site_info['original_status']}\"; requested operation was \"$op\").");
     }
 
-    if ($op == GARDENS_SIGNUP_SITE_OPERATION_INSTALL || $op == GARDENS_SIGNUP_SITE_OPERATION_INSTALL_AND_CONFIGURE) {
+    if ($op == GARDENS_SIGNUP_SITE_OPERATION_INSTALL_AND_CONFIGURE) {
       // Prepare the installation directories and files.
       acquia_gardens_prepare_for_installation($site_directory, $hosting_site_name, $hosting_site_environment, $gardens_site_id, $domains);
 
@@ -770,12 +771,10 @@ function install_gardens($hosting_site_name, $hosting_site_environment, $parent_
   acquia_gardens_call('set.install.status', array($gardens_site_info['nid'], $gardens_site_info['desired_status'], TRUE));
   $memory_used = acquia_gardens_peak_memory_usage();
   syslog(LOG_NOTICE, "Successfully performed the operation \"$op\" for Gardens site $gardens_site_id on Hosting site $hosting_site_name. ($memory_used)");
-  if ($op != GARDENS_SIGNUP_SITE_OPERATION_INSTALL) {
-    // For any operation except install, populate data from gardener.
-    // This should ALSO happen via task from the gardener.
-    if (!gardens_client_phone_home()) {
-      syslog(LOG_ERR, 'GardensError: Failed to retrieve Gardener data in install_gardens() for site: '. $gardens_site_id);
-    }
+  // For any operation except install, populate data from gardener.
+  // This should ALSO happen via task from the gardener.
+  if (!gardens_client_phone_home()) {
+    syslog(LOG_ERR, 'GardensError: Failed to retrieve Gardener data in install_gardens() for site: '. $gardens_site_id);
   }
 }
 
