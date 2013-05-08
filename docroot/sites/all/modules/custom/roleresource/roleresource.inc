@@ -85,6 +85,7 @@ function _roleresource_update($uid, $roles) {
     }
   }
   $query->execute();
+  cache_clear_all($uid, 'cache_entity_user');
 
   return array(
     'id' => $uid,
