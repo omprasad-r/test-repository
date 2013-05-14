@@ -1,0 +1,29 @@
+<?php
+/**
+ * @file
+ * Summary
+ */
+
+/**
+ * Implements hook_install();
+ */
+function migrate_rr_install() {
+  // Set our weight higher than scarecrow, so our hook_menu_alter() can undo
+  // the damage wrought by scarecrow_menu_alter().
+  $scarecrow_weight = db_select('system', 's')
+                      ->fields('s', array('weight'))
+                      ->condition('name', 'scarecrow')
+                      ->execute()
+                      ->fetchField();
+  db_update('system')
+    ->fields(array('weight' => $scarecrow_weight + 1))
+    ->condition('name', 'migrate_rr')
+    ->execute();
+}
+
+/**
+ * Implements hook_uninstall().
+ */
+function migrate_rr_uninstall() {
+  variable_del('migrate_rr_connection');
+}

@@ -1,0 +1,101 @@
+<?php
+/**
+ * @file
+ *
+ * Core hook implementations for Roadrunner migrations.
+ */
+
+/**
+ * Implementation of hook_menu().
+ */
+function migrate_rr_menu() {
+  $items = array();
+
+  $items['admin/content/import/rr_config'] = array(
+    'title' => 'Roadrunner Configuration',
+    'type' => MENU_LOCAL_TASK,
+    'description' => 'General configuration options for Roadrunner imports',
+    'page callback' => 'migrate_rr_configure',
+    'access arguments' => array(MIGRATE_ACCESS_BASIC),
+    'file' => 'migrate_rr.pages.inc',
+    'weight' => 0,
+  );
+
+  $items['admin/content/import/rr_add'] = array(
+    'title' => 'Add Roadrunner Artist',
+    'type' => MENU_LOCAL_TASK,
+    'description' => 'Configure import of a given artist\'s content',
+    'page callback' => 'migrate_rr_add_artist',
+    'access arguments' => array(MIGRATE_ACCESS_BASIC),
+    'file' => 'migrate_rr.pages.inc',
+    'weight' => 1,
+  );
+
+  return $items;
+}
+
+/**
+ * Implement hook_menu_alter().
+ */
+function migrate_rr_menu_alter(&$items) {
+  // We want to recapture the migrate menu items disabled by scarecrow. First,
+  // fetch the originals, adding in the 'module' key so files will have their
+  // proper paths for inclusion.
+  $migrate_ui_items = migrate_ui_menu();
+  foreach ($migrate_ui_items as $path => $item) {
+    $migrate_ui_items[$path]['module'] = 'migrate_ui';
+  }
+  $migrate_rr_items = migrate_rr_menu();
+  foreach ($migrate_rr_items as $path => $item) {
+    $migrate_rr_items[$path]['module'] = 'migrate_rr';
+  }
+  $migrate_items = $migrate_ui_items + $migrate_rr_items;
+  // Override the disabled scarecrow menu items with our reconstruction of the
+  // originals.
+  foreach ($items as $path => $item) {
+    if (substr($path, 0, strlen('admin/content/import')) == 'admin/content/import') {
+      $items[$path] = $migrate_items[$path];
+    }
+  }
+}
+
+function migrate_rr_connection() {
+  $connection = variable_get('migrate_rr_connection');
+  if ($connection) {
+    $connection = migrate_rr_decrypt($connection);
+  }
+  else {
+    $connection = array('host' => '', 'username' => '', 'password' => '',
+      'database' => '', 'driver' => 'mysql');
+  }
+  return $connection;
+}
+
+
+/**
+ * Encrypt an incoming value. Assumes the existence of the mcrypt PHP extension.
+ *
+ * @param string $value
+ * @return string The encrypted value.
+ */
+function migrate_rr_encrypt($value) {
+  $key = drupal_substr(variable_get('drupal_private_key', 'no_key'), 0, 32);
+  $iv_size = mcrypt_get_iv_size(MCRYPT_RIJNDAEL_256, MCRYPT_MODE_ECB);
+  $iv = mcrypt_create_iv($iv_size, MCRYPT_RAND);
+  $value = mcrypt_encrypt(MCRYPT_RIJNDAEL_256, $key, serialize($value), MCRYPT_MODE_ECB, $iv);
+  return $value;
+}
+
+/**
+ * Decrypt an incoming value.
+ *
+ * @param string $value
+ * @return string The encrypted value
+ */
+function migrate_rr_decrypt($value) {
+  $iv_size = mcrypt_get_iv_size(MCRYPT_RIJNDAEL_256, MCRYPT_MODE_ECB);
+  $iv = mcrypt_create_iv($iv_size, MCRYPT_RAND);
+  $key = drupal_substr(variable_get('drupal_private_key', 'no_key'), 0, 32);
+  $value = mcrypt_decrypt(MCRYPT_RIJNDAEL_256, $key, $value, MCRYPT_MODE_ECB, $iv);
+  return unserialize($value);
+}
