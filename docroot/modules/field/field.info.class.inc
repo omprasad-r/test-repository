@@ -138,7 +138,7 @@ class FieldInfo {
 
     $map = array();
 
-    $query = db_query('SELECT fc.type, fci.field_name, fci.entity_type, fci.bundle FROM {field_config_instance} fci LEFT JOIN {field_config} fc ON fc.id = fci.field_id WHERE fc.active = 1 AND fc.storage_active = 1 AND fc.deleted = 0 AND fci.deleted = 0');
+    $query = db_query('SELECT fc.type, fci.field_name, fci.entity_type, fci.bundle FROM {field_config_instance} fci INNER JOIN {field_config} fc ON fc.id = fci.field_id WHERE fc.active = 1 AND fc.storage_active = 1 AND fc.deleted = 0 AND fci.deleted = 0');
     foreach ($query as $row) {
       $map[$row->field_name]['bundles'][$row->entity_type][] = $row->bundle;
       $map[$row->field_name]['type'] = $row->type;
@@ -217,7 +217,7 @@ class FieldInfo {
 
         // Initialize empty arrays for all existing entity types and bundles.
         // This is not strictly needed, but is done to preserve the behavior of
-        // field_info_instances() before http://drupal.org/node/1040790.
+        // field_info_instances() before http://drupal.org/node/1915646.
         foreach (field_info_bundles() as $existing_entity_type => $bundles) {
           foreach ($bundles as $bundle => $bundle_info) {
             $this->bundleInstances[$existing_entity_type][$bundle] = array();

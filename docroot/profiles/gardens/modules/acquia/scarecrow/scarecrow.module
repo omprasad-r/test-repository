@@ -1508,6 +1508,7 @@ function scarecrow_required_modules() {
     'product_template',
     'references',
     'remote_stream_wrapper',
+    'saferpermissions',
     'scarecrow',
     'simpleviews',
     'siteinfo',
@@ -1687,6 +1688,59 @@ function scarecrow_forbidden_permissions() {
 }
 
 /**
+ * Implements hook_saferpermissions_anonymous_permission_ban_info().
+ */
+function scarecrow_saferpermissions_anonymous_permission_ban_info() {
+  return array(
+    // Comment notify
+    'subscribe to comments',
+    // Drupal Gardens broadcasted notification handler
+    'receive gardens broadcasted notifications',
+    // Field permissions
+    'access private fields',
+    // Follow
+    'edit site follow links',
+    'change follow link titles',
+    // Gardens features
+    'view provider list',
+    'access general ui configuration',
+    // Google analytics
+    'opt-in or out of tracking',
+    // Media
+    'edit media',
+    // Media internet sources
+    'add media from remote sources',
+    // Migrate UI
+    'migration information',
+    'advanced migration information',
+    // Mollom
+    'access mollom statistics',
+    // Pathauto
+    'notify of path changes',
+    // Save Draft
+    'save draft',
+    // Services
+    'get any binary files',
+    'get own binary files',
+    'save file information',
+    'get a system variable',
+    'set a system variable',
+    'perform unlimited index queries',
+    // Themebuilder
+    'publish theme',
+  );
+}
+
+/**
+ * Implements hook_saferpermissions_anonymous_permission_wordlist_ban_info().
+ */
+function scarecrow_saferpermissions_anonymous_permission_wordlist_ban_info() {
+  return array(
+    'themebuilder',
+  );
+}
+
+/**
  * Returns an array of permissions that are required for Gardens site admins.
  *
  * These are permissions for required modules which we need Gardens site owners
@@ -1846,7 +1900,16 @@ function scarecrow_help_text($path) {
     case 'admin/config/search/domain_301_redirect':
     case 'admin/help#domain_301_redirect':
       return t('Use the 301 Redirect module to redirect your Drupal Gardens domain to the domain specified below. This informs web traffic, such as search engines, not to store your Drupal Gardens domain, which helps search engine optimization. <a href="@url">Read more.</a>', array('@url' => 'http://www.drupalgardens.com/documentation/seo/redirect'));
+    case 'admin/people/permissions':
+      return '<p>' . t('Permissions let you control what users can do and see on your site. You can define a specific set of permissions for each role. (See the <a href="@role">Roles</a> page to create a role.)  On the <a href="@settings">User Settings</a> page, you can make any role the Administrator role for the site, meaning this will be granted all new permissions automatically. You cannot grant certain permissions to anonymous users for security reasons. <a href="@readmore">Read more</a>.',
+        array(
+          '@role' => url('admin/people/permissions/roles'),
+          '@settings' => url('admin/config/people/accounts'),
+          '@readmore' => 'http://www.drupalgardens.com/documentation/roles',
+        )) . '</p>';
   }
+
+  return NULL;
 }
 
 /**
