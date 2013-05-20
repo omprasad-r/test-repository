@@ -26,7 +26,6 @@ Drupal.behaviors.machineName = {
    */
   attach: function (context, settings) {
     var self = this;
-
     for (var i in settings.machineName) {
       if (settings.machineName.hasOwnProperty(i)) {
         (function (source_id, options) {
@@ -83,7 +82,7 @@ Drupal.behaviors.machineName = {
           // changes, but only if there is no machine name yet; i.e., only upon
           // initial creation, not when editing.
           if ($target.val() == '') {
-            $source.bind('keyup.machineName change.machineName', function () {
+            $source.bind('keyup.machineName change.machineName input.machineName', function () {
               machine = self.transliterate($(this).val(), options);
               // Set the machine name to the transliterated value.
               if (machine != '') {

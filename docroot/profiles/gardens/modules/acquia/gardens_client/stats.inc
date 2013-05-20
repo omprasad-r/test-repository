@@ -20,7 +20,7 @@ function gardens_client_generate_site_stats() {
   $start = microtime(TRUE);
   $stats = new stdClass();
 
-  $stats->dbname = $databases['default']['default']['database'];
+  $stats->dbname = variable_get('gardens_db_name', $databases['default']['default']['database']);
   $stats->dbmaster = gardens_client_get_db_master();
   $stats->tangle = themebuilder_compiler_get_tangle_name();
   _gardens_client_get_site_stats($stats);

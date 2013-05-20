@@ -702,6 +702,7 @@ class DrupalSiteTemplate {
    * Site template callback for the "News" page.
    */
   public function site_template_news_page_install(&$data, $features) {
+    module_enable(array('simpleviews', 'sqbs'), FALSE);
     // Rename the core article content type to "News item".
     $type = node_type_load('article');
     $type->name = 'News item';
@@ -891,6 +892,7 @@ class DrupalSiteTemplate {
    * Site template callback for the "FAQ" feature.
    */
   public function site_template_faq_feature_install(&$data, $features) {
+    module_enable(array('simpleviews', 'sqbs'), FALSE);
     // Save the content type.
     site_template_add_node_type($data['node_type_data']);
 

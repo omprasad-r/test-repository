@@ -246,8 +246,15 @@ function gardens_misc_load_plugins() {
   return $plugins;
 }
 
+/**
+ * Implements hook_page_alter().
+ */
 function gardens_misc_page_alter(&$page) {
-  if (variable_get('gardens_misc_include_google_analytics', TRUE)) {
+  // Respects the old overriding method.
+  // If this variable is set, the setting from gardener will not be active.
+  $override = variable_get('gardens_misc_include_google_analytics', TRUE);
+  $disable_ga = gardens_client_data_get('gardener_base', 'disable_ga');
+  if ($override && !$disable_ga) {
     // Add the global tracking code.
     $script1 = gardens_misc_get_tracking_code_include_ga();
     $script2 = gardens_misc_get_tracking_code_track_pageview();

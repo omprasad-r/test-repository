@@ -77,10 +77,22 @@ function gardens_duplication_scrub($options = array()) {
   // module settings page.
   variable_del('googleanalytics_account');
 
+  // Enterprise needed a quick solution to stop including our GA code. That
+  // quick solution has been extended to be a long term solution by now, except
+  // that it happens on the gardener instead of the gardens site. To be able to
+  // preserve the previous setup we did not removed variable responsible for the
+  // quick approach, but we definitely do not want it to be copied over during
+  // site duplication.
+  variable_del('gardens_misc_include_google_analytics');
+
   // We must disable domain 301 redirection to be able to use the new site.
   if (variable_get('domain_301_redirect_enabled', 0)) {
     variable_set('domain_301_redirect_enabled', 0);
   }
+
+  // If for some reason a site had its canonical domain set, it should not carry
+  // over to the duplicated site as it could cause unwanted redirecting.
+  variable_del('gardens_misc_canonical_domain');
 
   // Enable modules that are currently disabled, but that were once enabled, so
   // that their data cleanup hooks (e.g., hook_user_delete()) and functions
