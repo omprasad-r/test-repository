@@ -873,7 +873,7 @@ function hook_field_widget_form(&$form, &$form_state, $field, $instance, $langco
     '#type' => $instance['widget']['type'],
     '#default_value' => isset($items[$delta]) ? $items[$delta] : '',
   );
-  return $element;
+  return array('value' => $element);
 }
 
 /**
@@ -1741,7 +1741,7 @@ function hook_field_storage_load($entity_type, $entities, $age, $fields, $option
     // By the time this hook runs, the relevant field definitions have been
     // populated and cached in FieldInfo, so calling field_info_field_by_id()
     // on each field individually is more efficient than loading all fields in
-    // memory upfront with field_info_field_by_ids() (which is uncached).
+    // memory upfront with field_info_field_by_ids().
     $field = field_info_field_by_id($field_id);
     $field_name = $field['field_name'];
     $table = $load_current ? _field_sql_storage_tablename($field) : _field_sql_storage_revision_tablename($field);

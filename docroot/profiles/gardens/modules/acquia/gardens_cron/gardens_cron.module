@@ -242,3 +242,22 @@ function gardens_cron_module_invoke_some($hook, $modules) {
 
   return $return;
 }
+
+/**
+ * Implements hook_boot().
+ *
+ * Bypass site_guard and shield module authentication for cron run.
+ */
+function gardens_cron_boot() {
+  $user = variable_get('shield_user', '');
+  if (!$user) {
+    return;
+  }
+
+  $pass = variable_get('shield_pass', '');
+  $arg1 = arg(1);
+  if (arg(0) == 'gardens_cron_select' && !empty($arg1)) {
+    $_SERVER['PHP_AUTH_USER'] = $user;
+    $_SERVER['PHP_AUTH_PW'] = $pass;
+  }
+}

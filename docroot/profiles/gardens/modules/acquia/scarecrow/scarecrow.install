@@ -1201,3 +1201,10 @@ function scarecrow_update_11181() {
 function scarecrow_update_11182() {
   module_enable(array('gardens_health'), TRUE);
 }
+
+/**
+ * Enable the saferpermissions module.
+ */
+function scarecrow_update_11183() {
+  module_enable(array('saferpermissions'), TRUE);
+}
