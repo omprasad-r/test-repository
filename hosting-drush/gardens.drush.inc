@@ -592,7 +592,14 @@ function _gardens_drush_create_scrub_db($database_name, $host) {
  *  The hostname to use alongside the stored credentials.
  */
 function _gardens_drush_get_scrub_db_creds($host) {
-  $gardens_xmlrpc_creds = parse_ini_file("/mnt/gfs/nobackup/gardens_xmlrpc_creds.ini", TRUE);
+  if (!empty($_ENV['AH_SITE_GROUP']) && !empty($_ENV['AH_SITE_ENVIRONMENT'])) {
+    $site_dir = sprintf('%s.%s', $_ENV['AH_SITE_GROUP'], $_ENV['AH_SITE_ENVIRONMENT']);
+  }
+  else {
+    $site_dir = basename(dirname(dirname(__FILE__)));
+  }
+  $cred_location = sprintf('/mnt/gfs/%s/nobackup/gardens_xmlrpc_creds.ini', $site_dir);
+  $gardens_xmlrpc_creds = parse_ini_file($cred_location, TRUE);
   $creds = $gardens_xmlrpc_creds['gardens_temporary'];
 
   return array(
