@@ -205,6 +205,7 @@ EOD;
    * Site template callback for the "Testimonials" feature.
    */
   public function product_template_testimonials_feature_install(&$data, $features) {
+    module_enable(array('simpleviews', 'sqbs'), FALSE);
     // Create the content type.
     site_template_add_node_type($data['node_type_data']);
 
@@ -312,6 +313,7 @@ EOD;
    * Site template callback for the "Customers" feature.
    */
   public function product_template_customers_feature_install(&$data, $features) {
+    module_enable(array('simpleviews', 'sqbs'), FALSE);
     // Create the content type.
     site_template_add_node_type($data['node_type_data']);
 
