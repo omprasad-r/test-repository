@@ -84,6 +84,7 @@ function warner_misc_disallowed_modules_alter(&$modules) {
     'mailhandler_sendto_auth',
     'mailhandler_singlemailbox',
     'mailhandler_multiple_email',
+    'mailhandler_extended',
     'mail_media',
     'job_scheduler',
     'member_api',
