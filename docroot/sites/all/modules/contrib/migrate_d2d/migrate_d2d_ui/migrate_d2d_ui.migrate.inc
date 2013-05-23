@@ -114,7 +114,9 @@ class MigrateD2DWizard extends MigrateUIWizard {
     parent::__construct();
     $this->addStep(t('Credentials'), 'sourceDataForm');
     $this->addStep(t('Users'), 'userForm');
-    $this->addStep(t('Taxonomy'), 'taxonomyForm');
+    if (module_exists('taxonomy')) {
+      $this->addStep(t('Taxonomy'), 'taxonomyForm');
+    }
     $this->addStep(t('Files'), 'fileForm');
     $this->addStep(t('Content Types'), 'contentTypeForm');
     $this->addStep(t('Review'), 'reviewForm');
@@ -152,8 +154,8 @@ class MigrateD2DWizard extends MigrateUIWizard {
       '#prefix' => '<p>',
       '#markup' => t('You will be led through a series of steps, allowing you to ' .
         'customize what will be imported into Drupal and how it will be mapped. ' .
-        'At the end of this process, an import job will be '.
-        'generated and you will be left at the Import dashboard, from which ' .
+        'At the end of this process, a migration job will be '.
+        'generated and you will be left at the dashboard, from which ' .
         'you can perform the import, monitor its progress, roll it back, etc.'),
       '#suffix' => '</p>',
     );
@@ -814,10 +816,10 @@ class MigrateD2DWizard extends MigrateUIWizard {
       'format_mappings' => $this->formatMappings,
     );
 
-    $message = t('<p>Please review your import settings. When you submit this
-      form, an import job containing an import task for each type of item to be
+    $message = t('<p>Please review your migration settings. When you submit this
+      form, n migration job containing a migration task for each type of item to be
       imported will be created and you will be left at the
-      import dashboard.</p>');
+      dashboard.</p>');
 
     $form['description'] = array(
       '#prefix' => '<div>',

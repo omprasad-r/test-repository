@@ -6,17 +6,34 @@
 
 class DrupalVersion7 extends DrupalVersion {
   /**
-   * Generate default format mappings based on matching names.
+   * Generate default format mappings based on matching machine names or
+   * display names.
    */
   public function getDefaultFormatMappings() {
     $format_mappings = array();
-    $result = Database::getConnection('default', $this->arguments['source_connection'])
+    $formats = filter_formats();
+    $result = Database::getConnection('default',
+                                      $this->arguments['source_connection'])
               ->select('filter_format', 'f')
-              ->fields('f', array('format'))
+              ->fields('f', array('format', 'name'))
               ->execute();
     foreach ($result as $format_row) {
-      $format_mappings[$format_row->format] = $format_row->format;
+      // Take a match on the machine name.
+      if (isset($formats[$format_row->format])) {
+        $format_mappings[$format_row->format] = $format_row->format;
+      }
+      else {
+        // Otherwise, look for a matching display name.
+        foreach ($formats as $machine_name => $format_info) {
+          if (drupal_strtolower($format_row->name) ==
+              drupal_strtolower($format_info->name)) {
+            $format_mappings[$format_row->format] = $machine_name;
+            break;
+          }
+        }
+      }
     }
+
     return $format_mappings;
   }
 
@@ -155,6 +172,9 @@ class DrupalVersion7 extends DrupalVersion {
           }
           else {
             $index = $display_name;
+          }
+          if (isset($row->$index) && !is_array($row->$index)) {
+            $row->$index = array($row->$index);
           }
           $row->{$index}[] = $field_row->$column_name;
         }

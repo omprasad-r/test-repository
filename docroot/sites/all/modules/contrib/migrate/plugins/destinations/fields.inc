@@ -39,6 +39,7 @@ class MigrateFieldsEntityHandler extends MigrateDestinationHandler {
       // Look for subfields
       $class_list = _migrate_class_list('MigrateFieldHandler');
       $disabled = unserialize(variable_get('migrate_disabled_handlers', serialize(array())));
+      $fields_found = FALSE;
       foreach ($class_list as $class_name => $handler) {
         if (!in_array($class_name, $disabled) && $handler->handlesType($type)
             && method_exists($handler, 'fields')) {
@@ -49,6 +50,18 @@ class MigrateFieldsEntityHandler extends MigrateDestinationHandler {
           foreach ($subfields as $subfield_name => $subfield_label) {
             $fields[$machine_name . ':' . $subfield_name] = $subfield_label;
           }
+          $fields_found = TRUE;
+        }
+      }
+      if (!$fields_found) {
+        // Check the default field handler last.
+        migrate_instrument_start('MigrateDefaultFieldHandler->fields');
+        $subfields = call_user_func(
+          array('MigrateDefaultFieldHandler', 'fields'), $type, $instance,
+            $migration);
+        migrate_instrument_stop('MigrateDefaultFieldHandler->fields');
+        foreach ($subfields as $subfield_name => $subfield_label) {
+          $fields[$machine_name . ':' . $subfield_name] = $subfield_label;
         }
       }
     }
@@ -129,6 +142,84 @@ abstract class MigrateFieldHandler extends MigrateHandler {
       default:
         return $migration->getDestination()->getLanguage();
     }
+  }
+}
+
+/**
+ * A fallback field handler to do basic copying of field data.
+ */
+class MigrateDefaultFieldHandler extends MigrateFieldHandler {
+  public function __construct() {}
+
+  /**
+   * Implements MigrateFieldHandler::fields().
+   *
+   * @param $field_type
+   * @param $field_instance
+   *
+   * @return array
+   */
+  public function fields($field_type, $field_instance) {
+    $field_info = field_info_field($field_instance['field_name']);
+    $fields = array();
+    $first = TRUE;
+    foreach ($field_info['columns'] as $column_name => $column_info) {
+      // The first column is the primary value, which is mapped directly to
+      // the field name - so, don't include it here among the subfields.
+      if ($first) {
+        $first = FALSE;
+      }
+      else {
+        $fields[$column_name] = $column_info['description'];
+      }
+    }
+    return $fields;
+  }
+
+  /**
+   * Implements MigrateFieldHandler::prepare().
+   *
+   * @param $entity
+   * @param array $field_info
+   * @param array $instance
+   * @param array $values
+   *
+   * @return null
+   */
+  public function prepare($entity, array $field_info, array $instance,
+                          array $values) {
+    $arguments = array();
+    if (isset($values['arguments'])) {
+      $arguments = array_filter($values['arguments']);
+      unset($values['arguments']);
+    }
+    $language = $this->getFieldLanguage($entity, $field_info, $arguments);
+
+    // Get the name of the primary (first) column, which is mapped separately.
+    reset($field_info['columns']);
+    $primary_column = key($field_info['columns']);
+
+    // Setup the standard Field API array for saving.
+    $delta = 0;
+    foreach ($values as $value) {
+      $return[$language][$delta] = array($primary_column => $value) +
+        array_intersect_key($arguments, $field_info['columns']);
+      $delta++;
+    }
+
+    return isset($return) ? $return : NULL;
+  }
+
+  /**
+   * Overrides MigrateHandler::handlesType().
+   *
+   * @param string $type
+   *
+   * @return bool
+   */
+  public function handlesType($type) {
+    // We claim to handle any type.
+    return TRUE;
   }
 }
 
@@ -242,14 +333,21 @@ class MigrateTextFieldHandler extends MigrateFieldHandler {
   public function fields($type, $instance, $migration = NULL) {
     $fields = array();
     if ($type == 'text_with_summary') {
-      $fields['summary'] = t('Subfield: Summary of field contents');
+      $fields['summary'] = t('Subfield: <a href="@doc">Summary of field ' .
+          'contents</a>',
+        array('@doc' => 'http://drupal.org/node/1224042#summary'));
     }
     if ($instance['settings']['text_processing']) {
-      $fields['format'] = t('Subfield: Text format for the field');
+      $fields['format'] = t('Subfield: <a href="@doc">Text format for the ' .
+          'field</a>',
+        array('@doc' => 'http://drupal.org/node/1224042#format'));
     }
-    $fields['language'] = t('Subfield: Language for the field');
+    $fields['language'] = t('Subfield: <a href="@doc">Language for the ' .
+          'field</a>',
+        array('@doc' => 'http://drupal.org/node/1224042#language'));
     return $fields;
   }
+
 
   public function prepare($entity, array $field_info, array $instance, array $values) {
     if (isset($values['arguments'])) {
@@ -355,9 +453,15 @@ class MigrateTaxonomyTermReferenceFieldHandler extends MigrateFieldHandler {
    */
   public function fields($type, $instance, $migration = NULL) {
     return array(
-      'source_type' => t('Option: Set to \'tid\' when the value is a source ID'),
-      'create_term' => t('Option: Set to TRUE to create referenced terms when necessary'),
-      'ignore_case' => t('Option: Set to TRUE to ignore case differences between source data and existing term names'),
+      'source_type' => t('Option: <a href="@doc">Set to \'tid\' when the ' .
+          'value is a source ID</a>',
+        array('@doc' => 'http://drupal.org/node/1224042#source_type')),
+      'create_term' => t('Option: <a href="@doc">Set to TRUE to create ' .
+          'referenced terms when necessary</a>',
+        array('@doc' => 'http://drupal.org/node/1224042#create_term')),
+      'ignore_case' => t('Option: <a href="@doc">Set to TRUE to ignore case ' .
+          'differences between source data and existing term names</a>',
+        array('@doc' => 'http://drupal.org/node/1224042#ignore_case')),
     );
   }
 
@@ -634,8 +738,12 @@ class MigrateFileFieldHandler extends MigrateFileFieldBaseHandler {
   public function fields($type, $instance, $migration = NULL) {
     $fields = parent::fields($type, $instance, $migration);
     $fields += array(
-      'description' => t('Subfield: String to be used as the description value'),
-      'display' => t('Subfield: String to be used as the display value'),
+      'description' => t('Subfield: <a href="@doc">String to be used as the ' .
+          'description value</a>',
+        array('@doc' => 'http://drupal.org/node/1224042#description')),
+      'display' => t('Subfield: <a href="@doc">String to be used as the ' .
+          'display value</a>',
+        array('@doc' => 'http://drupal.org/node/1224042#display')),
     );
     return $fields;
   }
@@ -695,8 +803,12 @@ class MigrateImageFieldHandler extends MigrateFileFieldBaseHandler {
   public function fields($type, $instance, $migration = NULL) {
     $fields = parent::fields($type, $instance, $migration);
     $fields += array(
-      'alt' => t('Subfield: String to be used as the alt value'),
-      'title' => t('Subfield: String to be used as the title value'),
+      'alt' => t('Subfield: <a href="@doc">String to be used as the alt ' .
+          'value</a>',
+        array('@doc' => 'http://drupal.org/node/1224042#alt')),
+      'title' => t('Subfield: <a href="@doc">String to be used as the title ' .
+          'value</a>',
+        array('@doc' => 'http://drupal.org/node/1224042#title')),
     );
     return $fields;
   }

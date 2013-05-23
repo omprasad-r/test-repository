@@ -4,7 +4,7 @@
  * Base classes for all Drupal-to-Drupal migration classes.
  */
 
-abstract class DrupalMigration extends DynamicMigration {
+abstract class DrupalMigration extends Migration {
   /**
    * Connection key for the DatabaseConnection holding the source Drupal
    * installation.
@@ -63,6 +63,14 @@ abstract class DrupalMigration extends DynamicMigration {
   protected $formatMappings = array();
 
   /**
+   * Set to TRUE to suppress highwater marks or track_changes (i.e., to only
+   * import new items, skipping updated items, on subsequent imports).
+   *
+   * @var bool
+   */
+  protected $newOnly = FALSE;
+
+  /**
    * Required arguments:
    *
    * source_connection - Connection key for the DatabaseConnection holding the
@@ -70,6 +78,8 @@ abstract class DrupalMigration extends DynamicMigration {
    * source_version - Major version number (as an integer) of the source install.
    * machine_name - Machine name under which a particular migration is registered.
    * description - Description of the migration.
+   * group_name - The group (import job) containing this migration (import
+   *  task).
    *
    * Optional arguments:
    *
@@ -86,13 +96,15 @@ abstract class DrupalMigration extends DynamicMigration {
    *  derived from the machine name).
    * version_class - The name of a custom DrupalVersion class overriding the
    *  default derived from source_version.
+   * new_only - For any destination types that support highwater marks or
+   *  track_changes, suppress that support so repeated migrations only import
+   *  new items.
    *
    * @param array $arguments
    */
   public function __construct($arguments) {
-    $group = MigrateGroup::getInstance($arguments['group_name']);
-    $group_arguments = $group->getArguments();
-    $this->arguments = $group_arguments + $arguments;
+    parent::__construct($arguments);
+
     $this->sourceVersion = $this->arguments['source_version'];
     if (isset($this->arguments['version_class'])) {
       $version_class = $this->arguments['version_class'];
@@ -107,11 +119,10 @@ abstract class DrupalMigration extends DynamicMigration {
     elseif (!is_object($this->arguments['group'])) {
       $this->arguments['group'] = MigrateGroup::getInstance($this->arguments['group']);
     }
-    parent::__construct($this->arguments['group']);
     $this->sourceConnection = $this->arguments['source_connection'];
-    if (!empty($group_arguments['source_database'])) {
+    if (!empty($this->arguments['source_database'])) {
       Database::addConnectionInfo($this->sourceConnection, 'default',
-                                  $group_arguments['source_database']);
+                                  $this->arguments['source_database']);
     }
     if (!empty($this->arguments['source_type'])) {
       $this->sourceType = $this->arguments['source_type'];
@@ -136,13 +147,10 @@ abstract class DrupalMigration extends DynamicMigration {
     else {
       $this->formatMappings = $this->version->getDefaultFormatMappings();
     }
-  }
 
-  /**
-   * Use the explicit machine_name argument as this migration's machine name.
-   */
-  protected function generateMachineName($class_name = NULL) {
-    return $this->arguments['machine_name'];
+    if (!empty($this->arguments['new_only'])) {
+      $this->newOnly = $this->arguments['new_only'];
+    }
   }
 
   /**

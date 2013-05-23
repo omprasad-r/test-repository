@@ -73,7 +73,7 @@ abstract class DrupalNodeMigration extends DrupalMigration {
 
     $this->sourceFields += $this->version->getSourceFields('node', $this->sourceType);
     if ($this->moduleExists('path')) {
-      $this->sourceFields['path'] = array('label' => t('Path alias'));
+      $this->sourceFields['path'] = t('Path alias');
     }
 
     $this->destination = new MigrateDestinationNode($this->destinationType);
@@ -90,18 +90,26 @@ abstract class DrupalNodeMigration extends DrupalMigration {
       MigrateDestinationNode::getKeySchema()
     );
 
-    $this->highwaterField = array(
-      'name' => 'changed',
-      'alias' => 'n',
-      'type' => 'int',
-    );
+    if (!$this->newOnly) {
+      $this->highwaterField = array(
+        'name' => 'changed',
+        'alias' => 'n',
+        'type' => 'int',
+      );
+    }
 
     // Setup common mappings
-    $this->addSimpleMappings(array('title', 'body', 'status', 'created', 'changed',
+    $this->addSimpleMappings(array('title', 'status', 'created', 'changed',
       'comment', 'promote', 'sticky'));
 
-    $this->addFieldMapping('body:language')
-         ->defaultValue($this->defaultLanguage);
+    if (field_info_instance('node', 'body', $this->destinationType)) {
+      $this->addFieldMapping('body', 'body');
+      $this->addFieldMapping('body:language')
+           ->defaultValue($this->defaultLanguage);
+    }
+    else {
+      $this->addUnmigratedSources(array('body'));
+    }
 
     $this->addUnmigratedSources(array('vid'));
     $this->addUnmigratedDestinations(array('is_new', 'revision',

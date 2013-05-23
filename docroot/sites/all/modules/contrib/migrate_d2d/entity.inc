@@ -76,11 +76,13 @@ abstract class DrupalEntityMigration extends DrupalMigration {
       MigrateDestinationEntityAPI::getKeySchema($this->entityType)
     );
 
-    $this->highwaterField = array(
-      'name' => 'changed',
-      'alias' => 'n',
-      'type' => 'int',
-    );
+    if (!$this->newOnly) {
+      $this->highwaterField = array(
+        'name' => 'changed',
+        'alias' => 'n',
+        'type' => 'int',
+      );
+    }
 
     // Ignore by default
     $this->addUnmigratedSources(array(

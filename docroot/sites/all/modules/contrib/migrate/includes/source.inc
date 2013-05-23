@@ -79,6 +79,13 @@ abstract class MigrateSource implements Iterator {
   protected $highwaterField;
 
   /**
+   * The highwater mark at the beginning of the import operation.
+   *
+   * @var
+   */
+  protected $originalHighwater = '';
+
+  /**
    * List of source IDs to process.
    *
    * @var array
@@ -240,6 +247,9 @@ abstract class MigrateSource implements Iterator {
     $this->numProcessed = 0;
     $this->numIgnored = 0;
     $this->highwaterField = $this->activeMigration->getHighwaterField();
+    if (!empty($this->highwaterField)) {
+      $this->originalHighwater = $this->activeMigration->getHighwater();
+    }
     if ($this->activeMigration->getOption('idlist')) {
       $this->idList = explode(',', $this->activeMigration->getOption('idlist'));
     }
@@ -325,7 +335,6 @@ abstract class MigrateSource implements Iterator {
             // prepareRow() told us to skip it.
             continue;
           }
-          $prepared = TRUE;
         }
         else {
           // No highwater and not tracking changes, skip.
@@ -335,7 +344,7 @@ abstract class MigrateSource implements Iterator {
       // 5. The initial highwater mark, before anything is migrated, is ''. We
       //    want to make sure we don't mistakenly skip rows with a highwater
       //    field value of 0, so explicitly handle '' here.
-      elseif ($this->activeMigration->getHighwater() === '') {
+      elseif ($this->originalHighwater === '') {
         // Fall through
       }
       // 6. So, we are using highwater marks. Take the row if its highwater
@@ -343,8 +352,7 @@ abstract class MigrateSource implements Iterator {
       else {
         // Call prepareRow() here, in case the highwaterField needs preparation
         if ($this->prepareRow($row) !== FALSE) {
-          if ($row->{$this->highwaterField['name']} >
-              $this->activeMigration->getHighwater()) {
+          if ($row->{$this->highwaterField['name']} > $this->originalHighwater) {
             $this->currentRow = $row;
             break;
           }
@@ -388,6 +396,10 @@ abstract class MigrateSource implements Iterator {
     migrate_instrument_stop(get_class($this->activeMigration) . ' prepareRow');
     // We're explicitly skipping this row - keep track in the map table
     if ($return === FALSE) {
+      // Make sure we replace any previous messages for this item with any
+      // new ones.
+      $this->activeMigration->getMap()->delete($this->currentKey, TRUE);
+      $this->activeMigration->saveQueuedMessages();
       $this->activeMigration->getMap()->saveIDMapping($row, array(),
         MigrateMap::STATUS_IGNORED, $this->activeMigration->rollbackAction);
       $this->numIgnored++;
@@ -402,7 +414,13 @@ abstract class MigrateSource implements Iterator {
       // after hashes).
       if ($this->trackChanges) {
         $unhashed_row = clone ($row);
-        unset($unhashed_row->migrate_map_hash);
+        // Remove all map data, otherwise we'll have a false positive on the
+        // second import (attempt) on a row.
+        foreach ($unhashed_row as $field => $data) {
+          if (strpos($field, 'migrate_map_') === 0) {
+            unset($unhashed_row->$field);
+          }
+        }
         $row->migrate_map_original_hash = $row->migrate_map_hash;
         $row->migrate_map_hash = $this->hash($unhashed_row);
       }

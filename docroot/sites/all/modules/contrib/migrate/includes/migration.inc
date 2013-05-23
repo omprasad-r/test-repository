@@ -22,6 +22,9 @@ abstract class Migration extends MigrationBase {
   public function getSource() {
     return $this->source;
   }
+  public function setSource(MigrateSource $source) {
+    $this->source = $source;
+  }
 
   /**
    * Destination object for the migration, derived from MigrateDestination.
@@ -32,6 +35,9 @@ abstract class Migration extends MigrationBase {
   public function getDestination() {
     return $this->destination;
   }
+  public function setDestination(MigrateDestination $destination) {
+    $this->destination = $destination;
+  }
 
   /**
    * Map object tracking relationships between source and destination data
@@ -41,6 +47,9 @@ abstract class Migration extends MigrationBase {
   protected $map;
   public function getMap() {
     return $this->map;
+  }
+  public function setMap(MigrateMap $map) {
+    $this->map = $map;
   }
 
   /**
@@ -59,6 +68,9 @@ abstract class Migration extends MigrationBase {
   public function getSystemOfRecord() {
     return $this->systemOfRecord;
   }
+  public function setSystemOfRecord($system_of_record) {
+    $this->systemOfRecord = $system_of_record;
+  }
 
   /**
    * Specify value of needs_update for current map row. Usually set by
@@ -75,6 +87,12 @@ abstract class Migration extends MigrationBase {
    * @var int
    */
   protected $defaultRollbackAction = MigrateMap::ROLLBACK_DELETE;
+  public function getDefaultRollbackAction() {
+    return $this->defaultRollbackAction;
+  }
+  public function setDefaultRollbackAction($rollback_action) {
+    $this->defaultRollbackAction = $rollback_action;
+  }
 
   /**
    * The rollback action to be saved for the current row.
@@ -151,6 +169,9 @@ abstract class Migration extends MigrationBase {
   public function getHighwaterField() {
     return $this->highwaterField;
   }
+  public function setHighwaterField(array $highwater_field) {
+    $this->highwaterField = $highwater_field;
+  }
 
   /**
    * The object currently being constructed
@@ -175,8 +196,8 @@ abstract class Migration extends MigrationBase {
   /**
    * General initialization of a Migration object.
    */
-  public function __construct($group = NULL) {
-    parent::__construct($group);
+  public function __construct($arguments = array()) {
+    parent::__construct($arguments);
   }
 
   /**
@@ -270,7 +291,7 @@ abstract class Migration extends MigrationBase {
     foreach ($result as $row) {
       $field_mapping = unserialize($row->options);
       $field_mapping->setMappingSource(MigrateFieldMapping::MAPPING_SOURCE_DB);
-      if (is_null($row->destination_field)) {
+      if (empty($row->destination_field)) {
         $this->storedFieldMappings[] = $field_mapping;
       }
       else {
@@ -790,7 +811,7 @@ abstract class Migration extends MigrationBase {
       $row = $this->source->current();
       // Cheat for XML migrations, which don't pick up the source values
       // until applyMappings() applies the xpath()
-      if (is_a($this, 'XMLMigration')) {
+      if (is_a($this, 'XMLMigration') && isset($row->xml)) {
         $this->sourceValues = $row;
         $this->applyMappings();
         $row = $this->sourceValues;
@@ -1483,7 +1504,7 @@ abstract class Migration extends MigrationBase {
   /**
    * Save any messages we've queued up to the message table.
    */
-  protected function saveQueuedMessages() {
+  public function saveQueuedMessages() {
     foreach ($this->queuedMessages as $queued_message) {
       $this->saveMessage($queued_message['message'], $queued_message['level']);
     }
@@ -1502,12 +1523,21 @@ abstract class Migration extends MigrationBase {
 }
 
 /**
- * Convenience class - deriving from this rather than directory from Migration
- * ensures that a class will not be registered as a migration itself - it is
- * the implementor's responsibility to register each instance of a dynamic
- * migration class.
+ * @deprecated - This class is no longer necessary, inherit directly from
+ *  Migration instead.
  */
 abstract class DynamicMigration extends Migration {
+  static $deprecationWarning = FALSE;
+  public function __construct($arguments) {
+    parent::__construct($arguments);
+    if (variable_get('migrate_deprecation_warnings', 1) &&
+        !self::$deprecationWarning) {
+      self::displayMessage(t('The DynamicMigration class is no longer necessary ' .
+        'and is now deprecated - please derive your migration classes directly ' .
+        'from Migration.'));
+      self::$deprecationWarning = TRUE;
+    }
+  }
   /**
    * Overrides default of FALSE
    */
