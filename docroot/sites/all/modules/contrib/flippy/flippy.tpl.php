@@ -39,6 +39,7 @@
 <?php if (empty($first_link)): ?><li class="first empty"><?php print variable_get('flippy_first_label_' . $vars['node']->type, NULL); ?></li><?php endif; ?>
 <?php if (!empty($previous_link)): ?><li class="previous"><?php print $previous_link; ?></li><?php endif; ?>
 <?php if (empty($previous_link)): ?><li class="previous empty"><?php print variable_get('flippy_prev_label_' . $vars['node']->type, NULL); ?></li><?php endif; ?>
+<?php if (!empty($random_link)): ?><li class="random"><?php print $random_link; ?></li><?php endif; ?>
 <?php if (!empty($next_link)): ?><li class="next"><?php print $next_link; ?></li><?php endif; ?>
 <?php if (empty($next_link)): ?><li class="next empty"><?php print variable_get('flippy_next_label_' . $vars['node']->type, NULL); ?></li><?php endif; ?>
 <?php if (!empty($last_link)): ?><li class="last"><?php print $last_link; ?></li><?php endif; ?>

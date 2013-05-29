@@ -134,6 +134,30 @@ function flippy_form_node_type_form_alter(&$form, $form_state) {
       ),
     );
 
+    $form['flippy']['flippy_random'] = array(
+      '#type' => 'checkbox',
+      '#title' => t('Show random link'),
+      '#default_value' => isset($form['flippy']['flippy_random']) ? $form['flippy']['flippy_random'] : variable_get('flippy_random_' . $form['#node_type']->type, FALSE),
+      '#states' => array(
+        'visible' => array(   // action to take.
+          ':input[name=flippy]' => array('checked' => TRUE),
+        ),
+      ),
+    );
+
+    $form['flippy']['flippy_random_label'] = array(
+      '#type' => 'textfield',
+      '#title' => t('Label for "Random" link'),
+      '#size' => 32,
+      '#default_value' => isset($form['flippy']['flippy_random_label']) ? $form['flippy']['flippy_random_label'] : variable_get('flippy_random_label_' . $form['#node_type']->type, 'Random'),
+      '#states' => array(
+        'visible' => array(
+          ':input[name=flippy_random]' => array('checked' => TRUE),
+          ':input[name=flippy]' => array('checked' => TRUE),
+        ),
+      ),
+    );
+
   }
 }
 
@@ -193,7 +217,11 @@ function flippy_build_list($node) {
 
     $first = clone $query;
     $list['first'] = $first
-      ->condition('created', $node->created, '<=')
+      ->condition(db_or()
+        ->condition('created', $node->created, '<')
+        ->condition(db_and()
+          ->condition('created', $node->created, '=')
+          ->condition('nid', $node->nid, '<')))
       ->orderBy('created', 'ASC')
       ->execute()->fetchAssoc();
 
@@ -224,10 +252,19 @@ function flippy_build_list($node) {
 
     $last = clone $query;
     $list['last'] = $last
-      ->condition('created', $node->created, '>=')
+      ->condition(db_or()
+        ->condition('created', $node->created, '>')
+        ->condition(db_and()
+          ->condition('created', $node->created, '=')
+          ->condition('nid', $node->nid, '>')))
       ->orderBy('created', 'DESC')
       ->execute()->fetchAssoc();
     
+    $random = clone $query;
+    $list['random'] = $random
+      ->orderRandom()
+      ->execute()->fetchAssoc();
+
     $master_list[$node->nid] = $list;
   }
   return $master_list[$node->nid];
@@ -249,6 +286,10 @@ function template_preprocess_flippy(&$vars) {
     if (variable_get('flippy_firstlast_'. $vars['node']->type, NULL)) {
       $vars['first_link'] = empty($nav['first']) ? '' : l('« ' . t(variable_get('flippy_first_label_' . $vars['node']->type, NULL)), 'node/' . $nav['first']['nid']);
       $vars['last_link'] = empty($nav['last']) ? '' : l(t(variable_get('flippy_last_label_' . $vars['node']->type, NULL)) . ' »', 'node/' . $nav['last']['nid']);
+    }
+
+    if (variable_get('flippy_random_'. $vars['node']->type, NULL)) {
+      $vars['random_link'] = empty($nav['random']) ? '' : l(t(variable_get('flippy_random_label_' . $vars['node']->type, NULL)), 'node/' . $nav['random']['nid']);
     }
 
     switch ($label_type) {
