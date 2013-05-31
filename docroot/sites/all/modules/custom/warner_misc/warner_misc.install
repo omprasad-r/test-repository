@@ -476,3 +476,10 @@ function warner_misc_update_11155() {
 function warner_misc_update_11156() {
   module_enable(array('front_page'));
 }
+
+/**
+ * Enable imagecache_token module
+ */
+function warner_misc_update_11157() {
+  module_enable(array('imagecache_token'));
+}

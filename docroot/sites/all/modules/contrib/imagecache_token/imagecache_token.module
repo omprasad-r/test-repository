@@ -1,0 +1,81 @@
+<?php
+
+
+/**
+ * Implementation of hook_token_info
+ */
+function imagecache_token_token_info() {
+  $styles = image_styles();
+  $styles_tokens = array();
+
+  foreach ($styles as $style => $desc) {
+    $styles_tokens[$style] = array(
+      'name' => $style,
+      'description' => t("@s image style", array("@s" => $style)),
+    );
+  }
+
+  return array(
+    'types' => array(
+      'image-field' => array(
+        'name' => 'Image Field',
+        'description' => 'Image Field',
+        'needs-data' => 'image-field',
+      ),
+    ),
+    'tokens' => array(
+      'image-field' => $styles_tokens,
+    ),
+  );
+}
+
+/**
+ * Implementation of hook_token_info_alter
+ */
+function imagecache_token_token_info_alter(&$data) {
+  $data['types']['image-field'] = array(
+    'name' => 'Image Field',
+    'description' => 'Tokens for Image Field values.',
+    'needs-data' => 'image-field',
+  );
+
+  $fields = field_info_fields();
+
+  foreach ($fields as $field) {
+    if ($field['type'] == 'image') {
+      $data['tokens']['node'][$field['field_name']]['type'] = 'image-field';
+    }
+  } 
+}
+
+
+/**
+ * Implements hook_tokens().
+ */
+function imagecache_token_tokens($type, $tokens, array $data = array(), array $options = array()) {
+  $replacements = array();
+
+  if ($type == 'node' && !empty($data['node'])) {
+    $fields = field_info_fields();
+
+    foreach ($fields as $field) {
+      if ($field['type'] == 'image') {
+        if (($image_field_tokens = token_find_with_prefix($tokens, $field['field_name'])) && $field_object = field_get_items('node', $data['node'], $field['field_name'])) {
+          $replacements += token_generate('image-field', $image_field_tokens, array('image-field' => $field_object), $options);
+        }
+      }
+    } 
+  }
+
+  if ($type == 'image-field' && !empty($data['image-field'])) {
+    foreach ($tokens as $token => $original) {
+      $urls = array();
+      foreach ($data['image-field'] as $field) {
+        $urls[] = image_style_url($token, $field['uri']);
+      }
+      $replacements[$original] = implode(', ', $urls);
+    }
+  }
+
+  return $replacements;
+}
