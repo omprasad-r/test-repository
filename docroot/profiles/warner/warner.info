@@ -14,3 +14,4 @@ dependencies[] = audit_trail
 dependencies[] = gardens_enterprise_misc
 dependencies[] = site_guard
 dependencies[] = gardens_statsd
+dependencies[] = front_page
