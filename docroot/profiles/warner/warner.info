@@ -16,3 +16,5 @@ dependencies[] = site_guard
 dependencies[] = gardens_statsd
 dependencies[] = front_page
 dependencies[] = imagecache_token
+dependencies[] = imagecache_external
+dependencies[] = oembed_thumbnail_token
