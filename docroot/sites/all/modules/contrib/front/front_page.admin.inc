@@ -45,7 +45,7 @@ function front_page_admin($form, &$form_state) {
   $description .= '<dl><dt>' . t('full') . '</dt>
       <dd>' . t('allows you to have a completely different layout, style sheet etc.') . '</dd></dl>';
   $description .= '<dl><dt>' . t('redirect') . '</dt>
-      <dd>' . t('will automatically redirect visitors already logged in to a specific page specified in the REDIRECT TO box.') . '</dd></dl>';
+      <dd>' . t('will automatically redirect visitors to a specific page specified in the REDIRECT TO box.') . '</dd></dl>';
   $description .= '<dl><dt>' . t('alias') . '</dt>
       <dd>' . t('will display the page listed in path as if it were the home page. This option does not redirect.') . '</dd></dl>';
 
