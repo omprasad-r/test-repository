@@ -490,3 +490,10 @@ function warner_misc_update_11157() {
 function warner_misc_update_11158() {
   module_enable(array('imagecache_external', 'oembed_thumbnail_token'));
 }
+
+/**
+ * Enable flippy module
+ */
+function warner_misc_update_11159() {
+  module_enable(array('flippy'));
+}
