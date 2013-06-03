@@ -338,16 +338,8 @@
                               </div>
                               
                           <?php endif; endforeach; endif; ?>
-                              
-                        <?php 
-                          if(isset($variables['sidebars']['hidden'])):
-                            foreach($variables['sidebars']['hidden'] as $value):
-                              if (!empty($page['sidebar_'.$value])): ?>
-                              <div id="sidebar-<?php echo $value; ?>" class="col-<?php echo $value; ?> sidebar right tb-height-balance tb-region tb-scope tb-sidebar tb-right tb-hidden">
-                                <?php print render($page['sidebar_'.$value]); ?>
-                              </div>
                       
-                      <?php endif; endforeach; endif; endif; ?> <!-- end sidebars -->
+                      <?php endif; ?> <!-- end sidebars -->
                       
                       <div id="main" class="col-c tb-height-balance tb-region tb-scope tb-primary">
                         <?php if ($page['highlight']): ?>

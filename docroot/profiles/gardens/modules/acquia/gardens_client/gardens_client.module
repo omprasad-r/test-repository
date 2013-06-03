@@ -891,8 +891,6 @@ function gardens_client_user_register_page() {
     // Hide user name, password and OpenID URL info.
     $form['account']['#access'] = FALSE;
     $form['openid_display']['#access'] = FALSE;
-    // Retitle submit button.
-    $form['actions']['submit']['#value'] = t('Finish');
 
     return $form;
   }
@@ -972,6 +970,9 @@ function gardens_client_form_user_register_form_alter(&$form, &$form_state) {
   // done with it.  Therefore, we need to persist the data here.
   if (isset($_SESSION['openid']['response'])) {
     gardens_client_user_registration_openid_response($_SESSION['openid']['response']);
+
+    // Retitle submit button.
+    $form['actions']['submit']['#value'] = t('Finish');
   }
 
   $form['#validate'][] = 'gardens_client_user_register_validate';
