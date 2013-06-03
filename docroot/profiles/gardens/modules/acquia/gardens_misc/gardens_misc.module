@@ -263,6 +263,14 @@ function gardens_misc_page_alter(&$page) {
       drupal_add_js($script2, array('type' => 'inline', 'scope' => 'footer'));
     }
   }
+  if (module_exists('colorbox')) {
+    // If the colorbox library / module is being used to show some images using
+    // their URL directly then colorbox will have no idea about the image's
+    // dimensions during the overlay creation and as a result the overlay will
+    // be undersized. A resolution for this is to force resizing when colorbox
+    // has finished with the overlay.
+    drupal_add_js(drupal_get_path('module', 'gardens_misc') . '/js/gardens_misc.colorbox.js');
+  }
 }
 
 /**
@@ -3546,4 +3554,18 @@ function gardens_misc_form_janrain_capture_settings_alter(&$form, $form_state) {
   // For the time being, hide some of Janrain Capture's features.
   $form['janrain_capture_ver']['#access'] = FALSE;
   $form['janrain_capture_share']['#access'] = FALSE;
+}
+
+/**
+ * Implement hook_admin_paths_alter().
+ */
+function gardens_misc_admin_paths_alter(&$paths) {
+  // On a gallery page when the user clicks the "Add media" link, both the media
+  // and the overlay modules trigger and open two different overlays with a file
+  // uploading page. This confuses JavaScript and breaks the feature. A related
+  // change in the media module was, that it added the media/browser links into
+  // the list of admin paths and that allowed the overlay to pick it up, so as a
+  // quick fix for the issue, we are removing these paths from the list.
+  unset($paths['media/browser']);
+  unset($paths['media/browser/*']);
 }

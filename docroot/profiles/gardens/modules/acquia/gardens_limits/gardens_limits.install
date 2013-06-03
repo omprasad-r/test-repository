@@ -22,4 +22,8 @@ function gardens_limits_install() {
       }
     }
   }
+
+  // Sets the hard and soft quota multipliers for the file uploads.
+  variable_set('gardens_limits_hard_quota_multiplier', 1.1);
+  variable_set('gardens_limits_soft_quota_multiplier', 0.9);
 }
