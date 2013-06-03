@@ -1208,3 +1208,72 @@ function scarecrow_update_11182() {
 function scarecrow_update_11183() {
   module_enable(array('saferpermissions'), TRUE);
 }
+
+/**
+ * Sets the hard and soft quota multipliers for the file uploads.
+ */
+function scarecrow_update_11184() {
+  if (module_exists('gardens_limits')) {
+    variable_set('gardens_limits_hard_quota_multiplier', 1.1);
+    variable_set('gardens_limits_soft_quota_multiplier', 0.9);
+  }
+}
+
+/**
+ * Fixes up duplicated sites with MASt where the mobile app user got scrubbed.
+ */
+function scarecrow_update_11185() {
+  $mast_uid = variable_get('mast_app_uid');
+  if (module_exists('mast') && $mast_uid && !user_load($mast_uid)) {
+    if (!db_query('SELECT 1 FROM {users} WHERE name = :name OR mail = :mail', array(':name' => 'Mobile app user', ':mail' => 'mobileapp@example.com'))->fetchField()) {
+      // Create a user representing the mobile application.
+      $account = user_save(drupal_anonymous_user(), array(
+        'name' => 'Mobile app user',
+        'mail' => 'mobileapp@example.com',
+        'pass' => user_password(),
+        'status' => 1,
+      ));
+      variable_set('mast_app_uid', $account->uid);
+
+      // Create an oAuth consumer object corresponding to the mobile app.
+      $options = array(
+        'callback_url' => 'gardens://authorized',
+        'uid' => $account->uid,
+        'provider_consumer' => TRUE,
+        'in_database' => TRUE,
+        'context' => 'mast',
+      );
+      $consumer = new DrupalOAuthConsumer('Q29tZSBmb3IgdGhlIHNvZnR3YXJl', 'c3RheSBmb3IgdGhlIGNvbW11bml0eS4', $options);
+      $consumer->write();
+    }
+  }
+}
+
+/**
+ * Fix invalid colorbox_path variable if necessary.
+ */
+function scarecrow_update_11186() {
+  if (module_exists('colorbox')) {
+    $colorbox_get_path = NULL;
+    $colorbox_style = variable_get('colorbox_style');
+
+    // Set correct 'colorbox_path' variable.
+    if (function_exists('colorbox_get_path')) {
+      $colorbox_get_path = colorbox_get_path();
+    }
+
+    // If 'colorbox_style' is set, but does not match the actual path.
+    if ($colorbox_get_path !== NULL && $colorbox_style !== NULL) {
+      if (strpos($colorbox_style, $colorbox_get_path) === FALSE) {
+        $split = explode('/', $colorbox_style);
+        // Maybe 'colorbox_style' is not a full path.
+        if (is_array($split) && count($split) > 1 && ($style = array_pop($split))) {
+          $colorbox_style = $colorbox_get_path . '/' . $style;
+          if (is_dir($colorbox_style)) {
+            variable_set('colorbox_style', $colorbox_style);
+          }
+        }
+      }
+    }
+  }
+}

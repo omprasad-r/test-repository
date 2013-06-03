@@ -133,7 +133,7 @@ function gardens_duplication_scrub($options = array()) {
     $result = db_query('SELECT uid FROM {users} WHERE uid NOT IN (:uids)', array(':uids' => array(0, 1)));
     foreach ($result as $record) {
       $account = user_load($record->uid, TRUE);
-      if (!gardens_duplication_user_is_openid_admin($account)) {
+      if (!gardens_duplication_user_is_openid_admin($account) && !gardens_duplication_user_is_preserved($account)) {
         // Prior to deleting the user, re-assign {file_managed}.uid to anonymous.
         // Re-assign files only: allow nodes and comments to be deleted.
         // It would be more proper to call file_load_multiple(), iterate each
@@ -305,6 +305,20 @@ function gardens_duplication_scrub($options = array()) {
       db_delete($table)->execute();
     }
   }
+  if (module_exists('mast') && variable_get('mast_app_uid')) {
+    // Reinsert the oAuth consumer object needed for the MASt mobile app user
+    // and just got deleted above. Adding exception to the scrubbing query above
+    // would not be pretty.
+    $options = array(
+      'callback_url' => 'gardens://authorized',
+      'uid' => variable_get('mast_app_uid'),
+      'provider_consumer' => TRUE,
+      'in_database' => TRUE,
+      'context' => 'mast',
+    );
+    $consumer = new DrupalOAuthConsumer('Q29tZSBmb3IgdGhlIHNvZnR3YXJl', 'c3RheSBmb3IgdGhlIGNvbW11bml0eS4', $options);
+    $consumer->write();
+  }
 
   // Re-disable modules that were disabled prior to this function, and enabled
   // only for scrubbing.
@@ -343,4 +357,23 @@ function gardens_duplication_user_is_openid_admin($account) {
   $is_admin = !empty($roles);
   $is_openid = gardens_client_registered_with_openid($account);
   return $is_admin && $is_openid;
+}
+
+/**
+ * Preserves certain accounts during site duplication.
+ *
+ * @param object $account
+ *   Fully loaded user object.
+ *
+ * @return bool
+ *   TRUE if the user account needs to be preserved.
+ */
+function gardens_duplication_user_is_preserved($account) {
+  // MASt operates with a user created by the module, so it needs to be
+  // preserved during site duplication.
+  $mast_uid = variable_get('mast_app_uid');
+  if (module_exists('mast') && $mast_uid && $account->uid == $mast_uid) {
+    return TRUE;
+  }
+  return FALSE;
 }
