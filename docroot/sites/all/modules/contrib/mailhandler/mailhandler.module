@@ -76,6 +76,16 @@ function mailhandler_filter_info() {
 }
 
 /**
+ * Implements hook_coder_review_ignore().
+ */
+function mailhandler_coder_review_ignore() {
+  return array(
+    'path' => drupal_get_path('module', 'mailhandler'),
+    'line prefix' => drupal_get_path('module', 'mailhandler'),
+  );
+}
+
+/**
  * Implements hook_trigger_info().
  */
 function mailhandler_trigger_info() {

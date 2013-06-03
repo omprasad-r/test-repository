@@ -16,12 +16,7 @@ class MailhandlerCommandsFiles extends MailhandlerCommands {
       // 'unnamed_attachment' files are not really attachments, but mimeparts like HTML or Plain Text.
       // We only want to save real attachments, like images and files.
       if ($attachment->filename !== 'unnamed_attachment') {
-        $destination = variable_get('mailhandler_temporary_path', 'temporary://');
-        // Make sure the path ends with a '/'.
-        if (substr($destination, -1) != '/') {
-          $destination .= '/';
-        }
-
+        $destination = 'temporary://';
         $filename = mb_decode_mimeheader($attachment->filename);
         $file = file_save_data($attachment->data, $destination . $filename);
         $file->status = 0;

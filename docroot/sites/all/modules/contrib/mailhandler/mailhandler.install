@@ -127,7 +127,9 @@ function mailhandler_update_7202() {
   $result = db_query('SELECT * FROM {feeds_importer}');
   while ($row = $result->fetchAssoc()) {
     $row['config'] = unserialize($row['config']);
-    if ($row['config']['parser']['plugin_key'] == 'MailhandlerParser') {
+    $is_mailhandler = ($row['config']['parser']['plugin_key'] == 'MailhandlerParser');
+    $is_command = isset($row['config']['parser']['config']['command_plugin']);
+    if ($is_mailhandler && $is_command) {
       $old_plugins = $row['config']['parser']['config']['command_plugin'];
       $new_plugins = array(
         'MailhandlerCommandsFiles' => 'MailhandlerCommandsFiles',
@@ -143,13 +145,17 @@ function mailhandler_update_7202() {
  * Move human-readable mailbox name into separate field.
  */
 function mailhandler_update_7203() {
-  db_add_field('mailhandler_mailbox', 'admin_title', array('type' => 'varchar', 'length' => '255', 'description' => 'Human-readable name (email address) of this mailbox.'));
-  $result = db_query('SELECT * FROM {mailhandler_mailbox}');
-  while ($row = $result->fetchAssoc()) {
-    $row['settings'] = unserialize($row['settings']);
-    $row['admin_title'] = $row['settings']['mail'];
-    unset($row['settings']['mail']);
-    db_update('mailhandler_mailbox')->fields(array('admin_title' => $row['admin_title'], 'settings' => serialize($row['settings'])))->condition('mid', $row['mid'])->execute();
+  $table = 'mailhandler_mailbox';
+  $field = 'admin_title';
+  if (!db_field_exists($table, $field)) {
+    db_add_field($table, $field, array('type' => 'varchar', 'length' => '255', 'description' => 'Human-readable name (email address) of this mailbox.'));
+    $result = db_query('SELECT * FROM {mailhandler_mailbox}');
+    while ($row = $result->fetchAssoc()) {
+      $row['settings'] = unserialize($row['settings']);
+      $row['admin_title'] = $row['settings']['mail'];
+      unset($row['settings']['mail']);
+      db_update('mailhandler_mailbox')->fields(array('admin_title' => $row['admin_title'], 'settings' => serialize($row['settings'])))->condition('mid', $row['mid'])->execute();
+    }
   }
 }
 
@@ -176,12 +182,14 @@ function mailhandler_update_7204() {
  * for existing Mailhandler mailboxes.
  */
 function mailhandler_update_7205() {
-  module_enable(array('mailhandler_php_imap'));
-  $result = db_query('SELECT * FROM {mailhandler_mailbox}');
-  while ($row = $result->fetchAssoc()) {
-    $row['settings'] = unserialize($row['settings']);
-    $row['settings']['retrieve'] = 'MailhandlerPhpImapRetrieve';
-    db_update('mailhandler_mailbox')->fields(array('settings' => serialize($row['settings'])))->condition('mid', $row['mid'])->execute();
+  if (!module_exists('mailhandler_php_imap')) {
+    module_enable(array('mailhandler_php_imap'));
+    $result = db_query('SELECT * FROM {mailhandler_mailbox}');
+    while ($row = $result->fetchAssoc()) {
+      $row['settings'] = unserialize($row['settings']);
+      $row['settings']['retrieve'] = 'MailhandlerPhpImapRetrieve';
+      db_update('mailhandler_mailbox')->fields(array('settings' => serialize($row['settings'])))->condition('mid', $row['mid'])->execute();
+    }
   }
 }
 
@@ -196,19 +204,21 @@ function mailhandler_update_7206() {
   $result = db_query('SELECT * FROM {mailhandler_mailbox}');
   while ($row = $result->fetchAssoc()) {
     $row['settings'] = unserialize($row['settings']);
-    switch ($row['settings']['imap']) {
-      case '0':
-        $row['settings']['type'] = 'pop3';
-        break;
-      case '1':
-        $row['settings']['type'] = 'imap';
-        break;
+    if (isset($row['settings']['imap'])) {
+      switch ($row['settings']['imap']) {
+        case '0':
+          $row['settings']['type'] = 'pop3';
+          break;
+        case '1':
+          $row['settings']['type'] = 'imap';
+          break;
+      }
+      if (empty($row['settings']['domain'])) {
+        $row['settings']['type'] = 'local';
+      }
+      unset($row['settings']['imap']);
+      db_update('mailhandler_mailbox')->fields(array('settings' => serialize($row['settings'])))->condition('mid', $row['mid'])->execute();
     }
-    if (empty($row['settings']['domain'])) {
-      $row['settings']['type'] = 'local';
-    }
-    unset($row['settings']['imap']);
-    db_update('mailhandler_mailbox')->fields(array('settings' => serialize($row['settings'])))->condition('mid', $row['mid'])->execute();
   }
 }
 
@@ -266,7 +276,7 @@ function mailhandler_update_7210() {
   $result = db_query('SELECT * FROM {feeds_source}');
   while ($row = $result->fetchAssoc()) {
     $row['config'] = unserialize($row['config']);
-    if (isset($row['config']['MailhandlerParser'])) {
+    if (isset($row['config']['MailhandlerParser']['if_auth_fails'])) {
       switch ($row['config']['MailhandlerParser']['if_auth_fails']) {
         case 'remove':
         case 'retry':
@@ -279,6 +289,28 @@ function mailhandler_update_7210() {
       }
       unset($row['config']['MailhandlerParser']['if_auth_fails']);
       drupal_write_record('feeds_source', $row, array('id', 'feed_nid'));
+    }
+  }
+}
+
+/**
+ * Move default commands to source config.
+ */
+function mailhandler_update_7211() {
+  $importers = db_query('SELECT * FROM {feeds_importer}');
+  while ($importer = $importers->fetchAssoc()) {
+    $importer['config'] = unserialize($importer['config']);
+    if ($importer['config']['parser']['plugin_key'] == 'MailhandlerParser') {
+      if (!empty($importer['config']['content_type']) && isset($importer['config']['parser']['config']['default_commands'])) {
+        $nodes = db_query('SELECT * FROM {node} WHERE type = :type', array(':type' => $importer['config']['content_type']));
+        while ($node = $nodes->fetchAssoc()) {
+          $source = db_query('SELECT * FROM {feeds_source} WHERE feed_nid = :feed_nid', array(':feed_nid' => $node['nid']))->fetchAssoc();
+          $source['config'] = unserialize($source['config']);
+          $source['config']['MailhandlerParser']['default_commands'] = $importer['config']['parser']['config']['default_commands'];
+          $source['config']['MailhandlerParser']['commands_failed_auth'] = $importer['config']['parser']['config']['commands_failed_auth'];
+          drupal_write_record('feeds_source', $source, array('id', 'feed_nid'));
+        }
+      }
     }
   }
 }

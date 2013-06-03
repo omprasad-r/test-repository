@@ -14,21 +14,22 @@ class MailhandlerCommandsDefault extends MailhandlerCommands {
    * @param $source
    *   Source config.
    */
-  public function parse(&$message, $source) {
+  public function parse(&$message, $source, $client) {
     $config = $source->importer->getConfig();
     // Prepend the default commands.
     // User-added commands will override the default commands.
-    if ($config['parser']['config']['default_commands']) {
-      $message['body_text'] = trim($config['parser']['config']['default_commands']) . "\n" . $message['body_text'];
+    $source_config = $source->getConfigFor($client);
+    if ($source_config['default_commands']) {
+      $message['body_text'] = trim($source_config['default_commands']) . "\n" . $message['body_text'];
     }
     $commands = $this->getCommands($message['body_text']);
     $this->commands = $commands;
     foreach ($commands as $key => $value) {
-      $message['body_html'] = preg_replace('/' . $key . ': ' . $value . '/', '', $message['body_html'], 1);
+      $message['body_html'] = str_replace($key . ': ' . $value, '', $message['body_html']);
       $message['body_html'] = preg_replace('/<br[^>\r\n]*>/', '', $message['body_html'], 1);
     }
     if ($message['authenticated_uid'] == 0) {
-      $commands = $this->getCommands($config['parser']['config']['commands_failed_auth']);
+      $commands = $this->getCommands($source_config['commands_failed_auth']);
       foreach ($commands as $key => $value) {
         if (isset($this->commands[$key])) {
           $this->commands[$key] = $value;
@@ -66,17 +67,23 @@ class MailhandlerCommandsDefault extends MailhandlerCommands {
       '#description' => t('A set of commands that can be mapped to Feeds processor targets.'),
       '#default_value' => $config['available_commands'],
     );
+  }
+
+  /**
+   * Build source form.
+   */
+  public function sourceForm(&$form, $source_config) {
     $form['default_commands'] = array(
       '#type' => 'textarea',
       '#title' => t('Default commands (authenticated users)'),
       '#description' => t('A set of commands that are added to each message by default, if the user is authenticated. Should be in the form "key: value".'),
-      '#default_value' => $config['default_commands'],
+      '#default_value' => isset($source_config['default_commands']) ? $source_config['default_commands'] : '',
     );
     $form['commands_failed_auth'] = array(
       '#type' => 'textarea',
       '#title' => t('Default commands (anonymous users)'),
       '#description' => t('A set of commands that are added to each message by default, if the user is not authenticated. Should be in the form "key: value".'),
-      '#default_value' => $config['commands_failed_auth'],
+      '#default_value' => isset($source_config['commands_failed_auth']) ? $source_config['commands_failed_auth'] : '',
     );
   }
 
@@ -107,10 +114,10 @@ class MailhandlerCommandsDefault extends MailhandlerCommands {
     // Collect the commands and locate signature.
     $lines = explode("\n", $string);
     foreach ($lines as $i => $line) {
-      $line = explode(':', $line);
-      if (count($line) == 2) {
-        $key = trim($line[0]);
-        $value = trim($line[1]);
+      preg_match('/^([a-zA-Z0-9_-\s\.]+):{1}\s*(.+)$/', $line, $matches);
+      if (count($matches) == 3) {
+        $key = trim($matches[1]);
+        $value = trim($matches[2]);
         $commands[$key] = $value;
       }
       elseif (!empty($commands) || $i == 0) {
