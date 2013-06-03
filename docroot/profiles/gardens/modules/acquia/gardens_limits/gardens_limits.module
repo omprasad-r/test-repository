@@ -520,9 +520,32 @@ function gardens_limits_storage_limit_pre_render($element) {
 
 /**
  * Return TRUE/FALSE depending on whether we should limit further uploads.
+ *
+ * Also warn the user when he hits past the 90% limit.
  */
 function gardens_limits_storage_is_limited() {
+  global $user;
+
   $storage_limit = gardens_limits_storage_limit();
+
+  // Warn only if storage space is not unlimited.
+  if (!empty($storage_limit)) {
+    $soft_quota_multiplier = variable_get('gardens_limits_soft_quota_multiplier', 1.0);
+    $used = gardens_limits_storage_used();
+    $remains = $storage_limit - $used;
+    $percent_used = ($used / $storage_limit) * 100;
+
+    if (intval($user->uid) === 1 || in_array($user->uid, scarecrow_list_site_owner_uids())) {
+      if ((($storage_limit * $soft_quota_multiplier) <= $used) && ($used < $storage_limit)) {
+        drupal_set_message(t('You are at @percent% of your %quota storage limit. You can only upload an additional %remains.', array(
+          '@percent' => floor($percent_used),
+          '%quota' => format_size($storage_limit),
+          '%remains' => format_size($remains),
+        )), 'warning', FALSE);
+      }
+    }
+  }
+
   return !empty($storage_limit) && ($storage_limit <= gardens_limits_storage_used());
 }
 
@@ -530,7 +553,7 @@ function gardens_limits_storage_is_limited() {
  * Return the limit of file storage space. 0 is unlimited.
  */
 function gardens_limits_storage_limit() {
-  return (float) gardens_client_data_get('acquia_zuora', 'storage_limit');
+  return (int) gardens_client_data_get('acquia_zuora', 'storage_limit');
 }
 
 /**
@@ -550,6 +573,32 @@ function gardens_limits_file_insert($file) {
   if (gardens_limits_storage_is_limited()) {
     gardens_limits_set_notification_bit('storage_limit');
   }
+}
+
+/**
+ * Implements hook_file_validate().
+ */
+function gardens_limits_file_validate($file) {
+  $errors = array();
+
+  $storage_limit = gardens_limits_storage_limit();
+  $storage_used = gardens_limits_storage_used();
+
+  if ($storage_limit) {
+    $hard_quota_multiplier = variable_get('gardens_limits_hard_quota_multiplier', 1.0);
+    if ($storage_used > $storage_limit) {
+      $errors[] = t('You cannot upload this file because you have exceeded your %quota storage limit', array(
+        '%quota' => format_size($storage_limit),
+      ));
+    }
+    elseif (($storage_used + $file->filesize) > ($storage_limit * $hard_quota_multiplier)) {
+      $errors[] = t('Check your file size. The file you are trying to upload will exceed the %quota storage limit.', array(
+        '%quota' => format_size($storage_limit),
+      ));
+    }
+  }
+
+  return $errors;
 }
 
 /**
@@ -1017,6 +1066,32 @@ function gardens_limits_cron() {
       db_delete('aggregator_item')
         ->condition('iid', $iids, 'IN')
         ->execute();
+    }
+  }
+}
+
+/**
+ * Implements hook_user_login().
+ *
+ * Tell the site owner that they exceeded the limit.
+ *
+ * @param $edit
+ * @param $account
+ */
+function gardens_limits_user_login(&$edit, $account) {
+  global $user;
+
+  $limit = gardens_limits_storage_limit();
+  $used = gardens_limits_storage_used();
+
+  if (intval($user->uid) === 1 || in_array($user->uid, scarecrow_list_site_owner_uids())) {
+    if (!empty($limit) && ($used > $limit)) {
+      $over = $used - $limit;
+      drupal_set_message(t('This site is %total over the <a href="@status">file storage limit</a>. To upload new files, either remove some files or <a href="@upgrade">upgrade your subscription</a>.', array(
+        '%total' => format_size($over),
+        '@status' => url('admin/reports/status'),
+        '@upgrade' => scarecrow_get_gardener_url() . '/mysites',
+      )), 'warning', FALSE);
     }
   }
 }
