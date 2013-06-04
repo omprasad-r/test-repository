@@ -68,13 +68,13 @@ abstract class DrupalUserMigration extends DrupalMigration {
       'user', 'user');
 
     if ($this->moduleExists('path')) {
-      $this->sourceFields['path'] = array('label' => t('Path alias'));
+      $this->sourceFields['path'] = t('Path alias');
     }
     if ($this->roleMigration) {
-      $this->sourceFields['roles'] = array('label' => t('Roles'));
+      $this->sourceFields['roles'] = t('Roles');
     }
 
-    if (!isset($this->sourceOptions['track_changes'])) {
+    if (!isset($this->sourceOptions['track_changes']) && !$this->newOnly) {
       $this->sourceOptions['track_changes'] = TRUE;
     }
 
@@ -190,8 +190,9 @@ abstract class DrupalUserMigration extends DrupalMigration {
     }
 
     if (!empty($new_uid)) {
+      $hash = isset($row->migrate_map_hash) ? $row->migrate_map_hash : NULL;
       $this->map->saveIDMapping($row, array($new_uid), MigrateMap::STATUS_IGNORED,
-        MigrateMap::ROLLBACK_PRESERVE, $row->migrate_map_hash);
+        MigrateMap::ROLLBACK_PRESERVE, $hash);
       $this->rollbackAction = MigrateMap::ROLLBACK_PRESERVE;
       return FALSE;
     }
