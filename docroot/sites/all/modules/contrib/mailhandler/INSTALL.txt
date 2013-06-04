@@ -4,9 +4,8 @@ CONTENTS OF THIS FILE
  * Requirements
  * Quick setup
  * Overview
- * Fetcher configuration
- * Parser configuration
- * Processor configuration
+ * Importer configuration
+ * Source configuration
  * More information
 
 REQUIREMENTS
@@ -23,18 +22,37 @@ Dependencies:
 QUICK SETUP
 -----------
 
-The easiest way to get started is to enable the quick-start module:
+The goal of this tutorial is to show you how to quickly import messages from
+any mailbox using cron. After you've got this working, refer to the sections
+below for a deeper understanding of Mailhandler's architecture.
+
+There are three basic items that need to get set up:
+- Mailhandler Mailboxes store connection settings for an IMAP/POP3 mailbox
+- Feeds Importers import messages from those mailboxes
+- Feeds Source nodes link a specific importer to a specific mailbox to allow
+  automatic imports on cron runs
+
+Note that all of these components can be reused in various ways. For instance,
+you could have one Importer retrieve messages from multiple Mailboxes by
+creating a Source node for each Mailbox. Or, multiple Importers could run on
+one mailbox (with one Importer looking for nodes and the other looking for
+comment replies).
+
+Before you get started, you'll need to have a working Drupal installation and
+the required modules (dependencies) listed above. No configuration of those
+modules should be necessary.
+
+The quick-start module provides a test Mailbox and message, a default Importer,
+and a Source content type. Try to import this test message now:
 - Go to $base_url/admin/modules
 - Enable the "Mailhandler quick-start" module.
-
-The quick-start module provides a test mailbox and message, a default importer,
-and a source content type. Try to import this test message now:
 - Go to $base_url/node/add/mailhandler-source
 - Give the node a title (such as 'Test source').
 - For "Feed"->"Mailbox", select the mailbox to import from.
-- You should see the message 'created 1 story node'.
+- Save the node. You should see the message 'created 1 story node'. Congrats,
+  you just imported your first node with Mailhandler 2.x!
 - If you go to $base_url/admin/content/node, you should see the 'Test source'
-  node you just created, as well as an unpublished test message.
+  node and the imported test message (which should be unpublished).
 
 Now that you've verified that the basic features are working, it's time to
 customize them to suit your own needs:
@@ -47,15 +65,15 @@ customize them to suit your own needs:
 
 Note that new emails will be imported on cron runs. If you'd prefer that new
 messages NOT be imported automatically, you will need to edit the default
-importer ($base_url/admin/structure/feeds/edit/mailhandler_nodes/settings) and for
-'Attach to content type' select 'Use standalone form'. Messages can then be
+importer ($base_url/admin/structure/feeds/edit/mailhandler_nodes/settings) and
+for 'Attach to content type' select 'Use standalone form'. Messages can then be
 manually imported at $base_url/import/mailhandler_nodes.
 
 OVERVIEW
 --------
 
-Mailhandler fetches content from IMAP or POP mailboxes, which are represented by
-the mailhandler_mailbox_ui class. Feeds Importers configured to use the
+Mailhandler fetches content from IMAP or POP mailboxes, which are represented
+by the mailhandler_mailbox_ui class. Feeds Importers configured to use the
 Mailhandler Fetcher can use these mailboxes as Feeds Sources, in the same way
 that Importers using the HTTP Fetcher would use URLs as sources.
 
@@ -66,10 +84,10 @@ A Feeds Importer is made up of a Fetcher, Parser, and Processor. Mailhandler
 provides only a Fetcher and Parser, and requires the use of an existing
 processor (typically, the Node Processor or Comment Processor). Additionally,
 Mailhandler defines two types of plugins that extend the Mailhandler Parser:
-'authentication plugins' match the sender of the email to a Drupal user account,
-while 'commmand plugins' extract various parts of a message (such as files and
-IMAP headers) and allow users to 'command' attributes of created content using
-key: value pairs.
+'authentication plugins' match the sender of the email to a Drupal user
+account, while 'commmand plugins' extract various parts of a message (such as
+files and IMAP headers) and allow users to 'command' attributes of created
+content using key: value pairs.
 
 You can either manually run an importer, or you can attach an importer to a
 content type. Then you'll need to create a new node of the corresponding type,
@@ -80,29 +98,20 @@ cron.
 Finally, Mailhandler provides some input filters that can strip common garbage
 from imported messages (such as signatures).
   
-FETCHER CONFIGURATION
----------------------
-
+IMPORTER CONFIGURATION
+----------------------
+-- Fetcher --
 Using the 'filter' setting, choose which types of messages to retrieve (nodes,
 comments, or all). Note: if this importer fetches a type of message that the
 processor (below) does not support, that message will be marked as read or
 deleted! Thus, it's important to set this filter appropriately.
 
-PARSER CONFIGURATION
---------------------
-
+-- Parser --
 Choose plugins to handle commands and authentication, as well as set available
-and default commands. The commands plugins generate mapping sources that will
-appear in the processor mapping form in the next step.
+commands. The commands plugins generate mapping sources that will appear in the
+processor mapping form in the next step.
 
-For instance, setting the available commands to "status" and default commands to
-"status: 1" will publish all posts (if the processor, below, is configured
-appropriately), and allow users to override this by placing the command
-"status: 0" at the top of the body of emails.
-
-PROCESSOR CONFIGURATION
------------------------
-
+-- Processor --
 You will most likely want to use the Node Processor or Comment Processor.
 
 For Nodes Processor settings, choose (among other things) whether authorization
@@ -120,6 +129,18 @@ http://drupal.org/node/1329218
 
 If you would like to import comments by email, you can download Mailcomment and
 Feeds Comment Processor and select the Feeds Comment Processor instead.
+
+SOURCE CONFIGURATION
+--------------------
+Source nodes are what link your Importer to a specific mailbox and allow
+messages to be imported on cron runs. Here you can also set "default commands"
+that will be applied to all messages imported by this source node.
+
+For instance, if you set available commands (in the parser configuration) to
+"status", mapped "status" to "Published status" (in the processor
+configuration), and set default commands (in the source configuration) to
+"status: 1", all imported posts will be published by default. Users can
+override this by placing the command "status: 0" at the top an email's body.
 
 MORE INFORMATION
 ----------------

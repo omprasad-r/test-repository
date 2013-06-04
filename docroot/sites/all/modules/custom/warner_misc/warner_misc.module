@@ -42,6 +42,30 @@ function warner_misc_theme() {
 }
 
 /**
+ * Implements hook_page_alter().
+ */
+function warner_misc_page_alter(&$build) {
+  // See if we're on the front page:
+  // drupal_is_front_page() won't work if the front page is requested
+  // but a custom 403 page is returned because $_GET['q'] will be changed
+  // to match the custom 403 path. Instead, we need to check $_SERVER.
+  if (($_SERVER['REQUEST_URI'] == base_path()) || ($_SERVER['REQUEST_URI'] == base_path() . '/' . variable_get('site_frontpage', 'node'))) {
+    // See if the user is anonymous
+    if (user_is_anonymous()) {
+      // Fetch the menu item
+      if ($menu = menu_get_item()) {
+        // See if access was denied
+        if (!$menu['access']) {
+          // Change the status code to 200 so search engines will
+          // continue to index this page
+          drupal_add_http_header('Status', '200 OK');
+        }
+      }
+    }
+  }
+}
+
+/**
  * Access callback to ensure that the request came from a legitimate source.
  */
 function warner_misc_stats_access($hash) {
@@ -83,6 +107,8 @@ function warner_misc_disallowed_modules_alter(&$modules) {
     'mailhandler_medialink',
     'mailhandler_sendto_auth',
     'mailhandler_singlemailbox',
+    'mailhandler_multiple_email',
+    'mailhandler_extended',
     'mail_media',
     'job_scheduler',
     'member_api',

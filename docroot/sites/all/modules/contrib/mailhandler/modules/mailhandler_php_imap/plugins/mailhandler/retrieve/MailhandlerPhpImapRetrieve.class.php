@@ -87,7 +87,7 @@ class MailhandlerPhpImapRetrieve extends MailhandlerRetrieve {
         if ($mailbox->settings['delete_after_read']) {
           imap_delete($result, $message['imap_uid'], FT_UID);
         }
-        else {
+        elseif (!isset($mailbox->settings['flag_after_read']) || ($mailbox->settings['flag_after_read'])) {
           imap_setflag_full($result, (string)$message['imap_uid'], '\Seen', FT_UID);
         }
         $this->close_mailbox($result);
@@ -110,14 +110,20 @@ class MailhandlerPhpImapRetrieve extends MailhandlerRetrieve {
   function open_mailbox($mailbox) {
     extract($mailbox->settings);
 
+    if (!function_exists('imap_open')) {
+      throw new Exception(t('The PHP IMAP extension must be enabled in order to use Mailhandler.'));
+    }
     $box = $this->mailbox_string($mailbox);
     if ($type != 'local') {
       $result = imap_open($box, $name, $pass, NULL, 1);
     }
     else {
       $orig_home = getenv('HOME');
-      $new_home = $_SERVER['DOCUMENT_ROOT'];
-      putenv("HOME=$new_home");
+      // This is hackish, but better than using $_SERVER['DOCUMENT_ROOT']
+      $new_home = realpath(drupal_get_path('module', 'node') . '/../../');
+      if (!putenv("HOME=$new_home")) {
+        throw new Exception(t('Could not set home directory to %home.', array('%home' => $new_home)));
+      }
       $result = imap_open($box, '', '', NULL, 1);
       putenv("HOME=$orig_home");
     }
@@ -203,7 +209,7 @@ class MailhandlerPhpImapRetrieve extends MailhandlerRetrieve {
    * @return
    *   An array of file objects.
    */
-  function get_parts($stream, $msg_number, $max_depth = 10, $depth = 0, $structure = FALSE, $part_number = FALSE) {
+  function get_parts($stream, $msg_number, $max_depth = 10, $depth = 0, $structure = FALSE, $part_number = 1) {
     $parts = array();
 
     // Load Structure.
@@ -278,12 +284,6 @@ class MailhandlerPhpImapRetrieve extends MailhandlerRetrieve {
       $part->id = $structure->id;
     }
 
-    // If this email only has one part, then we arrive at this point with invalid
-    // part_number FALSE.  We need to pass a valid part number to imap_fetchbody
-    // at this point.  The correct part number for a single part e-mail is "1".
-    if ($part_number === FALSE) {
-      $part_number = 1;
-    }
     // Retrieve part and convert MIME encoding to UTF-8
     if (!$part->data = imap_fetchbody($stream, $msg_number, $part_number, FT_PEEK)) {
       watchdog('mailhandler', 'No Data!!', array(), WATCHDOG_ERROR);

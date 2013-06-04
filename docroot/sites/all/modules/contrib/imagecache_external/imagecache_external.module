@@ -1,0 +1,183 @@
+<?php
+/*
+ * @file imagecache_external.module
+ * Allows imagecache to operate on external images
+ * @copyright Copyright(c) 2010 Lee Rowlands
+ * @license GPL v2 http://www.fsf.org/licensing/licenses/gpl.html
+ * @author Lee Rowlands contact at rowlandsgroup dot com
+ *
+ */
+
+/**
+ * Implements hook_menu().
+ */
+function imagecache_external_menu() {
+  // more complex menu item
+  $items['admin/config/media/imagecache_external'] = array(
+    'title' => 'Imagecache External',
+    'description' => 'Configure imagecache external',
+    'file' => 'imagecache_external.admin.inc',
+    'page callback' => 'drupal_get_form',
+    'page arguments' => array('imagecache_external_admin_form'),
+    'access arguments' => array('Administer imagecache external'),
+    'type' => MENU_NORMAL_ITEM,
+  );
+  $items['admin/config/media/imagecache_external/settings'] = array(
+    'title' => 'Settings',
+    'description' => 'Configure imagecache external',
+    'file' => 'imagecache_external.admin.inc',
+    'page callback' => 'drupal_get_form',
+    'page arguments' => array('imagecache_external_admin_form'),
+    'access arguments' => array('Administer imagecache external'),
+    'type' => MENU_DEFAULT_LOCAL_TASK,
+  );
+  $items['admin/config/media/imagecache_external/flush'] = array(
+    'title' => 'Flush external images',
+    'description' => 'Flush external images',
+    'file' => 'imagecache_external.admin.inc',
+    'page callback' => 'drupal_get_form',
+    'page arguments' => array('imagecache_external_flush_form'),
+    'access arguments' => array('Administer imagecache external'),
+    'type' => MENU_LOCAL_TASK,
+  );
+
+  return $items;
+}
+
+/**
+ * Implements hook_permission().
+ */
+function imagecache_external_permission() {
+  return array(
+    'View external images' => array(
+      'title' => t('View external images'),
+      'description' => t('TODO Add a description for \'View external images\''),
+    ),
+    'Fetch external images' => array(
+      'title' => t('Fetch external images'),
+      'description' => t('TODO Add a description for \'Fetch external images\''),
+    ),
+    'Administer imagecache external' => array(
+      'title' => t('Administer imagecache external'),
+      'description' => t('TODO Add a description for \'Administer imagecache external\''),
+    ),
+    'Bypass black/white list' => array(
+      'title' => t('Bypass black/white list'),
+      'description' => t('TODO Add a description for \'Bypass black/white list\''),
+    ),
+  );
+}
+
+
+/**
+ * Implements hook_theme().
+ */
+function imagecache_external_theme() {
+  return array(
+    // Theme functions in image.module.
+    'imagecache_external' => array(
+      'variables' => array(
+        'style_name' => NULL,
+        'path' => NULL,
+        'alt' => '',
+        'title' => NULL,
+        'attributes' => array(),
+      ),
+    ),
+  );
+}
+
+/**
+ * Returns HTML for an image using a specific image style.
+ *
+ * @param $variables
+ *   An associative array containing:
+ *   - style_name: The name of the style to be used to alter the original image.
+ *   - path: The path of the image file relative to the Drupal files directory.
+ *     This function does not work with images outside the files directory nor
+ *     with remotely hosted images.
+ *   - alt: The alternative text for text-based browsers.
+ *   - title: The title text is displayed when the image is hovered in some
+ *     popular browsers.
+ *   - attributes: Associative array of attributes to be placed in the img tag.
+ *
+ * @ingroup themeable
+ */
+function theme_imagecache_external($variables) {
+  if($variables['path'] = imagecache_external_generate_path($variables['path'], $variables['style_name'])) {
+    dsm($variables);
+    return theme('image_style', $variables);
+  }
+}
+
+/**
+ * Util to generate a path to an image
+ * @param $url string the url to the image
+ * @param $preset imagecache preset
+ * @return string the url to the image
+ */
+function imagecache_external_generate_path($url, $preset) {
+  // Create the extenal images directory and ensure it's writable.
+  $hash       = md5($url);
+  $scheme     = file_default_scheme();
+  $directory  = $scheme . '://imagecache/externals';
+  if(file_prepare_directory($directory, FILE_CREATE_DIRECTORY | FILE_MODIFY_PERMISSIONS)) {
+    if (file_exists($directory. '/' . $hash)) {
+      return $directory. '/' . $hash;
+    }
+
+    $file = imagecache_external_fetch($url, $directory . '/' . $hash);
+    if ($file) {
+      return $file->uri;
+    }
+  }
+  //we couldn't get the file
+  return FALSE;
+}
+
+/**
+ * Api function to fetch a url
+ * @param $url string url to fetch
+ */
+function imagecache_external_fetch($url, $cachepath) {
+  //now we test it against the whitelist/blacklist
+  if (!$url) {
+    return FALSE;
+  }
+  //extract hostname from url
+  $parsed_url = parse_url($url);
+  $host = $parsed_url['host'];
+
+  $list = preg_split('/\s+/', variable_get('imagecache_external_hosts', ''));
+
+  // Check if the list is set as a blacklist and the host is in the list or if
+  // the list is set as a whitelist and the host is not found in the list.
+  // Note that this is retrospective, ie a previously downloaded image can be blocked
+  if (((variable_get('imagecache_external_option', 'white') == 'black' &&
+       in_array($host, $list)) ||
+      (variable_get('imagecache_external_option', 'white') == 'white' &&
+       !in_array($host, $list))) &&
+      !user_access('Bypass black/white list')) {
+    //if we are unsuccessful then log a message in watchdog
+    watchdog('imagecache_external', 'The image ' . $url . ' could not be retrieved, it did not meet the black/white list requirements.');
+    return FALSE;
+  }
+  if (!user_access('Fetch external images')) {
+    watchdog('imagecache_external', 'The image ' . $url . ' could not be retrieved, the user does not have permission to fetch external images.');
+    return FALSE;
+  }
+  $result = drupal_http_request($url);
+  $code   = floor($result->code / 100) * 100;
+  $types  = array('image/jpeg', 'image/png', 'image/gif');
+  if (isset($result->data) && $result->data && $code != 400 && $code != 500 && in_array($result->headers['content-type'], $types)) {
+    return file_save_data($result->data, $cachepath, FILE_EXISTS_REPLACE);
+  }
+  else {
+    //if we are unsuccessful then log a message in watchdog
+    watchdog('imagecache_external', 'The image ' . $url . ' could not be retrieved');
+    return FALSE;
+  }
+}
+
+
+

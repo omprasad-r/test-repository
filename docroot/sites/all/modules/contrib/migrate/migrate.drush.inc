@@ -146,7 +146,7 @@ function migrate_drush_command() {
     'drupal dependencies' => array('migrate'),
     'aliases' => array('mr'),
   );
-  $migration_options['update'] = 'In addition to processing unimported items from the source, update previously-imported items with new data';
+  $migration_options['update'] = 'In addition to processing unprocessed items from the source, update previously-imported items with new data';
   $migration_options['needs-update'] =
     'Reimport up to 10K records where needs_update=1. This option is only needed when your Drupal DB is on a different DB server from your source data. Otherwise, these records get migrated with just migrate-import.';
   $migration_options['stop'] = 'Stop specified migration(s) if applicable.';
@@ -330,7 +330,7 @@ function drush_migrate_status($name = NULL) {
           else {
             $table[] = array(dt('Group: !name',
               array('!name' => $group->getName())), dt('Total'), dt('Imported'),
-                    dt('Unimported'), dt('Status'), dt('Last imported'));
+                    dt('Unprocessed'), dt('Status'), dt('Last imported'));
           }
         }
         if (!$names_only) {
@@ -407,7 +407,7 @@ function drush_migrate_fields_destination($args = NULL) {
       if (method_exists($destination, 'fields')) {
         $table = array();
         foreach ($destination->fields($migration) as $machine_name => $description) {
-          $table[] = array($description, $machine_name);
+          $table[] = array(strip_tags($description), $machine_name);
         }
         drush_print_table($table);
       }
@@ -432,7 +432,7 @@ function drush_migrate_fields_source($args = NULL) {
       if (method_exists($source, 'fields')) {
         $table = array();
         foreach ($source->fields() as $machine_name => $description) {
-          $table[] = array($description, $machine_name);
+          $table[] = array(strip_tags($description), $machine_name);
         }
         drush_print_table($table);
       }

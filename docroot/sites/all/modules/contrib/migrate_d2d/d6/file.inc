@@ -10,11 +10,13 @@ class DrupalFile6Migration extends DrupalFileMigration {
   public function __construct(array $arguments) {
     parent::__construct($arguments);
 
-    $this->highwaterField = array(
-      'name' => 'timestamp',
-      'alias' => 'f',
-      'type' => 'int',
-    );
+    if (!$this->newOnly) {
+      $this->highwaterField = array(
+        'name' => 'timestamp',
+        'alias' => 'f',
+        'type' => 'int',
+      );
+    }
 
     $this->addFieldMapping('value', 'filepath')
          ->callbacks(array($this, 'fixUri'));
@@ -107,13 +109,17 @@ class DrupalPicture6Migration extends DrupalFile6Migration {
       MigrateDestinationFile::getKeySchema()
     );
     parent::__construct($arguments);
-    // Override the highwater definition, the best timestamp we have in this
-    // case is users.access.
-    $this->highwaterField = array(
-      'name' => 'access',
-      'alias' => 'f',
-      'type' => 'int',
-    );
+
+    if (!$this->newOnly) {
+      // Override the highwater definition, the best timestamp we have in this
+      // case is users.access.
+      $this->highwaterField = array(
+        'name' => 'access',
+        'alias' => 'f',
+        'type' => 'int',
+      );
+    }
+
     // No appropriate timestamp to save, so let it default.
     $this->addFieldMapping('timestamp', NULL, FALSE);
 

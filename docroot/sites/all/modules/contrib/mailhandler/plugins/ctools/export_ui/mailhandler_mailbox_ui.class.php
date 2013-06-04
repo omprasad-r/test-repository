@@ -122,6 +122,12 @@ class mailhandler_mailbox_ui extends ctools_export_ui {
       '#default_value' => $encoding,
       '#description' => t('The default character encoding to use when an incoming message does not define an encoding.'),
     );
+    $form['extra']['settings']['flag_after_read'] = array(
+      '#type' => 'checkbox',
+      '#title' => t('Mark messages as seen/read after they are processed?'),
+      '#default_value' => isset($flag_after_read) ? $flag_after_read : TRUE,
+      '#description' => t('Note that messages cannot be marked as seen/read for POP3 accounts.'),
+    );
     $form['extra']['settings']['delete_after_read'] = array(
       '#type' => 'checkbox',
       '#title' => t('Delete messages after they are processed?'),
