@@ -17,7 +17,22 @@ the first parameter and pass it to its parent. This version does support legacy
 migrations which pass a group object, or nothing, but that support will be
 removed in a future version.
 
+Features and enhancements
+- #2017835 - Add MigrateFileUriAsIs file class, and make file migrations more
+             flexible.
+- #2004426 - UI support for editing dependencies; enable setting dependencies
+             through arguments.
+
 Bug fixes
+- #2016173 - Fix fatal error editing MigrationBase migrations.
+- #2015327 - Remove broken automatic field mapping feature.
+- #2014849 - Make sure statistics properly default to 0.
+- #2011024 - Wildcard groups/tasks in the menu hierarchy, saving the need to
+             rebuild menus when migrations are registered/deregistered.
+- #2010884 - Clean up empty default groups on dbupdate.
+- #2004296 - Enforce map/message table names with prefixes.
+- #2009222 - Properly update map/message tables on a non-default connection.
+- #2006158 - Fix warnings on default field handler fields().
 - #1999918 - Move permissions to core Migrate module.
 - #1999290 - Check that an XMLMigration has actually populated $row->xml.
 
