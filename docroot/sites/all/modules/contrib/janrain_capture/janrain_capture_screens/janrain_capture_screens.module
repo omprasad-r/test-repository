@@ -35,8 +35,11 @@ function _janrain_capture_get_screen_file($screen_name) {
   // Serve updated screen if availible.
   $screen_machine_name = _janrain_capture_get_screen_machine_name($screen_name);
   $updated_screen = variable_get("janrain_capture_screen_${screen_machine_name}");
-  if ($updated_screen) {
-    if ($file = file_load($updated_screen)) {
+  $updated_screen_remote_url = trim(variable_get("janrain_capture_screen_${screen_machine_name}_remote_url", ''));
+  $updated_screen_remote_fid = variable_get('janrain_capture_screen_' . $screen_machine_name . '_remote_fid');
+  $screen_fid = $updated_screen_remote_url && $updated_screen_remote_fid ? $updated_screen_remote_fid : $updated_screen;
+  if ($screen_fid) {
+    if ($file = file_load($screen_fid)) {
       return $file->uri;
     }
   }
@@ -90,4 +93,58 @@ function _janrain_capture_get_screens() {
  */
 function _janrain_capture_get_screen_machine_name($screen_name) {
   return str_replace(array('.', '/'), '_', $screen_name);
+}
+
+/**
+ * Implements hook_cron().
+ *
+ * Refreshes the locally cached remote screens.
+ */
+function janrain_capture_screens_cron() {
+  $screens = _janrain_capture_get_screens();
+  foreach ($screens as $screen) {
+    $screen_machine_name = _janrain_capture_get_screen_machine_name($screen);
+    $screen_remote_fid = variable_get('janrain_capture_screen_' . $screen_machine_name . '_remote_fid');
+    $screen_remote_url = trim(variable_get('janrain_capture_screen_' . $screen_machine_name . '_remote_url', ''));
+    if ($screen_remote_url && $screen_remote_fid && ($file = file_load($screen_remote_fid)) && $file->timestamp < REQUEST_TIME - 3*3600) {
+      janrain_capture_screens_local_screen_data_refresh($screen);
+    }
+  }
+}
+
+/**
+ * Refreshes a locally cached janrain capture screen.
+ *
+ * @param string $screen
+ *   The name of the screen that needs refreshing.
+ * @param string $screen_content
+ *   Optional parameter, which may hold the screen's content. If not set, then
+ *   the content will be fetched from the remote URL.
+ */
+function janrain_capture_screens_local_screen_data_refresh($screen, $screen_content = NULL) {
+  $screen_machine_name = _janrain_capture_get_screen_machine_name($screen);
+
+  if (!isset($screen_content)) {
+    $screen_remote_url = trim(variable_get('janrain_capture_screen_' . $screen_machine_name . '_remote_url', ''));
+    if ($screen_remote_url) {
+      $response = drupal_http_request($screen_remote_url);
+      if ($response->code == 200) {
+        $screen_content = $response->data;
+      }
+    }
+  }
+
+  // Load the current screen content to see if there is a change.
+  $screen_remote_fid = variable_get('janrain_capture_screen_' . $screen_machine_name . '_remote_fid');
+  $current_screen_content = '';
+  if ($screen_remote_fid && ($file = file_load($screen_remote_fid))) {
+    $current_screen_content = file_get_contents($file->uri);
+  }
+
+  if (isset($screen_content) && (!$screen_remote_fid || md5($screen_content) != md5($current_screen_content))) {
+    $file = file_save_data($screen_content, 'public://janrain_capture_screens/cache/' . $screen_machine_name, FILE_EXISTS_REPLACE);
+    if (!$screen_remote_fid && $file) {
+      variable_set('janrain_capture_screen_' . $screen_machine_name . '_remote_fid', $file->fid);
+    }
+  }
 }
