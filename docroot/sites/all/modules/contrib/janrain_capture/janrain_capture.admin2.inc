@@ -10,22 +10,7 @@
  */
 function janrain_capture_settings() {
   global $base_url;
-  $form['description'] = array(
-    '#markup' => '<p>' . t('Connection to Janrain Capture requires a subscription. Once subscribed, use the values on the Janrain dashboard to complete the fields below to connect the service.') . '</p>',
-  );
-  $janrain_capture_ver = variable_get('janrain_capture_ver', '1.0');
-  $ver = !empty($janrain_capture_ver) ? $janrain_capture_ver : 'empty';
   
-  $form['janrain_capture_ver'] = array(
-    '#type' => 'select',
-    '#title' => t('Capture Version'),
-    '#options' => array(
-      '2.0' => t('Capture'),
-      '1.0' => t('Capture Legacy'),
-    ),
-    '#default_value' => !empty($janrain_capture_ver) ? $janrain_capture_ver : '1.0',
-    '#description' => t('Which version of Capture are you using? Chose and save before configuring. Settings below will change accordingly and are stored separately.'),
-  );
   $janrain_capture_main = variable_get('janrain_capture_main2', array());
   $form['janrain_capture_main2'] = array(
     '#type' => 'fieldset',
@@ -48,6 +33,26 @@ function janrain_capture_settings() {
     '#type' => 'textfield',
     '#title' => t('Client Secret'),
     '#default_value' => !empty($janrain_capture_main['capture_client_secret']) ? $janrain_capture_main['capture_client_secret'] : '',
+  );
+  $form['janrain_capture_main2']['capture_load_js_default'] = array(
+    '#type' => 'checkbox',
+    '#title' => t('Use default load.js URL'),
+    '#description' => t(_janrain_capture_default_loadjs_url()),
+    '#default_value' => isset($janrain_capture_main['capture_load_js_default']) ? $janrain_capture_main['capture_load_js_default'] : 1,
+  );
+  $form['janrain_capture_main2']['capture_load_js_settings'] = array(
+    '#type' => 'container',
+    '#states' => array(
+      'invisible' => array(
+        ':input[name="janrain_capture_main2[capture_load_js_default]"]' => array('checked' => TRUE),
+      )
+    ),
+  );
+  $form['janrain_capture_main2']['capture_load_js_settings']['load_js'] = array(
+    '#type' => 'textfield',
+    '#title' => t('Load.js file URL'),
+    '#description' => t('URL of the load.js file without the protocol.<br />Example: d16s8pqtk4uodx.cloudfront.net/default/load.js'),
+    '#default_value' => !empty($janrain_capture_main['capture_load_js_settings']['load_js']) ? $janrain_capture_main['capture_load_js_settings']['load_js'] : '',
   );
   $form['janrain_capture_main2']['capture_address'] = array(
     '#type' => 'textfield',
@@ -74,33 +79,20 @@ function janrain_capture_settings() {
     '#type' => 'checkbox',
     '#title' => t('Enable Capture Profiles'),
     '#default_value' => isset($janrain_capture_ui['profile_enabled']) ? $janrain_capture_ui['profile_enabled'] : 1,
-    '#description' => t('Enable/Disable overriding the standard Drupal Profiles'),
-  );
-  $form['janrain_capture_ui2']['load_js'] = array(
-    '#type' => 'textfield',
-    '#title' => t('Url for load.js file'),
-    '#default_value' => !empty($janrain_capture_ui['load_js']) ? $janrain_capture_ui['load_js'] : 'd16s8pqtk4uodx.cloudfront.net/default/load.js',
-    '#description' => t('The absolute url (minus protocol) of the Widget load.js file<br/>(example: d16s8pqtk4uodx.cloudfront.net/default/load.js)'),
+    '#description' => t('Override the standard Drupal profiles and use the Janrain Capture profiles.'),
   );
   $form['janrain_capture_ui2']['registration_flow'] = array(
     '#type' => 'textfield',
     '#title' => t('Registration Flow'),
     '#default_value' => !empty($janrain_capture_ui['registration_flow']) ? $janrain_capture_ui['registration_flow'] : 'socialRegistration',
-    '#description' => t('Change this only when instructed to do so<br/>(default: socialRegistration)'),
-  );
-  $form['janrain_capture_ui2']['screens_folder'] = array(
-    '#type' => 'textfield',
-    '#title' => t('Screens Folder'),
-    '#default_value' => !empty($janrain_capture_ui['screens_folder']) ? $janrain_capture_ui['screens_folder'] : 'file:///sites/all/themes/janrain-capture-screens/',
-    '#description' => t('URL of the Capture screens folder<br/>(examples: file:///sites/all/themes/janrain-capture-screens/, http://example.com/capture-screens/)'),
+    '#description' => t('WARNING: DO NOT change this setting unless contacted by the Janrain support team. The default value is social Registration.'),
   );
   $form['janrain_capture_ui2']['recaptcha_key'] = array(
     '#type' => 'textfield',
     '#title' => t('Recaptcha Public Key'),
-    '#default_value' => !empty($janrain_capture_ui['recaptcha_key']) ? $janrain_capture_ui['recaptcha_key'] : '',
-    '#description' => t('Your Recaptcha Public Key'),
+    '#default_value' => !empty($janrain_capture_ui['recaptcha_key']) ? $janrain_capture_ui['recaptcha_key'] : '6LeVKb4SAAAAAGv-hg5i6gtiOV4XrLuCDsJOnYoP',
   );
-    
+
   $janrain_capture_federate = variable_get('janrain_capture_federate2', array());
   $form['janrain_capture_federate2'] = array(
     '#type' => 'fieldset',
@@ -113,15 +105,15 @@ function janrain_capture_settings() {
     '#type' => 'checkbox',
     '#title' => t('Enable SSO'),
     '#default_value' => isset($janrain_capture_federate['capture_sso_enabled']) ? $janrain_capture_federate['capture_sso_enabled'] : 0,
-    '#description' => t('Enable/Disable SSO for Capture 2.0'),
+    '#description' => t('Enable Single Sign On for Capture 2.0.'),
   );
   $form['janrain_capture_federate2']['capture_sso_address'] = array(
     '#type' => 'textfield',
-    '#title' => t('Single sign on domain'),
+    '#title' => t('SSO domain'),
     '#default_value' => !empty($janrain_capture_federate['capture_sso_address']) ? $janrain_capture_federate['capture_sso_address'] : '',
     '#description' => t('For example, myapp.janrainsso.com.'),
   );
-  
+
   $janrain_capture_backplane = variable_get('janrain_capture_backplane2', array());
   $form['janrain_capture_backplane2'] = array(
     '#type' => 'fieldset',
@@ -134,8 +126,21 @@ function janrain_capture_settings() {
     '#type' => 'checkbox',
     '#title' => t('Enable Backplane'),
     '#default_value' => isset($janrain_capture_backplane['backplane_enabled']) ? $janrain_capture_backplane['backplane_enabled'] : 0,
-    '#description' => t('Enable/Disable Backplane for Capture 2.0'),
+    '#description' => t('Enable Backplane server support for Capture 2.0.'),
   );
+
+  $options = array(
+    '1.2' => t('1.2'),
+    '2' => t('2.0'),
+  );
+
+  $form['janrain_capture_backplane2']['backplane_version'] = array(
+    '#type' => 'radios',
+    '#title' => t('Backplane Version'),
+    '#options' => $options,
+    '#default_value' => $options['2'],
+  );
+
   $form['janrain_capture_backplane2']['backplane_bus_name'] = array(
     '#type' => 'textfield',
     '#title' => t('Backplane bus name'),
@@ -153,9 +158,9 @@ function janrain_capture_settings() {
   );
   $form['janrain_capture_fields2']['capture_no_email'] = array(
     '#type' => 'checkbox',
-    '#title' => t('Don\'t store user email addresses in the Drupal database'),
+    '#title' => t('Don\'t store email addresses'),
     '#default_value' => isset($janrain_capture_fields['capture_no_email']) ? $janrain_capture_fields['capture_no_email'] : 0,
-    '#description' => t('No real email addresses will be stored in the Drupal database; a placeholder value (UUID@localhost) will be stored instead. Note: you can also avoid storing email addresses as user names by enabling the Janrain Capture Mapping module and mapping a field (e.g. UUID) to Drupal user name'),
+    '#description' => t('UUID values will be used instead of email addresses in the Drupal database.'),
   );
   $form['janrain_capture_fields2']['capture_enforce_verification'] = array(
     '#type' => 'checkbox',
@@ -177,13 +182,14 @@ function janrain_capture_settings() {
   );
   $form['janrain_capture_fields2']['capture_map_profile_pic'] = array(
     '#type' => 'checkbox',
-    '#title' => t('Map profile pic'),
+    '#title' => t('Use profile avatar'),
     '#default_value' => isset($janrain_capture_fields['capture_map_profile_pic']) ? $janrain_capture_fields['capture_map_profile_pic'] : 1,
-    '#description' => t('Automatically map the Capture profile photo to the Drupal user profile picture.'),
+    '#description' => t('Automatically apply the Capture profile photo to the Drupal user profile avatar.'),
+    // @todo state
   );
   $form['janrain_capture_fields2']['capture_preferred_photo_variant'] = array(
     '#type' => 'select',
-    '#title' => t('Preferred photo variant'),
+    '#title' => t('Default avatar size'),
     '#options' => array(
       'small' => t('Small'),
       'normal' => t('Normal'),
@@ -192,7 +198,7 @@ function janrain_capture_settings() {
       'original' => t('Original')
     ),
     '#default_value' => isset($janrain_capture_fields['capture_preferred_photo_variant']) ? $janrain_capture_fields['capture_preferred_photo_variant'] : 'small',
-    '#description' => t('Select the preferred photo variant to use from the Capture profile. When it\'s not available, the "other" variant will be used as fallback.'),
+    '#description' => t('Select the Capture profile photo size you want to use for the Drupal avatar.'),
   );
 
   $group = 'janrain_capture_share';
@@ -204,13 +210,13 @@ function janrain_capture_settings() {
     '#tree' => TRUE,
     '#collapsible' => TRUE,
     '#collapsed' => TRUE,
-    '#description' => t('To configure social sharing providers visit <a href="@social_link" target="_blank">Janrain\'s rpxnow site</a>.', array('@social_link' => 'https://rpxnow.com')),
+    '#description' => t('To configure social sharing providers go to !janrain_dashboard.', array('!janrain_dashboard' => l(t('Janrain dashboard'), 'https://rpxnow.com')) ),
   );
   $form[$group]['enabled'] = array(
     '#type' => 'checkbox',
-    '#title' => t('Enable social share.'),
+    '#title' => t('Enable social share'),
     '#default_value' => isset($conf['enabled']) ? $conf['enabled'] : 0,
-    '#description' => t('Enable social sharing for the site. Don\'t forget to edit the social sharing settings for individual <a href="!content_types_link" target="_blank">content types</a>.', array('!content_types_link' => url('admin/structure/types/'))),
+    '#description' => t('Don\'t forget to edit the social sharing settings for individual !content_types.', array('!content_types' => l(t('content types'), 'admin/structure/types/'))),
   );
   $sgroup = 'nodes';
   $sconf = isset($conf[$sgroup]) ? $conf[$sgroup] : array();
@@ -225,25 +231,25 @@ function janrain_capture_settings() {
     '#type' => 'textfield',
     '#title' => t('Default message for shared content'),
     '#default_value' => isset($sconf['default_message']) ? $sconf['default_message'] : JANRAIN_CAPTURE_SHARE_MESSAGE_NODES,
-    '#description' => t('Specify the default message text (including tokens) to be used when sharing content. This setting can be overridden on the content type edit page.')
+    '#description' => t('Specify the default message text (including tokens) to be used when sharing content.')
   );
   $form[$group][$sgroup]['default_linktext'] = array(
     '#type' => 'textfield',
     '#title' => t('Default link text for shared content'),
     '#default_value' => isset($sconf['default_linktext']) ? $sconf['default_linktext'] : JANRAIN_CAPTURE_SHARE_LINKTEXT_NODES,
-    '#description' => t('Specify the default action description (including tokens) to be used when sharing content.  This setting can be overridden on the content type edit page.')
+    '#description' => t('Specify the default action description (including tokens) to be used when sharing content.')
   );
   $form[$group][$sgroup]['default_title'] = array(
     '#type' => 'textfield',
     '#title' => t('Default title for shared content'),
     '#default_value' => isset($sconf['default_title']) ? $sconf['default_title'] : JANRAIN_CAPTURE_SHARE_TITLE_NODES,
-    '#description' => t('Specify the default title (including tokens) to be used when sharing content. This setting can be overridden on the content type edit page.')
+    '#description' => t('Specify the default title (including tokens) to be used when sharing content.')
   );
   $form[$group][$sgroup]['default_summary'] = array(
     '#type' => 'textfield',
     '#title' => t('Default description for shared content'),
     '#default_value' => isset($sconf['default_summary']) ? $sconf['default_summary'] : JANRAIN_CAPTURE_SHARE_SUMMARY_NODES,
-    '#description' => t('Specify the default description (including tokens) to be used when sharing content. This setting can be overridden on the content type edit page.')
+    '#description' => t('Specify the default description (including tokens) to be used when sharing content.')
   );
   $form[$group][$sgroup]['providers'] = array(
     '#type' => 'textfield',
@@ -264,25 +270,25 @@ function janrain_capture_settings() {
     '#type' => 'textfield',
     '#title' => t('Default message for shared comments'),
     '#default_value' => isset($sconf['default_message']) ? $sconf['default_message'] : JANRAIN_CAPTURE_SHARE_MESSAGE_COMMENTS,
-    '#description' => t('Specify the default message text (including tokens) to be used when sharing comments. This setting can be overridden on the content type edit page.')
+    '#description' => t('Specify the default message text (including tokens) to be used when sharing comments.')
   );
   $form[$group][$sgroup]['default_linktext'] = array(
     '#type' => 'textfield',
     '#title' => t('Default link text for shared comments'),
     '#default_value' => isset($sconf['default_linktext']) ? $sconf['default_linktext'] : JANRAIN_CAPTURE_SHARE_LINKTEXT_COMMENTS,
-    '#description' => t('Specify the default action description (including tokens) to be used when sharing comments.  This setting can be overridden on the content type edit page.')
+    '#description' => t('Specify the default action description (including tokens) to be used when sharing comments.')
   );
   $form[$group][$sgroup]['default_title'] = array(
     '#type' => 'textfield',
     '#title' => t('Default title for shared comments'),
     '#default_value' => isset($sconf['default_title']) ? $sconf['default_title'] : JANRAIN_CAPTURE_SHARE_TITLE_COMMENTS,
-    '#description' => t('Specify the default title (including tokens) to be used when sharing comments. This setting can be overridden on the content type edit page.')
+    '#description' => t('Specify the default title (including tokens) to be used when sharing comments.')
   );
   $form[$group][$sgroup]['default_summary'] = array(
     '#type' => 'textfield',
     '#title' => t('Default description for shared comments'),
     '#default_value' => isset($sconf['default_summary']) ? $sconf['default_summary'] : JANRAIN_CAPTURE_SHARE_SUMMARY_COMMENTS,
-    '#description' => t('Specify the default description (including tokens) to be used when sharing comments. This setting can be overridden on the content type edit page.')
+    '#description' => t('Specify the default description (including tokens) to be used when sharing comments.')
   );
 
   // Add the token tree UI.
@@ -303,7 +309,7 @@ function janrain_capture_settings() {
     '#type' => 'checkbox',
     '#title' => t('Enforce the use of Janrain Capture.'),
     '#default_value' => variable_get('janrain_capture_enforce', 0),
-    '#description' => t('Make it impossible to login to this site outside of Janrain Capture. <br/>WARNING: DO NOT enable this setting until you have made at least one Capture user a Drupal Administrator and all of your user accounts have been migrated to Janrain Capture.'),
+    '#description' => t('Make it impossible to login to this site outside of Janrain Capture.') . '<br />' . t('WARNING: DO NOT enable this setting until you have made at least one Capture user a Drupal Administrator and all of your user accounts have been migrated to Janrain Capture.'),
   );
   $form['#validate'] = array(
     'janrain_capture_settings_validate2',
@@ -327,38 +333,32 @@ function janrain_capture_settings_validate2($form, &$form_state) {
   if ($form_state['values']['janrain_capture_share']['enabled'] && empty($form_state['values']['janrain_capture_main2']['engage_address'])) {
     form_set_error('janrain_capture_main2][engage_address', t('You must provide an Engage URL in order to enable social share.'));
   }
-
-  $v = strtolower($form_state['values']['janrain_capture_ui2']['screens_folder']);
-  if ($v
-      && strpos($v, 'file:///', 0) !== 0
-      && strpos($v, 'http://', 0) !== 0
-      && strpos($v, 'https://', 0) !== 0) {
-
-    form_set_error('janrain_capture_ui2][screens_folder', t('Capture screens folder URL: unknown scheme. Examples of valid URLs: file:///sites/all/themes/janrain-capture-screens/, http://example.com/capture-screens/)'));
-  }
 }
 
 /**
  * Submit callback for the settings form.
  */
 function janrain_capture_settings_submit2($form, &$form_state) {
+  // Check to see if default load.js toggle is set
+  if ($form_state['values']['janrain_capture_main2']['capture_load_js_default']) {
+    $form_state['values']['janrain_capture_ui2']['load_js'] = _janrain_capture_default_loadjs_url();
+  }
+  else {
+    $form_state['values']['janrain_capture_ui2']['load_js'] = $form_state['values']['janrain_capture_main2']['capture_load_js_settings']['load_js'];
+  }
+  
   // Store the comma-separated list of share providers as an array.
-  if(!empty($form_state['values']['janrain_capture_share']['nodes']['providers'])) {
+  if (!empty($form_state['values']['janrain_capture_share']['nodes']['providers'])) {
     $providers = $form_state['values']['janrain_capture_share']['nodes']['providers'];
     $providers = str_replace(' ', '', $providers);
     $providers = explode(',', $providers);
-  } else {
+  }
+  else {
     $providers = array();
   }
+
   $form_state['values']['janrain_capture_share']['nodes']['providers'] = $providers;
 
   // Rebuild the menu in case the "enforce" setting changed.
   variable_set('menu_rebuild_needed', TRUE);
-
-  // Make sure there's a trailing slash in the capture screens folder URL.
-  $v = strtolower($form_state['values']['janrain_capture_ui2']['screens_folder']);
-  if ($v) {
-    $v = rtrim($v, '/') . '/';
-  }
-  $form_state['values']['janrain_capture_ui2']['screens_folder'] = $v;
 }

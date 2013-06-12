@@ -1,10 +1,8 @@
-name = Janrain Capture Mapping
-description = Enables mapping of Capture user attributes to local Drupal fields and properties via a UI
+name = Janrain Capture Screens
+description = Adds the ability to upload Capture screens files through an administration interface
 package = Janrain Capture
 core = 7.x
-files[] = tests/janrain_capture_mapping.test
 
-dependencies[] = entity
 dependencies[] = janrain_capture
 
 ; Information added by drupal.org packaging script on 2013-06-11

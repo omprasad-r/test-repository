@@ -9,22 +9,6 @@
  * Sets up the admin settings form for this module.
  */
 function janrain_capture_settings() {
-  $form['description'] = array(
-    '#markup' => '<p>' . t('Connection to Janrain Capture requires a subscription. Once subscribed, use the values on the Janrain dashboard to complete the fields below to connect the service.') . '</p>',
-  );
-  $janrain_capture_ver = variable_get('janrain_capture_ver', '1.0');
-  $ver = !empty($janrain_capture_ver) ? $janrain_capture_ver : '1.0';
-  
-  $form['janrain_capture_ver'] = array(
-    '#type' => 'select',
-    '#title' => t('Capture Version'),
-    '#options' => array(
-      '2.0' => t('Capture'),
-      '1.0' => t('Capture Legacy'),
-    ),
-    '#default_value' => !empty($janrain_capture_ver) ? $janrain_capture_ver : '1.0',
-    '#description' => t('Which version of Capture are you using? Chose and save before configuring. Settings below will change accordingly and are stored separately.'),
-  );
   $janrain_capture_main = variable_get('janrain_capture_main', array());
   $form['janrain_capture_main'] = array(
     '#type' => 'fieldset',
@@ -267,17 +251,6 @@ function janrain_capture_settings_validate($form, &$form_state) {
         empty($form_state['values']['janrain_capture_main']['capture_client_secret']) ||
         empty($form_state['values']['janrain_capture_main']['capture_address'])) {
       form_set_error('janrain_capture_enforce', t('You cannot enforce Janrain Capture for login because you have not configured the application settings. You must at least provide a Janrain Capture Client ID, Janrain Capture Client Secret and Janrain Capture Address'));
-    }
-    else {
-      // Do not allow the current user to set the "enforce" property if they do
-      // not have a Capture account themselves. Otherwise they could lock themselves
-      // out of the site.
-      $api = new JanrainCaptureApi();
-      $profile = $api->loadUserEntity();
-
-      if (!$profile) {
-        form_set_error('janrain_capture_enforce', t('You cannot enforce Janrain Capture for login because you do not have a Janrain Capture account and would no longer be able to log into this site.'));
-      }
     }
   }
 

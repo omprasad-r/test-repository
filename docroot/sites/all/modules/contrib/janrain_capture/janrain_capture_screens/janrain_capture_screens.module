@@ -1,0 +1,93 @@
+<?php
+
+/**
+ * @file
+ * Janrain Capture Admin Screens Module
+ */
+
+/**
+ * Implements hook_menu_alter().
+ */
+function janrain_capture_screens_menu_alter(&$items) {
+  $items['admin/config/people/janrain_capture/screens'] = array(
+    'title' => 'Screens',
+    'page callback' => 'drupal_get_form',
+    'page arguments' => array('janrain_capture_admin_screens_settings'),
+    'access arguments' => array('administer site configuration'),
+    'type' => MENU_LOCAL_TASK,
+    'weight' => -40,
+    'file' => 'janrain_capture_screens.admin.inc',
+    'file path' => drupal_get_path('module', 'janrain_capture_screens'),
+  );
+}
+
+/**
+ * Gets the appropriate Janrain screen file.
+ *
+ * @param string $screen_name
+ *   Janrain screen name.
+ *   @see _janrain_capture_get_screens()
+ *
+ * @return string|bool
+ *   Janrain screen uri if file found, FALSE if not.
+ */
+function _janrain_capture_get_screen_file($screen_name) {
+  // Serve updated screen if availible.
+  $screen_machine_name = _janrain_capture_get_screen_machine_name($screen_name);
+  $updated_screen = variable_get("janrain_capture_screen_${screen_machine_name}");
+  if ($updated_screen) {
+    if ($file = file_load($updated_screen)) {
+      return $file->uri;
+    }
+  }
+
+  // Serve default shipped screen if not.
+  $module_path = drupal_get_path('module', 'janrain_capture');
+  $file_path = "${module_path}/janrain-capture-screens/${screen_name}";
+
+  return file_exists($file_path) ? $file_path : FALSE;
+}
+
+/**
+ * Helper function to get the list of available Janrain capture screens.
+ *
+ * @return array
+ *   Availible Janrain Capture screens.
+ */
+function _janrain_capture_get_screens() {
+  $screens = array(
+    'edit-profile.html',
+    'forgot.html',
+    'public-profile.html',
+    'signin.html',
+    'verify.html',
+
+    'edit-profile.js',
+    'forgot.js',
+    'public-profile.js',
+    'signin.js',
+    'verify.js',
+
+    'stylesheets/styles.css',
+    'stylesheets/ie-styles.css',
+    'stylesheets/mobile-styles.css',
+  );
+
+  return $screens;
+}
+
+/**
+ * Gets a machine name for a screen.
+ *
+ * Replaces dots and slashes with underscores.
+ *
+ * @param string $screen_name
+ *   Janrain capture screen name.
+ *   @see _janrain_capture_get_screens()
+ *
+ * @return string
+ *   Screen machine name which can be used as a form element key.
+ */
+function _janrain_capture_get_screen_machine_name($screen_name) {
+  return str_replace(array('.', '/'), '_', $screen_name);
+}
