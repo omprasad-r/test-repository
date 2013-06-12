@@ -4,11 +4,14 @@ package = Janrain Capture
 core = 7.x
 configure = admin/config/people/janrain_capture
 files[] = janrain_capture.api.inc
+files[] = janrain_capture.admin.inc
+files[] = janrain_capture.admin2.inc
+files[] = janrain_capture_admin_version.inc
 stylesheets[all][] = janrain_capture.css
 
-; Information added by drupal.org packaging script on 2013-03-11
-version = "7.x-2.0-rc3"
+; Information added by drupal.org packaging script on 2013-06-11
+version = "7.x-2.1"
 core = "7.x"
 project = "janrain_capture"
-datestamp = "1363044014"
+datestamp = "1370972754"
 

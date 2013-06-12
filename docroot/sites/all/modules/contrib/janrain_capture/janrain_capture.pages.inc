@@ -335,3 +335,35 @@ function janrain_capture_token_expired() {
   drupal_set_message(t('Your session has expired. Please sign in again.'), 'error');
   drupal_goto();
 }
+
+/**
+ * Callback for the janrain_capture/simple_logout menu item.
+ *
+ * Logs out the user without redirecting to a regular Drupal page. This endpoint
+ * can be used by services that need to log the user out without incurring the
+ * overhead of a redirect and processing of a full-blown Drupal page. It is
+ * particularly useful for Janrain SSO's Javascript, which calls the logout link
+ * using a dynamically created iframe and may break if iframe busters are used
+ * by the Drupal site.
+ */
+function janrain_capture_simple_logout_page() {
+  global $user;
+
+  watchdog('janrain_capture', 'Session closed for %name.', array('%name' => $user->name));
+  module_invoke_all('user_logout', $user);
+  // Destroy the current session, and reset $user to the anonymous user.
+  session_destroy();
+
+  $output = <<<EOF
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml" >
+  <body>
+    <p>You have been logged out.</p>
+  </body>
+</html>
+EOF;
+
+  print $output;
+  return NULL;
+}

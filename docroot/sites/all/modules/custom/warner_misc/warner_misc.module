@@ -127,6 +127,7 @@ function warner_misc_disallowed_modules_alter(&$modules) {
  */
 function warner_misc_simplified_modules_hidden_submodules() {
   return array(
+    'janrain_capture_screens',
     // Prevent the Views RSS and Views RSS Core modules from appearing on the
     // Modules page, but turn them on automatically whenever Views (which they
     // depend on) is enabled.

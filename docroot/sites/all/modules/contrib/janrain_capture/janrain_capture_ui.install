@@ -6,7 +6,7 @@
  */
 
 /**
- * Implements hook_requirements.
+ * Implements hook_requirements().
  */
 function janrain_capture_ui_requirements($phase) {
   $requirements = array();
@@ -33,4 +33,12 @@ function janrain_capture_ui_requirements($phase) {
     }
   }
   return $requirements;
+}
+
+/**
+ * Implements hook_install().
+ */
+function janrain_capture_install() {
+  // Set the default janrain_capture_screens_folder setting
+  variable_set('janrain_capture_screens_folder', 'file:///sites/all/themes/janrain-capture-screens/');
 }

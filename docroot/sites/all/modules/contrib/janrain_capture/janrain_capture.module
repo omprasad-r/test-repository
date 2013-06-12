@@ -36,11 +36,6 @@ function janrain_capture_init() {
  * Implements hook_page_build().
  */
 function janrain_capture_page_build(&$page) {
-  // Inject the signin capture screen.
-
-  if (!user_is_anonymous()) {
-    return;
-  }
   if (variable_get('janrain_capture_ver', '1.0') == '1.0') {
     return;
   }
@@ -54,21 +49,36 @@ function janrain_capture_page_build(&$page) {
   // can visit the user profiles. In such cases, the site would better not offer
   // a signin link there (in a block or something), because such signins
   // currently will not work.
-
   $rpath = request_path();
   if ($rpath === 'user' || strpos($rpath, 'user/') === 0) {
     return;
   }
 
-  $page['page_bottom']['janrainCaptureSigninScreen'] = array(
-    '#weight' => 0,
-    '#markup' => _janrain_capture_get_screen("signin.html"),
-  );
-
-  if ($js = _janrain_capture_get_screen("signin.js")) {
-    // JS for the signin screen that should go into <head> before the widget.
+  if (user_is_anonymous()) {
+    // Inject the signin capture screen.
+    $markup = _janrain_capture_get_screen("signin.html");
+    if ($js = _janrain_capture_get_screen("signin.js")) {
+      // JS for the signin screen that should go into <head> before the widget.
+      drupal_add_js($js, array('type' => 'inline', 'every_page' => TRUE, 'weight' => 2));
+    }
+  } else {
+    // Include a stub 'returnSocial' div for Capture so that
+    // janrain.capture.ui.start() doesn't barf (we need to run it because it
+    // will init Backplane/SSO for us.
+    $markup = '<div style="display:none;" id="returnSocial"></div>';
+    $js = <<<EOD
+function janrainCaptureWidgetOnLoad() {
+  janrain.settings.capture.flowName = 'plugins';
+  janrain.capture.ui.start();
+}
+EOD;
     drupal_add_js($js, array('type' => 'inline', 'every_page' => TRUE, 'weight' => 2));
   }
+
+  $page['page_bottom']['janrainCaptureSigninScreen'] = array(
+    '#weight' => 0,
+    '#markup' => $markup,
+  );
 }
 
 function janrain_capture_ini($ver = '1.0') {
@@ -140,7 +150,7 @@ function janrain_capture_ini($ver = '1.0') {
       $scripts['inline'][] = '
       var janrainCaptureClientId ="'. $capture_client_id .'";
       var janrainCaptureRedirectUri ="'. url('janrain_capture/oauth', array('absolute' => TRUE)).'";
-      var janrainCaptureLogoutUri ="'. url('user/logout', array('absolute' => TRUE, 'real_logout' => TRUE)).'";
+      var janrainCaptureLogoutUri ="'. url('janrain_capture/simple_logout', array('absolute' => TRUE)).'";
       var janrainCaptureXdReceiver ="'. url(NULL, array('absolute' => TRUE)) . drupal_get_path('module', 'janrain_capture') . '/xdcomm.html";
       
       if("" == "'.$janrain_capture_optional['backplane_bus_name'].'") {
@@ -187,14 +197,29 @@ function janrain_capture_ini($ver = '1.0') {
 }
 
 /**
+ * Settings menu item callback
+ */
+function janrain_capture_get_settings() {
+  $janrain_capture_ver = variable_get('janrain_capture_ver', '1.0');
+  $ver = !empty($janrain_capture_ver) ? $janrain_capture_ver : '1.0';
+
+  if ($ver == '1.0') {
+    include_once drupal_get_path('module', 'janrain_capture') . '/janrain_capture.admin.inc';
+  } else {
+    include_once drupal_get_path('module', 'janrain_capture') . '/janrain_capture.admin2.inc';
+  }
+
+  return drupal_get_form('janrain_capture_settings');
+}
+
+/**
  * Implements hook_menu().
  */
 function janrain_capture_menu() {
-
   $items['janrain_capture/oauth'] = array(
     'title' => 'Capture Oauth Receiver',
     'page callback' => 'janrain_capture_oauth',
-    'access callback' => 'user_is_anonymous',
+    'access callback' => 'janrain_capture_oauth_access_callback',
     'type' => MENU_CALLBACK,
     'file' => 'janrain_capture.pages.inc',
   );
@@ -247,19 +272,28 @@ function janrain_capture_menu() {
     'title' => 'Janrain Capture',
     'description' => t('Connect to Janrain Capture service for centralized storage of social profile data.'),
     'page callback' => 'drupal_get_form',
-    'page arguments' => array('janrain_capture_settings'),
+    'page arguments' => array('janrain_capture_version_settings'),
     'access arguments' => array('administer site configuration'),
     'weight' => -4,
-    'file' => "janrain_capture.admin$ver.inc",
+    'file' => "janrain_capture.admin_version.inc",
   );
-  $items['admin/config/people/janrain_capture/settings'] = array(
-    'title' => 'Settings',
+  $items['admin/config/people/janrain_capture/version'] = array(
+    'title' => 'Version',
     'page callback' => 'drupal_get_form',
-    'page arguments' => array('janrain_capture_settings'),
+    'page arguments' => array('janrain_capture_version_settings'),
     'access arguments' => array('administer site configuration'),
     'type' => MENU_DEFAULT_LOCAL_TASK,
-    'weight' => -10,
-    'file' => "janrain_capture.admin$ver.inc",
+    'weight' => -50,
+    'file' => "janrain_capture.admin_version.inc",
+  );
+  $items['admin/config/people/janrain_capture/screens'] = array(
+    'title' => 'Screens',
+    'page callback' => 'drupal_get_form',
+    'page arguments' => array('janrain_capture_screens_settings'),
+    'access arguments' => array('administer site configuration'),
+    'type' => MENU_LOCAL_TASK,
+    'weight' => -40,
+    'file' => "janrain_capture.admin_screens.inc",
   );
   $items['janrain_capture/token_expired/%'] = array(
     'title' => 'Capture Token Expired',
@@ -269,24 +303,89 @@ function janrain_capture_menu() {
     'type' => MENU_CALLBACK,
     'file' => 'janrain_capture.pages.inc',
   );
-  // in case of emergency go here
-  $items['admin/config/people/janrain_capture/settings2'] = array(
+  $items['admin/config/people/janrain_capture/settings'] = array(
     'title' => 'Settings',
-    'page callback' => 'drupal_get_form',
-    'page arguments' => array('janrain_capture_settings'),
+    'page callback' => 'janrain_capture_get_settings',
     'access arguments' => array('administer site configuration'),
-    'weight' => -10,
-    'file' => "janrain_capture.admin2.inc",
+    'weight' => -30,
+    'type' => MENU_LOCAL_TASK,
   );
-  $items['admin/config/people/janrain_capture/settings1'] = array(
-    'title' => 'Settings',
-    'page callback' => 'drupal_get_form',
-    'page arguments' => array('janrain_capture_settings'),
-    'access arguments' => array('administer site configuration'),
-    'weight' => -10,
-    'file' => "janrain_capture.admin.inc",
-  );
+
+  // Create a no frills logout URL if SSO is enabled.
+  $conf = $janrain_capture_ver == '1.0' ?
+    variable_get('janrain_capture_optional', array()) :
+    variable_get('janrain_capture_federate2', array());
+
+  if ($janrain_capture_ver == '1.0' && !empty($conf['capture_sso_address'])
+      || isset($conf['capture_sso_enabled'])) {
+
+    $items['janrain_capture/simple_logout'] = array(
+      'title' => 'Plain logout page',
+      'page callback' => 'janrain_capture_simple_logout_page',
+      'access callback' => 'user_is_logged_in',
+      'type' => MENU_CALLBACK,
+      'file' => "janrain_capture.pages.inc",
+    );
+  }
+
   return $items;
+}
+
+/**
+ * Access callback for the Capture Oauth Receiver endpoint.
+ */
+function janrain_capture_oauth_access_callback() {
+  // This path is for anonymous users only, unless they are trying to confirm an
+  // email address.
+  $url_type = isset($_REQUEST['url_type']) ? $_REQUEST['url_type'] : NULL;
+  if ($url_type == 'verify' || isset($_REQUEST['verification_code']) || user_is_anonymous()) {
+    return TRUE;
+  }
+  return FALSE;
+}
+
+/**
+ * Implements hook_token_info().
+ * Provide a token for:
+ * - SSO URL
+ *  ` the href attribute of the sign-in link. Allows
+ *    use of the URL in Content (where tokens are available)
+ */
+function janrain_capture_token_info() {
+  $types['janrain_capture'] = array(
+    'name' => t("Janrain Capture Tokens"),
+    'description' => t("Tokens for Janrain Capture."),
+  );
+  
+  // Janrain Capture specific tokens.
+  $janrain_capture['sso_url'] = array(
+    'name' => t("Janrain SSO URL"),
+    'description' => t("A link for Social Sign-On using Janrain Capture"),
+  );
+  return array(
+    'types' => $types,
+    'tokens' => array(
+      'janrain_capture' => $janrain_capture,
+    ),
+  );
+}
+
+/**
+ * Implements hook_tokens().
+ */
+function janrain_capture_tokens($type, $tokens, array $data = array(), array $options = array()) {
+  $replacements = array();
+  
+  if ($type == 'janrain_capture') {
+    foreach ($tokens as $name => $original) {
+      switch ($name) {
+        case 'sso_url':
+          $replacements[$original] = janrain_capture_url();
+        break;
+      }
+    }
+  }
+  return $replacements;
 }
 
 /**
@@ -377,10 +476,12 @@ function janrain_capture_url($options = NULL) {
       $url = 'https://'
         . (!empty($janrain_capture_optional['captureui_address']) ? $janrain_capture_optional['captureui_address'] : $janrain_capture_main['capture_address'])
         . '/oauth/' . $action . '?' . http_build_query($args, '', '&');
-    } else {
+    }
+    else {
       return '';
     }
-  } else {
+  }
+  else {
     return '';
   }
   return $url;
@@ -390,19 +491,22 @@ function janrain_capture_url($options = NULL) {
  * Implements hook_url_outbound_alter().
  */
 function janrain_capture_url_outbound_alter(&$path, &$options, $original_path) {
-  // Override lougout link
-  //var_dump($path);
+  // Override logout link
   switch ($path) {
     case 'user/logout':
       $ver = variable_get('janrain_capture_ver', '1.0');
-      $conf = ($ver == '1.0') ?
-        variable_get('janrain_capture_optional', array()) :
-        variable_get('janrain_capture_federate2', array());
 
-      if($conf['capture_sso_address'] && !isset($options['real_logout'])) {
-        $path = 'javascript:CAPTURE.logout()';
-        $options['external'] =TRUE;
+      if ($ver == '1.0') {
+        $conf = variable_get('janrain_capture_optional', array());
+
+        if($conf['capture_sso_address']
+         && !(isset($conf['capture_sso_enabled']) && !$conf['capture_sso_enabled'])
+         && !isset($options['real_logout'])) {
+          $path = 'javascript:CAPTURE.logout()';
+          $options['external'] =TRUE;
+        }
       }
+
       break;
   }
 }
@@ -684,55 +788,108 @@ function janrain_capture_widget_js() {
   $settings["capture.federate"]           = $janrain_settings['capture_sso_enabled'];
   $settings["capture.federateServer"]     = 'https://' . $janrain_settings['capture_sso_address'];
   $settings["capture.federateXdReceiver"] = url(NULL, array('absolute' => TRUE)) . drupal_get_path('module', 'janrain_capture') . '/xdcomm.html';
-  $settings["capture.federateLogoutUri"]  = url('user/logout', array('absolute' => TRUE, 'real_logout' => TRUE));
+  $settings["capture.federateLogoutUri"]  = url('janrain_capture/simple_logout', array('absolute' => TRUE));
 
   // backplane
   $settings["capture.backplane"]          = $janrain_settings['backplane_enabled'];
   $settings["capture.backplaneBusName"]   = $janrain_settings['backplane_bus_name'];
+  $settings["capture.backplaneVersion"]   = $janrain_settings['backplane_version'];
 
-  $folder_url  = $janrain_settings['screens_folder'];
+  if (module_exists('janrain_capture_screens')) {
+    $settings["capture.stylesheets"] = "'" . file_create_url(_janrain_capture_get_screen_file('stylesheets/styles.css')) . "'";
+    if ($mobile_stylesheet = _janrain_capture_get_screen_file('stylesheets/mobile-styles.css')) {
+      $settings["capture.mobileStylesheets"] = "'" . file_create_url($mobile_stylesheet) . "'";
+    }
+    if ($ie_stylesheet = _janrain_capture_get_screen_file('stylesheets/ie-styles.css')) {
+      $settings["capture.conditionalIEStylesheets"] = "'" . file_create_url($ie_stylesheet) . "'";
+    }
+  }
+  else {
+    $folder_url = variable_get('janrain_capture_screens_folder', array());
 
-  // If path is local, search for user agent-specific stylesheets in the file system.
-  if(strpos($folder_url, 'file:///', 0) === 0) {
-    // Example of $folder_url: file:///sites/all/themes/janrain-capture-screens/
-    $web_path = str_replace('file://', '', $folder_url);
-    // Example of $web_path: /sites/all/themes/janrain-capture-screens/
-    $fs_path = DRUPAL_ROOT . $web_path;
-    // Example of $fs_path: /var/www/d7/sites/all/themes/janrain-capture-screens/
-    //watchdog('janrain_capture', 'Searching for Capture screen stylesheets in: ' . $fs_path,  array(), WATCHDOG_DEBUG);
-    $web_url = $base_url . $web_path;
+    // If path is local, search for user agent-specific stylesheets in the file system.
+    if(strpos($folder_url, 'file:///', 0) === 0) {
+      // Example of $folder_url: file:///sites/all/themes/janrain-capture-screens/
+      $web_path = str_replace('file://', '', $folder_url);
+      // Example of $web_path: /sites/all/themes/janrain-capture-screens/
+      $fs_path = DRUPAL_ROOT . $web_path;
+      // Example of $fs_path: /var/www/d7/sites/all/themes/janrain-capture-screens/
+      //watchdog('janrain_capture', 'Searching for Capture screen stylesheets in: ' . $fs_path,  array(), WATCHDOG_DEBUG);
+      $web_url = $base_url . $web_path;
 
-    // check the stylesheets folder for css files
-    $dir = new DirectoryIterator($fs_path."stylesheets");
-    $css = array();
-    $css_mobile = array();
-    $css_ie = array();
-    foreach ($dir as $fileinfo) {
-      $fn = $fileinfo->getFilename();
-      if (!$fileinfo->isDot() && stripos($fn,'.css')) {
-        switch (true){
-          // if file begins with mobile set is as a mobile style
-        case (stripos($fn, 'mobile') === 0):
-          $css_mobile[] = "'{$web_url}stylesheets/{$fn}'";
-          break;
-          // if file begins with ie set is as an IE style
-        case (stripos($fn, 'ie') === 0):
-          $css_ie[] = "'{$web_url}stylesheets/{$fn}'";
-          break;
-          // otherwise set it as a normal style
-        default:
-          $css[] = "'{$web_url}stylesheets/{$fn}'";
-          break;
+      $is_nested = is_dir($fs_path.'stylesheets');
+
+      if ($is_nested) {
+        $fs_path .= "stylesheets";
+      }
+
+      try {
+        $dir = new DirectoryIterator($fs_path);
+      }
+      catch (UnexpectedValueException $e) {
+        if ($is_nested) {
+          $screens_message = 'No "stylesheets" subfolder found in the screens folder (@path). Please check the Janrain Capture module settings.';
+          
+        } else {
+          $screens_message = 'The screens folder (@path) could not be found. Please check the Janrain Capture module settings.';
+        }
+
+        watchdog('janrain_capture',
+                 $screens_message,
+                 array('@path' => $fs_path),
+                 WATCHDOG_WARNING,
+                 l(t('Janrain Capture module settings'), 'admin/config/people/janrain_capture'));
+
+        return;
+      }
+
+      if ($is_nested) {
+        $web_url .= "stylesheets/";
+      }
+
+      $css = array();
+      $css_mobile = array();
+      $css_ie = array();
+      if ($dir) {
+        foreach ($dir as $fileinfo) {
+          $fn = $fileinfo->getFilename();
+          if (!$fileinfo->isDot() && stripos($fn,'.css')) {
+            switch (true){
+              // if file begins with mobile set is as a mobile style
+            case (stripos($fn, 'mobile') === 0):
+              $css_mobile[] = "'{$web_url}{$fn}'";
+              break;
+              // if file begins with ie set is as an IE style
+            case (stripos($fn, 'ie') === 0):
+              $css_ie[] = "'{$web_url}{$fn}'";
+              break;
+              // otherwise set it as a normal style
+            default:
+              $css[] = "'{$web_url}{$fn}'";
+              break;
+            }
+          }
         }
       }
+      $settings["capture.stylesheets"] = implode(', ', $css);
+      $settings["capture.mobileStylesheets"] = implode(', ', $css_mobile);
+      $settings["capture.conditionalIEStylesheets"] = implode(', ', $css_ie);
+    } else {
+      // just grab a single remote sheet
+      $settings["capture.stylesheets"] = "'{$folder_url}styles.css'";
     }
-    $settings["capture.stylesheets"] = implode(', ', $css);
-    $settings["capture.mobileStylesheets"] = implode(', ', $css_mobile);
-    $settings["capture.conditionalIEStylesheets"] = implode(', ', $css_ie);
-  } else {
-    // just grab a single remote sheet
-    $settings["capture.stylesheets"] = "'{$folder_url}styles.css'";
+
+    // Log a warning if directories are setup properly but no stylesheets were found
+    if (!count($css) && !count($css_mobile) && !count($css_ie)) {
+      watchdog('janrain_capture',
+                 'No stylesheets were found in the screens folder (@path). Please check the Janrain Capture module settings.',
+                 array('@path' => $fs_path),
+                 WATCHDOG_WARNING,
+                 l(t('Janrain Capture module settings'), 'admin/config/people/janrain_capture'));
+    }
   }
+
+  
 
   $output = <<<EOD
 function janrainSignOut(){
@@ -791,12 +948,14 @@ EOD;
   janrain.settings.tokenAction = 'event';
 
 EOD;
-
+  
+  // Backplane
   if($settings["capture.backplane"]) {
     $output .= <<<EOD
   // backplane settings
   janrain.settings.capture.backplane = '{$settings["capture.backplane"]}';
   janrain.settings.capture.backplaneBusName = '{$settings["capture.backplaneBusName"]}';
+  janrain.settings.capture.backplaneVersion = '{$settings["capture.backplaneVersion"]}';
 
 EOD;
   }
@@ -840,7 +999,7 @@ EOD;
 {$access_token}
 
 EOD;
-
+  
   return $output;
 }
 
@@ -1178,8 +1337,6 @@ function theme_janrain_capture_icon($variables) {
 
   if (isset($variables['node'])) {
     $nid = $variables['node']->nid;
-  } else {
-    $nid = rand(1,1000);
   }
   $size = $variables['size'] == 'small' ? '16' : '32';
   $style = array(
@@ -1217,34 +1374,74 @@ function janrain_capture_theme() {
  * Return empty string on failure to retrieve.
  */
 function _janrain_capture_get_screen($fname) {
-  $conf = variable_get('janrain_capture_ui2', array());
-  if (!isset($conf['screens_folder'])) {
-    watchdog('janrain_capture', 'No Capture screens folder specified in the Janrain Capture settings.',  array(), WATCHDOG_WARNING);
+  if (module_exists('janrain_capture_screens')) {
+    if (!in_array($fname, _janrain_capture_get_screens())) {
+      return '';
+    }
+
+    if ($screen_file = _janrain_capture_get_screen_file($fname)) {
+      return file_get_contents($screen_file);
+    }
+
     return '';
   }
-  $url = $conf['screens_folder'];
-
-  if (strpos($url, 'file:///', 0) === 0) {
-    global $base_path;
-
-    $path = DRUPAL_ROOT . str_replace('file://', '', $url) . $fname;
-    $result = file_get_contents($path);
-  }
   else {
-    $url .= $fname;
-    $resp = drupal_http_request($url);
-    if (isset($resp->error)) {
-      watchdog('janrain_capture', 'Failed to retrieve a Capture screen with the following URL: ' . $url, array(),  WATCHDOG_WARNING);
-      $result = '';
+    $url = variable_get('janrain_capture_screens_folder', array());
+    if (!isset($url)) {
+      watchdog('janrain_capture', 'No Capture screens folder specified in the Janrain Capture settings.',  array(), WATCHDOG_WARNING);
+      return '';
+    }
+    //$url = $conf['screens_folder'];
+
+    if (strpos($url, 'file:///', 0) === 0) {
+      global $base_path;
+
+      $path = DRUPAL_ROOT . str_replace('file://', '', $url) . $fname;
+      $result = file_get_contents($path);
     }
     else {
-      $result = $resp->data;
+      $url_type = isset( $_REQUEST['url_type'] ) ? $_REQUEST['url_type'] : false;
+
+      // allow only alpha-numeric (and dashes) to prevent hijacking
+      if ( ! ctype_alnum( str_replace( '-', '', $url_type ) ) ) {
+        header( 'HTTP/1.1 400 Bad Request' );
+        exit();
+      }
+
+      $url .= $fname;
+      $resp = drupal_http_request($url);
+      if (isset($resp->error)) {
+        watchdog('janrain_capture', 'Failed to retrieve a Capture screen with the following URL: %url', array('%url' => $url),  WATCHDOG_WARNING);
+        $result = '';
+      }
+      else {
+        $result = $resp->data;
+      }
     }
+
+    if (!$result) {
+      $result = '';
+    }
+
+    return $result;
+  }
+}
+
+/*
+ * Determines the default load.js URL
+ */
+function _janrain_capture_default_loadjs_url() {
+  // Parse engage app name to load.js path. If engage address is given engage app name will be parsed else default will be parsed.
+
+  $janrain_capture_main = variable_get('janrain_capture_main2', array());
+  $engageAppUrl = $janrain_capture_main['engage_address'];
+
+  if ($engageAppUrl != ''){
+    $engageAppName = strstr(parse_url($engageAppUrl, PHP_URL_HOST), '.', true);   
+  }
+  else {
+    $engageAppName = 'default';
   }
 
-  if (!$result) {
-    $result = '';
-  }
-
-  return $result;
+  return 'd16s8pqtk4uodx.cloudfront.net/' . $engageAppName . '/load.js';
 }

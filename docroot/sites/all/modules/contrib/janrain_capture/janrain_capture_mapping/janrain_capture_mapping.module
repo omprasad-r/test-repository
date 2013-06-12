@@ -78,7 +78,21 @@ function janrain_capture_mapping_janrain_capture_profile_sync($account, $profile
   $capture_fields = db_query("SELECT fid, path FROM {janrain_capture_mapping_field}")->fetchAllKeyed();
   foreach ($map as $mapping) {
     try {
-      $value = $profile[$capture_fields[$mapping['fid']]];
+      // support for plurals up to a depth of 3: plural.plural.plural.value  
+      $fid   = explode('.', $capture_fields[$mapping['fid']]);
+      $value = $profile[$fid[0]];
+      if (count($fid) > 1) { 
+        $value = $value[$fid[1]]; 
+      }
+      if (count($fid) > 2) { 
+        $value = $value[$fid[2]]; 
+      }
+      if (count($fid) > 3) { 
+        $value = $value[$fid[3]]; 
+      }
+      if (count($fid) > 4) { 
+        $value = $value[$fid[4]]; 
+      }
       if (isset($mapping['column']) && $mapping['column'] != 'value') {
         $value = array($mapping['column'] => $profile[$capture_fields[$mapping['fid']]]);
       }
