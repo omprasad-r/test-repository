@@ -48,7 +48,6 @@ class DrupalFile7Migration extends DrupalFileMigration {
 
   protected function query() {
     $query = $this->baseQuery();
-    $query->condition('uri', 'youtube://%', 'NOT LIKE');
     if ($this->skipPictures) {
       $query->leftJoin('users', 'u', 'f.fid=u.picture');
       $query->isNull('u.uid');
@@ -66,6 +65,21 @@ class DrupalFile7Migration extends DrupalFileMigration {
     }
 
     $this->version->getSourceValues($row, $row->fid);
+
+    // Do our best to apply the appropriate file_class to the import of this
+    // "file". Assume if we don't recognize a special case, we'll treat it as
+    // a real file to be copied.
+    switch ($row->filemime) {
+      case 'video/oembed':
+        $this->destination->setFileClass('MigrateFileUriAsIs');
+        break;
+      case 'video/youtube':
+        $this->destination->setFileClass('MigrateExtrasFileYoutube');
+        break;
+      default:
+        $this->destination->setFileClass('MigrateFileUri');
+        break;
+    }
   }
 
   protected function fixUri($uri) {

@@ -74,14 +74,18 @@ class MigrateSQLMap extends MigrateMap {
     if (isset($options['track_last_imported'])) {
       $this->trackLastImported = TRUE;
     }
+
+    $this->connection = Database::getConnection('default', $connection_key);
+
     // Default generated table names, limited to 63 characters
+    $prefixLength = strlen($this->connection->tablePrefix()) ;
     $this->mapTable = 'migrate_map_' . drupal_strtolower($machine_name);
-    $this->mapTable = drupal_substr($this->mapTable, 0, 63);
+    $this->mapTable = drupal_substr($this->mapTable, 0, 63 - $prefixLength);
     $this->messageTable = 'migrate_message_' . drupal_strtolower($machine_name);
-    $this->messageTable = drupal_substr($this->messageTable, 0, 63);
+    $this->messageTable = drupal_substr($this->messageTable, 0, 63 - $prefixLength);
     $this->sourceKey = $source_key;
     $this->destinationKey = $destination_key;
-    $this->connection = Database::getConnection('default', $connection_key);
+
     // Build the source and destination key maps
     $this->sourceKeyMap = array();
     $count = 1;
@@ -190,8 +194,10 @@ class MigrateSQLMap extends MigrateMap {
       }
       else {
         // Add any missing columns to the map table
-        if (!db_field_exists($this->mapTable, 'rollback_action')) {
-          db_add_field($this->mapTable, 'rollback_action', array(
+        if (!$this->connection->schema()->fieldExists($this->mapTable,
+                                                      'rollback_action')) {
+          $this->connection->schema()->addField($this->mapTable,
+                                                'rollback_action', array(
             'type' => 'int',
             'size' => 'tiny',
             'unsigned' => TRUE,
@@ -200,8 +206,8 @@ class MigrateSQLMap extends MigrateMap {
             'description' => 'Flag indicating what to do for this item on rollback',
           ));
         }
-        if (!db_field_exists($this->mapTable, 'hash')) {
-          db_add_field($this->mapTable, 'hash', array(
+        if (!$this->connection->schema()->fieldExists($this->mapTable, 'hash')) {
+          $this->connection->schema()->addField($this->mapTable, 'hash', array(
             'type' => 'varchar',
             'length' => '32',
             'not null' => FALSE,
