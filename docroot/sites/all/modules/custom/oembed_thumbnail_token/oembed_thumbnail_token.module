@@ -17,8 +17,8 @@ function oembed_thumbnail_token_token_info() {
   return array(
     'types' => array(
       'oembed-thumbnail' => array(
-        'name' => 'oEmbed thumbnail',
-        'description' => 'oEmbed thumbnail',
+        'name' => t('oEmbed thumbnail'),
+        'description' => t('oEmbed thumbnail'),
         'needs-data' => 'media',
       ),
     ),
