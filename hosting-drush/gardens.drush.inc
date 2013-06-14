@@ -532,20 +532,24 @@ function _gardens_drush_get_database_server_by_stage($stage) {
  * Gets a site's database dump from the slave database.
  */
 function drush_gardens_gardens_sql_dump() {
+  $result = NULL;
   // Currently the $databases variable in the settings file only points to the
   // site's master database. However there is an other variable which contains
   // information about both the master and the slave servers.
   if (!empty($GLOBALS['conf']['acquia_hosting_site_info']['db']['db_url_ha']) && is_array($GLOBALS['conf']['acquia_hosting_site_info']['db']['db_url_ha'])) {
-    // The master and slave DB information is stored in D6 style DB url.
+    // The master and slave DB information is stored in D6 style DB url. Make
+    // sure we use the last one which should be the slave.
     $slave_db_spec = drush_convert_db_from_db_url(end($GLOBALS['conf']['acquia_hosting_site_info']['db']['db_url_ha']));
     $sql_dump_info = drush_sql_dump($slave_db_spec);
-    $sql_dump_cmd = $sql_dump_info[0];
-    drush_log($sql_dump_cmd, 'notice');
-    return drush_op_system($sql_dump_cmd);
+    // The actual database dump command is in the first key.
+    if (!empty($sql_dump_info[0])) {
+      $result = drush_op_system($sql_dump_info[0]);
+    }
   }
-  else {
-    drush_log('Could not find the hosting site information about the database high availability pair.', 'error');
+  if (!isset($result)) {
+    drush_log('Could not generate a database dump.', 'error');
   }
+  return $result;
 }
 
 /**
