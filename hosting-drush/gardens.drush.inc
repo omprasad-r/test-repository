@@ -55,6 +55,11 @@ function gardens_drush_command() {
     'description' => "Duplicates a database, scrubs it, dumps it stdout.",
   );
 
+  $items['gardens-sql-dump'] = array(
+    'bootstrap' => DRUSH_BOOTSTRAP_DRUPAL_DATABASE,
+    'description' => "Dumps database from the slave server to stdout.",
+  );
+
   $items['export'] = array(
     'bootstrap' => DRUSH_BOOTSTRAP_DRUPAL_FULL,
     'description' => "Exports a site and its database",
@@ -276,7 +281,7 @@ function drush_gardens_getsite($sitename = '', $tangle = '') {
 
       // Create the database dump command string.
       $drush = "/mnt/www/html/$tangle/drush/drush --include=../hosting-drush";
-      $db_command = "$drush --uri=$domain sql-dump-with-scrub $database_server";
+      $db_command = "$drush --uri=$domain gardens-sql-dump";
 
       // Set the SQL dump filepath.
       $temp_dump_file = "$system_temp_dir/gardens_$sitename.sql";
@@ -294,22 +299,16 @@ function drush_gardens_getsite($sitename = '', $tangle = '') {
         // moment.
         throw new Exception('Unable to continue, database dump failed. Run with -sv to debug the command');
       }
-
-      // This is a hash of the word 'admin'.
-      $hashed_pass = '$S$CX5niOnlVy6ctHZUXsk5z21Xj.B7.Clr7QhgU9cZvZEI15ie2Wsi';
-
-      // Add on some extra SQL required to make the site usable.
-      $sql = <<<SQL
-UPDATE users SET pass='$hashed_pass';
-UPDATE users SET name='admin2' WHERE name = 'admin';
-UPDATE users SET name='admin' WHERE name LIKE 'Gardens admin';
-SQL;
-      file_put_contents($temp_dump_file, $sql, FILE_APPEND);
-
       drush_log("Got database and dumped to $temp_dump_file", 'success');
 
       // Import the database.
       $import_command = sprintf('mysql %s %s < %s', $connection_string, $database_name, $temp_dump_file);
+      gardens_drush_exec($import_command);
+
+      // Scrub the database.
+      $import_command = sprintf('mysql %s %s < %s', $connection_string, $database_name, dirname(dirname(__FILE__)) . '/gsite-scrub.sql');
+      gardens_drush_exec($import_command);
+      $import_command = sprintf('mysql %s %s < %s', $connection_string, $database_name, dirname(dirname(__FILE__)) . '/gsite-scrub-local-dev.sql');
       gardens_drush_exec($import_command);
     }
 
@@ -527,6 +526,26 @@ function _gardens_drush_get_database_server_by_stage($stage) {
   // Otherwise, fall back on the standard one used e.g. in gsteamer.
   $db_server = isset($map[$stage]) ? $map[$stage] : 'dbmaster-45';
   return $db_server;
+}
+
+/**
+ * Gets a site's database dump from the slave database.
+ */
+function drush_gardens_gardens_sql_dump() {
+  // Currently the $databases variable in the settings file only points to the
+  // site's master database. However there is an other variable which contains
+  // information about both the master and the slave servers.
+  if (!empty($GLOBALS['conf']['acquia_hosting_site_info']['db']['db_url_ha']) && is_array($GLOBALS['conf']['acquia_hosting_site_info']['db']['db_url_ha'])) {
+    // The master and slave DB information is stored in D6 style DB url.
+    $slave_db_spec = drush_convert_db_from_db_url(end($GLOBALS['conf']['acquia_hosting_site_info']['db']['db_url_ha']));
+    $sql_dump_info = drush_sql_dump($slave_db_spec);
+    $sql_dump_cmd = $sql_dump_info[0];
+    drush_log($sql_dump_cmd, 'notice');
+    return drush_op_system($sql_dump_cmd);
+  }
+  else {
+    drush_log('Could not find the hosting site information about the database high availability pair.', 'error');
+  }
 }
 
 /**
