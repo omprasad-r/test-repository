@@ -601,8 +601,8 @@ function install_gardens($hosting_site_name, $hosting_site_environment, $parent_
         // If the gardener passed an enterprise client name, we switch to and install
         // a profile of the same name, if it exists.  All custom configurations for
         // the client and  additional modules can be handled from there.
-        if (!empty($gardens_site_info['gardens_client_name'])) {
-          $profile_name = $gardens_site_info['gardens_client_name'];
+        $profile_name = empty($gardens_site_info['gardens_client_name']) ? '' : $gardens_site_info['gardens_client_name'];
+        if ($profile_name && file_exists(DRUPAL_ROOT . "/profiles/{$profile_name}/{$profile_name}.info")) {
           // Save the value for future use.
           variable_set('gardens_client_name', $profile_name);
           $previous_profile = variable_get('install_profile', 'gardens');
