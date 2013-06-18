@@ -497,3 +497,12 @@ function warner_misc_update_11158() {
 function warner_misc_update_11159() {
   module_enable(array('flippy'));
 }
+
+/**
+ * Ensures that janrain capture screens is enabled for janrain capture.
+ */
+function warner_misc_update_11160() {
+  if (module_exists('janrain_capture') && !module_exists('janrain_capture_screens')) {
+    module_enable(array('janrain_capture_screens'));
+  }
+}
