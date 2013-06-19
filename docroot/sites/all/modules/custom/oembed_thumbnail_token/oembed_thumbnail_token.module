@@ -17,8 +17,8 @@ function oembed_thumbnail_token_token_info() {
   return array(
     'types' => array(
       'oembed-thumbnail' => array(
-        'name' => 'oEmbed thumbnail',
-        'description' => 'oEmbed thumbnail',
+        'name' => t('oEmbed thumbnail'),
+        'description' => t('oEmbed thumbnail'),
         'needs-data' => 'media',
       ),
     ),
@@ -96,7 +96,8 @@ function oembed_thumbnail_token_tokens($type, $tokens, array $data = array(), ar
 }
 
 /**
- * Generate an image path for an oEmbed file thumbnail.
+ * Generate an image path for an oEmbed file thumbnail. If the field 
+ * contains a local file instead, that will also be supported.
  * 
  * @param $fid
  *   The oEmbed file ID.
@@ -109,22 +110,31 @@ function oembed_thumbnail_token_tokens($type, $tokens, array $data = array(), ar
 function oembed_thumbnail_token_thumbnail_style_path($fid, $style) {
   // Load the file
   if ($file = file_load($fid)) {
-    // See if this is an oEmbed file
-    if (file_uri_scheme($file->uri) == 'oembed') {
-      // Create a wrapper
-      if ($wrapper = file_stream_wrapper_get_instance_by_uri($file->uri)) {
-        // Fetch the oEmbed data
-        if ($embed = oembedcore_oembed_data($wrapper->interpolateUrl())) {
-          // See if we have a thumbnail
-          if (isset($embed->thumbnail_url) && $embed->thumbnail_url) {
-            // Generate a local path for the external thumbnail image
-            if ($path = imagecache_external_generate_path($embed->thumbnail_url, $style)) {
-              // Convert the path to use the image style
-              return image_style_url($style, $path);
+    // Act based on the file URI scheme
+    switch (file_uri_scheme($file->uri)) {
+      // See if this is an oEmbed file
+      case 'oembed':
+        // Create a wrapper
+        if ($wrapper = file_stream_wrapper_get_instance_by_uri($file->uri)) {
+          // Fetch the oEmbed data
+          if ($embed = oembedcore_oembed_data($wrapper->interpolateUrl())) {
+            // See if we have a thumbnail
+            if (isset($embed->thumbnail_url) && $embed->thumbnail_url) {
+              // Generate a local path for the external thumbnail image
+              if ($path = imagecache_external_generate_path($embed->thumbnail_url, $style)) {
+                // Convert the path to use the image style
+                return image_style_url($style, $path);
+              }
             }
           }
         }
-      }
+        break;
+        
+      // See if this is a local file
+      case 'public':
+      case 'private':
+        // Return the path to use the image style
+        return image_style_url($style, $file->uri);
     }
   }
   
