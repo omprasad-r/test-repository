@@ -674,6 +674,16 @@ function gardens_misc_modules_enabled($modules) {
       variable_set('extlink_alert_type', '');
     }
   }
+
+  // Turn on colorbox and extlink_extra modules if extlink is enabled.
+  if (in_array('extlink', $modules)) {
+    if (!module_exists('extlink_extra')) {
+      module_enable(array('extlink_extra'), FALSE);
+    }
+    if (!module_exists('colorbox')) {
+      module_enable(array('colorbox'), FALSE);
+    }
+  }
 }
 
 /**

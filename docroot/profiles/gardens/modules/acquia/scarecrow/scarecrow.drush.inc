@@ -73,26 +73,27 @@ function drush_scarecrow_revoke_permission($permission, $role) {
  */
 function _scarecrow_validate_drush_permission_role($permission, $role) {
   if (in_array($permission, scarecrow_forbidden_permissions())) {
-    drush_log(dt('The permission @permission is not allowed to be assigned or revoked.', array('@permission' => $permission)), 'error');
+    drush_set_error(NULL, dt('The permission @permission is not allowed to be assigned or revoked.', array('@permission' => $permission)));
     return FALSE;
   }
 
   $all_permissions = array_keys(module_invoke_all('permission'));
   if (!in_array($permission, $all_permissions)) {
-    drush_log(dt('The permission "@permission" is not defined by an enabled module.', array('@permission' => $permission)), 'error');
+    drush_set_error(NULL, dt('The permission "@permission" is not defined by an enabled module.', array('@permission' => $permission)));
     return FALSE;
   }
 
   $role_object = user_role_load_by_name($role);
   if (empty($role_object)) {
-    drush_log(dt('No role named "@role" exists on the site.', array('@role' => $role)), 'error');
+    drush_set_error(NULL, dt('No role named "@role" exists on the site.', array('@role' => $role)));
     return FALSE;
   }
 
   if (($site_owner_rid = variable_get('gardens_site_owner_role')) && $role_object->rid == $site_owner_rid) {
-    drush_log(dt('The "@role" role automatically gets all permissions in Gardens, so it cannot have additional permissions assigned or revoked.', array('@role' => $role)), 'error');
+    drush_set_error(NULL, dt('The "@role" role automatically gets all permissions in Gardens, so it cannot have additional permissions assigned or revoked.', array('@role' => $role)));
     return FALSE;
   }
 
   return TRUE;
 }
+

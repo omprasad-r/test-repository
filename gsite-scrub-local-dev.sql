@@ -17,3 +17,9 @@ DELETE FROM `variable` WHERE `name` = 'themebuilder_screenshot_private_key';
 -- Make sure that the variable cache is cleared (just in case this script ever
 -- needs to be run independently).
 TRUNCATE `cache_bootstrap`;
+
+-- Add on some extra SQL required to make the site usable.
+-- This is a hash of the word 'admin'.
+UPDATE users SET pass='$S$CX5niOnlVy6ctHZUXsk5z21Xj.B7.Clr7QhgU9cZvZEI15ie2Wsi';
+UPDATE users SET name='admin2' WHERE name = 'admin';
+UPDATE users SET name='admin' WHERE name LIKE 'Gardens admin';

@@ -1277,3 +1277,59 @@ function scarecrow_update_11186() {
     }
   }
 }
+
+/**
+ * Turn on colorbox and extlink_extra modules if extlink is enabled.
+ */
+function scarecrow_update_11187() {
+  if (module_exists('extlink') && (!module_exists('extlink_extra') || !module_exists('colorbox'))) {
+    module_enable(array('colorbox', 'extlink_extra'), FALSE);
+  }
+}
+
+/**
+ * Fixes up fivestar field instances to contain the right path.
+ */
+function scarecrow_update_11188() {
+  if (module_exists('fivestar')) {
+    // Get the valid fivestar widgets.
+    $fivestar_widgets = module_invoke_all('fivestar_widgets');
+
+    // Find the fivestar fields.
+    $fields = field_info_fields();
+    if (empty($fields)) {
+      $fields = array();
+    }
+    foreach ($fields as $field_name => $field) {
+      if (empty($field['type']) || empty($field['module']) || $field['type'] != 'fivestar' || $field['module'] != 'fivestar' || empty($field['bundles'])) {
+        continue;
+      }
+
+      // Examine the fivestar instances to see if any fixing is needed.
+      foreach ($field['bundles'] as $entity_type => $bundles) {
+        foreach ($bundles as $bundle) {
+          $instance = field_info_instance($entity_type, $field['field_name'], $bundle);
+          if (!$instance || empty($instance['display'])) {
+            continue;
+          }
+
+          // Display holds the path to the fivestar css.
+          $instance_changed = FALSE;
+          foreach ($instance['display'] as $display_name => $display) {
+            if ($display['type'] != 'fivestar_formatter_default' || empty($display['settings']['widget']['fivestar_widget']) || isset($fivestar_widgets[$display['settings']['widget']['fivestar_widget']])) {
+              continue;
+            }
+            if (strpos($display['settings']['widget']['fivestar_widget'], 'sites/all/modules/fivestar/widgets/') === 0) {
+              $instance['display'][$display_name]['settings']['widget']['fivestar_widget'] = str_replace('sites/all/modules/fivestar', drupal_get_path('module', 'fivestar'), $display['settings']['widget']['fivestar_widget']);
+              $instance_changed = TRUE;
+            }
+          }
+
+          if ($instance_changed) {
+            field_update_instance($instance);
+          }
+        }
+      }
+    }
+  }
+}
