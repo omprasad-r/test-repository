@@ -38,14 +38,15 @@ function themebuilder_live_preview_available_themes_get() {
   // fetch the list of themes, but in that case we would get an exception due to
   // themebuilder_themes_themebuilder_init_data().
   $themes = themebuilder_compiler_get_theme_list();
-  $themes += themebuilder_marketplace_get_theme_list();
+
   if (!empty($themes)) {
-    foreach (array('mythemes', 'featured') as $type) {
+    foreach (array('mythemes') as $type) {
       foreach ($themes[$type] as $system_name => $theme) {
         $themelist[$system_name] = $theme;
       }
     }
   }
+
   uasort($themelist, '_themebuilder_live_preview_sort');
   return $themelist;
 }

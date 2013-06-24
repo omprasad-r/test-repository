@@ -118,6 +118,11 @@ DirectoryIndex index.php index.html index.htm
   RewriteRule ^ http://%1%{REQUEST_URI} [L,R=301]
   # Do not serve files from the gardens_temp directory on each site
   RewriteRule ^(.*/)+gardens_temp/ - [F,L]
+  # Hide PATCHES.txt
+  <Files "PATCHES.txt">
+    Order Deny,Allow
+    Deny from All
+  </Files>
 ##################################################GardensExcludeFromExportEnd##
   # Modify the RewriteBase if you are using Drupal in a subdirectory or in a
   # VirtualDocumentRoot and the rewrite rules are not working properly.

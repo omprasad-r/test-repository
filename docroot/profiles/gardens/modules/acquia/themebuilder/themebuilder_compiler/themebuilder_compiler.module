@@ -284,6 +284,7 @@ function themebuilder_compiler_themebuilder_bar_editor() {
     'js'  => array($path . "/js/Modification.js",
                    $path . "/js/Theme.js",
                    $path . "/js/PaletteModification.js",
+                   $path . "/js/NestedThemeSettingModification.js",
                    $path . "/js/json2.js"),
     'group' => JS_LIBRARY
   ));
@@ -2028,20 +2029,17 @@ function _themebuilder_compiler_modify($modification, $forward = TRUE) {
       $theme->dist();
       break;
     case 'themeSetting':
-      // Handle viewport differently to other theme settings in that viewport is
-      // an object of values whereas others are simple values.
-      if ($modification->selector === 'viewport') {
-        foreach ($state as $setting_name => $setting_value) {
-          // Avoid saving items that are not theme settings.
-          if ($setting_name == 'type' || $setting_name == 'selector') {
-            continue;
-          }
-          $theme->setThemeSetting($setting_name, $setting_value);
-        }
-      }
-      else {
-        $theme->setThemeSetting($modification->selector, $state->value);
-      }
+      $theme->setThemeSetting($modification->selector, $state->value);
+      $theme->modify();
+      $theme->dist();
+      // Force the theme settings to load from the .info file on the next
+      // request.
+      _themebuilder_compiler_rebuild_theme_data();
+      list_themes(TRUE);
+      drupal_static_reset('theme_get_setting');
+      break;
+    case 'nestedThemeSetting':
+      $theme->setNestedThemeSetting($modification->selector, $state->parents, $state->value);
       $theme->modify();
       $theme->dist();
       // Force the theme settings to load from the .info file on the next

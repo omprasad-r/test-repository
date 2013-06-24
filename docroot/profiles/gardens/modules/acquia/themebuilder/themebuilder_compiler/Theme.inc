@@ -500,6 +500,30 @@ class Theme {
     $this->assets_new['info']->changeSetting($key, $value, $this);
   }
 
+  /**
+   * Save the value of a nested setting.
+   *
+   * @param string $key
+   *   Key of the setting to set.
+   * @param array $parents
+   *   Array of parents to use for nesting the $value under $key.
+   * @param $value
+   *   Value of the setting to set.
+   */
+  public function setNestedThemeSetting($key, $parents, $value) {
+    if (!empty($parents)) {
+      $settingsValue = $this->getThemeSetting($key);
+      if (!is_array($settingsValue)) {
+        $settingsValue = array();
+      }
+      drupal_array_set_nested_value($settingsValue, $parents, $value, TRUE);
+      $this->assets_new['info']->changeSetting($key, $settingsValue, $this);
+    }
+    else {
+      $this->assets_new['info']->changeSetting($key, $value, $this);
+    }
+  }
+
   /*******************************
    *
    * General state related methods
