@@ -30,7 +30,7 @@
   ThemeBuilder.MetatagConfig.prototype.init = function() {
     var app;
 
-    ThemeBuilder.addModificationHandler(ThemeBuilder.ThemeSettingModification.TYPE, this);
+    ThemeBuilder.addModificationHandler(ThemeBuilder.NestedThemeSettingModification.TYPE, this);
 
     // Update button press.
     $(this.context).delegate('.update-button', 'click', ThemeBuilder.bind(this, this.update));
@@ -64,8 +64,14 @@
     *   was redone.
     */
    ThemeBuilder.MetatagConfig.prototype.modificationCompleted = function(event, modification, operation) {
-     if (modification.type === 'themeSetting' && modification.selector === 'viewport') {
-       ThemeBuilder.Bar.getInstance().enableThemebuilder();
+     switch (modification.getType()) {
+       case ThemeBuilder.GroupedModification.TYPE:
+         ThemeBuilder.Bar.getInstance().enableThemebuilder();
+         break;
+
+       case ThemeBuilder.NestedThemeSettingModification.TYPE:
+         ThemeBuilder.Bar.getInstance().enableThemebuilder();
+         break;
      }
    };
 
@@ -126,7 +132,7 @@
     }
 
     return viewport;
-  }
+  };
 
   /**
    * Generates the UI for the theme settings form.
@@ -220,11 +226,14 @@
     // event of the viewport enabled checkbox.
     $(this.context).delegate('#themebuilder-metatag-viewport-enabled', 'change', this.toggleDisabled);
 
-    // Instantiate a new ThemeSettingModification and set the prior state.
-    this.modifications.viewport = new ThemeBuilder.ThemeSettingModification('viewport');
-    this.modifications.viewport.setPriorState({
-      'viewport': viewport
-    });
+    for (var setting in viewport) {
+      if (setting && viewport.hasOwnProperty(setting)) {
+        // Instantiate a new NestedThemeSettingModification and set the prior state.
+        var modification = new ThemeBuilder.NestedThemeSettingModification('viewport');
+        modification.setPriorState([setting], viewport[setting]);
+        this.modifications['viewport-' + setting] = modification;
+      }
+    }
   };
 
   /**
@@ -290,13 +299,18 @@
     }
 
     // The user chose not to save their changes so we must revert them.
-    else if (this.modifications.viewport) {
-      // Get the prior state which we'll use for resetting the form.
-      var prior = this.modifications.viewport.getPriorState();
+    else if (this.modifications) {
+      var modifications = this.modifications;
 
-      // Reset the form elements to their prior values.
-      this.setFormValue('#themebuilder-metatag-viewport-content', prior.viewport.content);
-      this.setFormValue('#themebuilder-metatag-viewport-enabled', prior.viewport.enabled);
+      for (var modification in modifications) {
+        if (modification && modifications.hasOwnProperty(modification)) {
+          // Get the prior state which we'll use for resetting the form.
+          var prior = modifications[modification].getPriorState();
+
+          // Reset the form elements to their prior values.
+          this.processModification(modification, prior);
+        }
+      }
     }
 
     // Update the state of the update button and remove the control veil.
@@ -335,7 +349,7 @@
         this.toggleDisabled.call($element);
         break;
     }
-  }
+  };
 
   /**
    * Populates the state object with the corresponding form element values.
@@ -345,13 +359,17 @@
    * the state object.
    */
   ThemeBuilder.MetatagConfig.prototype.fieldUpdate = function(event) {
-    var selector = this.modifications.viewport.getSelector(),
-        state    = this.modifications.viewport.getPriorState();
+    var modifications = this.modifications;
 
-    state[selector]['content'] = this.getElementValue.call($('#themebuilder-metatag-viewport-content', this.context));
-    state[selector]['enabled'] = this.getElementValue.call($('#themebuilder-metatag-viewport-enabled', this.context));
+    for (var modification in modifications) {
+      if (modification && modifications.hasOwnProperty(modification)) {
+        var element = this._getElementForProperty(modification);
+        var value = this.getElementValue.call($(element, this.context));
+        var parents = modifications[modification].getPriorState().parents;
+        modifications[modification].setNewState(parents, value);
+      }
+    }
 
-    this.modifications.viewport.setNewState(state);
     this.setUpdateButtonState();
   };
 
@@ -378,7 +396,7 @@
     }
 
     return value;
-  }
+  };
 
   /**
    * Commits any changes to the server.
@@ -387,40 +405,76 @@
    * chooses to save their changes after navigating away with a dirty form.
    */
   ThemeBuilder.MetatagConfig.prototype.update = function(event) {
-    var next;
-
     if (this.isDirty()) {
+      var next;
+      var group = new ThemeBuilder.GroupedModification();
+
       // Committing the viewport modification can take significant
       // time (a few seconds).  Disable the themebuilder to prevent its
       // state from changing during this update.
       ThemeBuilder.Bar.getInstance().disableThemebuilder();
-      next = this.modifications.viewport.getNewState();
 
-      ThemeBuilder.applyModification(this.modifications.viewport);
-      this.modifications.viewport = this.modifications.viewport.getFreshModification();
-      this.modifications.viewport.setNewState(next);
+      for (var modificationName in this.modifications) {
+        if (modificationName && this.modifications.hasOwnProperty(modificationName)) {
+          next = this.modifications[modificationName].getNewState();
+          group.addChild(modificationName, ThemeBuilder.clone(this.modifications[modificationName]));
+          this.modifications[modificationName] = this.modifications[modificationName].getFreshModification();
+          this.modifications[modificationName].setNewState(next.parents, next.value);
+        }
+      }
+
+      ThemeBuilder.applyModification(group);
+
+      this.setUpdateButtonState();
     }
-
-    this.setUpdateButtonState();
   };
 
   /**
    * Handles undo/redo actions.
    *
-   * @todo This function is hard-coded to deal with viewport. Adding more
-   * metatags will require further abstraction of this code.
-   *
-   * @param object modification
+   * @param {Object} modification
    *   The modification object that handles this element.
-   * @param object state
+   * @param {Object} state
    *   Represents the state of the viewport configuration after an undo or redo
    *   operation.
    */
   ThemeBuilder.MetatagConfig.prototype.processModification = function(modification, state) {
-    if (state && state.selector && state.selector === 'viewport') {
-      this.setFormValue('#themebuilder-metatag-viewport-content', state.viewport.content);
-      this.setFormValue('#themebuilder-metatag-viewport-enabled', state.viewport.enabled);
+    if (state && state.selector) {
+      var property = state.selector + '-' + state.parents.join('-');
+      var value = state.value;
+      var element = this._getElementForProperty(property);
+      this.setFormValue(element, value);
     }
+  };
+
+  /**
+   * Returns the element responsible for displaying or editing the specified setting.
+   *
+   * @param {String} setting
+   *   The name of the property.
+   * @return {HTMLElement}
+   *   The element responsible for editing the specified setting.
+   */
+  ThemeBuilder.MetatagConfig.prototype._getElementForProperty = function (setting) {
+    var id = 'themebuilder-metatag-' + setting;
+    return document.getElementById(id);
+  };
+
+  /**
+   * Returns the setting associated with the specified element.
+   *
+   * @param {HTMLElement} element
+   *   The element. Generally this will be an input field.
+   * @return {String}
+   *   The setting associated with the element.
+   */
+  ThemeBuilder.MetatagConfig.prototype._getPropertyForElement = function (element) {
+    var property = '';
+    var id = element.id;
+    if (new RegExp('^themebuilder-metatag-(.)*').test(id)) {
+      property = id.slice('themebuilder-metatag-'.length);
+    }
+    return property;
   };
 
   /**
@@ -461,17 +515,14 @@
    *   otherwise.
    */
   ThemeBuilder.MetatagConfig.prototype.isDirty = function() {
-    var prior,
-        next;
-
-    if (this.modifications.viewport && this.modifications.viewport.newState) {
-      // Use JSON.stringify to compare the state objects for equality.
-      prior = JSON.stringify(this.modifications.viewport.getPriorState().viewport);
-      next  = JSON.stringify(this.modifications.viewport.getNewState().viewport);
-
-      return prior !== next;
+    var modifications = this.modifications;
+    for (var modification in modifications) {
+      if (modification && modifications.hasOwnProperty(modification)) {
+        if (modifications[modification].hasChanged()) {
+          return true;
+        }
+      }
     }
-
     return false;
   };
 

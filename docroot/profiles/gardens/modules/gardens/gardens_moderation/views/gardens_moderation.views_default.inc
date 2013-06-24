@@ -204,11 +204,12 @@ function gardens_moderation_views_default_views() {
   $handler->display->display_options['fields']['body']['alter']['replace_spaces'] = 0;
   $handler->display->display_options['fields']['body']['alter']['trim_whitespace'] = 0;
   $handler->display->display_options['fields']['body']['alter']['nl2br'] = 0;
+  $handler->display->display_options['fields']['body']['alter']['max_length'] = '600';
   $handler->display->display_options['fields']['body']['alter']['word_boundary'] = 1;
   $handler->display->display_options['fields']['body']['alter']['ellipsis'] = 1;
   $handler->display->display_options['fields']['body']['alter']['strip_tags'] = 0;
-  $handler->display->display_options['fields']['body']['alter']['trim'] = 0;
-  $handler->display->display_options['fields']['body']['alter']['html'] = 0;
+  $handler->display->display_options['fields']['body']['alter']['trim'] = 1;
+  $handler->display->display_options['fields']['body']['alter']['html'] = 1;
   $handler->display->display_options['fields']['body']['element_label_colon'] = 1;
   $handler->display->display_options['fields']['body']['element_default_classes'] = 1;
   $handler->display->display_options['fields']['body']['hide_empty'] = 0;

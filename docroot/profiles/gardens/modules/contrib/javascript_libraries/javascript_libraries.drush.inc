@@ -63,6 +63,7 @@ function drush_javascript_libraries_jslib_switch_url($current_url = NULL, $new_u
     drush_log(dt('External library URL was updated from @old to @new for @count URI(s): @info', array('@old' => $current_url, '@new' => $new_url, '@count' => count($changed), '@info' => implode(' | ', $info))), 'success');
   }
   else {
-    drush_log(dt('There are no existing libraries with the URL @old.', array('@old' => $current_url)), 'warning');
+    drush_set_error(NULL, dt('There are no existing libraries with the URL @old.', array('@old' => $current_url)));
   }
 }
+

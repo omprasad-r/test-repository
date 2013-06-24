@@ -50,11 +50,6 @@ ThemeBuilder.ThemeSettingModification.create = function (priorState, newState) {
   instance.setPriorState(priorState);
 
   if (newState) {
-    // Handle the viewport theme settings differently to normal theme settings.
-    if (priorState.selector !== 'viewport') {
-      newState = newState.value;
-    }
-
     instance.setNewState(newState);
   }
 
@@ -83,12 +78,6 @@ ThemeBuilder.ThemeSettingModification.prototype.initialize = function (key) {
  *   The value of the theme setting modification.
  */
 ThemeBuilder.ThemeSettingModification.prototype.createState = function (value) {
-  // Allow viewport theme settings to be an object of settings, rather than
-  // simple values.
-  if (this.selector === 'viewport') {
-    return value;
-  }
-
   return {
     'value': value
   };
