@@ -35,6 +35,7 @@ define('GARDENS_SIGNUP_SITE_STATUS_INSTALLING', 'installing');
 /**
  * Status constant indicating that a Gardens site has been installed, but not
  * yet assigned to a particular customer.
+ * This status was deprecated as part of DG-8020.
  */
 define('GARDENS_SIGNUP_SITE_STATUS_INSTALLED', 'installed');
 
@@ -77,6 +78,7 @@ define('GARDENS_SIGNUP_SITE_STATUS_COMPLETED', 'completed');
 /**
  * Operation constant indicating that a Gardens site should be installed but
  * not configured for a particular customer.
+ * This operation was deprecated as part of DG-8020.
  */
 define('GARDENS_SIGNUP_SITE_OPERATION_INSTALL', 'install');
 
@@ -352,7 +354,7 @@ function acquia_gardens_remove_site_domains($deleted_domains, $hosting_site_name
  *   The machine-readable name (from Acquia Hosting) of the Hosting
  *   environment whose Gardens sites will be installed or configured.
  */
-function install_gardens($hosting_site_name, $hosting_site_environment, $parent_hosting_site_name = '') {
+function install_gardens($hosting_site_name, $hosting_site_environment, $parent_hosting_site_name = '', $data = NULL) {
   if (empty($parent_hosting_site_name)) {
     $parent_hosting_site_name = $hosting_site_name;
   }
@@ -362,7 +364,7 @@ function install_gardens($hosting_site_name, $hosting_site_environment, $parent_
   // function call is that we need to load parts of the Drupal codebase for
   // each one, and I don't trust Drupal's static caches enough to do that for
   // multiple sites sharing the same codebase.)
-  $gardens_site_info = acquia_gardens_call('get.site.to.process', array($parent_hosting_site_name));
+  $gardens_site_info = isset($data) ? unserialize($data) : acquia_gardens_call('get.site.to.process', array($parent_hosting_site_name));
   if (empty($gardens_site_info)) {
     // No sites to process, so nothing to do here.
     return;
@@ -382,16 +384,15 @@ function install_gardens($hosting_site_name, $hosting_site_environment, $parent_
     // Bail out in the event that the Gardener thinks we should do something
     // for this site but we have no idea how to do it.
     $expected_operations = array(
-      GARDENS_SIGNUP_SITE_OPERATION_INSTALL,
       GARDENS_SIGNUP_SITE_OPERATION_INSTALL_AND_CONFIGURE,
-      GARDENS_SIGNUP_SITE_OPERATION_CONFIGURE,
       GARDENS_SIGNUP_SITE_OPERATION_DUPLICATE,
     );
     if (!in_array($op, $expected_operations)) {
       throw new Exception("GardensError: AN-22794 - A Gardens site requested an invalid operation and could not be processed GardensError: site id: $gardens_site_id; hosting account: $hosting_site_name; original site status \"{$gardens_site_info['original_status']}\"; requested operation was \"$op\").");
     }
 
-    if ($op == GARDENS_SIGNUP_SITE_OPERATION_INSTALL || $op == GARDENS_SIGNUP_SITE_OPERATION_INSTALL_AND_CONFIGURE) {
+    if ($op == GARDENS_SIGNUP_SITE_OPERATION_INSTALL_AND_CONFIGURE) {
+      try {
       // Prepare the installation directories and files.
       acquia_gardens_prepare_for_installation($site_directory, $hosting_site_name, $hosting_site_environment, $gardens_site_id, $domains);
 
@@ -459,196 +460,126 @@ function install_gardens($hosting_site_name, $hosting_site_environment, $parent_
         ),
       );
 
-
       chdir("$current_directory/docroot");
       define('DRUPAL_ROOT', getcwd());
       define('MAINTENANCE_MODE', 'install');
       include_once('docroot/includes/install.core.inc');
       install_drupal($settings);
 
+      // Ensure that cron does not get to run untill we are finished. This is
+      // similar to lock_acquire() except that it is not using _lock_id as
+      // that would set an exit function to kill the semaphore.
+      $lock_id = uniqid(mt_rand(), TRUE);
+      db_merge('semaphore')
+        ->key(array('name' => 'cron'))
+        ->fields(array(
+          'value' => $lock_id,
+          'expire' => microtime(TRUE) + 3600.0,
+        ))->execute();
+
       // Have to make the directory writable again or the touch fails.
       chmod($site_directory, 0755);
       touch("$site_directory/installed");
-      if ($op == GARDENS_SIGNUP_SITE_OPERATION_INSTALL_AND_CONFIGURE) {
-        // Save the site's original (standard *.drupalgardens.com) domain.
-        $standard_domain = reset($domains);
-        variable_set('gardens_misc_standard_domain', $standard_domain);
-        // Normally we only have one domain during configure, so just set the last value.
-        // @see: AN-19653  this is a quick fix for imagecache problems.
-        $domain = end($domains);
-        variable_set('file_public_path', "sites/{$domain}/files");
+
+      // Save the site's original (standard *.drupalgardens.com) domain.
+      $standard_domain = reset($domains);
+      drupal_override_server_variables(array('url' => $gardens_site_info['url'] . '/index.php'));
+
+      variable_set('gardens_misc_standard_domain', $standard_domain);
+      // Normally we only have one domain during configure, so just set the last value.
+      // @see: AN-19653  this is a quick fix for imagecache problems.
+      $domain = end($domains);
+      variable_set('file_public_path', "sites/{$domain}/files");
+      variable_set('site_name', $gardens_site_info['site_name']);
+      variable_set('site_mail', $gardens_site_info['site_mail']);
+
+      if ($gardens_site_info['account_method'] == 'local') {
+        scarecrow_allow_local_user_logins();
       }
-    }
 
-    if ($op == GARDENS_SIGNUP_SITE_OPERATION_CONFIGURE) {
-      try {
-        // Create symlinks in the docroot that point to the site directory.
-        foreach ($domains as $domain) {
-          acquia_gardens_ensure_symlink($site_directory, acquia_gardens_site_directory_symlink($domain));
-        }
+      // The site owner is the last user account created. We'll replace that
+      // one with the provided information about the person who will actually
+      // own the site.
+      $uid = db_query("SELECT MAX(uid) FROM {users}")->fetchField();
+      $account = user_load($uid);
+      variable_set('acquia_gardens_site_owner', $uid);
+      $edit['name'] = $gardens_site_info['account_name'];
+      $edit['mail'] = $gardens_site_info['account_mail'];
+      $edit['init'] = $gardens_site_info['account_mail'];
 
-        // Bootstrap Drupal and customize the site.
-        chdir("$current_directory/docroot");
-        define('DRUPAL_ROOT', getcwd());
-        require_once DRUPAL_ROOT . '/includes/bootstrap.inc';
-        drupal_override_server_variables(array('url' => $gardens_site_info['url'] . '/index.php'));
-        drupal_bootstrap(DRUPAL_BOOTSTRAP_FULL);
-        // Ensure that cron does not get to run untill we are finished. This is
-        // similar to lock_acquire() except that it is not using _lock_id as
-        // that would set an exit function to kill the semaphore.
-        $lock_id = uniqid(mt_rand(), TRUE);
-        db_merge('semaphore')
-          ->key(array('name' => 'cron'))
-          ->fields(array(
-            'value' => $lock_id,
-            'expire' => microtime(TRUE) + 3600.0,
-          ))->execute();
-        // Save the site's original (standard *.drupalgardens.com) domain.
-        $standard_domain = reset($domains);
-        variable_set('gardens_misc_standard_domain', $standard_domain);
-        // Normally we only have one domain during configure, so just set the last value.
-        // @see: AN-19653  this is a quick fix for imagecache problems.
-        $domain = end($domains);
-        variable_set('file_public_path', "sites/{$domain}/files");
-        variable_set('site_name', $gardens_site_info['site_name']);
-        variable_set('site_mail', $gardens_site_info['site_mail']);
-        if ($gardens_site_info['account_method'] == 'local') {
-          scarecrow_allow_local_user_logins();
-        }
+      // Let the Gardens site know whether to nag the site owner about
+      // verifying their email address.
+      $verification_status = $gardens_site_info['email_verified'];
+      $verification_status['last_updated'] = time();
+      variable_set('gardens_client_site_verification_status', $verification_status);
 
-        // The site owner is the last user account created. We'll replace that
-        // one with the provided information about the person who will actually
-        // own the site.
-        $uid = db_query("SELECT MAX(uid) FROM {users}")->fetchField();
-        $account = user_load($uid);
-        variable_set('acquia_gardens_site_owner', $uid);
-        $edit['name'] = $gardens_site_info['account_name'];
-        $edit['mail'] = $gardens_site_info['account_mail'];
-        $edit['init'] = $gardens_site_info['account_mail'];
-
-        // Reset the account's creation time, so it shows up as having just been
-        // created now, rather than when it was originally created during the
-        // pre-installation.
-        $edit['created'] = time();
-        $account = user_save($account, $edit);
-
-        // Let the Gardens site know whether to nag the site owner about
-        // verifying their email address.
-        $verification_status = $gardens_site_info['email_verified'];
-        $verification_status['last_updated'] = time();
-        variable_set('gardens_client_site_verification_status', $verification_status);
-
-        // Reset the OpenID record to point to the new Gardener account that owns
-        // this site.
-        user_set_authmaps($account, array('authname_openid' => ''));
-        gardens_client_add_authmaps($account, array('authname_openid' => $gardens_site_info['openid']));
-
-        // Update the site's Mollom keys, if they've changed.
-        $mollom_public_key = !empty($gardens_site_info['mollom']['public_key']) ? $gardens_site_info['mollom']['public_key'] : '';
-        $mollom_private_key = !empty($gardens_site_info['mollom']['private_key']) ? $gardens_site_info['mollom']['private_key'] : '';
-        gardens_misc_update_mollom_keys_if_necessary($mollom_public_key, $mollom_private_key);
-
-        // Enable the chosen site template and finalize the template selection
-        // (unless the site already has a template installed).
-        if (!variable_get('site_template_current_template') && !empty($gardens_site_info['template']) && in_array($gardens_site_info['template'], array_keys(site_template_get_all_templates()))) {
-          $template = $gardens_site_info['template'];
-          if (!empty($gardens_site_info['features'])) {
-            // Special string to indicate an empty list of features should be
-            // passed in to the site template.
-            if ($gardens_site_info['features'] == array('NONE')) {
-              $features = array();
-            }
-            else {
-              $features = $gardens_site_info['features'];
-            }
+      // Enable the chosen site template and finalize the template selection
+      // (unless the site already has a template installed).
+      if (!variable_get('site_template_current_template') && !empty($gardens_site_info['template']) && in_array($gardens_site_info['template'], array_keys(site_template_get_all_templates()))) {
+        $template = $gardens_site_info['template'];
+        if (!empty($gardens_site_info['features'])) {
+          // Special string to indicate an empty list of features should be
+          // passed in to the site template.
+          if ($gardens_site_info['features'] == array('NONE')) {
+            $features = array();
           }
           else {
-            $features = NULL;
-          }
-          site_template_install_features($template, $features);
-        }
-        else {
-          // Do any "reverse scrubbing" necessary in the case where this site was
-          // preinstalled with a site template before we had all the personalized
-          // information that was needed to make it work.
-          if (db_table_exists('contact')) {
-            db_update('contact')->fields(array('recipients' => variable_get('site_mail')))->execute();
+            $features = $gardens_site_info['features'];
           }
         }
-        site_template_finalize_template_selection();
-
-        // If the site doesn't have a themebuilder theme yet, create one here
-        // from the default theme, and switch to it. This is the case for sites
-        // that were preinstalled without a site template; see the comment in
-        // gardens_installer_custom_submit().
-        $default_theme = variable_get('theme_default', 'bartik');
-        if (!Theme::loadByName($default_theme)->fetchAll()) {
-          $new_default_theme = themebuilder_compiler_copy_theme($default_theme, 'My theme');
-          gardens_misc_replace_default_theme($new_default_theme);
-          $default_theme = $new_default_theme;
-        }
-        // If the site already had a themebuilder theme, it may have been
-        // preinstalled using a temporary URL, which winds up in the theme path
-        // in the {system} table. Rebuild the theme data here so that the theme
-        // is correctly recorded in the {system} table.
         else {
-          system_rebuild_theme_data();
+          $features = NULL;
         }
-        // Adjust the last modified time of the advanced.css file, so that
-        // Themebuilder will correctly report the last saved time.
-        touch(drupal_get_path('theme', $default_theme) . '/advanced.css');
+        site_template_install_features($template, $features);
+      }
+      else {
+        // Do any "reverse scrubbing" necessary in the case where this site was
+        // preinstalled with a site template before we had all the personalized
+        // information that was needed to make it work.
+        if (db_table_exists('contact')) {
+          db_update('contact')->fields(array('recipients' => variable_get('site_mail')))->execute();
+        }
+      }
+      site_template_finalize_template_selection();
 
-        // If the gardener passed an enterprise client name, we switch to and install
-        // a profile of the same name, if it exists.  All custom configurations for
-        // the client and  additional modules can be handled from there.
-        $profile_name = empty($gardens_site_info['gardens_client_name']) ? '' : $gardens_site_info['gardens_client_name'];
-        if ($profile_name && file_exists(DRUPAL_ROOT . "/profiles/{$profile_name}/{$profile_name}.info")) {
-          // Save the value for future use.
-          variable_set('gardens_client_name', $profile_name);
-          $previous_profile = variable_get('install_profile', 'gardens');
-          // First set the profile to make sure the profile "module" is found when we ...
-          variable_set('install_profile', $profile_name);
-          // ... rebuild module data (making sure it's not cached).
+      // Reset the OpenID record to point to the new Gardener account that owns
+      // this site.
+      user_set_authmaps($account, array('authname_openid' => ''));
+      gardens_client_add_authmaps($account, array('authname_openid' => $gardens_site_info['openid']));
+
+      // If the gardener passed an enterprise client name, we switch to and install
+      // a profile of the same name, if it exists.  All custom configurations for
+      // the client and  additional modules can be handled from there.
+      $profile_name = empty($gardens_site_info['gardens_client_name']) ? '' : $gardens_site_info['gardens_client_name'];
+      if ($profile_name && file_exists(DRUPAL_ROOT . "/profiles/{$profile_name}/{$profile_name}.info")) {
+        $profile_name = $gardens_site_info['gardens_client_name'];
+        // Save the value for future use.
+        variable_set('gardens_client_name', $profile_name);
+        $previous_profile = variable_get('install_profile', 'gardens');
+        // First set the profile to make sure the profile "module" is found when we ...
+        variable_set('install_profile', $profile_name);
+        // ... rebuild module data (making sure it's not cached).
+        system_list_reset();
+        system_rebuild_module_data();
+        // If the profile "module" is not found, reset to the previous profile.
+        if (db_query("SELECT 1 FROM {system} WHERE type = 'module' AND name = :name", array(':name' => $profile_name))->fetchField()) {
+          // Pass TRUE to module_enable() so that dependent modules are also enabled.
+          // Normally, for performance, we would list dependencies here explicitly and
+          // pass FALSE, but in this case, we've already incurred the penalty of rebuilding
+          // the module data, so can allow module_enable() to benefit from that.
+          module_enable(array($profile_name), TRUE);
+        }
+        else {
+          // If the profile "module" is not found, reset to the previous profile. This
+          // should not happen.
+          variable_set('install_profile', $previous_profile);
           system_list_reset();
           system_rebuild_module_data();
-          // If the profile "module" is not found, reset to the previous profile.
-          if (db_query("SELECT 1 FROM {system} WHERE type = 'module' AND name = :name", array(':name' => $profile_name))->fetchField()) {
-            // Pass TRUE to module_enable() so that dependent modules are also enabled.
-            // Normally, for performance, we would list dependencies here explicitly and
-            // pass FALSE, but in this case, we've already incurred the penalty of rebuilding
-            // the module data, so can allow module_enable() to benefit from that.
-            module_enable(array($profile_name), TRUE);
-          }
-          else {
-            // If the profile "module" is not found, reset to the previous profile. This
-            // should not happen.
-            variable_set('install_profile', $previous_profile);
-            system_list_reset();
-            system_rebuild_module_data();
-          }
         }
+      }
 
-        // Rebuild the XML sitemap. This ensures that any relevant menu
-        // items/etc added by the site template are included. For preinstalled
-        // sites, it also ensures that the sitemap has the correct URLs (rather
-        // than fake URLs like http://g123.gardenssite that the site was
-        // initially preinstalled with).
-        module_load_install('gardens');
-        gardens_rebuild_xmlsitemap();
+      db_delete('semaphore')->condition('value', $lock_id)->execute();
 
-        // As the last step before handing the finished site to the user,
-        // clear the theme registry cache. In some cases, we'll have already
-        // done this above (when switching the site's default theme), but we do
-        // it again because we want to make sure to do it (a) in all cases, and
-        // (b) as late as possible. This is because Drupal's theme registry
-        // cache has a race condition, and we know there are other requests to
-        // the site happening at the same time as this one (e.g., phone home
-        // requests triggered by the Gardener) which are at risk of populating
-        // the cache with out-of-date theme information.
-        drupal_theme_rebuild();
-
-        // Release cron lock.
-        db_delete('semaphore')->condition('value', $lock_id)->execute();
       }
       catch (Exception $e) {
         // Configuring a site happens live (while the end user is waiting), so
@@ -658,10 +589,12 @@ function install_gardens($hosting_site_name, $hosting_site_environment, $parent_
         // Gardens alerts.
         if (strpos($e->getMessage(), 'Gardens') === 0) {
           // The Exception is already a GardensError or GardensWarning.
+          syslog(LOG_ERROR, 'Gardens Site Install Error: ' . $e->getMessage());
           throw $e;
         }
         else {
           // Turn the message into a GardensError.
+          syslog(LOG_ERROR, 'Gardens Site Install Error: ' . $e->getMessage());
           throw new Exception("GardensError: AN-22470 - Error occurred during site installation and configuration (install_gardens function) GardensError: " . $e->getMessage() . $e->getTraceAsString());
         }
       }
@@ -770,12 +703,10 @@ function install_gardens($hosting_site_name, $hosting_site_environment, $parent_
   acquia_gardens_call('set.install.status', array($gardens_site_info['nid'], $gardens_site_info['desired_status'], TRUE));
   $memory_used = acquia_gardens_peak_memory_usage();
   syslog(LOG_NOTICE, "Successfully performed the operation \"$op\" for Gardens site $gardens_site_id on Hosting site $hosting_site_name. ($memory_used)");
-  if ($op != GARDENS_SIGNUP_SITE_OPERATION_INSTALL) {
-    // For any operation except install, populate data from gardener.
-    // This should ALSO happen via task from the gardener.
-    if (!gardens_client_phone_home()) {
-      syslog(LOG_ERR, 'GardensError: Failed to retrieve Gardener data in install_gardens() for site: '. $gardens_site_id);
-    }
+  // For any operation except install, populate data from gardener.
+  // This should ALSO happen via task from the gardener.
+  if (!gardens_client_phone_home()) {
+    syslog(LOG_ERR, 'GardensError: Failed to retrieve Gardener data in install_gardens() for site: '. $gardens_site_id);
   }
 }
 
