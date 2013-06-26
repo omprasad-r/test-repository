@@ -376,6 +376,9 @@ function install_gardens($hosting_site_name, $hosting_site_environment, $parent_
     $op = $gardens_site_info['operation'];
     $domains = $gardens_site_info['domains'];
     $site_directory = acquia_gardens_site_directory($hosting_site_name, $gardens_site_id);
+    // Store the PID of this installer process so that gardener can check it
+    // later if needed.
+    file_put_contents("$site_directory/installer.pid", getmypid());
     // Store the install operation in a global variable so the Drupal install
     // code can find out about it if necessary.
     $GLOBALS['gardens_install_op'] = $op;
