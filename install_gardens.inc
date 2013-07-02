@@ -721,6 +721,76 @@ function install_gardens($hosting_site_name, $hosting_site_environment, $parent_
 }
 
 /**
+ * Set up the site directory, symlinks, and settings.php for a duplicated site.
+ *
+ * @param string $hosting_site_name
+ *   The hosting site name ('tangle001').
+ * @param string $hosting_site_environment
+ *   The hosting site environment ('prod').
+ * @param string $gardens_site_id
+ *   The unique gardens site id ('mysite').
+ * @param string $domains
+ *   A json-encoded array of domains to be added to the site.
+ *
+ * @throws Exception
+ */
+function acquia_gardens_set_up_directory_for_duplication($hosting_site_name, $hosting_site_environment, $gardens_site_id, $domains) {
+  $domains = json_decode($domains);
+  $site_directory = acquia_gardens_site_directory($hosting_site_name, $gardens_site_id);
+  acquia_gardens_prepare_for_installation($site_directory, $hosting_site_name, $hosting_site_environment, $gardens_site_id, $domains, TRUE);
+}
+
+/**
+ * Configure a duplicated site.
+ *
+ * @param string $gardens_site_info
+ *   A JSON-encoded array of site information.
+ */
+function acquia_gardens_configure_duplicated_site($gardens_site_info) {
+  $gardens_site_info = json_decode($gardens_site_info);
+  define('DRUPAL_ROOT', getcwd());
+  require_once DRUPAL_ROOT . '/includes/bootstrap.inc';
+  drupal_override_server_variables(array('url' => $gardens_site_info['url'] . '/index.php'));
+  drupal_bootstrap(DRUPAL_BOOTSTRAP_FULL);
+  variable_set('site_name', $gardens_site_info['site_name']);
+  $mollom_public_key = !empty($gardens_site_info['mollom']['public_key']) ? $gardens_site_info['mollom']['public_key'] : '';
+  $mollom_private_key = !empty($gardens_site_info['mollom']['private_key']) ? $gardens_site_info['mollom']['private_key'] : '';
+  gardens_misc_update_mollom_keys_if_necessary($mollom_public_key, $mollom_private_key);
+  // Ensure Drupal filesystem related configuration variables are correct
+  // for the new site. Consider the following variables:
+  // - file_directory_path
+  // - file_directory_temp
+  // - file_public_path
+  // - file_private_path
+  // - file_temporary_path
+  // Given the AH environment for Gardens, we want to leave the temp paths
+  // alone, and we want to delete the other variables, to ensure they reset
+  // to their defaults (because of scarecrow, these shouldn't exist in the
+  // {variable} table anyway).
+  foreach (array('file_directory_path', 'file_public_path', 'file_private_path') as $var) {
+    variable_del($var);
+  }
+  // Save the site's original (standard *.drupalgardens.com) domain.
+  $standard_domain = reset($domains);
+  variable_set('gardens_misc_standard_domain', $standard_domain);
+  // Normally we only have one domain during configure, so just set it.
+  // @see: AN-19653  this is a quick fix for imagecache problems.
+  $domain = end($domains);
+  variable_set('file_public_path', "sites/{$domain}/files");
+  module_enable(array('gardens_duplication'), FALSE);
+  $scrub_options = array();
+  $scrub_options['retain_janrain_settings'] = $gardens_site_info['exact_copy'] || $gardens_site_info['retain_janrain_settings'];
+  if ($gardens_site_info['exact_copy']) {
+    $scrub_options['retain_users_and_content'] = TRUE;
+    $scrub_options['retain_webform_submissions'] = TRUE;
+    $scrub_options['retain_voting_api_data'] = TRUE;
+  }
+  gardens_duplication_scrub($scrub_options);
+  module_disable(array('gardens_duplication'), FALSE);
+
+}
+
+/**
  * Prepare a Gardens site for installation on the filesystem.
  *
  * Creates directories, settings files, etc., necessary for a Gardens site to
@@ -737,8 +807,13 @@ function install_gardens($hosting_site_name, $hosting_site_environment, $parent_
  *   The Gardens site ID that will be installed.
  * @param $domains
  *   An array of domain names at which this site will be accessed.
+ * @param $readonly
+ *   Whether to make the settings file read-only. Should be set to FALSE for
+ *   site installation, and TRUE for site duplication. Defaults to FALSE.
+ *
+ * @throws Exception
  */
-function acquia_gardens_prepare_for_installation($site_directory, $hosting_site_name, $hosting_site_environment, $gardens_site_id, $domains) {
+function acquia_gardens_prepare_for_installation($site_directory, $hosting_site_name, $hosting_site_environment, $gardens_site_id, $domains, $readonly = FALSE) {
   // Create the site directory on the shared filesystem.
   acquia_gardens_ensure_directory($site_directory);
 
@@ -754,11 +829,13 @@ function acquia_gardens_prepare_for_installation($site_directory, $hosting_site_
   }
 
   // Create a settings.php file.
-  acquia_gardens_ensure_settings_file($site_directory, $hosting_site_name, $hosting_site_environment, $gardens_site_id);
-  // The installer wants the settings file to be writeable.
-  $settings_file = "$site_directory/settings.php";
-  if (acquia_gardens_fileperms($settings_file) != '0600' && !chmod($settings_file, 0600)) {
-    throw new Exception("Could not change permissions of the file $settings_file.");
+  acquia_gardens_ensure_settings_file($site_directory, $hosting_site_name, $hosting_site_environment, $gardens_site_id, $readonly);
+  if (!$readonly) {
+    // The installer wants the settings file to be writable.
+    $settings_file = "$site_directory/settings.php";
+    if (acquia_gardens_fileperms($settings_file) != '0600' && !chmod($settings_file, 0600)) {
+      throw new Exception("Could not change permissions of the file $settings_file.");
+    }
   }
 }
 
