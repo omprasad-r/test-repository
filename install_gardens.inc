@@ -353,6 +353,12 @@ function acquia_gardens_remove_site_domains($deleted_domains, $hosting_site_name
  * @param $hosting_site_environment
  *   The machine-readable name (from Acquia Hosting) of the Hosting
  *   environment whose Gardens sites will be installed or configured.
+ * @param $parent_hosting_site_name
+ *   Optional.
+ * @param $data
+ *   Optional.
+ *
+ * @throws Exception
  */
 function install_gardens($hosting_site_name, $hosting_site_environment, $parent_hosting_site_name = '', $data = NULL) {
   if (empty($parent_hosting_site_name)) {
@@ -820,15 +826,19 @@ function acquia_gardens_site_directory_symlink($domain) {
 }
 
 /**
- * Ensure that a directory exists on the shared Gardens
- * filesystem. The directory will be owned by tangleN:tangleN and be
+ * Ensure that a directory exists on the shared Gardens filesystem.
+ *
+ * The directory will be owned by tangleN:tangleN and be
  * mode 755, making it writable by Gardens PHP and readable by Apache.
  *
- * Throws an exception on failure.
+ * @param $directory
+ *   The directory to be created.
  *
- * @return
- *   If the directory already exists, the string 'exists' is returned. If this
- *   function creates it, the string 'created' is returned.
+ * @return string
+ *   'exists' if the directory already exists, 'created' if this
+ *   function creates it.
+ *
+ * @throws Exception
  */
 function acquia_gardens_ensure_directory($directory) {
   if (is_dir($directory)) {
@@ -852,6 +862,8 @@ function acquia_gardens_ensure_directory($directory) {
  *   The site directory where the settings.php file should be.
  * @param $hosting_site_name
  *   The hosting site name.
+ * @param $hosting_site_environment
+ *   The environment where the settings file should be created.
  * @param $gardens_site_id
  *   A gardens site ID.
  * @param $ensure_permissions
