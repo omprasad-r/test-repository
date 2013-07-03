@@ -790,7 +790,7 @@ function acquia_gardens_configure_duplicated_site($gardens_site_info) {
   }
   gardens_duplication_scrub($scrub_options);
   module_disable(array('gardens_duplication'), FALSE);
-  variable_set('gardens_site_duplication_complete', TRUE);
+  variable_set('gardens_site_duplication_complete', 'complete');
 }
 
 /**
