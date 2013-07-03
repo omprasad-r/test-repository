@@ -750,7 +750,7 @@ function acquia_gardens_set_up_directory_for_duplication($hosting_site_name, $ho
  */
 function acquia_gardens_configure_duplicated_site($gardens_site_info) {
   $gardens_site_info = json_decode($gardens_site_info);
-  define('DRUPAL_ROOT', getcwd() . '/docroot');
+  define('DRUPAL_ROOT', dirname(__FILE__) . '/docroot');
   require_once DRUPAL_ROOT . '/includes/bootstrap.inc';
   drupal_override_server_variables(array('url' => $gardens_site_info['url'] . '/index.php'));
   drupal_bootstrap(DRUPAL_BOOTSTRAP_FULL);
