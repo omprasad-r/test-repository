@@ -750,10 +750,11 @@ function acquia_gardens_set_up_directory_for_duplication($hosting_site_name, $ho
  */
 function acquia_gardens_configure_duplicated_site($gardens_site_info) {
   $gardens_site_info = json_decode($gardens_site_info);
-  define('DRUPAL_ROOT', getcwd());
+  define('DRUPAL_ROOT', getcwd() . '/docroot');
   require_once DRUPAL_ROOT . '/includes/bootstrap.inc';
   drupal_override_server_variables(array('url' => $gardens_site_info['url'] . '/index.php'));
   drupal_bootstrap(DRUPAL_BOOTSTRAP_FULL);
+  variable_del('gardens_site_duplication_complete');
   variable_set('site_name', $gardens_site_info['site_name']);
   $mollom_public_key = !empty($gardens_site_info['mollom']['public_key']) ? $gardens_site_info['mollom']['public_key'] : '';
   $mollom_private_key = !empty($gardens_site_info['mollom']['private_key']) ? $gardens_site_info['mollom']['private_key'] : '';
@@ -789,7 +790,7 @@ function acquia_gardens_configure_duplicated_site($gardens_site_info) {
   }
   gardens_duplication_scrub($scrub_options);
   module_disable(array('gardens_duplication'), FALSE);
-
+  variable_set('gardens_site_duplication_complete', TRUE);
 }
 
 /**
