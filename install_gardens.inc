@@ -756,8 +756,8 @@ function acquia_gardens_configure_duplicated_site($gardens_site_info) {
   drupal_bootstrap(DRUPAL_BOOTSTRAP_FULL);
   variable_del('gardens_site_duplication_complete');
   variable_set('site_name', $gardens_site_info->site_name);
-  $mollom_public_key = !empty($gardens_site_info->mollom['public_key']) ? $gardens_site_info->mollom['public_key'] : '';
-  $mollom_private_key = !empty($gardens_site_info->mollom['private_key']) ? $gardens_site_info->mollom['private_key'] : '';
+  $mollom_public_key = !empty($gardens_site_info->mollom->public_key) ? $gardens_site_info->mollom->public_key : '';
+  $mollom_private_key = !empty($gardens_site_info->mollom->private_key) ? $gardens_site_info->mollom->private_key : '';
   gardens_misc_update_mollom_keys_if_necessary($mollom_public_key, $mollom_private_key);
   // Ensure Drupal filesystem related configuration variables are correct
   // for the new site. Consider the following variables:
