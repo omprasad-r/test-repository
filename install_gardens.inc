@@ -752,12 +752,12 @@ function acquia_gardens_configure_duplicated_site($gardens_site_info) {
   $gardens_site_info = json_decode($gardens_site_info);
   define('DRUPAL_ROOT', dirname(__FILE__) . '/docroot');
   require_once DRUPAL_ROOT . '/includes/bootstrap.inc';
-  drupal_override_server_variables(array('url' => $gardens_site_info['url'] . '/index.php'));
+  drupal_override_server_variables(array('url' => $gardens_site_info->url . '/index.php'));
   drupal_bootstrap(DRUPAL_BOOTSTRAP_FULL);
   variable_del('gardens_site_duplication_complete');
-  variable_set('site_name', $gardens_site_info['site_name']);
-  $mollom_public_key = !empty($gardens_site_info['mollom']['public_key']) ? $gardens_site_info['mollom']['public_key'] : '';
-  $mollom_private_key = !empty($gardens_site_info['mollom']['private_key']) ? $gardens_site_info['mollom']['private_key'] : '';
+  variable_set('site_name', $gardens_site_info->site_name);
+  $mollom_public_key = !empty($gardens_site_info->mollom['public_key']) ? $gardens_site_info->mollom['public_key'] : '';
+  $mollom_private_key = !empty($gardens_site_info->mollom['private_key']) ? $gardens_site_info->mollom['private_key'] : '';
   gardens_misc_update_mollom_keys_if_necessary($mollom_public_key, $mollom_private_key);
   // Ensure Drupal filesystem related configuration variables are correct
   // for the new site. Consider the following variables:
@@ -782,8 +782,8 @@ function acquia_gardens_configure_duplicated_site($gardens_site_info) {
   variable_set('file_public_path', "sites/{$domain}/files");
   module_enable(array('gardens_duplication'), FALSE);
   $scrub_options = array();
-  $scrub_options['retain_janrain_settings'] = $gardens_site_info['exact_copy'] || $gardens_site_info['retain_janrain_settings'];
-  if ($gardens_site_info['exact_copy']) {
+  $scrub_options['retain_janrain_settings'] = $gardens_site_info->exact_copy || $gardens_site_info->retain_janrain_settings;
+  if ($gardens_site_info->exact_copy) {
     $scrub_options['retain_users_and_content'] = TRUE;
     $scrub_options['retain_webform_submissions'] = TRUE;
     $scrub_options['retain_voting_api_data'] = TRUE;
