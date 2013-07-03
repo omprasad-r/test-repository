@@ -735,7 +735,9 @@ function install_gardens($hosting_site_name, $hosting_site_environment, $parent_
  * @throws Exception
  */
 function acquia_gardens_set_up_directory_for_duplication($hosting_site_name, $hosting_site_environment, $gardens_site_id, $domains) {
-  $domains = json_decode($domains);
+  foreach (array('hosting_site_name', 'hosting_site_environment', 'gardens_site_id', 'domains') as $arg) {
+    $$arg = json_decode($$arg);
+  }
   $site_directory = acquia_gardens_site_directory($hosting_site_name, $gardens_site_id);
   acquia_gardens_prepare_for_installation($site_directory, $hosting_site_name, $hosting_site_environment, $gardens_site_id, $domains, TRUE);
 }
