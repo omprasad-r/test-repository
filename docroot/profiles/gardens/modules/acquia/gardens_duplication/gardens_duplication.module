@@ -340,8 +340,6 @@ function gardens_duplication_scrub($options = array()) {
   if (db_table_exists('watchdog')) {
     db_delete('watchdog')->execute();
   }
-
-  registry_rebuild();
 }
 
 /**
