@@ -162,7 +162,10 @@ function acquia_gardens_xmlrpc_call($method, $data, $server, $username = NULL, $
 
     // We have a retry failure.
     if ($tries < $max_tries - 1) {
-      watchdog('gardens_xmlrpc', 'Communication error - method: @method - message: @message - tries: @tries/@maxtries', array('@method' => $method, '@message' => $error_message, '@tries' => $tries, '@maxtries' => $max_tries), WATCHDOG_WARNING);
+      // We might not have a Drupal bootstrap yet.
+      if (function_exists('watchdog')) {
+        watchdog('gardens_xmlrpc', 'Communication error - method: @method - message: @message - tries: @tries/@maxtries', array('@method' => $method, '@message' => $error_message, '@tries' => $tries, '@maxtries' => $max_tries), WATCHDOG_WARNING);
+      }
     }
     else {
       throw new AcquiaGardensRpcCommunicationException($error_message);
@@ -174,7 +177,10 @@ function acquia_gardens_xmlrpc_call($method, $data, $server, $username = NULL, $
   // We have success or a non-retry failure. $response is guaranteed
   // not to be empty.
   if ($response->faultCode()) {
-    watchdog('gardens_xmlrpc', 'Response error - method: @method - code: @code - message: @message', array('@method' => $method, '@code' => $response->faultCode(), '@message' => $response->faultString()), WATCHDOG_ERROR);
+    // We might not have a Drupal bootstrap yet.
+    if (function_exists('watchdog')) {
+      watchdog('gardens_xmlrpc', 'Response error - method: @method - code: @code - message: @message', array('@method' => $method, '@code' => $response->faultCode(), '@message' => $response->faultString()), WATCHDOG_ERROR);
+    }
     throw new AcquiaGardensRpcApiException("$method: Error - Fault Code: {$response->faultCode()}; Fault Reason: {$response->faultString()}");
   }
   else {
