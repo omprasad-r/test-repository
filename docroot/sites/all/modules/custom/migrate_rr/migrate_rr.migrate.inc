@@ -30,13 +30,9 @@ abstract class RRMigration extends Migration {
 
   public function __construct($arguments) {
     $this->arguments = $arguments;
-    parent::__construct(MigrateGroup::getInstance($arguments['group_name']));
+    parent::__construct($arguments);
     Database::addConnectionInfo('rr_legacy', 'default', migrate_rr_connection());
     $this->connection = Database::getConnection('default', 'rr_legacy');
-  }
-
-  protected function generateMachineName() {
-    return $this->arguments['machine_name'];
   }
 }
 

@@ -92,7 +92,7 @@ class RRNewsMigration extends RRMigration {
       ->select('board_posts', 'bp')
       ->fields('bp')
       ->condition('fanclub_id', $arguments['artist_id'])
-      ->condition('topic_id', array(184, 550), 'IN')
+      ->condition('topic_id', array(184, 550, 376), 'IN')
       ->orderBy('updated_at');
 
     $this->source = new MigrateSourceSQL($query, $fields, NULL,
