@@ -235,10 +235,9 @@ function janrain_client_admin_settings_submit($form, &$form_state) {
  */
 function janrain_client_get_rpxnow_url() {
   if (variable_get('rpx_invite_url', '')) {
-    global $databases;
-    // Call the gardener to see if the invite's been accepted since we checked last.
-    $dbname = $databases['default']['default']['database'];
-    $result = gardens_client_call_gardener('janrain.check.invite', $dbname);
+    // Call the gardener to see if the invite's been accepted since we checked
+    // last.
+    $result = gardens_client_call_gardener('janrain.check.invite', gardens_client_get_gardens_db_name());
     if ($result) {
       return $result;
     }

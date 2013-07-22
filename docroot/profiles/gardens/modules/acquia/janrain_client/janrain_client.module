@@ -1373,12 +1373,7 @@ function janrain_client_ensure_setup() {
  * Retrieve Engage app information from the Gardener.
  */
 function janrain_client_get_rp() {
-  global $databases;
-
-  // The DB name is actually the site's nid on gardener.
-  $dbname = $databases['default']['default']['database'];
-
-  return gardens_client_call_gardener('janrain.get.rp', $dbname);
+  return gardens_client_call_gardener('janrain.get.rp', gardens_client_get_gardens_db_name());
 }
 
 /**

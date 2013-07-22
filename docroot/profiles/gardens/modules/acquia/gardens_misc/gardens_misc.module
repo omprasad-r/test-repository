@@ -2578,25 +2578,9 @@ function gardens_misc_get_site_statistics_token() {
   // The token consists of a hash of the site's Gardener site node id,
   // plus a salt.
   $salt = '05';
-  $site_nid = gardens_misc_get_site_nid();
+  $site_nid = gardens_client_get_site_identifier();
   $expected_md5 = md5($site_nid . $salt);
   return $expected_md5;
-}
-
-/**
- * Returns the node ID from the database name.
- */
-function gardens_misc_get_site_nid() {
-  global $databases;
-  $gsite = $databases['default']['default']['database'];
-  if (preg_match('/^g[0-9]+$/', $gsite)) {
-    return ltrim($gsite, 'g');
-  }
-  else {
-    // This is probably a development environment. Let local developers specify
-    // a nid corresponding to this site in settings.php.
-    return (variable_get('gardens_misc_site_nid', FALSE));
-  }
 }
 
 /**
