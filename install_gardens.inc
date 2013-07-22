@@ -774,7 +774,7 @@ function acquia_gardens_configure_duplicated_site($gardens_site_info) {
     variable_del($var);
   }
   // Save the site's original (standard *.drupalgardens.com) domain.
-  $domains = $gardens_site_info['domains'];
+  $domains = $gardens_site_info->domains;
   $standard_domain = reset($domains);
   variable_set('gardens_misc_standard_domain', $standard_domain);
   // Normally we only have one domain during configure, so just set it.
