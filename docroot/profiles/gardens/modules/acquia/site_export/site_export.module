@@ -137,10 +137,9 @@ function site_export_call_gardener($form, &$form_state) {
     return;
   }
 
-  global $databases;
   $stats = new stdClass();
 
-  $stats->dbname = $databases['default']['default']['database'];
+  $stats->dbname = gardens_client_get_gardens_db_name();
   $stats->reason = $form_state['values']['reason'];
   $stats->explanation = $form_state['values']['explanation'];
 
