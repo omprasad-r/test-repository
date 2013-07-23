@@ -246,7 +246,7 @@ function gardens_client_init() {
 
   // Display site blocked message instead of site page if the site is blocked.
   $verifier = new EmailVerifier();
-  if ($verifier->needsSiteBlock() && arg(0) != 'gardener') {
+  if (!drupal_is_cli() && $verifier->needsSiteBlock() && arg(0) != 'gardener') {
     $gardener_url = variable_get('acquia_gardens_gardener_url');
     if ($verifier->needsDeleteReminder()) {
       $body = t('You did not verify your user account, therefore your !service_name_long website is blocked.', array('!service_name_long' => variable_get('gardens_service_name_long', 'Drupal Gardens'))) . '<div>' . $verifier->getReminderText('to_be_deleted') .'</div>';
@@ -1325,6 +1325,18 @@ function gardens_client_phone_home() {
   }
 
   return FALSE;
+}
+
+/**
+ * Returns the site's gardens specific database name.
+ *
+ * In the past the database names were in the 'g<site nid>' format, but it has
+ * been changed with pivot to something like <environment>db<db role>. Some of
+ * the code still depends on the old format though.
+ */
+function gardens_client_get_gardens_db_name() {
+  global $databases;
+  return variable_get('gardens_db_name', $databases['default']['default']['database']);
 }
 
 /**

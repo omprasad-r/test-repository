@@ -21,6 +21,47 @@ function xmlsitemap_node_cron() {
 }
 
 /**
+ * Implements hook_cron_queue_info().
+ */
+function xmlsitemap_node_cron_queue_info() {
+  return array(
+    'xmlsitemap_node_updated_node_worker' => array(
+      'worker callback' => 'xmlsitemap_node_updated_node_worker',
+    ),
+  );
+}
+
+/**
+ * Handles the appearance of the updated nodes in the XML sitemap.
+ *
+ * In node_save() the insert/update hooks are called before the node access data
+ * would get recalculated by node_access_acquire_grants(). If the code would
+ * check the access in the insert/update hook then it could pick up stale data,
+ * for example a freshly unpublished node could stay in the sitemap until the
+ * node gets saved again, and even then if the new save publishes the node then
+ * the node could be left out from the sitemap.
+ *
+ * This queue worker allows the code to check for access data after node_save()
+ * has finished its job.
+ */
+function xmlsitemap_node_updated_node_worker(array $item) {
+  if (!empty($item['nid']) && ($node = node_load($item['nid']))) {
+    xmlsitemap_node_sitemap_link_generate($node);
+  }
+}
+
+/**
+ * Generates a sitemap link for a node.
+ *
+ * @param object $node
+ *   A fully loaded node.
+ */
+function xmlsitemap_node_sitemap_link_generate(stdClass $node) {
+  $link = xmlsitemap_node_create_link($node);
+  xmlsitemap_link_save($link);
+}
+
+/**
  * Implements hook_xmlsitemap_index_links().
  */
 function xmlsitemap_node_xmlsitemap_index_links($limit) {
@@ -39,8 +80,7 @@ function xmlsitemap_node_xmlsitemap_index_links($limit) {
 function xmlsitemap_node_xmlsitemap_process_node_links(array $nids) {
   $nodes = node_load_multiple($nids);
   foreach ($nodes as $node) {
-    $link = xmlsitemap_node_create_link($node);
-    xmlsitemap_link_save($link);
+    xmlsitemap_node_sitemap_link_generate($node);
   }
 }
 
@@ -55,8 +95,8 @@ function xmlsitemap_node_node_insert(stdClass $node) {
  * Implements hook_node_update().
  */
 function xmlsitemap_node_node_update(stdClass $node) {
-  $link = xmlsitemap_node_create_link($node);
-  xmlsitemap_link_save($link);
+  $queue = DrupalQueue::get('xmlsitemap_node_updated_node_worker');
+  $queue->createItem(array('nid' => $node->nid));
 }
 
 /**
@@ -71,7 +111,7 @@ function xmlsitemap_node_node_delete(stdClass $node) {
  */
 function xmlsitemap_node_comment_update(stdClass $comment) {
   if ($node = node_load($comment->nid, NULL, TRUE)) {
-    xmlsitemap_node_node_update($node);
+    xmlsitemap_node_sitemap_link_generate($node);
   }
 }
 

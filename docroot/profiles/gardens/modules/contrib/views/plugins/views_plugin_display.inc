@@ -1448,6 +1448,7 @@ class views_plugin_display extends views_plugin {
           '#type' => 'textfield',
           '#description' => t('This name will appear only in the administrative interface for the View.'),
           '#default_value' => $this->display->display_title,
+          '#maxlength' => 64,
         );
         $form['display_description'] = array(
           '#title' => t('Description'),
