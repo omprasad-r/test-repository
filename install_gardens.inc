@@ -370,7 +370,7 @@ function install_gardens($hosting_site_name, $hosting_site_environment, $parent_
   // function call is that we need to load parts of the Drupal codebase for
   // each one, and I don't trust Drupal's static caches enough to do that for
   // multiple sites sharing the same codebase.)
-  $gardens_site_info = isset($data) ? unserialize($data) : acquia_gardens_call('get.site.to.process', array($parent_hosting_site_name));
+  $gardens_site_info = isset($data) ? stripslashes(unserialize($data)) : acquia_gardens_call('get.site.to.process', array($parent_hosting_site_name));
   if (empty($gardens_site_info)) {
     // No sites to process, so nothing to do here.
     return;
