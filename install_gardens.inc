@@ -740,7 +740,6 @@ function acquia_gardens_set_up_directory_for_duplication($hosting_site_name, $ho
   }
   $site_directory = acquia_gardens_site_directory($hosting_site_name, $gardens_site_id);
   acquia_gardens_prepare_for_installation($site_directory, $hosting_site_name, $hosting_site_environment, $gardens_site_id, $domains, TRUE);
-  echo 'success';
 }
 
 /**
@@ -793,7 +792,6 @@ function acquia_gardens_configure_duplicated_site($gardens_site_info) {
   gardens_duplication_scrub($scrub_options);
   module_disable(array('gardens_duplication'), FALSE);
   variable_set('gardens_site_duplication_complete', 'complete');
-  echo 'success';
 }
 
 /**
