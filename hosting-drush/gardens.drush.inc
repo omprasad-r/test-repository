@@ -759,7 +759,7 @@ function drush_gardens_export_s3() {
     ini_set('memory_limit', $memory_limit);
   }
 
-  $nid = gardens_misc_get_site_nid();
+  $nid = gardens_client_get_site_identifier();
   $uri = site_export_export_both();
   $path = drupal_realpath($uri);
   $resource_name = 'g' . $nid . '.tar.gz';
