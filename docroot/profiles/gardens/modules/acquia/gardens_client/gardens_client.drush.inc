@@ -123,9 +123,7 @@ function drush_gardens_client_gardens_stats() {
 
 function drush_gardens_client_gardens_move_cluster($gardener_url = NULL, $usermapfile = NULL) {
   drush_log('Running the gardens-move-cluster command...', 'ok');
-  $hostname_full = php_uname('n');
-  $hostname = explode('.', $hostname_full);
-  $stage = isset($hostname[1]) ? $hostname[1] : '';
+  $stage = gardens_client_stage_name_get();
   if (empty($stage)) {
     drush_log('Unable to determine the stage from the hostname.', 'error');
     return;
