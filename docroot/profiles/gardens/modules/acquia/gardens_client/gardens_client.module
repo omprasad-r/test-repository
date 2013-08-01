@@ -1633,3 +1633,12 @@ function gardens_client_gardens_health_report() {
   $client = new GardensClientHealthReport('Gardens Client XMLRPC');
   return array($client);
 }
+
+/**
+ * Retrieves the name of the stage this server is part of.
+ */
+function gardens_client_stage_name_get() {
+  $hostname_full = php_uname('n');
+  $hostname = explode('.', $hostname_full);
+  return isset($hostname[1]) ? $hostname[1] : '';
+}
