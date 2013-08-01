@@ -470,7 +470,7 @@ function install_gardens($hosting_site_name, $hosting_site_environment, $data = 
         // we always want to receive alerts when something goes wrong and it
         // needs to be tried again. We therefore re-throw any regular exception
         // (e.g., those triggered by Drupal) as an exception that triggers
-        // Gardens alerts. Some excpetions are expected temporarily during site
+        // Gardens alerts. Some exceptions are expected temporarily during site
         // installation, so in those cases the exception should be silent to
         // avoid flooding with alerts.
         $silent_exception = FALSE;
