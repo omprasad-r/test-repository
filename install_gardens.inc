@@ -474,7 +474,7 @@ function install_gardens($hosting_site_name, $hosting_site_environment, $data = 
         // installation, so in those cases the exception should be silent to
         // avoid flooding with alerts.
         $silent_exception = FALSE;
-        if (strpos($e->getMessage(), 'This message is expected') !== NULL) {
+        if (strpos($e->getMessage(), 'This message is expected') !== FALSE) {
           $file_change_time = is_dir($site_directory) ? filectime($site_directory) : 0;
           // Silent exception period - tentative 5 minutes.
           $silent_exception = $file_change_time + 300 >= time();
