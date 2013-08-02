@@ -92,7 +92,10 @@ class RRNewsMigration extends RRMigration {
       ->select('board_posts', 'bp')
       ->fields('bp')
       ->condition('fanclub_id', $arguments['artist_id'])
-      ->condition('topic_id', array(184, 550, 376), 'IN')
+      ->condition('topic_id',
+        array(58, 101, 156, 170, 184, 190, 313, 346, 366, 376, 409, 507, 536,
+              550, 551, 566, 576, 599),
+        'IN')
       ->orderBy('updated_at');
 
     $this->source = new MigrateSourceSQL($query, $fields, NULL,
@@ -273,7 +276,10 @@ class RRNewsCommentMigration extends RRMigration {
       ->fields('c');
     $query->innerJoin('board_posts', 'bp', 'c.board_post_id=bp.id');
     $query->condition('bp.fanclub_id', $arguments['artist_id']);
-    $query->condition('topic_id', array(184, 550), 'IN');
+    $query->condition('topic_id',
+      array(58, 101, 156, 170, 184, 190, 313, 346, 366, 376, 409, 507, 536,
+             550, 551, 566, 576, 599),
+      'IN');
 
     $this->source = new MigrateSourceSQL($query, $fields, NULL,
       array('map_joinable' => FALSE));

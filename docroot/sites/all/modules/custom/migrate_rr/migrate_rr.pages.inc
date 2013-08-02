@@ -229,5 +229,5 @@ function migrate_rr_add_artist_submit($form, &$form_state) {
   menu_rebuild();
   drupal_set_message(t('An import job for !artist has been created.',
                      array('!artist' => $artist_name)));
-  $form_state['redirect'] = 'admin/content/import';
+  $form_state['redirect'] = 'admin/content/migrate';
 }
