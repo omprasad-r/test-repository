@@ -1,3 +1,4 @@
+#!/usr/bin/env php
 <?php
 
 define('CHECK_TIMEOUT', 300);
