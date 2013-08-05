@@ -8,9 +8,9 @@ define('CHECK_VALUE', 'scrubbed');
 
 $site = $argv[1];    // AH site group
 $env = $argv[2];     // AH site env
-$db_name = $argv[3]; // Database name
+$db_role = $argv[3]; // Database name
 
-echo "Blocking cloud hooks until site scrub is complete. Site: $site, Env: $env, Db: $db_name\n";
+echo "Blocking cloud hooks until site scrub is complete. Site: $site, Env: $env, Db Role: $db_role\n";
 
 $timeout = time() + CHECK_TIMEOUT;
 
@@ -18,11 +18,12 @@ $timeout = time() + CHECK_TIMEOUT;
 // relatively safe to open outside of a Drupal context as it doesn't call out
 // to other functions like the D7 version does.
 $conf['acquia_use_early_cache'] = TRUE;
-require_once sprintf('/mnt/www/site-php/%s.%s/D6-%s-%s-settings.inc', $site, $env, $env, $db_name);
+require_once sprintf('/mnt/www/site-php/%s.%s/D6-%s-%s-settings.inc', $site, $env, $env, $db_role);
 
 // Connection info.
 $user = $conf['acquia_hosting_site_info']['db']['user'];
 $pass = $conf['acquia_hosting_site_info']['db']['pass'];
+$db_name = $conf['acquia_hosting_site_info']['db']['name'];
 $hosts = array_keys($conf['acquia_hosting_site_info']['db']['db_url_ha']);
 $host = array_shift($hosts);
 
