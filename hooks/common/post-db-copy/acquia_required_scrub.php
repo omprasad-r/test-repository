@@ -18,7 +18,7 @@ $timeout = time() + CHECK_TIMEOUT;
 // relatively safe to open outside of a Drupal context as it doesn't call out
 // to other functions like the D7 version does.
 $conf['acquia_use_early_cache'] = TRUE;
-require_once sprintf('/mnt/www/site-php/spartacus.live/D6-%s-settings.inc', $db_name);
+require_once sprintf('/mnt/www/site-php/%s.%s/D6-%s-%s-settings.inc', $site, $env, $env, $db_name);
 
 // Connection info.
 $user = $conf['acquia_hosting_site_info']['db']['user'];
