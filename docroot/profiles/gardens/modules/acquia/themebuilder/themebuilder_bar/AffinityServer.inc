@@ -226,13 +226,9 @@ class AffinityServer {
    */
   public function getHostname() {
     if (empty(self::$hostname)) {
-      self::$hostname = @file_get_contents('/tmp/hostname_base.txt');
-      if (empty(self::$hostname)) {
-        // Fall back to retrieving the hostname from a function call.
-        $hostname_full = php_uname('n');
-        $hostname = explode('.', $hostname_full);
-        self::$hostname = $hostname[0];
-      }
+      $hostname_full = php_uname('n');
+      $hostname = explode('.', $hostname_full);
+      self::$hostname = $hostname[0];
     }
     return self::$hostname;
   }

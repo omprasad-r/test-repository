@@ -123,14 +123,9 @@ function drush_gardens_client_gardens_stats() {
 
 function drush_gardens_client_gardens_move_cluster($gardener_url = NULL, $usermapfile = NULL) {
   drush_log('Running the gardens-move-cluster command...', 'ok');
-  $stage_file = '/tmp/hostname_stage.txt';
-  if (!file_exists($stage_file)) {
-    drush_log("The stage file ${stage_file} is missing.", 'error');
-    return;
-  }
-  $stage = trim(file_get_contents($stage_file));
+  $stage = gardens_client_stage_name_get();
   if (empty($stage)) {
-    drush_log("The stage file ${stage_file} is empty.", 'error');
+    drush_log('Unable to determine the stage from the hostname.', 'error');
     return;
   }
 
