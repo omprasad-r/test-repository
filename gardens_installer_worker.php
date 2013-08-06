@@ -23,9 +23,10 @@ $parent_hosting_site_name = $argv[1];
 // hosting site name.
 $user_info = posix_getpwuid(posix_geteuid());
 
-// If the hosting site name does not contain the hosting site user name, bail out.
-if (empty($parent_hosting_site_name) || strpos($hosting_site_name, $parent_hosting_site_name) === FALSE || $parent_hosting_site_name != $user_info['name']) {
-  gardens_log_and_alert_if_necessary($hosting_site_name, "[TAG] Hosting site directories and process username do not match.[TAG] site: $hosting_site_name parent: $parent_hosting_site_name user: {$user_info['name']}",
+// We can no longer check the site name contains the site group name, but we can
+// check that the unix user and site group match.
+if (empty($parent_hosting_site_name) || $parent_hosting_site_name != $user_info['name']) {
+  gardens_log_and_alert_if_necessary($hosting_site_name, "[TAG] Hosting site group and process username do not match.[TAG] sitegroup: $parent_hosting_site_name user: {$user_info['name']}",
     'hosting_site_user_mismatch', array('warning' => 1, 'error' => 1));
   exit;
 }
