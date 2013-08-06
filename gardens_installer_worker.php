@@ -17,6 +17,7 @@ include_once $current_directory . '/install_gardens.inc';
 // Rely on the fact that Hosting sites are installed in directories given by
 // their site name.
 $hosting_site_name = basename($current_directory);
+// This is misnamed: parent_hosting_site_name should be the sitegroup
 $parent_hosting_site_name = $argv[1];
 // Obtain the current process owner in order to perform sanity checks against the
 // hosting site name.

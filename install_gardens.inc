@@ -149,7 +149,7 @@ function install_gardens_initialize($hosting_site_name, $hosting_site_environmen
     $microtime = microtime(TRUE);
     syslog(LOG_INFO, "install_gardens_initialize (performance log) $hosting_site_name $hosting_site_environment $microtime: Starting to initialize Gardens sites");
   }
-  $sites_directory = acquia_gardens_sites_directory($hosting_site_name);
+  $sites_directory = acquia_gardens_sites_directory($hosting_site_name, $hosting_site_environment);
   acquia_gardens_ensure_directory($sites_directory);
   // Assuming allow_url_fopen as On to get remote files.
   $json = file_get_contents(_acquia_gardens_gardener_url() ."/files/gardens/$hosting_site_name/active_domains_by_site.json.txt");
@@ -163,7 +163,7 @@ function install_gardens_initialize($hosting_site_name, $hosting_site_environmen
   $site_domains = json_decode($json);
   $valid_domains = array();
   foreach ($site_domains as $gardens_site_id => $domains) {
-    $site_directory = acquia_gardens_site_directory($hosting_site_name, $gardens_site_id);
+    $site_directory = acquia_gardens_site_directory($hosting_site_name, $hosting_site_environment, $gardens_site_id);
     if ($update_settings) {
       acquia_gardens_ensure_settings_file($site_directory, $hosting_site_name, $hosting_site_environment, $gardens_site_id);
     }
@@ -265,14 +265,14 @@ function install_gardens_initialize_push($hosting_site_name, $hosting_site_envir
     $microtime = microtime(TRUE);
     syslog(LOG_INFO, "install_gardens_initialize (performance log) $hosting_site_name $hosting_site_environment $microtime: Starting to initialize Gardens sites");
   }
-  $sites_directory = acquia_gardens_sites_directory($hosting_site_name);
+  $sites_directory = acquia_gardens_sites_directory($hosting_site_name, $hosting_site_environment);
   acquia_gardens_ensure_directory($sites_directory);
 
   if ($update_settings) {
     // Retrieve a list of currently active domains.
     $site_domains = acquia_gardens_call('get.active.domains.by.site', array($hosting_site_name));
     foreach ($site_domains as $gardens_site_id => $domains) {
-      $site_directory = acquia_gardens_site_directory($hosting_site_name, $gardens_site_id);
+      $site_directory = acquia_gardens_site_directory($hosting_site_name, $hosting_site_environment, $gardens_site_id);
       acquia_gardens_ensure_settings_file($site_directory, $hosting_site_name, $hosting_site_environment, $gardens_site_id);
     }
   }
@@ -319,7 +319,7 @@ function acquia_gardens_full_domain_sync($cleanup_deleted = TRUE, $hosting_site_
  */
 function acquia_gardens_remove_site_domains($deleted_domains, $hosting_site_name) {
   foreach ($deleted_domains as $gardens_site_id => $domains) {
-    $site_directory = acquia_gardens_site_directory($hosting_site_name, $gardens_site_id);
+    $site_directory = acquia_gardens_site_directory_legacy($hosting_site_name, $gardens_site_id);
     foreach ($domains as $domain) {
       $site_directory_symlink = acquia_gardens_site_directory_symlink($domain);
       if (file_exists($site_directory_symlink) && is_link($site_directory_symlink)) {
@@ -381,7 +381,7 @@ function install_gardens($hosting_site_name, $hosting_site_environment, $parent_
     $gardens_site_id = $gardens_site_info['site_id'];
     $op = $gardens_site_info['operation'];
     $domains = $gardens_site_info['domains'];
-    $site_directory = acquia_gardens_site_directory($hosting_site_name, $gardens_site_id);
+    $site_directory = acquia_gardens_site_directory($hosting_site_name, $hosting_site_environment, $gardens_site_id);
     // Store the install operation in a global variable so the Drupal install
     // code can find out about it if necessary.
     $GLOBALS['gardens_install_op'] = $op;
@@ -738,7 +738,7 @@ function acquia_gardens_set_up_directory_for_duplication($hosting_site_name, $ho
   foreach (array('hosting_site_name', 'hosting_site_environment', 'gardens_site_id', 'domains') as $arg) {
     $$arg = json_decode($$arg);
   }
-  $site_directory = acquia_gardens_site_directory($hosting_site_name, $gardens_site_id);
+  $site_directory = acquia_gardens_site_directory($hosting_site_name, $hosting_site_environment, $gardens_site_id);
   acquia_gardens_prepare_for_installation($site_directory, $hosting_site_name, $hosting_site_environment, $gardens_site_id, $domains, TRUE);
 }
 
@@ -882,8 +882,8 @@ function acquia_gardens_update_file($path, $content) {
  * Returns the directory on the shared filesystem in which a Hosting site will
  * store the sites directories of its Gardens sites.
  */
-function acquia_gardens_sites_directory($hosting_site_name) {
-  return "/mnt/files/{$hosting_site_name}/gardens-sites";
+function acquia_gardens_sites_directory($hosting_site_name, $hosting_site_environment) {
+  return "/mnt/files/{$hosting_site_name}.{$hosting_site_environment}/gardens-sites";
 }
 
 /**
@@ -891,8 +891,23 @@ function acquia_gardens_sites_directory($hosting_site_name) {
  * settings.php file) for an individual Gardens site, belonging to a particular
  * Hosting site.
  */
-function acquia_gardens_site_directory($hosting_site_name, $gardens_site_id) {
-  $sites_directory = acquia_gardens_sites_directory($hosting_site_name);
+function acquia_gardens_site_directory($hosting_site_name, $hosting_site_environment, $gardens_site_id) {
+  $sites_directory = acquia_gardens_sites_directory($hosting_site_name, $hosting_site_environment);
+  return "$sites_directory/$gardens_site_id";
+}
+
+/**
+ * Legacy version of acquia_gardens_sites_directory that does not use the environment name.
+ */
+function acquia_gardens_sites_directory_legacy($hosting_site_name) {
+  return "/mnt/files/{$hosting_site_name}/gardens-sites";
+}
+
+/**
+ * Legacy version of acquia_gardens_site_directory that does not use the environment name.
+ */
+function acquia_gardens_site_directory_legacy($hosting_site_name, $gardens_site_id) {
+  $sites_directory = acquia_gardens_sites_directory_legacy($hosting_site_name);
   return "$sites_directory/$gardens_site_id";
 }
 
