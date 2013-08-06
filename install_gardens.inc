@@ -1055,7 +1055,9 @@ EOF;
  */
 function acquia_gardens_ensure_symlink($target, $link) {
   if (is_link($link)) {
-    if (readlink($link) == $target) {
+    // We use realpath to avoid false positives here as sometimes the path
+    // specified by $target does point to the right place via a symlink.
+    if (readlink($link) == realpath($target)) {
       // Nothing to do.
       return;
     }
