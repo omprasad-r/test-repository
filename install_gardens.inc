@@ -995,11 +995,11 @@ function acquia_gardens_ensure_settings_file($site_directory, $hosting_site_name
   //
   // The glob() below is used to account for a gardener who had suffixed their
   // database names to identify them in a particular environment.
-  $settings_inc = array_pop(glob("/var/www/site-php/{$hosting_site_name}/D7-{$hosting_site_environment}-{$gardens_site_id}*settings.inc"));
+  $settings_inc = array_pop(glob("/var/www/site-php/{$hosting_site_name}.{$hosting_site_environment}/D7-{$hosting_site_environment}-{$gardens_site_id}*settings.inc"));
   if (!file_exists($settings_inc)) {
     syslog(LOG_ERR, "Gardens install unable to glob() $settings_inc for $gardens_site_id");
     // Try the old naming scheme.
-    $settings_inc = "/var/www/site-php/{$hosting_site_name}/D7-{$gardens_site_id}-settings.inc";
+    $settings_inc = "/var/www/site-php/{$hosting_site_name}.{$hosting_site_environment}/D7-{$gardens_site_id}-settings.inc";
   }
   if (!file_exists($settings_inc)) {
     throw new Exception("Trying to create settings file but ${settings_inc} hasn't been created by Hosting yet. This message is expected for a couple minutes after a new site starts installing.");
