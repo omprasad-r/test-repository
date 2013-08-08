@@ -93,7 +93,7 @@ function warner_misc_disallowed_modules_alter(&$modules) {
 
   // Modules that are not in the distro but are add-ons in this codebase and
   // should not show up in the UI.
-  $modules += array(
+  $extra_disallowed_modules = array(
     'bulk_email',
     'coppa_lite',
     'feeds',
@@ -120,6 +120,7 @@ function warner_misc_disallowed_modules_alter(&$modules) {
     'views_rss_dc',
     'getid3',
   );
+  $modules = array_merge($modules, $extra_disallowed_modules);
 }
 
 /**
