@@ -5,6 +5,10 @@
  */
 function gardens_misc_drush_command() {
   $items = array(
+    'gardens-get-gardener-creds' => array(
+      'description' => dt('Print credentials retrieved from the gardener.'),
+      'bootstrap' => DRUSH_BOOTSTRAP_DRUPAL_ROOT,
+    ),
     'gardens-sql-sanitize' => array(
       'description' => dt("Scrub the current site's database in place. NOT for use on production sites."),
       'options' => array(
@@ -92,4 +96,16 @@ function drush_gardens_misc_get_gardener_info() {
 
   $creds = _acquia_gardens_xmlrpc_creds('gardener');
   return $creds;
+}
+
+/**
+ * Command callback. Prints gardener information.
+ */
+function drush_gardens_misc_gardens_get_gardener_creds() {
+  $creds = drush_gardens_misc_get_gardener_info();
+  $output = drush_format($creds, NULL, 'json');
+  if (drush_get_context('DRUSH_PIPE')) {
+    drush_print_pipe($output);
+  }
+  drush_print($output);
 }
