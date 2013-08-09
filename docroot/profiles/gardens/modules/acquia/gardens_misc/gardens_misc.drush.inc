@@ -59,7 +59,7 @@ function gardens_misc_drush_sql_sync_sanitize() {
     $creds = drush_gardens_misc_get_gardener_info();
     $staged_gardener = preg_replace('@^https?://@', '', $creds['url']);
 
-    $site_name = preg_replace('@^([^.]+)\.@', '$1', variable_get('gardens_misc_standard_domain'));
+    $site_name = preg_replace('@^([^.]+)\..+@', '$1', variable_get('gardens_misc_standard_domain'));
     $standard_domain = sprintf('%s.%s', $site_name, $creds['url_suffix']);
   }
 
