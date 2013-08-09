@@ -696,8 +696,9 @@ function drush_hosting_domain_sync() {
   drush_hosting_include_install_gardens();
   $hosting_site_name = _drush_hosting_get_hosting_site_name();
   $hosting_site_group = _drush_hosting_get_hosting_site_group();
+  $environment = acquia_gardens_get_site_environment();
   
-  $active_domains = acquia_gardens_call('get.active.domains.by.site', array($hosting_site_group));
+  $active_domains = acquia_gardens_call('get.active.domains.by.site', array($hosting_site_group, $environment));
 
   syslog(LOG_INFO, "Got " . count($active_domains) . " domains from the gardener");
   $valid_domains = acquia_gardens_ensure_domains($active_domains, $hosting_site_name);

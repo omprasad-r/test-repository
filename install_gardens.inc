@@ -151,7 +151,7 @@ function install_gardens_initialize_push($hosting_site_name, $hosting_site_envir
 
   if ($update_settings) {
     // Retrieve a list of currently active domains.
-    $site_domains = acquia_gardens_call('get.active.domains.by.site', array($hosting_site_name));
+    $site_domains = acquia_gardens_call('get.active.domains.by.site', array($hosting_site_name, $hosting_site_environment));
     foreach ($site_domains as $gardens_site_id => $domains) {
       $site_directory = acquia_gardens_site_directory($hosting_site_name, $hosting_site_environment, $gardens_site_id);
       acquia_gardens_ensure_settings_file($site_directory, $hosting_site_name, $hosting_site_environment, $gardens_site_id);
