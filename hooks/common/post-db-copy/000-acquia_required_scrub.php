@@ -42,7 +42,7 @@ if (empty($site_name)) {
 fwrite(STDERR, "Site name: $site_name\n");
 
 // Get the target url suffix from the gardener.
-$command = sprintf('drush @%1$s.%2$s -r /var/www/html/%1$s.%2$s/docroot -i /var/www/html/%1$s.%2$s/docroot/profiles/gardens/modules/acquia/gardens_misc gardens-get-gardener-creds --pipe', escapeshellarg($site), escapeshellarg($env));
+$command = sprintf('drush5 @%1$s.%2$s -r /var/www/html/%1$s.%2$s/docroot -i /var/www/html/%1$s.%2$s/docroot/profiles/gardens/modules/acquia/gardens_misc gardens-get-gardener-creds --pipe', escapeshellarg($site), escapeshellarg($env));
 fwrite(STDERR, "Executing command: $command\n");
 
 $creds = json_decode(trim(shell_exec($command)));
@@ -53,7 +53,7 @@ if (empty($url_suffix)) {
 
 $new_domain = "$site_name.$url_suffix";
 
-$command = sprintf("drush @%s.%s -r /var/www/html/%s.%s/docroot -l %s -y gardens-sql-sanitize", escapeshellarg($site), escapeshellarg($env), escapeshellarg($site), escapeshellarg($env), escapeshellarg($new_domain));
+$command = sprintf("drush5 @%s.%s -r /var/www/html/%s.%s/docroot -l %s -y gardens-sql-sanitize", escapeshellarg($site), escapeshellarg($env), escapeshellarg($site), escapeshellarg($env), escapeshellarg($new_domain));
 print "Executing $command";
 $result = shell_exec($command);
 print $result;
