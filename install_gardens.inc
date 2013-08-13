@@ -274,7 +274,7 @@ function install_gardens($hosting_site_name, $hosting_site_environment, $data = 
     if ($op == GARDENS_SIGNUP_SITE_OPERATION_INSTALL_AND_CONFIGURE) {
       try {
       // Prepare the installation directories and files.
-      acquia_gardens_prepare_for_installation($site_directory, $hosting_site_name, $hosting_site_environment, $gardens_site_id, $domains);
+      acquia_gardens_prepare_for_installation($site_directory, $hosting_site_name, $hosting_site_environment, $gardens_site_id, $domains, FALSE, $gardens_site_info['nid']);
 
       // Store the PID of this installer process so that gardener can check it
       // later if needed.
@@ -605,15 +605,19 @@ function install_gardens($hosting_site_name, $hosting_site_environment, $data = 
  *   The unique gardens site id ('mysite').
  * @param string $domains
  *   A json-encoded array of domains to be added to the site.
+ * @param int $nid
+ *   (Optional) An explicit nid which will override any derived nid.
  *
  * @throws Exception
  */
-function acquia_gardens_set_up_directory_for_duplication($hosting_site_name, $hosting_site_environment, $gardens_site_id, $domains) {
-  foreach (array('hosting_site_name', 'hosting_site_environment', 'gardens_site_id', 'domains') as $arg) {
-    $$arg = json_decode($$arg);
+function acquia_gardens_set_up_directory_for_duplication($hosting_site_name, $hosting_site_environment, $gardens_site_id, $domains, $nid = NULL) {
+  foreach (array('hosting_site_name', 'hosting_site_environment', 'gardens_site_id', 'domains', 'nid') as $arg) {
+    if (isset($$arg)) {
+      $$arg = json_decode($$arg);
+    }
   }
   $site_directory = acquia_gardens_site_directory($hosting_site_name, $hosting_site_environment, $gardens_site_id);
-  acquia_gardens_prepare_for_installation($site_directory, $hosting_site_name, $hosting_site_environment, $gardens_site_id, $domains, TRUE);
+  acquia_gardens_prepare_for_installation($site_directory, $hosting_site_name, $hosting_site_environment, $gardens_site_id, $domains, TRUE, $nid);
 }
 
 /**
@@ -688,10 +692,14 @@ function acquia_gardens_configure_duplicated_site($gardens_site_info) {
  * @param $readonly
  *   Whether to make the settings file read-only. Should be set to FALSE for
  *   site installation, and TRUE for site duplication. Defaults to FALSE.
+ * @param $nid
+ *   (Optional). The site nid can be passed explicitly when install is being
+ *   driven from the gardener.  This will override any nid derived from the site
+ *   ID.
  *
  * @throws Exception
  */
-function acquia_gardens_prepare_for_installation($site_directory, $hosting_site_name, $hosting_site_environment, $gardens_site_id, $domains, $readonly = FALSE) {
+function acquia_gardens_prepare_for_installation($site_directory, $hosting_site_name, $hosting_site_environment, $gardens_site_id, $domains, $readonly = FALSE, $nid = NULL) {
   // Create the site directory on the shared filesystem.
   acquia_gardens_ensure_directory($site_directory);
 
@@ -707,7 +715,7 @@ function acquia_gardens_prepare_for_installation($site_directory, $hosting_site_
   }
 
   // Create a settings.php file.
-  acquia_gardens_ensure_settings_file($site_directory, $hosting_site_name, $hosting_site_environment, $gardens_site_id, $readonly);
+  acquia_gardens_ensure_settings_file($site_directory, $hosting_site_name, $hosting_site_environment, $gardens_site_id, $readonly, $nid);
   if (!$readonly) {
     // The installer wants the settings file to be writable.
     $settings_file = "$site_directory/settings.php";
@@ -840,12 +848,18 @@ function acquia_gardens_ensure_directory($directory) {
  *   (optional) Boolean which determines whether or not to ensure that the
  *   settings file has permissions 0400 (i.e., readable by the web server only,
  *   and not writable). Defaults to FALSE.
+ * @param
+ *   (Optional) An explicit site NID passed from the gardener.
+ *
  * @throws
  *   Exception on failure.
  */
-function acquia_gardens_ensure_settings_file($site_directory, $hosting_site_name, $hosting_site_environment, $gardens_site_id, $ensure_permissions = FALSE) {
+function acquia_gardens_ensure_settings_file($site_directory, $hosting_site_name, $hosting_site_environment, $gardens_site_id, $ensure_permissions = FALSE, $nid = NULL) {
   $matches = array();
-  if (preg_match('/(\d+)$/', $gardens_site_id, $matches) == 1) {
+  if (!empty($nid)) {
+    $site_nid = $nid;
+  }
+  elseif (preg_match('/(\d+)$/', $gardens_site_id, $matches) == 1) {
     $site_nid = $matches[1];
   }
   else {
