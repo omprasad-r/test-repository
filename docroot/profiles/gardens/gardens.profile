@@ -329,7 +329,7 @@ function gardens_installer_custom_submit($form, &$form_state) {
   variable_set('theme_settings', $theme_settings);
 
   // Enable media on for Full HTML.
-  include_once DRUPAL_ROOT . '/modules/acquia/gardens_misc/gardens_misc.install';
+  include_once DRUPAL_ROOT . '/profiles/gardens/modules/acquia/gardens_misc/gardens_misc.install';
   gardens_misc_update_7001();
 
   // For normal installs, we're done here, so the site's final theme is set and
