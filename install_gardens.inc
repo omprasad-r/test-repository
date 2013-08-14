@@ -473,12 +473,12 @@ function install_gardens($hosting_site_name, $hosting_site_environment, $data = 
         // Gardens alerts.
         if (strpos($e->getMessage(), 'Gardens') === 0) {
           // The Exception is already a GardensError or GardensWarning.
-          syslog(LOG_ERROR, 'Gardens Site Install Error: ' . $e->getMessage());
+          syslog(LOG_ERR, 'Gardens Site Install Error: ' . $e->getMessage());
           throw $e;
         }
         else {
           // Turn the message into a GardensError.
-          syslog(LOG_ERROR, 'Gardens Site Install Error: ' . $e->getMessage());
+          syslog(LOG_ERR, 'Gardens Site Install Error: ' . $e->getMessage());
           throw new Exception("GardensError: AN-22470 - Error occurred during site installation and configuration (install_gardens function) GardensError: " . $e->getMessage() . $e->getTraceAsString());
         }
       }
