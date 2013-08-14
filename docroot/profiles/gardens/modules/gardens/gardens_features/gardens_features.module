@@ -2031,7 +2031,7 @@ function gardens_features_form_search_admin_settings_alter(&$form, $form_state) 
   $form['gardens_search'] = array(
     '#type' => 'fieldset',
     '#title' => t('Search Results Theme Configuration'),
-    '#description' => t('Drupal search will display a "snippet" of each search result. A snippet is a relevant section of the content. Drupal allows you to !view_mode_link for search results, but this is still reduced to a snippet for each search result. If you wish to display a custom view for each node in search results, you may specify it below.', array('!view_mode_link' => l(t('manage displays'), 'http://www.drupalgardens.com/documentation/content/content-type/custom'))),
+    '#description' => t('Drupal search will display a "snippet" of each search result. A snippet is a relevant section of the content. Drupal allows you to <a href="@url">manage displays</a> for search results, but this is still reduced to a snippet for each search result. If you wish to display a custom view for each node in search results, you may specify it below.', array('@url' => $is_smb ? 'http://www.drupalgardens.com/documentation/content/content-type/custom' : 'https://docs.acquia.com/site-factory/content/types/custom')),
     '#collapsible' => FALSE,
   );
 

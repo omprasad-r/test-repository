@@ -87,7 +87,7 @@ function comment_notify_get_user_comment_notify_preference($uid) {
 function comment_notify_get_user_node_notify_preference($uid) {
   $setting = comment_notify_get_user_notification_setting($uid);
   if (!$setting) {
-    $settings = comment_notify_get_default_notification_setting();
+    $setting = comment_notify_get_default_notification_setting();
   }
   return $setting->node_notify;
 }

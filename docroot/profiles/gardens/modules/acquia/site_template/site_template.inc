@@ -520,10 +520,12 @@ class DrupalSiteTemplate {
       'weight' => -16,
     );
 
+    $learn_more = '<p>' . t('<a href="@url" target="_blank">Learn more</a>', array('@url' => $is_smb ? 'http://www.drupalgardens.com/documentation/forums' : 'https://docs.acquia.com/site-factory/feature/content/forums')) . '</p>';
+
     // Define an initial forum.
     $forum = (object) array(
       'name' => 'This is a forum',
-      'description' => '<p>A forum is used to group related discussion topics. Sample container names could be Announcements, or Q&A. Administrators could post important topics to the Announcements container and site visitors could post questions to the Q&A container, where other members would reply with answers.<br />To add or manage Forums, click Structure > Forums.</p><a href="http://www.drupalgardens.com/documentation/forums" target="_blank">Learn more</a>',
+      'description' => '<p>' . t('A forum is used to group related discussion topics. Sample container names could be Announcements, or Q&A. Administrators could post important topics to the Announcements container and site visitors could post questions to the Q&A container, where other members would reply with answers.') . '</p><p>' . t('To add or manage Forums, click Structure > Forums.') . '</p>' . $learn_more,
       'weight' => -2,
     );
     $data['forums']['discussion_forum']['forum'] = $forum;
@@ -531,13 +533,13 @@ class DrupalSiteTemplate {
     // Define an initial forum topic.
     $forum_topic = array(
       'type' => 'forum',
-      'title' => "This is a sample forum topic",
-      'body' => '<p>A forum topic is a new discussion thread. Most forum topics are either questions or announcements. Site visitors or administrators can add comments in response to the forum topic if it allows comments. Forum topics are placed into forums, and can be moved by administrators to another forum to keep discussions organized.</p><p>To add Forum Topics, click Add content  > Forum Topic.</p><p><a href="http://www.drupalgardens.com/documentation/forums" target="_blank">Learn more</a></p>',
+      'title' => t('This is a sample forum topic'),
+      'body' => '<p>' . t('A forum topic is a new discussion thread. Most forum topics are either questions or announcements. Site visitors or administrators can add comments in response to the forum topic if it allows comments. Forum topics are placed into forums, and can be moved by administrators to another forum to keep discussions organized.') . '</p><p>' . t('To add Forum Topics, click Add content  > Forum Topic.') . '</p>' . $learn_more,
     );
     $data['forums']['discussion_forum']['forum_topic'] = $forum_topic;
 
     // Define an initial comment on the forum topic.
-    $data['forums']['discussion_forum']['comments'][] = site_template_prepare_basic_comment('This is a sample comment', '<p>Comments are posted by site visitors in response to forum topics.</p><p><a href="http://www.drupalgardens.com/documentation/forums" target="_blank">Learn more</a></p>');
+    $data['forums']['discussion_forum']['comments'][] = site_template_prepare_basic_comment(t('This is a sample comment'), '<p>' . t('Comments are posted by site visitors in response to forum topics.') . '</p>' . $learn_more);
   }
 
   /**
