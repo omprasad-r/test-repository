@@ -191,14 +191,14 @@ class SiteExport {
     $updates[] = $statement;
     if (module_exists('scarecrow')) {
       foreach (scarecrow_list_site_owner_uids() as $uid) {
-	$account = db_query('SELECT name FROM {users} WHERE uid = :uid', array(':uid' => $uid))->fetchObject();
-	$newpass = user_password();
-	$newhash = user_hash_password($newpass);
-	$statement['table'] = 'users';
-	$statement['data'] = array('pass' => $newhash);
-	$statement['where'] = 'uid = '. $uid;
-	$output .= $account->name . "\t$newpass\n";
-	$updates[] = $statement;
+        $account = db_query('SELECT name FROM {users} WHERE uid = :uid', array(':uid' => $uid))->fetchObject();
+        $newpass = user_password();
+        $newhash = user_hash_password($newpass);
+        $statement['table'] = 'users';
+        $statement['data'] = array('pass' => $newhash);
+        $statement['where'] = 'uid = '. $uid;
+        $output .= $account->name . "\t$newpass\n";
+        $updates[] = $statement;
       }
     }
 
@@ -255,11 +255,15 @@ class SiteExport {
       'akamai',
       'antivirus',
       'audit_trail',
+      'audit_trail_test',
       'blog_template',
       'campaign_template',
+      'gardens_broadcasting_client',
+      'gardens_broadcasting_client_notifications',
       'gardens_client',
       'gardens_cron',
       'gardens_duplication',
+      'gardens_enterprise_misc',
       'gardens_help',
       'gardens_misc',
       'gardens_limits',
@@ -302,6 +306,108 @@ class SiteExport {
       'profiles/gardens/gardens.install',
       'profiles/gardens/gardens.profile',
     );
+  }
+
+  /**
+   * Returns an array of table names whose data should not be exported.
+   */
+  private function getTablesToTruncate() {
+    $tables = array(
+      'authmap',
+      'cache',
+      'cache_block',
+      'cache_bootstrap',
+      'cache_field',
+      'cache_file_styles',
+      'cache_filter',
+      'cache_form',
+      'cache_image',
+      'cache_media_xml',
+      'cache_menu',
+      'cache_page',
+      'cache_path',
+      'cache_styles',
+      'registry_file',
+      'search_index',
+      'sessions',
+      'watchdog',
+    );
+    return $tables;
+  }
+
+  /**
+   * Returns an array of tables that should be dumped with specific conditions.
+   *
+   * These conditions are used to omit data from the export.
+   */
+  private function getTablesWithConditions() {
+    $tables = array(
+      'variable' => array(
+        'name' => array(
+          'not like' => array(
+            'akamai_%',
+            'antivirus_%',
+            'audit_trail_%',
+            'gardens_misc_%',
+            'gardens_statsd_%',
+            'mailhandler_%',
+            'mollom_%',
+            'themebuilder_%',
+          ),
+          'not in' => array(
+            'agrcache_css_cache_files',
+            'agrcache_js_cache_files',
+            'file_public_path',
+            'file_temporary_path',
+            'https',
+            'preprocess_css',
+            'oembedembedly_api_key',
+          ),
+        ),
+      ),
+      'system' => array(
+        'filename' => array(
+          'not in' => array(
+            'profiles/gardens/gardens.profile',
+            'sites/all/modules/antivirus/antivirus.module',
+            'themes/acquia/wmg/wmg.info',
+          ),
+        ),
+      ),
+      'menu_links' => array(
+        'router_path' => array(
+          'not in' => array(
+            'admin/structure/block/list/wmg',
+            'admin/structure/block/list/wmg/add',
+          ),
+        ),
+      ),
+      'menu_router' => array(
+        'path' => array(
+          'not in' => array(
+            'admin/structure/block/demo/wmg',
+            'admin/structure/block/list/wmg',
+            'admin/structure/block/list/wmg/add',
+          ),
+        ),
+      ),
+      'xmlsitemap' => array(
+        'loc' => array(
+          'not in' => array(
+            'admin/structure/block/list/wmg',
+            'admin/structure/block/list/wmg/add',
+          ),
+        ),
+      ),
+      // These tables are here because we will later add some conditions for
+      // rows which we want excluded so when we get to the exporting, then these
+      // tables will not get dumped as is.
+      'block' => array(),
+      'locales_source' => array(),
+      'registry' => array(),
+      'users' => array(),
+    );
+    return $tables;
   }
 
   /**
@@ -394,92 +500,9 @@ class SiteExport {
    *   Database updates that will be appended to the resulting sql.
    */
   private function sanitizeDB(&$contents, $modules_to_remove = NULL, $updates = array()) {
-    // NOTE: Always use pass by reference for the database contents to avoid multiple
-    // copies in memory.
     $sqlEditor = new SqlEditor($contents);
     $sqlEditor
-      ->dropTableData('sessions')
-      ->dropTableData('registry_file')
-      ->dropTableData('authmap')
-      ->dropTableData('cache')
-      ->dropTableData('cache_block')
-      ->dropTableData('cache_bootstrap')
-      ->dropTableData('cache_field')
-      ->dropTableData('cache_file_styles')
-      ->dropTableData('cache_filter')
-      ->dropTableData('cache_form')
-      ->dropTableData('cache_image')
-      ->dropTableData('cache_media_xml')
-      ->dropTableData('cache_menu')
-      ->dropTableData('cache_page')
-      ->dropTableData('cache_path')
-      ->dropTableData('cache_styles')
-      ->dropTableData('gardens_broadcasting_client_tasks')
-      ->dropTableData('gardens_broadcasting_client_notifications')
-      ->dropTableData('gardens_broadcasting_client_read_notifications')
-      ->dropTableRow('system', 'profiles/gardens/gardens.profile', 0)
-      ->dropTableRow('system', 'profiles/gardens_demo/gardens_demo.profile', 0)
       ->insertTableData('variable', "'menu_rebuild_needed', '" .serialize(TRUE) ."'")
-      // Antivirus
-      ->dropTableRow('system', 'sites/all/modules/antivirus/antivirus.module', 0)
-      ->dropTableRow('variable', 'antivirus_settings_clamavdaemon', 0)
-      ->dropTableRow('variable', 'antivirus_scanner_clamavdaemon_flags', 0)
-      // Audit trail
-      ->dropTableRow('variable', 'audit_trail_separator', 0)
-      ->dropTableRow('variable', 'audit_trail_log_destination', 0)
-      ->dropTableRow('variable', 'audit_trail_log_file', 0)
-      ->dropTableRow('variable', 'audit_trail_form_changes', 0)
-      ->dropTableRow('variable', 'audit_trail_form_changes_path', 0)
-      ->dropTableRow('variable', 'audit_trail_form_submissions', 0)
-      ->dropTableRow('variable', 'audit_trail_form_submissions_path', 0)
-      ->dropTableRow('variable', 'audit_trail_form_management_link', 0)
-      // Gardens Stats
-      ->dropTableRow('variable', 'gardens_statsd_env_checked', 0)
-      ->dropTableRow('variable', 'gardens_statsd_enabled', 0)
-      ->dropTableRow('variable', 'gardens_statsd_prefix', 0)
-      ->dropTableRow('variable', 'gardens_statsd_suffix', 0)
-      ->dropTableRow('variable', 'gardens_statsd_host', 0)
-      ->dropTableRow('variable', 'gardens_statsd_host_ip', 0)
-      ->dropTableRow('variable', 'gardens_statsd_port', 0)
-      ->dropTableRow('variable', 'gardens_statsd_stage', 0)
-      // Mollom settings.
-      ->dropTableRow('variable', 'mollom_public_key', 0)
-      ->dropTableRow('variable', 'mollom_private_key', 0)
-      // Themebuilder values.
-      ->dropTableRow('variable', 'themebuilder_screenshot_access_key', 0)
-      ->dropTableRow('variable', 'themebuilder_screenshot_private_key', 0)
-      ->dropTableRow('variable', 'themebuilder_update_level', 0)
-      // Gardens domain management.
-      ->dropTableRow('variable', 'gardens_misc_canonical_domain', 0)
-      ->dropTableRow('variable', 'gardens_misc_standard_domain', 0)
-      // Mailhandler settings.
-      ->dropTableRow('variable', 'mailhandler_singlemailbox_default_mailbox_name', 0)
-      ->dropTableRow('variable', 'mailhandler_singlemailbox_addressing_scheme', 0)
-      ->dropTableRow('variable', 'mailhandler_temporary_path', 0)
-      // Misc settings.
-      ->dropTableRow('variable', 'https', 0)
-      ->dropTableRow('variable', 'file_temporary_path', 0)
-      ->dropTableRow('variable', 'preprocess_css', 0)
-      ->dropTableRow('variable', 'file_public_path', 0)
-      // Embed.ly API key.
-      ->dropTableRow('variable', 'oembedembedly_api_key', 0)
-      // Akamai related settings.
-      ->dropTableRow('variable', 'akamai_wsdl', 0)
-      ->dropTableRow('variable', 'akamai_basepath', 0)
-      ->dropTableRow('variable', 'akamai_username', 0)
-      ->dropTableRow('variable', 'akamai_password', 0)
-      ->dropTableRow('variable', 'akamai_domain', 0)
-      ->dropTableRow('variable', 'akamai_action', 0)
-      ->dropTableRow('variable', 'akamai_email', 0)
-      // WMG-specific settings.
-      ->dropTableRow('menu_links', 'admin/structure/block/list/wmg', 3)
-      ->dropTableRow('menu_links', 'admin/structure/block/list/wmg/add', 3)
-      ->dropTableRow('menu_router', 'admin/structure/block/demo/wmg', 0)
-      ->dropTableRow('menu_router', 'admin/structure/block/list/wmg', 0)
-      ->dropTableRow('menu_router', 'admin/structure/block/list/wmg/add', 0)
-      ->dropTableRow('system', 'themes/acquia/wmg/wmg.info', 0)
-      ->dropTableRow('xmlsitemap', 'admin/structure/block/list/wmg', 3)
-      ->dropTableRow('xmlsitemap', 'admin/structure/block/list/wmg/add', 3)
       // Empty preprocessed CSS list.
       ->insertTableData('variable', "'preprocess_css', '" .serialize(0) ."'")
       // Reset file path.
@@ -488,14 +511,11 @@ class SiteExport {
     $this->resetUserEmails($sqlEditor);
 
     if ($modules_to_remove !== NULL) {
-      foreach ($modules_to_remove as $module_name) {
-	$sqlEditor->removeModule($module_name);
-      }
       // If we are deleting the current install profile, replace it with the
       // default profile.
       if (in_array(variable_get('install_profile', 'standard'), $modules_to_remove)) {
-	$sqlEditor->dropTableRow('variable', 'install_profile', 0);
-	$sqlEditor->insertTableData('variable', "'install_profile', '" . serialize('standard') . "'");
+        $sqlEditor->dropTableRow('variable', 'install_profile', 0);
+        $sqlEditor->insertTableData('variable', "'install_profile', '" . serialize('standard') . "'");
       }
       // Hack to get all caches flushed including file paths.
       $sqlEditor->insertTableData('variable', "'gardens_misc_flush_all_caches', '" . serialize(TRUE) ."'");
@@ -619,39 +639,164 @@ EOT;
     $ext = "sql";
 
     $path = "${working_dir}/${name}.${ext}";
+    $tableContents = '';
 
-    /**
-     * There is no need to export tables for modules we are removing.
-     */
-    $tables_to_ignore = '';
-    $modules_to_remove = $this->getModulesToRemove();
+    // Step 1 - dump all tables that do not require edits. There is no need to
+    // export tables for modules we are removing.
+    $tables_to_ignore = array();
+    // Ignore all tables associated with modules being removed on export.
     foreach ($modules_to_remove as $module) {
       $schema = drupal_get_schema_unprocessed($module);
       $tables = array_keys($schema);
-      foreach ($tables as $table) {
-	$tables_to_ignore .= '--ignore-table=' . escapeshellarg($db['database'] . '.' . $table) . ' ';
-      }
+      $tables_to_ignore = array_merge($tables_to_ignore, $tables);
     }
+    // Skip all tables that will be exported as schema only or those that have
+    // dump conditionals.
+    $tables_to_ignore = array_merge($tables_to_ignore, $this->getTablesToTruncate(), array_keys($this->getTablesWithConditions()));
+    $ignore_option = $this->getDumpIgnoreOptions($tables_to_ignore);
 
-    // Be sure to use the --skip-extended-insert option to force individual
-    // insert statements.  This is required by the SqlEditor, which edits the
-    // database dump.
-    $cmd = sprintf('mysqldump %s -u%s %s --skip-extended-insert --single-transaction -h%s %s',
-      $tables_to_ignore,
+    // These tables are simply going to be dumped with no modification. Go ahead
+    // and put them into the temporary file.
+    $cmd = sprintf('mysqldump %s -u%s %s --single-transaction -h%s %s > %s',
+      $ignore_option,
       escapeshellarg($db['username']),
       empty($db['password']) ? '' : '-p' . escapeshellarg($db['password']),
       escapeshellarg($db['host']),
-      escapeshellarg($db['database'])
+      escapeshellarg($db['database']),
+      escapeshellarg($path)
     );
 
     $contents = array();
     exec($cmd, $contents);
-    $contents = implode("\n", $contents) ."\n";
 
+    // Step 2 - Append the schema for tables that need no exported data.
+    $tables_to_truncate = $this->getExistingTables($this->getTablesToTruncate());
+    $cmd = sprintf('mysqldump %s -u%s %s --single-transaction -h%s %s --tables %s >> %s',
+      '--no-data',
+      escapeshellarg($db['username']),
+      empty($db['password']) ? '' : '-p' . escapeshellarg($db['password']),
+      escapeshellarg($db['host']),
+      escapeshellarg($db['database']),
+      implode(' ', array_map('escapeshellarg', $tables_to_truncate)),
+      escapeshellarg($path)
+    );
 
-    $this->sanitizeDB($contents, $modules_to_remove, $updates);
-    file_put_contents($path, $contents);
+    $contents = array();
+    exec($cmd, $contents);
+
+    // Step 3 - Add partial tables, skipping rows that we want to modify. Tables
+    // that will be modified have to be loaded into memory so the SqlEditor can
+    // be used. Otherwise, simply append the dumps to the existing sql file.
+    // Note that the where option can only be used once per command, so we have
+    // to dump each table separately.
+    $tableConditions = $this->getTablesWithConditions();
+    // The modules that are being removed during the export might also have
+    // entries in some of the system tables, so we have to add those here
+    // manually if we want to avoid string manipulation.
+    if ($modules_to_remove) {
+      foreach ($modules_to_remove as $moduleName) {
+        $modulePath = drupal_get_path('module', $moduleName);
+        $tableConditions['block']['module']['not in'][] = $moduleName;
+        $tableConditions['menu_router']['page_callback']['not like'][] = $moduleName . '%';
+        $tableConditions['menu_links']['link_path']['not like'][] = str_replace('_', '-', $moduleName) . '%';
+        $tableConditions['registry']['module']['not like'][] = $moduleName . '%';
+        $tableConditions['system']['name']['not in'][] = $moduleName;
+        $tableConditions['variable']['name']['not like'][] = $moduleName . '%';
+        if (!empty($modulePath)) {
+          // This table might not exist on every site, but the foreach handling
+          // it will have safeguard anyway.
+          $tableConditions['locales_source']['location']['not like'][] = $modulePath . '%';
+        }
+        // Ignore the menu entries coming from the modules being removed.
+        $functionName = $moduleName . '_menu';
+        if (function_exists($functionName)) {
+          $moduleMenu = $functionName();
+          foreach ($moduleMenu as $moduleMenuPath => $value) {
+            $tableConditions['locales_source']['location']['not in'][] = '/'. $moduleMenuPath;
+            $tableConditions['menu_router']['path']['not in'][] = $moduleMenuPath;
+            $tableConditions['menu_links']['router_path']['not in'][] = $moduleMenuPath;
+            $tableConditions['xmlsitemap']['loc']['not in'][] = $moduleMenuPath;
+          }
+        }
+      }
+    }
+    foreach ($tableConditions as $table => $conditions) {
+      if (!db_table_exists($table)) {
+        continue;
+      }
+      $where_clause = $this->getDumpConditional($conditions);
+      switch ($table) {
+        case 'variable':
+        case 'system':
+        case 'users':
+          // These tables will be modified using the SqlEditor. Be sure to use
+          // the --skip-extended-insert option to force individual insert
+          // statements.
+          $cmd = sprintf("mysqldump -u%s %s --skip-extended-insert --single-transaction --skip-comments -h%s %s %s %s",
+            escapeshellarg($db['username']),
+            empty($db['password']) ? '' : '-p' . escapeshellarg($db['password']),
+            escapeshellarg($db['host']),
+            escapeshellarg($db['database']),
+            $where_clause,
+            escapeshellarg($table)
+          );
+          $contents = array();
+          exec($cmd, $contents);
+          $tableContents .= implode("\n", $contents) . "\n";
+          break;
+
+        default:
+          // Simply append the dump to the existing sql file.
+          $cmd = sprintf("mysqldump -u%s %s --single-transaction --skip-comments -h%s %s %s %s >> %s",
+            escapeshellarg($db['username']),
+            empty($db['password']) ? '' : '-p' . escapeshellarg($db['password']),
+            escapeshellarg($db['host']),
+            escapeshellarg($db['database']),
+            $where_clause,
+            escapeshellarg($table),
+            escapeshellarg($path)
+          );
+          $contents = array();
+          exec($cmd, $contents);
+          break;
+      }
+    }
+
+    // Step 4 - sanitize the tables requiring modification and append that data
+    // to the existing sql file.
+    $this->sanitizeDB($tableContents, $modules_to_remove, $updates);
+    file_put_contents($path, $tableContents, FILE_APPEND);
+
     return $path;
+  }
+
+  /**
+   * Returns the formatted list of tables to be ignored by mysqldump.
+   *
+   * The return value can be used in mysqldump's --ignore-table option that will
+   * cause the specified tables to be ignored in mysqldump.
+   */
+  private function getDumpIgnoreOptions($tables_to_ignore) {
+    global $databases;
+    $db = $databases['default']['default'];
+    $result = '';
+    foreach ($tables_to_ignore as $table) {
+      $result .= '--ignore-table=' . escapeshellarg($db['database'] . '.' . $table) . ' ';
+    }
+    return $result;
+  }
+
+  /**
+   * Returns tables that exist in the database from the specified set.
+   */
+  private function getExistingTables($tables) {
+    $result = array();
+    foreach ($tables as $table) {
+      if (db_table_exists($table)) {
+        $result[] = $table;
+      }
+    }
+    return $result;
   }
 
   /**
@@ -827,19 +972,19 @@ EOT;
     $handle = opendir($dir);
     while (FALSE !== ($file = readdir($handle))) {
       if ($file == '.' || $file == '..' || $file == '.htaccess') {
-	continue;
+        continue;
       }
       $full_path = "${dir}/${file}";
       $relative_path = str_replace("${dir_prefix}/", '', $full_path);
       if ($this->omitFile($relative_path)) {
-	continue;
+        continue;
       }
       if (is_dir($full_path)) {
-	$this->getFileDownloadLinesRecursive($full_path, $dir_prefix, $lines);
+        $this->getFileDownloadLinesRecursive($full_path, $dir_prefix, $lines);
       }
       else if (is_file($full_path)) {
-	// This is a file.
-	$this->addDownloadLine($relative_path, $lines);
+        // This is a file.
+        $this->addDownloadLine($relative_path, $lines);
       }
     }
     closedir($handle);
@@ -992,5 +1137,39 @@ EOT;
     $path = drupal_realpath($directory_uri);
     mkdir($path);
     return $path;
+  }
+
+  /**
+   * Constructs a --where option for mysqldump with the specified conditions.
+   */
+  private function getDumpConditional($conditions) {
+    $result = '';
+    $where_clauses = array();
+    // Constructs a string representing the where option for a mysqldump call.
+    // --where='var not like "value%" and var not like "value%"...
+    foreach ($conditions as $field_name => $where) {
+      foreach ($where as $condition => $values) {
+        if (strtolower($condition) == 'in' || strtolower($condition) == 'not in') {
+          $where_clauses[] = sprintf('%s %s (%s)', $field_name, $condition, implode(',', array_map(array($this, 'quoteString'), $values)));
+        }
+        else {
+          // Enumerate each in the where clause.
+          foreach ($values as $value) {
+            $where_clauses[] = sprintf('%s %s "%s"', $field_name, $condition, $value);
+          }
+        }
+      }
+    }
+    if (count($where_clauses) > 0) {
+      $result = sprintf("--where='%s'", implode(" AND ", $where_clauses));
+    }
+    return $result;
+  }
+
+  /**
+   * Wraps the specified string in double quotes.
+   */
+  public function quoteString($str) {
+    return "\"$str\"";
   }
 }

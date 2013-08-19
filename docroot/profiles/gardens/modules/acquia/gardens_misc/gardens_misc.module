@@ -18,6 +18,11 @@ include_once(dirname(__FILE__) . '/plugins/gardens_misc.media.inc');
  * Force some variable values.
  */
 function gardens_misc_init() {
+  $settings = array(
+    'isSMB' => gardens_misc_is_smb(),
+  );
+  drupal_add_js(array('gardensMisc' => $settings), 'setting');
+
   global $conf;
   //@todo: set this to something like sharedtemporary because temp is not HA compat.
   $conf['plupload_temporary_uri'] = 'public://pluploadtemp/';
@@ -3548,4 +3553,94 @@ function gardens_misc_admin_paths_alter(&$paths) {
   // quick fix for the issue, we are removing these paths from the list.
   unset($paths['media/browser']);
   unset($paths['media/browser/*']);
+}
+
+/**
+ * Implements hook_filter_info().
+ */
+function gardens_misc_filter_info() {
+  return array(
+    'stripimageurl' => array(
+      'title' => t('Strip protocol from image URLs'),
+      'description' => t('Converts fixed https:// and http:// protocols on local embedded images to protocol-relative URLs. In the Filter processing order, use this filter after converting media tags to markup.'),
+      'process callback' => '_gardens_misc_stripimageurl_filter',
+      'weight' => 999,
+    )
+  );
+}
+
+/**
+ * 'stripimageurl' filter process callback.
+ */
+function _gardens_misc_stripimageurl_filter($text, $filter, $format, $langcode, $cache, $cache_id) {
+  // Parse $text and return it as a DOM object.
+  $dom = filter_dom_load($text);
+
+  // Get '<img>' tags.
+  $imgs = $dom->getElementsByTagName('img');
+  // Loop through each <img> tag in the DOM.
+  foreach ($imgs as $img) {
+    if ($img->hasAttribute('src')) {
+      $src_replace = _gardens_misc_stripimageurl_replace($img->getAttribute('src'));
+      $img->setAttribute('src', $src_replace);
+    }
+  }
+
+  // Serialize DOMDocument back to a XHTML snippet.
+  return filter_dom_serialize($dom);
+}
+
+/**
+ * Converts https/http protocls in local image URLs to protocol-relative URLs.
+ *
+ * @param $src
+ *
+ * @return string
+ */
+function _gardens_misc_stripimageurl_replace($src) {
+  // Process local images only.
+  $canonical_domain = gardens_misc_get_canonical_domain();
+  $standard_domain = gardens_misc_get_standard_domain();
+
+  // Convert protocol.
+  if ($canonical_domain !== NULL || $standard_domain !== NULL) {
+    $result = preg_replace('~https?://(' . preg_quote($canonical_domain) . '/|' . preg_quote($standard_domain) .'/)~', '//$1', $src);
+  }
+
+  return $result;
+}
+
+/**
+ * Implements hook_form_FORM_ID_alter().
+ *
+ * Override description messages in the filter settings form.
+ */
+function gardens_misc_form_filter_admin_format_form_alter(&$form, &$form_state) {
+  if (!empty($form['filters']['status'])) {
+    $filters = $form['filters']['status'];
+    foreach ($filters as $filter_name => $filter_attr) {
+      switch ($filter_name) {
+        case 'filter_tokens':
+          $form['filters']['status'][$filter_name]['#description'] = t('Restrict the use of this filter to trusted users because tokens with sensitive date could be exposed.');
+          break;
+        case 'htmlpurifier_basic':
+          $form['filters']['status'][$filter_name]['#description'] = t('Removes malicious HTML code and ensures output meets standards.');
+          break;
+        case 'media_filter':
+          $form['filters']['status'][$filter_name]['#description'] = t('Converts [[{type:media...]] tags into markup.');
+          // If the WYSIWYG module is enabled, add additional help.
+          if (module_exists('wysiwyg')) {
+            $form['filters']['status'][$filter_name]['#description'] .= ' ' . t('This must be enabled for the Media WYSIWYG integration to work with this input format.');
+          }
+          break;
+      }
+    }
+  }
+}
+
+/**
+ * Returns TRUE if this site is on SMB, FALSE otherwise.
+ */
+function gardens_misc_is_smb() {
+  return (bool) gardens_client_data_get('gardens_manager', 'is_drupalgardens_dot_com');
 }

@@ -50,32 +50,33 @@ function gardens_help_contextual_links_view_alter(&$element, $items) {
  * Returns an array of help links indexed by module.
  */
 function gardens_help_contextual_links() {
+  $is_smb = gardens_misc_is_smb();
   $links = array(
     'menu' => array(
       'menu-help' => array(
         'title' => t('What is a menu?'),
-        'href' => GARDENS_HELP_SMB_GARDENER . '/documentation/menus',
+        'href' => $is_smb ? GARDENS_HELP_SMB_GARDENER . '/documentation/menus' : 'https://docs.acquia.com/site-factory/structure/menus',
         'attributes' => array('target' => '_blank'),
       ),
     ),
     'block' => array(
       'block-help' => array(
         'title' => t('What is a block?'),
-        'href' => GARDENS_HELP_SMB_GARDENER . '/documentation/blocks',
+        'href' => $is_smb ? GARDENS_HELP_SMB_GARDENER . '/documentation/blocks' : 'https://docs.acquia.com/site-factory/structure/blocks',
         'attributes' => array('target' => '_blank'),
       ),
     ),
     'views_ui' => array(
       'views-help' => array(
         'title' => t('What is a view?'),
-        'href' => GARDENS_HELP_SMB_GARDENER . '/documentation/views',
+        'href' => $is_smb ? GARDENS_HELP_SMB_GARDENER . '/documentation/views' : 'https://docs.acquia.com/site-factory/feature/display/views',
         'attributes' => array('target' => '_blank'),
       ),
     ),
     'node' => array(
       'node-help' => array(
         'title' => t('What is content?'),
-        'href' => GARDENS_HELP_SMB_GARDENER . '/documentation/working-content',
+        'href' => $is_smb ? GARDENS_HELP_SMB_GARDENER . '/documentation/working-content' : 'https://docs.acquia.com/site-factory/content',
         'attributes' => array('target' => '_blank'),
       ),
     ),
@@ -88,7 +89,9 @@ function gardens_help_contextual_links() {
  * Page callback used for help page when help module is not enabled.
  */
 function gardens_help_main() {
-  drupal_goto('http://www.drupalgardens.com/help');
+  $is_smb = gardens_misc_is_smb();
+  $url = $is_smb ? 'http://www.drupalgardens.com/help' : 'https://docs.acquia.com/site-factory';
+  drupal_goto($url);
 }
 
 /**
@@ -100,6 +103,9 @@ function gardens_help_init() {
   $path = drupal_get_path('module', 'gardens_help');
   drupal_add_css($path . '/gardens_help.css');
   drupal_add_js($path . '/gardens_help.js', array('weight' => 50));
+
+  $is_smb = gardens_misc_is_smb();
+  $url = $is_smb ? GARDENS_HELP_SMB_GARDENER : 'https://docs.acquia.com/site-factory';
   drupal_add_js(array('gardenerHelpSearchURL' => GARDENS_HELP_SMB_GARDENER), 'setting');
 
   if (!isset($_COOKIE[session_name()]) && $user->uid == 1) {
@@ -135,14 +141,20 @@ function gardens_help_page_alter(&$page) {
   $blank = array('attributes' => array('target' => '_blank'));
 
   $current_gardener = scarecrow_get_gardener_url();
-  $current_client = variable_get('gardens_client_name', '');
-  $current_gardener_is_smb = empty($current_client);
+  $is_smb = gardens_misc_is_smb();
   $support = '';
 
-  // Forums link only incldued if the parent gardener is SMB.
-  if ($current_gardener_is_smb) {
+  if ($is_smb) {
+    $support .= '<li>' . l(t('Videos'), GARDENS_HELP_SMB_GARDENER . '/videos', $blank) . '</li>';
+  }
+
+  $url = $is_smb ? GARDENS_HELP_SMB_GARDENER . '/documentation' : 'https://docs.acquia.com/site-factory';
+  $support .= '<li>' . l(t('Documentation'), $url, $blank) . '</li>';
+
+  if ($is_smb) {
     $support .= '<li>' . l(t('Forums'), GARDENS_HELP_SMB_GARDENER . '/forum', $blank) . '</li>';
   }
+
   // Build support links based on available permissions.
   // Parature related links go to local gardener, not SMB.
   if (user_access('use parature support')) {
@@ -164,10 +176,7 @@ function gardens_help_page_alter(&$page) {
         </div>
       </div>
       <div class="help-section" id="help-section-links">
-        <ul>
-          <li>'. l(t('Videos'), GARDENS_HELP_SMB_GARDENER . '/videos', $blank) .'</li>
-          <li>'. l(t('Documentation'), GARDENS_HELP_SMB_GARDENER . '/documentation', $blank) .'</li>' . $support .'
-        </ul>
+        <ul>' . $support . '</ul>
       </div>
     </div>',
   );
@@ -198,9 +207,9 @@ function gardens_help_pre_render($toolbar) {
       'attributes' => array('title' => t('Site manager'), 'target' => '_self'),
     );
     // Link to help page on gardener (no JS and right-click).
-    $help_link['href'] = GARDENS_HELP_SMB_GARDENER . '/help';
+    $is_smb = gardens_misc_is_smb();
+    $help_link['href'] = $is_smb ? GARDENS_HELP_SMB_GARDENER . '/help' : 'https://docs.acquia.com/site-factory';
     $build['toolbar_user']['#links']['help'] = $help_link;
-
 
     $links = $build['toolbar_user']['#links'];
     $links['account']['title'] = t('<strong>@username</strong>', array('@username' => format_username($user)));

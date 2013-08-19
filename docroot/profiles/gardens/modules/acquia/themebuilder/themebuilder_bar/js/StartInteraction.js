@@ -353,7 +353,12 @@ ThemeBuilder.StartInteraction.prototype.invokeThemeElves = function (data) {
  *   application into the opened state.
  */
 ThemeBuilder.StartInteraction.prototype.setGenericExitMessage = function (data) {
-  data.userMessage = Drupal.t('An error has occurred. Please let us know what you tried to do in the <a target="_blank" href="http://www.drupalgardens.com/forums">Drupal Gardens forums</a>, and we will look into it.');
+  if (Drupal.settings.gardensMisc.isSMB) {
+    data.userMessage = Drupal.t('An error has occurred. Please let us know what you tried to do in the <a target="_blank" href="http://www.drupalgardens.com/forums">Drupal Gardens forums</a>, and we will look into it.');
+  }
+  else {
+    data.userMessage = Drupal.t('An error has occurred. Please contact support to let us know what you tried to do and we will look into it.');
+  }
   this.event(data, 'exitMessageSet');
 };
 

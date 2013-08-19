@@ -63,7 +63,6 @@ function site_export_set_limits() {
   }
   else {
     set_time_limit(variable_get('site_export_time_limit', 300));
-    ini_set('memory_limit', '512M');
   }
 }
 
@@ -73,6 +72,7 @@ function site_export_set_limits() {
 function site_export_export_confirm() {
   drupal_add_js(drupal_get_path('module', 'site_export') . '/site_export.js');
 
+  $is_smb = gardens_misc_is_smb();
   $cancel_path = empty($_GET['return']) ? 'admin/config/system' : array('path' => urldecode($_GET['return']), 'attributes' => array('class' => 'overlay-exclude'));
   $form = confirm_form(array(),
   t('Generate and download an export of your database and site files?'),
@@ -80,7 +80,7 @@ function site_export_export_confirm() {
   t('Export'), t('Cancel'));
   $form['message'] = array(
     '#prefix' => '<p>',
-    '#markup' => t('Usernames and passwords will be reset and stored in the archive file. To learn more, see !export_your_site.',array('!export_your_site' => l('Exporting your site','http://www.drupalgardens.com/documentation/site-export'))),
+    '#markup' => t('Usernames and passwords will be reset and stored in the archive file. To learn more, see <a href="@url">Exporting your site</a>.', array('@url' => $is_smb ? 'http://www.drupalgardens.com/documentation/site-export' : 'https://docs.acquia.com/site-factory/manage/website/export')),
     '#suffix' => '</p>',
   );
 

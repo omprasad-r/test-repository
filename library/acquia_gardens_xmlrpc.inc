@@ -48,12 +48,13 @@ function acquia_gardens_call($method, $data = array(), $server = NULL) {
  * url = "http://gardener.[stage].acquia-sites.com"
  * username = "acquiagardensrpc"
  * password = "[password]"
+ * url_suffix = "[stage].acquia-sites.com"
  *
  * @param String $site
  *  The name of the acquia site to retrieve, e.g. 'gardener'.
  *
  * @return Array
- *  An array ('url', 'username' and 'password') of the RPC configuration.
+ *  An array ('url', 'username', 'password' and 'url_suffix') of the RPC configuration.
  */
 function _acquia_gardens_xmlrpc_creds($site) {
   static $gardens_xmlrpc_creds = array();

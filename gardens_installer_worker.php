@@ -17,14 +17,16 @@ include_once $current_directory . '/install_gardens.inc';
 // Rely on the fact that Hosting sites are installed in directories given by
 // their site name.
 $hosting_site_name = basename($current_directory);
+// This is misnamed: parent_hosting_site_name should be the sitegroup
 $parent_hosting_site_name = $argv[1];
 // Obtain the current process owner in order to perform sanity checks against the
 // hosting site name.
 $user_info = posix_getpwuid(posix_geteuid());
 
-// If the hosting site name does not contain the hosting site user name, bail out.
-if (empty($parent_hosting_site_name) || strpos($hosting_site_name, $parent_hosting_site_name) === FALSE || $parent_hosting_site_name != $user_info['name']) {
-  gardens_log_and_alert_if_necessary($hosting_site_name, "[TAG] Hosting site directories and process username do not match.[TAG] site: $hosting_site_name parent: $parent_hosting_site_name user: {$user_info['name']}",
+// We can no longer check the site name contains the site group name, but we can
+// check that the unix user and site group match.
+if (empty($parent_hosting_site_name) || $parent_hosting_site_name != $user_info['name']) {
+  gardens_log_and_alert_if_necessary($hosting_site_name, "[TAG] Hosting site group and process username do not match.[TAG] sitegroup: $parent_hosting_site_name user: {$user_info['name']}",
     'hosting_site_user_mismatch', array('warning' => 1, 'error' => 1));
   exit;
 }
@@ -73,56 +75,6 @@ catch (Exception $e) {
   exit;
 }
 
-if (!isset($argv[2]) || $argv[2] != 'install') {
-  // This server should not try to install new sites.
-  exit;
-}
-
-$lock_dir = "/mnt/tmp/{$hosting_site_name}/install_gardens_locks";
-$mypid = getmypid();
-// Create a pid file with my pid to avoid race conditions.
-$limit = gardens_pidfile_setup($lock_dir, $mypid);
-// Find out how many running installs exist.
-$pid_files = glob("$lock_dir/[0-9]*");
-
-$number_of_processes = count($pid_files);
-if ($number_of_processes > $limit) {
-  // Try to clean up for the next time this script runs.
-  gardens_pidfile_cleanup($pid_files, $parent_hosting_site_name);
-  // We want to get alerts if the server is too busy to configure sites, but
-  // it's not too big a deal if we get them occasionally, so we only alert if
-  // it happens often.  Also note that we have seen the number of pid files
-  // build up to well above $limit on occasion; this could be due to a buildup
-  // of the fields-config scripts which call this one (during times when the
-  // server is very slow). We don't know for sure, and it's probably not a huge
-  // deal.
-  $threshold = array(
-    'warning' => 30,
-    'error' => 30,
-    'seconds' => 300,
-  );
-  gardens_log_and_alert_if_necessary($hosting_site_name, "[TAG] AN-20385 - Hosting site had multiple running Gardens site configuration processes and could not check for sites that need to be installed or configured. [TAG] site: {$hosting_site_name}; number of processes: {$number_of_processes}", 'too_many_site_config_processes', $threshold);
-}
-else {
-  // Attempt to install or configure a Gardens site associated with this
-  // Hosting site, if there is at least one that needs work done on it.
-  try {
-    install_gardens($hosting_site_name, $hosting_site_environment, $parent_hosting_site_name);
-  }
-  catch (Exception $e) {
-    // The system is designed to retry failed installations (and temporary
-    // failures, e.g. if the database wasn't set up yet, are normal and
-    // expected). So we just log the message and let the next process try
-    // again. If the error was actually a real one that requires human
-    // attention, it is up to the calling code to label it appropriately
-    // (e.g. with "GardensError"). In the future, we could take different
-    // kinds of actions here depending, for example, on the type of exception
-    // that was thrown.
-    syslog(LOG_NOTICE, $e->getMessage());
-  }
-}
-// Cleanup the pid file.
-unlink("$lock_dir/$mypid");
 // End of script.
 exit;
 
