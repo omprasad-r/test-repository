@@ -1885,10 +1885,11 @@ function scarecrow_user_cancel_access($account) {
  * Returns the system help replacement text for a given path, if applicable.
  */
 function scarecrow_help_text($path) {
+  $is_smb = gardens_misc_is_smb();
   switch ($path) {
     case 'admin/help':
       $output = '<h2>' . t('Drupal Gardens help') . '</h2>';
-      $output .= '<p>' . t('Use the <a href="@url">Drupal Gardens help resources</a> for overall help with your site, or the individual topics below for help with more specific areas.', array('@url' => 'http://www.drupalgardens.com/drupalgardens-help')) . '</p>';
+      $output .= '<p>' . t('Use the <a href="@url">Drupal Gardens help resources</a> for overall help with your site, or the individual topics below for help with more specific areas.', array('@url' => $is_smb ? 'http://www.drupalgardens.com/drupalgardens-help' : 'https://docs.acquia.com/site-factory')) . '</p>';
       return $output;
     case 'admin/modules':
       $output = '<p>' . t("Modules are plugins that extend Drupal's core functionality. They can be enabled or disabled from this page.") . '</p>';
@@ -1899,13 +1900,13 @@ function scarecrow_help_text($path) {
       return '';
     case 'admin/config/search/domain_301_redirect':
     case 'admin/help#domain_301_redirect':
-      return t('Use the 301 Redirect module to redirect your Drupal Gardens domain to the domain specified below. This informs web traffic, such as search engines, not to store your Drupal Gardens domain, which helps search engine optimization. <a href="@url">Read more.</a>', array('@url' => 'http://www.drupalgardens.com/documentation/seo/redirect'));
+      return t('Use the 301 Redirect module to redirect your domain to the domain specified below. This informs web traffic, such as search engines, not to store your domain, which helps search engine optimization. <a href="@url">Read more.</a>', array('@url' => $is_smb ? 'http://www.drupalgardens.com/documentation/seo/redirect' : 'https://docs.acquia.com/site-factory/manage/redirect'));
     case 'admin/people/permissions':
       return '<p>' . t('Permissions let you control what users can do and see on your site. You can define a specific set of permissions for each role. (See the <a href="@role">Roles</a> page to create a role.)  On the <a href="@settings">User Settings</a> page, you can make any role the Administrator role for the site, meaning this will be granted all new permissions automatically. You cannot grant certain permissions to anonymous users for security reasons. <a href="@readmore">Read more</a>.',
         array(
           '@role' => url('admin/people/permissions/roles'),
           '@settings' => url('admin/config/people/accounts'),
-          '@readmore' => 'http://www.drupalgardens.com/documentation/roles',
+          '@readmore' => $is_smb ? 'http://www.drupalgardens.com/documentation/roles' : 'https://docs.acquia.com/site-factory/users/roles',
         )) . '</p>';
   }
 
