@@ -854,6 +854,9 @@ function acquia_gardens_ensure_domains($active_domains, $hosting_site_name, $env
       $site_directory = acquia_gardens_site_directory($hosting_site_name, $live_environment, $gardens_site_id);
     }
     foreach ($domains as $domain) {
+      if (empty($domain)) {
+        continue;
+      }
       $valid_domains[$domain] = $site_directory;
       // Create any new symlinks pointing from the domain to the Gardens site.
       // If an error occurs here, something is seriously wrong, and the site is
