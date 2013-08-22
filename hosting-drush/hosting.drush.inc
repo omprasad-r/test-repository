@@ -123,6 +123,7 @@ function hosting_drush_command() {
     'arguments' => array(
       'site' => 'Hosting sitgroup name',
       'env' => 'Hosting environment name',
+      'live_env' => 'Hosting environment name for the live environment of the tangle',
     ),
     'required-arguments' => TRUE,
   );
@@ -737,14 +738,17 @@ function drush_hosting_domain_sync() {
  *   A hosting site group name.
  * @param String $environment
  *   A hosting environment name.
+ * @param String $live_environment
+ *   A hosting environment name for the corresponding live environment of the
+ *   tangle.
  */
-function drush_hosting_domain_sync_full($hosting_site_group, $environment) {
-  if (empty($hosting_site_group) || empty($environment)) {
+function drush_hosting_domain_sync_full($hosting_site_group, $environment, $live_environment) {
+  if (empty($hosting_site_group) || empty($environment) || empty($live_environment)) {
     return drush_set_error("BAD_ARGUMENTS", dt('Missing required argument.'));
   }
   drush_hosting_include_install_gardens();
   $active_domains = acquia_gardens_call('get.active.domains.by.site', array($hosting_site_group, $environment));
-  $valid_domains = acquia_gardens_ensure_domains($active_domains, $hosting_site_group, $environment);
+  $valid_domains = acquia_gardens_ensure_domains($active_domains, $hosting_site_group, $environment, $live_environment);
   syslog(LOG_INFO, "Got " . count($active_domains) . " domains from the gardener for [$hosting_site_group.$environment]");
   // We no longer preinstall, so there is no need to remove preinstall domains
   // any more.
@@ -840,14 +844,14 @@ function _drush_hosting_get_hosting_site_group() {
  * @return array
  *  An array of domains in the format array('domainname.com' => '/path/to/sites/g1234');
  */
-function acquia_gardens_ensure_domains($active_domains, $hosting_site_name, $environment = '') {
+function acquia_gardens_ensure_domains($active_domains, $hosting_site_name, $environment = '', $live_environment = '') {
   $valid_domains = array();
   foreach ($active_domains as $gardens_site_id => $domains) {
     if (empty($environment)) {
       $site_directory = acquia_gardens_site_directory_legacy($hosting_site_name, $gardens_site_id);
     }
     else {
-      $site_directory = acquia_gardens_site_directory($hosting_site_name, $environment, $gardens_site_id);
+      $site_directory = acquia_gardens_site_directory($hosting_site_name, $live_environment, $gardens_site_id);
     }
     foreach ($domains as $domain) {
       $valid_domains[$domain] = $site_directory;
@@ -866,7 +870,7 @@ function acquia_gardens_ensure_domains($active_domains, $hosting_site_name, $env
         }
       }
       catch (Exception $e) {
-        syslog(LOG_ERR, "GardensError: AN-22477 - Hosting site failed to set up a Gardens site domain GardensError: site: $hosting_site_name.$environment; error message: " . $e->getMessage());
+        syslog(LOG_ERR, "GardensError: AN-22477 - Hosting site failed to set up a Gardens site domain GardensError: site: $hosting_site_name.$environment (live env: $live_environment); error message: " . $e->getMessage());
       }
     }
   }
