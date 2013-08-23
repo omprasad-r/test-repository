@@ -470,10 +470,11 @@ function flag_form($form, &$form_state, $flag) {
     '#title' => t('Link type'),
     '#options' => _flag_link_type_options(),
     '#option_descriptions' => _flag_link_type_descriptions(),
-    '#flag_link_fields' => _flag_link_type_fields(),
     '#after_build' => array('flag_expand_link_option', 'flag_check_link_types'),
     '#default_value' => $flag->link_type,
-    '#weight' => 2,
+    // Give this a high weight so additions by the flag classes for entity-
+    // specific options go above.
+    '#weight' => 18,
     '#access' => empty($flag->locked['link_type']),
   );
 
@@ -602,7 +603,7 @@ function flag_delete_confirm($form, &$form_state, $flag) {
   return confirm_form($form,
     t('Are you sure you want to delete %title?', array('%title' => $flag->get_title())),
     !empty($_GET['destination']) ? $_GET['destination'] : FLAG_ADMIN_PATH,
-    isset($flag->module) ? t('This flag is provided by the %module module. It will loose any customizations and be disabled.', array('%module' => $flag->module)) : t('This action cannot be undone.'),
+    isset($flag->module) ? t('This flag is provided by the %module module. It will lose any customizations and be disabled.', array('%module' => $flag->module)) : t('This action cannot be undone.'),
     t('Delete'), t('Cancel')
   );
 }
