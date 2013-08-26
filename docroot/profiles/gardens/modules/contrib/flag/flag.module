@@ -185,8 +185,7 @@ function flag_help($path, $arg) {
  * Implements hook_init().
  */
 function flag_init() {
-  $path = drupal_get_path('module', 'flag');
-  include_once $path . '/includes/flag.actions.inc';
+  module_load_include('inc', 'flag', 'includes/flag.actions');
 }
 
 /**
@@ -459,10 +458,17 @@ function flag_field_attach_form($entity_type, $entity, &$form, &$form_state, $la
  * @see flag_field_attach_form().
  */
 function flag_field_attach_submit($entity_type, $entity, $form, &$form_state) {
-  // Put the form values in the entity so flag_field_attach_save() can find
-  // them. We can't call flag() here as new entities have no id yet.
-  if (isset($form_state['values']['flag'])) {
-    $entity->flag = $form_state['values']['flag'];
+  // This is invoked for each flag_field_attach_form(), but possibly more than
+  // once for a particular form in the case that a form is showing multiple
+  // entities (field collection, inline entity form). Hence we can't simply
+  // assume our submitted form values are in $form_state['values']['flag'].
+  if (isset($form['flag'])) {
+    $parents = $form['flag']['#parents'];
+    $flag_values = drupal_array_get_nested_value($form_state['values'], $parents);
+
+    // Put the form values in the entity so flag_field_attach_save() can find
+    // them. We can't call flag() here as new entities have no id yet.
+    $entity->flag = $flag_values;
   }
 }
 
@@ -856,7 +862,7 @@ function flag_user_view($account, $view_mode) {
       // User has no permission to use this flag.
       continue;
     }
-    if (!$flag->uses_hook_link(array())) {
+    if (!$flag->show_on_profile) {
       // Flag not set to appear on profile.
       continue;
     }
@@ -1529,18 +1535,6 @@ function _flag_link_type_descriptions() {
   return $options;
 }
 
-/**
- * Return an array of flag link fields that are dependent on a link type.
- */
-function _flag_link_type_fields() {
-  $options = array();
-  $types = flag_get_link_types();
-  foreach ($types as $type_name => $type) {
-    $options[$type_name] = array_keys($type['options']);
-  }
-  return $options;
-}
-
 // ---------------------------------------------------------------------------
 // Non-Views public API
 
@@ -1940,6 +1934,7 @@ function flag_get_user_flags($content_type, $content_id = NULL, $uid = NULL, $si
  *   ID that flagged the content. Each flagged content array is structured as
  *   an array of flag information for each flag, keyed by the flag name. If
  *   a flag name is specified, only the information for that flag is returned.
+ *   If no flags were found an empty array is returned.
  */
 function flag_get_content_flags($content_type, $content_id, $flag_name = NULL) {
   $content_flags = &drupal_static(__FUNCTION__, array());
@@ -1952,6 +1947,7 @@ function flag_get_content_flags($content_type, $content_id, $flag_name = NULL) {
       ->condition('content_id', $content_id)
       ->orderBy('timestamp', 'DESC')
       ->execute();
+    $content_flags[$content_type][$content_id] = array();
     foreach ($result as $flag_content) {
       // Build a list of flaggings for all flags by user.
       $content_flags[$content_type][$content_id]['users'][$flag_content->uid][$flag_names[$flag_content->fid]] = $flag_content;
@@ -1959,8 +1955,13 @@ function flag_get_content_flags($content_type, $content_id, $flag_name = NULL) {
       $content_flags[$content_type][$content_id]['flags'][$flag_names[$flag_content->fid]][$flag_content->uid] = $flag_content;
     }
   }
-
-  return isset($flag_name) ? $content_flags[$content_type][$content_id]['flags'][$flag_name] : $content_flags[$content_type][$content_id]['users'];
+  if (empty($content_flags[$content_type][$content_id])) {
+    return array();
+  }
+  if (isset($flag_name)) {
+    return $content_flags[$content_type][$content_id]['flags'][$flag_name];
+  }
+  return $content_flags[$content_type][$content_id]['users'];
 }
 
 /**

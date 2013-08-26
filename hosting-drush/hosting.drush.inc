@@ -116,7 +116,17 @@ function hosting_drush_command() {
       'cleanup-deleted' => 'Cleanup Deleted Symlinks',
     ),
   );
-
+  $items['domain-sync-full'] = array(
+    'bootstrap' => DRUSH_BOOTSTRAP_DRUPAL_ROOT,
+    'description' => 'Sync all domains from the gardener for a site/env',
+    'aliases' => array('dom-full'),
+    'arguments' => array(
+      'site' => 'Hosting sitgroup name',
+      'env' => 'Hosting environment name',
+      'live_env' => 'Hosting environment name for the live environment of the tangle',
+    ),
+    'required-arguments' => TRUE,
+  );
 
   $items['localhost-curl'] = array(
     'description' => "Makes a localhost curl request.",
@@ -722,6 +732,29 @@ function drush_hosting_domain_sync() {
 }
 
 /**
+ * Environment-aware full domain sync command for a sitegroup/environment
+ *
+ * @param String $hosting_site_group
+ *   A hosting site group name.
+ * @param String $environment
+ *   A hosting environment name.
+ * @param String $live_environment
+ *   A hosting environment name for the corresponding live environment of the
+ *   tangle.
+ */
+function drush_hosting_domain_sync_full($hosting_site_group, $environment, $live_environment) {
+  if (empty($hosting_site_group) || empty($environment) || empty($live_environment)) {
+    return drush_set_error("BAD_ARGUMENTS", dt('Missing required argument.'));
+  }
+  drush_hosting_include_install_gardens();
+  $active_domains = acquia_gardens_call('get.active.domains.by.site', array($hosting_site_group, $environment));
+  $valid_domains = acquia_gardens_ensure_domains($active_domains, $hosting_site_group, $environment, $live_environment);
+  syslog(LOG_INFO, "Got " . count($active_domains) . " domains from the gardener for [$hosting_site_group.$environment]");
+  // We no longer preinstall, so there is no need to remove preinstall domains
+  // any more.
+}
+
+/**
  * drush command callback. cURL me maybe.
  *
  */
@@ -792,22 +825,38 @@ function _drush_hosting_get_hosting_site_group() {
 }
 
 /**
+ * Creates any required domain symlinks in the sites directory from a given list.
  *
  * @param array $active_domains
- *  An array keyed by site id containing an array of domains alloted to that site.
- *  Example:
- *  array('g123' => array('domain1.com', 'domain2.org', etc), 'g321' => array('othersite.drupalgardens.com'));
+ *   An array keyed by DB role containing an array of domains alloted to that
+ *   site.
+ *   Example:
+ *     array(
+ *       'g123' => array('domain1.com', 'domain2.org', etc),
+ *       'g321' => array('othersite.drupalgardens.com')
+ *     );
  * @param string $hosting_site_name
- *  The hosting site identifier (e.g. tangle001).
+ *   The hosting site identifier (e.g. tangle001), or a sitegroup name if
+ *   $environment is also specified.
+ * @param String $environment
+ *   (Optional) A hosting environment name.
  *
  * @return array
  *  An array of domains in the format array('domainname.com' => '/path/to/sites/g1234');
  */
-function acquia_gardens_ensure_domains($active_domains, $hosting_site_name) {
+function acquia_gardens_ensure_domains($active_domains, $hosting_site_name, $environment = '', $live_environment = '') {
   $valid_domains = array();
   foreach ($active_domains as $gardens_site_id => $domains) {
-    $site_directory = acquia_gardens_site_directory_legacy($hosting_site_name, $gardens_site_id);
+    if (empty($environment)) {
+      $site_directory = acquia_gardens_site_directory_legacy($hosting_site_name, $gardens_site_id);
+    }
+    else {
+      $site_directory = acquia_gardens_site_directory($hosting_site_name, $live_environment, $gardens_site_id);
+    }
     foreach ($domains as $domain) {
+      if (empty($domain)) {
+        continue;
+      }
       $valid_domains[$domain] = $site_directory;
       // Create any new symlinks pointing from the domain to the Gardens site.
       // If an error occurs here, something is seriously wrong, and the site is
@@ -824,7 +873,7 @@ function acquia_gardens_ensure_domains($active_domains, $hosting_site_name) {
         }
       }
       catch (Exception $e) {
-        syslog(LOG_ERR, "GardensError: AN-22477 - Hosting site failed to set up a Gardens site domain GardensError: site: $hosting_site_name; error message: " . $e->getMessage());
+        syslog(LOG_ERR, "GardensError: AN-22477 - Hosting site failed to set up a Gardens site domain GardensError: site: $hosting_site_name.$environment (live env: $live_environment); error message: " . $e->getMessage());
       }
     }
   }
