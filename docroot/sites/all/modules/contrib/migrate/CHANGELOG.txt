@@ -1,4 +1,3 @@
-
 Next release
 ============
 
@@ -18,12 +17,42 @@ migrations which pass a group object, or nothing, but that support will be
 removed in a future version.
 
 Features and enhancements
+- #2051547 - Add ability to revert UI-defined field mappings.
+
+Bug fixes
+- #2060631 - Fix notices on poll vote import.
+- #2049689 - Empty values for node is_new caused SQL errors.
+- #2042399 - Node import did not respect revision flag.
+- #2034885 - For XML sources, don't override values populated in prepareRow().
+- #2041267 - Handle lack of potential dependencies on edit page.
+- #2040101 - Breadcrumbs in migration UI missing sections
+- #2033947 - Empty migration display names when matching group names.
+- #2037265 - Static migrations were not registered on module enable.
+- #2021457 - Coding standard improvements for xml.inc.
+- #2030559 - Add deprecation messages for arguments().
+- #1854382 - Fix handling of terms with leading spaces.
+
+Migrate 2.6 Release Candidate 1
+===============================
+
+Features and enhancements
+- #1998632 - Extend MigrateItemsXML to handle an array of XML files.
+- #1990612 - Add a row status argument to MigrateException, allowing rows to
+             be cleanly skipped by throwing exceptions.
 - #2017835 - Add MigrateFileUriAsIs file class, and make file migrations more
              flexible.
 - #2004426 - UI support for editing dependencies; enable setting dependencies
              through arguments.
 
 Bug fixes
+- #2025137 - Ignore --update in the presence of --idlist.
+- #2023813 - Apply defaultValue() for empty XML values.
+- #2023657 - Prevent duplicate aliases when updating nodes.
+- #2021973 - Drush deregistration needs to handle mixed-case machine names.
+- #2017443 - Properly hash XML source rows with track_changes on.
+- #2020095 - Preserve arguments in legacy constructors.
+- #2018841 - Default field handler needs to account for empty column
+             descriptions.
 - #2016173 - Fix fatal error editing MigrationBase migrations.
 - #2015327 - Remove broken automatic field mapping feature.
 - #2014849 - Make sure statistics properly default to 0.
