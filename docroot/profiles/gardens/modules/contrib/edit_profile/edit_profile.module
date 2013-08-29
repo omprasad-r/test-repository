@@ -89,8 +89,11 @@ function edit_profile_form_user_profile_form_alter(&$form, &$form_state, $form_i
   // Hide all user fields when displaying the main "Edit account" form. (We
   // need to explicitly check that we aren't on the "Edit profile" form or on a
   // different category under "Edit account", since this alter hook gets called
-  // in those contexts also.)
-  if ($form_id != 'edit_profile_user_profile_form' && $form['#user_category'] == 'account') {
+  // in those contexts also.) Probably it is best to avoid applying this logic
+  // on programmatically submitted forms because datetime fields do not accept
+  // values when the field is hidden. (submitting new data via services for a
+  // user object)
+  if ($form_id != 'edit_profile_user_profile_form' && $form['#user_category'] == 'account' && empty($form_state['programmed'])) {
     foreach (array_keys(field_info_instances('user', 'user')) as $field_name) {
       $form[$field_name]['#access'] = FALSE;
     }
