@@ -1,12 +1,12 @@
 <?php
 
 if (count($_SERVER['argv']) < 4) {
-  echo "Usage: install_site.php DOMAIN DBROLE JSON_SETTINGS\n";
+  echo "Usage:\n{$_SERVER['argv'][0]} DOMAIN DBROLE BASE64_JSON_SETTINGS\n";
   exit(1);
 }
 
 list($script_name, $domain, $db_role, $data) = $_SERVER['argv'];
-$gardens_site_info = $data ? json_decode($data, TRUE) : array();
+$gardens_site_info = $data ? json_decode(base64_decode($data), TRUE) : array();
 install_site($domain, $db_role, $gardens_site_info);
 
 /**
