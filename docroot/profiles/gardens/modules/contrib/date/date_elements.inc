@@ -447,7 +447,7 @@ function date_combo_validate($element, &$form_state) {
   $form_input = drupal_array_get_nested_value($form_state['input'], $element['#field_parents']);
 
   // If the whole field is empty and that's OK, stop now.
-  if (empty($form_input[$field_name]) && !$element['#required']) {
+  if (empty($form_input[$field_name])) {
     return;
   }
 

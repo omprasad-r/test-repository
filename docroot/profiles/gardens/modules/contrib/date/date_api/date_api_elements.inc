@@ -400,7 +400,7 @@ function date_text_validate($element, &$form_state) {
  */
 function date_text_input_date($element, $input) {
   if (empty($input) || !is_array($input) || !array_key_exists('date', $input) || empty($input['date'])) {
-    return NULL;
+    return is_string($input) && $input === $element['#default_value'] ? date_default_date($element) : NULL;
   }
   $granularity = date_format_order($element['#date_format']);
   $date = new DateObject($input['date'], $element['#date_timezone'], $element['#date_format']);
