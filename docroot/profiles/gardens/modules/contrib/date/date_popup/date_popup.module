@@ -521,7 +521,7 @@ function date_popup_validate($element, &$form_state) {
  */
 function date_popup_input_date($element, $input, $auto_complete = FALSE) {
   if (empty($input) || !is_array($input) || !array_key_exists('date', $input) || empty($input['date'])) {
-    return NULL;
+    return is_string($input) && $input === $element['#default_value'] ? date_default_date($element) : NULL;
   }
   date_popup_add();
   $granularity = date_format_order($element['#date_format']);
