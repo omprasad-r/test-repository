@@ -106,6 +106,8 @@ function warner_misc_disallowed_modules_alter(&$modules) {
     'mailhandler_tokenauth', // Cannot be removed from disallowed - unmet dependency
     'mailhandler_medialink',
     'mailhandler_sendto_auth',
+    'privatemsg_realname',
+    'privatemsg_rules',
     'mailhandler_singlemailbox',
     'mailhandler_multiple_email',
     'mailhandler_extended',
