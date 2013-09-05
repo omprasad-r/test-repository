@@ -625,3 +625,68 @@ function theme_warner_misc_membership_stats($variables) {
     array(t('Inactive members'), $variables['inactive_member_count'])
   )));
 }
+
+/**
+ * Implements hook_privatemsg_block_message().
+ */
+function warner_misc_privatemsg_block_message($author, $recipients, $context = array()) {
+  if (!warner_misc_is_privatemsg_restricted_to_friends() ) {
+    return;
+  }
+
+  $blocked = array();
+
+  foreach ($recipients as $recipient_id => $recipient) {
+    if ($author->uid !== $recipient->uid) {
+      $flag = flag_get_flag('friend');
+      $flag_status = flag_friend_determine_friend_status($flag, $author->uid, $recipient->uid);
+
+      if ($flag_status !== FLAG_FRIEND_FLAGGED) {
+        $blocked[] = array(
+          'recipient' => $recipient_id,
+          'message' => t('You can only message friends.'),
+        );
+      }
+    }
+  }
+
+  return $blocked;
+}
+
+/**
+ * Implements hook_form_FORM_ID_alter().
+ *
+ * Adds an option to restrict messaging to friends only.
+ */
+function warner_misc_form_privatemsg_admin_settings_alter(&$form, $form_state) {
+  if (!module_exists('flag_friend')) {
+    return;
+  }
+
+  $form['flag_friend'] = array(
+    '#type' => 'fieldset',
+    '#group' => 'settings',
+    '#title' => t('Flag friend integration'),
+  );
+
+  $form['flag_friend']['privatemsg_restrict_messaging_to_friends_only'] = array(
+    '#type' => 'checkbox',
+    '#title' => t('Restrict messaging to friends only'),
+    '#description' => t(''),
+    '#default_value' => warner_misc_is_privatemsg_restricted_to_friends(),
+  );
+}
+
+/**
+ * Helper function to check if private messages is restricted to friends only.
+ *
+ * @return Bool
+ *   TRUE if Private messages is restricted to friends only.
+ */
+function warner_misc_is_privatemsg_restricted_to_friends() {
+  $flag_friend_enabled = module_exists('flag_friend');
+  $privatemsg_restricted = variable_get('privatemsg_restrict_messaging_to_friends_only', FALSE);
+
+  return $flag_friend_enabled && $privatemsg_restricted;
+}
+
