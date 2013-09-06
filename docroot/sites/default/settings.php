@@ -11,16 +11,19 @@ if (function_exists('drush_main') || drupal_is_cli()) {
   return;
 }
 
-// Determine what stage we are in, so we can figure out if the user requested a
-// custom domain or not. Use gsteamer as the fallback when we can't find a
-// stage at all (e.g., local development machines).
+// Determine what gardener we are in and figure out if the user requested a
+// custom domain or not.
 
-// @todo DG-7864: get one or both of these values out of the .ini file. For now
-// we'll hard-code them in each customer repo.
-$site_suffix = "example.acquia-test.com";
-$gardener_url = "http://gardener.example.acquia-test.com";
+if (!function_exists('_acquia_gardens_xmlrpc_creds')) {
+  $path = DRUPAL_ROOT .'/../library';
+  @include_once("$path/acquia_gardens_xmlrpc.inc");
+}
 
-
+$creds = _acquia_gardens_xmlrpc_creds('gardener');
+$gardener_url = $creds['url'];
+// The gardener is assumed to be of the form www.CUSTOMER.DOMAIN.com, so site
+// suffix is the gardener URL without the leading 'www.'.
+$site_suffix = substr(parse_url($gardener_url, PHP_URL_HOST), 4);
 
 // Now check the requested URL; if it doesn't end in the standard Gardens site
 // suffix, it must be a custom domain.
