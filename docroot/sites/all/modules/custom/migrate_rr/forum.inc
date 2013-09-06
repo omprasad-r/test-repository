@@ -92,7 +92,7 @@ class RRForumMigration extends RRMigration {
       ->select('board_posts', 'bp')
       ->fields('bp')
       ->condition('fanclub_id', $arguments['artist_id'])
-      ->condition('topic_id', array(184, 550), 'NOT IN')
+      ->condition('topic_id', $this->newsTopicIds, 'NOT IN')
       ->orderBy('updated_at');
 
     $this->source = new MigrateSourceSQL($query, $fields, NULL,
