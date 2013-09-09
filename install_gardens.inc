@@ -365,6 +365,10 @@ function install_gardens($hosting_site_name, $hosting_site_environment, $data = 
       chmod($site_directory, 0755);
       touch("$site_directory/installed");
 
+      // Rename files to f and symlink files -> f.
+      rename("$site_directory/files", "$site_directory/f");
+      acquia_gardens_ensure_symlink("$site_directory/f", "$site_directory/files");
+
       // Save the site's original (standard *.drupalgardens.com) domain.
       $standard_domain = reset($domains);
       drupal_override_server_variables(array('url' => $gardens_site_info['url'] . '/index.php'));
@@ -372,8 +376,7 @@ function install_gardens($hosting_site_name, $hosting_site_environment, $data = 
       variable_set('gardens_misc_standard_domain', $standard_domain);
       // Normally we only have one domain during configure, so just set the last value.
       // @see: AN-19653  this is a quick fix for imagecache problems.
-      $domain = end($domains);
-      variable_set('file_public_path', "sites/{$domain}/files");
+      variable_set('file_public_path', "sites/g/files/{$gardens_site_id}/f");
       variable_set('site_name', $gardens_site_info['site_name']);
       variable_set('site_mail', $gardens_site_info['site_mail']);
 
