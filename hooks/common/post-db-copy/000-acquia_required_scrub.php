@@ -8,7 +8,7 @@ $db_role = $argv[3]; // Database name
 fwrite(STDERR, "Scrubbing site database. Site: $site, Env: $env, Db Role: $db_role\n");
 
 // Get the db connection.
-require dirname(__FILE__) . '/../acquia/db_connect.php';
+require dirname(__FILE__) . '/../../acquia/db_connect.php';
 $link = get_db($site, $env, $db_role);
 
 // Get the site name from the database.
