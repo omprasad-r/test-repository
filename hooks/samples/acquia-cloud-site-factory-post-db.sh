@@ -15,9 +15,8 @@ source_env="$4"
 
 # You need the URI of the site factory website in order for drush to target that
 # site. Without it, the drush command will fail. The uri.php file below will
-# locate the URI based on the site, environment and db role arguments. Make sure
-# that the path to uri.php is correct relative to your script.
-uri=`/usr/bin/env php ../../acquia/uri.php $site $target_env $db_role`
+# locate the URI based on the site, environment and db role arguments.
+uri=`/usr/bin/env php /mnt/www/html/$site.$target_env/hooks/acquia/uri.php $site $target_env $db_role`
 
 # Print a statement to the cloud log.
 echo "$site.$target_env: Received copy of database $db_name from $source_env."
