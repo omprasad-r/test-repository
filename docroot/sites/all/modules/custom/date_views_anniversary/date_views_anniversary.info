@@ -1,0 +1,8 @@
+name = Date Views anniversary
+description = Filter on date fields to be able to display content based on a day of a year without year restriction.
+package = Development
+core = 7.x
+
+dependencies[] = date_views
+
+files[] = includes/date_views_anniversary_filter_handler.inc
