@@ -506,3 +506,10 @@ function warner_misc_update_11160() {
     module_enable(array('janrain_capture_screens'));
   }
 }
+
+/**
+ * Enables 'scheduler' module.
+ */
+function warner_misc_update_11161() {
+  module_enable(array('scheduler'));
+}
