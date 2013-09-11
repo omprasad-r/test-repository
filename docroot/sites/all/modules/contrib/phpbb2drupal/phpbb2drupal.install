@@ -1,0 +1,186 @@
+<?php
+/**
+ * @file
+ * Install, update and uninstall functions for the phpbb2drupal module.
+ *
+ */
+
+/**
+ * Implements hook_schema().
+ */
+function phpbb2drupal_schema() {
+ $schema = array();
+ $schema['phpbb2drupal_instances'] = array(
+   'description' => 'Table to hold information on a phpbb instance and migration settings for that instance',
+   'fields' => array(
+     'machine_name' => array(
+                         'description' => 'machine name of the migration instance generated from name',
+                         'type' => 'varchar',
+                         'length' => 256,
+                         'not null' => TRUE),
+     'name' => array(
+                         'description' => 'human readable name of the migration',
+                         'type' => 'varchar',
+                         'length' => 256,
+                         'not null' => TRUE),
+     'db' => array(
+                         'description' => 'structure with DB settings for the migration',
+                         'type' => 'varchar',
+                         'length' => 2056,
+                         'not null' => TRUE),
+     'text_format' => array(
+                         'description' => 'the text format used in the migration',
+                         'type' => 'varchar',
+                         'length' => 16,
+                         'not null' => TRUE),
+     'language' => array(
+                         'description' => 'the language code for the migration',
+                         'type' => 'char',
+                         'length' => 2,
+                         'not null' => FALSE),
+     'files_domain' => array(
+                         'description' => 'A url pointing to a file domain for the migration',
+                         'type' => 'varchar',
+                         'length' => 512,
+                         'not null' => FALSE),
+     'files_directory' => array(
+                         'description' => 'a local directory for the files for the migration',
+                         'type' => 'varchar',
+                         'length' => 256,
+                         'not null' => FALSE),
+     'settings' => array(
+           'description' => 'structure with additional settings for this migration in',
+           'type' => 'varchar',
+           'length' => 2056,
+           'not null' => FALSE),
+            
+     ),
+     'primary keys' => array('machine_name'),
+   );
+ return $schema;
+}
+
+/**
+ * Add table for storing multple phpbb migrations on one site.
+ */
+function phpbb2drupal_update_7300() {
+ // Install the table needed for storing phpbb2drupal information
+ $schema['phpbb2drupal_instances'] = array(
+   'description' => 'Table to hold information on a phpbb instance and migration settings for that instance',
+   'fields' => array(
+     'machine_name' => array(
+       'description' => 'machine name of the migration instance generated from name',
+       'type' => 'varchar',
+       'length' => 256,
+       'not null' => TRUE),
+     'name' => array(
+       'description' => 'human readable name of the migration',
+       'type' => 'varchar',
+       'length' => 256,
+       'not null' => TRUE),
+     'db' => array(
+       'description' => 'structure with DB settings for the migration',
+       'type' => 'varchar',
+       'length' => 2056,
+       'not null' => TRUE),
+     'text_format' => array(
+       'description' => 'the text format used in the migration',
+       'type' => 'varchar',
+       'length' => 16,
+       'not null' => TRUE),
+     'language' => array(
+       'description' => 'the language code for the migration',
+       'type' => 'char',
+       'length' => 2,
+       'not null' => FALSE),
+     'files_domain' => array(
+       'description' => 'A url pointing to a file domain for the migration',
+       'type' => 'varchar',
+       'length' => 512,
+       'not null' => FALSE),
+     'files_directory' => array(
+       'description' => 'a local directory for the files for the migration',
+       'type' => 'varchar',
+       'length' => 256,
+       'not null' => FALSE),
+   ),
+   'primary keys' => array('machine_name'),
+ );
+ // Create the table.
+ db_create_table('phpbb2drupal_instances', $schema['phpbb2drupal_instances']);
+ 
+ // Migrate the exsisting data to the new table.
+ $phpbb_instance = array();
+ $phpbb_instance['machine_name'] = 'phpbb2drupal';
+ $phpbb_instance['name'] = 'phpbb2drupal default instance';
+ $phpbb_instance['db'] = array(
+   'prefx' => variable_get('phpbb2drupal_db_prefix',''),
+   'local' => variable_get('phpbb2drupal_db_local',''),
+   'driver' =>  variable_get('phpbb2drupal_db_driver',''),
+   'host' =>  variable_get('phpbb2drupal_db_host',''),
+   'database' =>  variable_get('phpbb2drupal_db_dbname',''),
+   'username' =>  variable_get('phpbb2drupal_db_username',''),
+   'password' => variable_get('phpbb2drupal_db_password',''),
+ );
+ $phpbb_instance['db'] = serialize($phpbb_instance['db']);
+ 
+ $phpbb_instance['text_format'] = variable_get('phpbb2drupal_text_format','');
+ if (variable_get('phpbb2drupal_files_domain','') != '') {
+  $phpbb_instance['files_domain'] = variable_get('phpbb2drupal_files_domain','');
+ }
+ if (variable_get('phpbb2drupal_files_directory','') != '') {
+  $phpbb_instance['files_directory'] = variable_get('phpbb2drupal_files_directory','');
+ }
+ 
+ db_insert('phpbb2drupal_instances')->fields($phpbb_instance)->execute();
+ 
+ // Remove the old fields that are no longer needed.
+ variable_del('phpbb2drupal_text_format');
+ variable_del('phpbb2drupal_db_prefix');
+ variable_del('phpbb2drupal_db_local');
+ variable_del('phpbb2drupal_db_driver');
+ variable_del('phpbb2drupal_db_host');
+ variable_del('phpbb2drupal_db_dbname');
+ variable_del('phpbb2drupal_db_username');
+ variable_del('phpbb2drupal_db_password');
+ variable_del('phpbb2drupal_files_domain');
+ variable_del('phpbb2drupal_files_directory');
+}
+
+/**
+ * Add field for attached media. 
+ */
+function phpbb2drupal_update_7301() {
+  // No longer automatically creating fields.
+}
+
+/**
+ * Add column for other settings for phpbb migrations. 
+ */
+function phpbb2drupal_update_7302() {
+  $column = array(
+      'description' => 'structure with additional settings for this migration in',
+      'type' => 'varchar',
+      'length' => 2056,
+      'not null' => FALSE,
+  );
+
+  db_add_field('phpbb2drupal_instances', 'settings', $column);
+
+}
+
+
+
+/**
+ * Implements hook_disable().
+ * Clean out current migrations.
+ */
+function phpbb2drupal_disable() {
+ $query = db_select('phpbb2drupal_instances','m');
+ $query->addField('m', 'machine_name');
+ $results = $query->execute();
+ while($migration = $results->fetchField()) {
+  PhpbbConfig::deregisterMigrations('phpbb2drupal',$migration);
+ }
+ db_delete('phpbb2drupal_instances')->execute();
+}
