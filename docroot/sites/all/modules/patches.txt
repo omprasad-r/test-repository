@@ -1,0 +1,5 @@
+; Contrib module: scheduler
+; ---------------------------------------
+;
+; See DG-9383 and https://drupal.org/node/1819074#comment-7845145
+; projects[scheduler][patch][] = "https://drupal.org/files/1819074-9-scheduler-publish_past_dates.patch"
