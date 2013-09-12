@@ -55,6 +55,13 @@ function quote_settings_form() {
     '#default_value' => _quote_variable_get('nest')
   );
 
+  $form['quote']['highlighted_text'] = array(
+    '#type' => 'checkbox',
+    '#title' => t('Quote highlighted text'),
+    '#description' => t('If enabled, javascript will be used for quoting selected (highlighted) text to provide a better user experience.'),
+    '#default_value' => _quote_variable_get('highlighted_text'),
+  );
+
   return system_settings_form($form);
 }
 
