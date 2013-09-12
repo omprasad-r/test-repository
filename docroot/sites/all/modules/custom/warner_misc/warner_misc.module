@@ -27,7 +27,131 @@ function warner_misc_menu() {
     'type' => MENU_CALLBACK,
   );
 
+  $items['admin/config/content/wysiwyg_customization'] = array(
+    'title' => 'Wysiwyg customization',
+    'description' => 'Customize wysiwyg settings.',
+    'page callback' => 'drupal_get_form',
+    'page arguments' => array('warner_misc_wysiwyg_settings_form'),
+    'access arguments' => array('administer filters'),
+    'type' => MENU_NORMAL_ITEM,
+  );
+
   return $items;
+}
+
+/**
+ * Wysiwyg customization form.
+ */
+function warner_misc_wysiwyg_settings_form() {
+  $form['warner_misc_wysiwyg_comment_form_buttons']= array(
+    '#type' => 'fieldset',
+    '#title' => t('Wysiwyg comment form button settings'),
+    '#description' => t(''),
+    '#collapsible' => FALSE,
+    '#collapsed' => FALSE,
+    '#tree' => TRUE,
+  );
+
+  // Get all filter formats.
+  $filter_formats = filter_formats();
+  $options = array();
+
+  foreach (wysiwyg_profile_load_all() as $format => $profile) {
+    // Get plugin metadata for selected editor.
+    $plugins = wysiwyg_get_plugins($profile->editor);
+
+    $form['warner_misc_wysiwyg_comment_form_buttons'][$format] = array(
+      '#type' => 'fieldset',
+      '#title' => 'Enabled editor buttons in comments for ' . $filter_formats[$format]->name,
+      '#collapsible' => TRUE,
+      '#collapsed' => FALSE,
+      '#theme' => 'warner_misc_admin_button_table',
+    );
+
+    if (!empty($profile->settings) && isset($filter_formats[$format])) {
+      $options[$format] = variable_get('warner_misc_comment_form_buttons_for_' . $format, array());
+
+      foreach ($plugins as $name => $meta) {
+        if (isset($meta['buttons']) && is_array($meta['buttons'])) {
+          foreach ($profile->settings['buttons'][$name] as $button => $value) {
+            if ($meta['buttons'][$button]) {
+              $button_title = $meta['buttons'][$button];
+              $form['warner_misc_wysiwyg_comment_form_buttons'][$format]['buttons'][$button] = array(
+                '#type' => 'checkbox',
+                '#title' => $button_title,
+                '#default_value' => !empty($options[$format]) ? $options[$format][$button] : $value,
+              );
+            }
+          }
+        }
+      }
+    }
+  }
+
+  $form['submit'] = array(
+    '#type' => 'submit',
+    '#value' => t('Save'),
+    '#weight' => 100,
+  );
+
+  return $form;
+}
+
+/**
+ * Custom submit handler for the Wysiwyg customization form.
+ */
+function warner_misc_wysiwyg_settings_form_submit($form, &$form_state) {
+  $values = $form_state['values'];
+
+  foreach ($values['warner_misc_wysiwyg_comment_form_buttons'] as $input_format => $settings) {
+    if (isset($settings['buttons'])) {
+      $settings['buttons'] = array_filter($settings['buttons']);
+      variable_set('warner_misc_comment_form_buttons_for_' . $input_format, $settings['buttons']);
+    }
+  }
+  wysiwyg_profile_cache_clear();
+
+  foreach ($values['warner_misc_wysiwyg_other'] as $key => $value) {
+    variable_set($key, $value);
+  }
+
+  drupal_set_message(t('Wysiwyg customized settings have been saved.'));
+
+  $form_state['redirect'] = 'admin/config/content/wysiwyg_customization';
+}
+
+/**
+ * Layout for the buttons in the Wysiwyg customization form.
+ */
+function theme_warner_misc_admin_button_table($variables) {
+  $form = $variables['form'];
+  $buttons = array();
+
+  // Flatten forms array.
+  foreach (element_children($form) as $name) {
+    foreach (element_children($form[$name]) as $button) {
+      $buttons[] = drupal_render($form[$name][$button]);
+    }
+  }
+
+  // Split checkboxes into rows with 3 columns.
+  $total = count($buttons);
+  $rows = array();
+  for ($i = 0; $i < $total; $i++) {
+    $row = array();
+    $row[] = array('data' => $buttons[$i]);
+    if (isset($buttons[++$i])) {
+      $row[] = array('data' => $buttons[$i]);
+    }
+    if (isset($buttons[++$i])) {
+      $row[] = array('data' => $buttons[$i]);
+    }
+    $rows[] = $row;
+  }
+
+  $output = theme('table', array('rows' => $rows, 'attributes' => array('width' => '100%')));
+
+  return $output;
 }
 
 /**
@@ -37,6 +161,9 @@ function warner_misc_theme() {
   return array(
     'warner_misc_membership_stats' => array(
       'variables' => array('member_count' => 0, 'fan_member_count' => 0, 'new_member_count' => 0, 'inactive_member_count' => 0),
+    ),
+    'warner_misc_admin_button_table' => array(
+      'render element' => 'form',
     ),
   );
 }
