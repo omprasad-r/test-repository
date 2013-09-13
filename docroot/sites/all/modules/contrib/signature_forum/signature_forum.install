@@ -45,10 +45,7 @@ function signature_forum_schema() {
 function signature_forum_schema_alter(&$schema) {
   // Allow longer signatures than the default 255 characters.
   drupal_load('module', 'signature_forum');
-  $schema['users']['fields']['signature']['type'] = 'text';
   $schema['users']['fields']['signature']['length'] = SIGNATURE_FORUM_FIELD_LENGTH;
-  unset($schema['users']['fields']['signature']['default']);
-  $schema['users']['fields']['signature']['not null'] = FALSE;
 }
 
 /**
@@ -171,31 +168,5 @@ function signature_forum_update_7000() {
 function signature_forum_update_7100() {
   if (db_table_exists('signature_post')) {
     db_rename_table('signature_post', 'signature_forum_post');
-  }
-}
-
-/**
- * Remedial fix for SQL error on install.
- *
- * Fixes problems caused when installing signature_forum returns error:
- * 'SQLSTATE[42000]: Syntax error or access violation: 1101 BLOB/TEXT column
- * 'signature' can't have a default value'.
- */
-function signature_forum_update_7101() {
-  drupal_load('module', 'signature_forum');
-  _signature_forum_update_schema();
-}
-
-/**
- * Fix regression when using with authentication modules.
- */
-function signature_forum_update_7102() {
-  $table = drupal_get_schema('users', TRUE);
-
-  // Change the field.
-  try {
-    db_change_field('users', 'signature', 'signature', $table['fields']['signature']);
-  } catch (PDOException $e) {
-    drupal_set_message($e->getMessage(), 'error');
   }
 }

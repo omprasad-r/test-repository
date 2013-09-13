@@ -54,14 +54,8 @@ define('SIGNATURE_FORUM_PER_POST_USER', 2);
 
 /**
  * The new length of the signature field of the user table.
- *
- * Limiting factor |  Bytes
- * ----------------+-------
- * Drupal core     |    255
- * MySQL           | 65,535
- * SQLite          | 21,845
  */
-define('SIGNATURE_FORUM_FIELD_LENGTH', 21845);
+define('SIGNATURE_FORUM_FIELD_LENGTH', 16383);
 
 /**
  * Implementation of hook_help().
@@ -1048,16 +1042,5 @@ function signature_forum_node_type_insert($info) {
 function signature_forum_exit() {
   if (defined('SIGNATURE_FORUM_UPDATE_EXTRA_FIELDS')) {
     _signature_forum_update_extra_fields_visibilities();
-  }
-}
-
-/**
- * Implements hook_user_presave().
- */
-function signature_forum_user_presave(&$edit, $account, $category) {
-  // Work around MySQL not allowing TEXT/BLOB fields to have a default value.
-  // @see: http://bugs.mysql.com/bug.php?id=21532.
-  if (!isset($account->signature) && !isset($edit['signature'])) {
-    $edit['signature'] = '';
   }
 }
