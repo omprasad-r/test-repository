@@ -1,3 +1,9 @@
+; Contrib module: quote
+; ---------------------------------------
+;
+; See DG-9394 and https://drupal.org/node/2081491#comment-7829295
+; projects[quote][patch][] = "https://drupal.org/files/quote-highlighted-text-1.patch"
+
 ; Contrib module: signature_forum
 ; ---------------------------------------
 ;
