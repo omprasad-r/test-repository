@@ -1,0 +1,201 @@
+<?php
+
+/**
+ * @file
+ * Installs, updates and uninstalls signature_forum module.
+ */
+
+/**
+ * Implementation of hook_schema().
+ */
+function signature_forum_schema() {
+  $schema['signature_forum_post'] = array(
+    'fields' => array(
+      'delta' => array(
+        'type' => 'int',
+        'unsigned' => TRUE,
+        'description' => 'The id of the attached object. nid for nodes and cid for comments.',
+        'not null' => TRUE,
+        'disp-width' => 11,
+      ),
+      'type' => array(
+        'description' => 'The type of comment to attach settings.',
+        'type' => 'varchar',
+        'length' => 32,
+        'not null' => TRUE,
+        'default' => '',
+      ),
+      'status' => array(
+        'type' => 'int',
+        'description' => 'A boolean indicator for whether or not a signature should be displayed.',
+        'size' => 'tiny',
+        'not null' => TRUE,
+        'disp-width' => 11,
+      ),
+    ),
+    'primary key' => array('delta', 'type'),
+  );
+
+  return $schema;
+}
+
+/**
+ * Implementation of hook_schema_alter().
+ */
+function signature_forum_schema_alter(&$schema) {
+  // Allow longer signatures than the default 255 characters.
+  drupal_load('module', 'signature_forum');
+  $schema['users']['fields']['signature']['type'] = 'text';
+  $schema['users']['fields']['signature']['length'] = SIGNATURE_FORUM_FIELD_LENGTH;
+  unset($schema['users']['fields']['signature']['default']);
+  $schema['users']['fields']['signature']['not null'] = FALSE;
+}
+
+/**
+ * Implementation of hook_install().
+ */
+function signature_forum_install() {
+  drupal_load('module', 'signature_forum');
+  _signature_forum_update_schema();
+  _signature_forum_update_extra_fields_visibilities();
+}
+
+/**
+ * Implementation of hook_disable().
+ */
+function signature_forum_disable() {
+  drupal_set_message(t('Signatures for Forums has been disabled. Signatures for Forums enabled longer signatures than the Drupal default. <strong>Caution! If you choose to uninstall Signatures for Forums all signatures will be truncated to the default length of 255 characters.</strong>'), 'warning');
+}
+
+/**
+ * Implementation of hook_uninstall().
+ */
+function signature_forum_uninstall() {
+  _signature_forum_update_schema();
+
+  variable_del('signature_forum_short_content_action');
+  variable_del('signature_forum_short_content_length');
+  variable_del('signature_forum_short_content_format');
+  variable_del('signature_forum_short_content_exempt_roles');
+  variable_del('signature_forum_show_once_options');
+  variable_del('signature_forum_show_once_exempt_roles');
+  variable_del('signature_forum_defaults_mode');
+  variable_del('signature_forum_defaults_global');
+  variable_del('signature_forum_max_characters');
+  variable_del('signature_forum_max_lines');
+}
+
+/**
+ * Synchronize the signature field with what hook_schema() says. Note that
+ * schema changes might truncate signatures in the database.
+ */
+function _signature_forum_update_schema() {
+  $table = drupal_get_schema('users', TRUE);
+
+  // Truncate the field.
+  $affected_rows = 0;
+  switch (Database::getConnection()->databaseType()) {
+    case 'mysql':
+    case 'mysqli':
+    case 'pqsql':
+      $affected_rows = db_query('UPDATE {users} SET signature = SUBSTR(signature, 1, :len)', array(':len' => $table['fields']['signature']['length']))->rowCount();
+      break;
+  }
+  if ($affected_rows) {
+    drupal_set_message(t('%affected signatures have been truncated.', array('%affected' => $affected_rows)), 'warning');
+  }
+
+  // Change the field.
+  try {
+    db_change_field('users', 'signature', 'signature', $table['fields']['signature']);
+  } catch (PDOException $e) {
+    drupal_set_message($e->getMessage(), 'error');
+  }
+}
+
+/**
+ * Upgrade to Drupal 7.
+ */
+function signature_forum_update_7000() {
+  // Make sure signature_forum is loaded.
+  drupal_load('module', 'signature_forum');
+  _signature_forum_update_schema();
+
+  // Move signatures to the core users table.
+  switch (Database::getConnection()->databaseType()) {
+    case 'mysql':
+    case 'mysqli':
+      db_query('UPDATE {users}, {users_signature}
+        SET {users}.signature = {users_signature}.signature
+        WHERE {users}.uid = {users_signature}.uid');
+      break;
+    case 'pqsql':
+      db_query('UPDATE {users} SET signature = {users_signature}.signature FROM {users_signature}}
+        WHERE {users}.uid = {users_signature}.uid');
+      break;
+  }
+
+  // Update the Drupal 6 schema.
+  db_drop_table('users_signature');
+
+  // Update the settings.
+  $settings = variable_get('signature_forum_settings', array());
+  $direct_transfer = array(
+    'signature_forum_line_limit' => 'signature_forum_max_lines',
+    'signature_forum_min_content_length' => 'signature_forum_short_content_length',
+    'signature_forum_min_content_length_action' => 'signature_forum_short_content_action',
+    'signature_forum_min_content_length_filter' => 'signature_forum_short_content_format',
+    'signature_forum_show_once_options' => 'signature_forum_show_once_options',
+  );
+  foreach ($direct_transfer as $from => $to) {
+    if (!empty($settings[$from])) {
+      variable_set($to, $settings[$from]);
+    }
+  }
+  if (empty($settings['signature_forum_min_content_length'])) {
+    variable_set('signature_forum_short_content_action', SIGNATURE_FORUM_DO_NOTHING);
+  }
+  variable_del('signature_forum_settings');
+
+  // Upgrade the visibility settings.
+  $visibility_settings = array();
+  foreach (node_type_get_names() as $type) {
+    $visibility_settings[$type->type] = !empty($settings['signature_forum_show_for_' . $type->type]);
+  }
+  _signature_forum_update_bundle_settings('node', $visibility_settings);
+}
+
+/**
+ * Update Drupal 6 schema.
+ */
+function signature_forum_update_7100() {
+  if (db_table_exists('signature_post')) {
+    db_rename_table('signature_post', 'signature_forum_post');
+  }
+}
+
+/**
+ * Remedial fix for SQL error on install.
+ *
+ * Fixes problems caused when installing signature_forum returns error:
+ * 'SQLSTATE[42000]: Syntax error or access violation: 1101 BLOB/TEXT column
+ * 'signature' can't have a default value'.
+ */
+function signature_forum_update_7101() {
+  drupal_load('module', 'signature_forum');
+  _signature_forum_update_schema();
+}
+
+/**
+ * Fix regression when using with authentication modules.
+ */
+function signature_forum_update_7102() {
+  $table = drupal_get_schema('users', TRUE);
+
+  // Change the field.
+  try {
+    db_change_field('users', 'signature', 'signature', $table['fields']['signature']);
+  } catch (PDOException $e) {
+    drupal_set_message($e->getMessage(), 'error');
+  }
+}
