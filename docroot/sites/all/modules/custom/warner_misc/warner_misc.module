@@ -859,3 +859,24 @@ function warner_misc_is_user_admin($account) {
   return FALSE;
 }
 
+/**
+ * Implements hook_form_FORM_ID_alter().
+ */
+function warner_misc_form_node_type_form_alter(&$form, $form_state) {
+  $form['scheduler']['#attached']['js']['vertical-tabs'] = drupal_get_path('module', 'warner_misc') . "/js/warner_misc_scheduler_vertical_tabs.js";
+}
+
+/**
+ * Implements hook_form_alter().
+ */
+function warner_misc_form_alter(&$form, $form_state) {
+  if (!empty($form['#node_edit_form']) && user_access('schedule (un)publishing of nodes')) {
+    $publishing_enabled = variable_get('scheduler_publish_enable_' . $form['type']['#value'], 0) == 1;
+    $unpublishing_enabled = variable_get('scheduler_unpublish_enable_' . $form['type']['#value'], 0) == 1;
+
+    // if scheduling has been enabled for this node type
+    if ($publishing_enabled || $unpublishing_enabled) {
+      $form['scheduler_settings']['#attached']['js']['vertical-tabs'] = drupal_get_path('module', 'warner_misc') . "/js/warner_misc_scheduler_vertical_tabs.js";
+    }
+  }
+}
