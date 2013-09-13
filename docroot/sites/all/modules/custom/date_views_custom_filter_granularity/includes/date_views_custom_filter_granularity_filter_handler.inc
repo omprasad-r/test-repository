@@ -9,7 +9,7 @@
  * holidays, etc...
  */
 
-class date_views_anniversary_filter_handler extends date_views_filter_handler {
+class date_views_custom_filter_granularity_filter_handler extends date_views_filter_handler {
 
   /**
    * Add extra option for setting the date comparison granularity.

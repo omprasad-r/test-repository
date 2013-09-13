@@ -1,15 +1,17 @@
 <?php
 /**
  * @file
- * Extend functionality to Views to be able to create day and month filter without year restriction.
+ * Extend functionality of Views to be able to filter on dates based on any
+ * combination of date components (e.g. filtering on only month and day,
+ * without year restriction).
  */
 
 /**
  * Implements hook_views_api().
  */
-function date_views_anniversary_views_api() {
+function date_views_custom_filter_granularity_views_api() {
   return array(
     'api' => 3,
-    'path' => drupal_get_path('module', 'date_views_anniversary') . '/includes',
+    'path' => drupal_get_path('module', 'date_views_custom_filter_granularity') . '/includes',
   );
 }
