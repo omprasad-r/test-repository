@@ -1,0 +1,121 @@
+<?php
+
+/**
+ * @file
+ * Merge two forum topics into one.
+ *
+ */
+
+/**
+ * Implements hook_menu().
+ */
+function forum_merge_menu() {
+  $items = array();
+
+  $items['node/%/merge'] = array(
+    'type' => MENU_LOCAL_TASK,
+    'title' => 'Merge forum',
+    'page callback' => 'drupal_get_form',
+    'page arguments' => array('forum_merge_page_form', 1),
+    'access callback' => 'forum_merge_access_callback',
+    'access arguments' => array(1),
+  );
+
+  $items['forum_merge/autocomplete/%'] = array(
+    'type' => MENU_CALLBACK,
+    'title' => 'Forum topic autocomplete',
+    'page callback' => 'forum_merge_autocomplete_callback',
+    'access arguments' => array('merge forums'),
+  );
+
+  return $items;
+}
+
+/**
+ * Implements hook_permission().
+ */
+function forum_merge_permission() {
+  return array(
+    'merge forums' => array(
+      'title' => t('Merge forums'),
+      'description' => t('Permission to merge two forum topics into one.'),
+    ),
+  );
+}
+
+/**
+ * Form builder to forum merge page.
+ *
+ * @see forum_merge_menu().
+ */
+function forum_merge_page_form($form, $form_state, $nid) {
+  $form['forum'] = array(
+    '#type' => 'textfield',
+    '#title' => t('Topic title'),
+    '#required' => TRUE,
+    '#description' => t('Choose a forum topic which you would like to merge into this one.'),
+    '#autocomplete_path' => 'forum_merge/autocomplete/',
+  );
+
+  return $form;
+}
+
+/**
+ * Validate handler for forum_merge_page_form().
+ */
+function forum_merge_page_form_validate($form, $form_state, $nid) {
+  if ($form_state['forum']) {
+    $forum_id = forum_merge_parse_id($form_state['forum']);
+  }
+}
+
+/**
+ * Submit handler for forum_merge_page_form().
+ */
+function forum_merge_page_form_submit($form, $form_state, $nid) {
+  // Merge the proper forums, delete the unnecessary topic and create a redirect for it.
+}
+
+/**
+ * Access callback to forum merge page.
+ *
+ * @see forum_merge_menu().
+ */
+function forum_merge_access_callback($nid) {
+  $node = node_load($nid);
+  // If the displayed content is a forum topic, and the viewing user has the rights to merge and update
+  // forum topics.
+  if ($node->type === 'forum' && user_access('merge forums') && node_access('update', $node)) {
+    return TRUE;
+  }
+  return FALSE;
+}
+
+/**
+ * Autocomplete callback for forum topics.
+ *
+ * @see forum_merge_menu().
+ */
+function forum_merge_autocomplete_callback($string = '') {
+  $matches = array();
+  if (strlen($string) > 2) {
+    // Get the forum topics.
+  }
+  drupal_json_output($matches);
+}
+
+/**
+ * Parse a field value in form of "title [id:123]" and return 123
+ *
+ * @param $string
+ *   Forum name with ID in form of "title [id:123]".
+ * @return
+ *   Int value of the ID or NULL if not found.
+ */
+function forum_merge_parse_id($string) {
+  preg_match('/\[id:([^\[]*)\]$/', $string, $matches);
+  if (count($matches) == 2) {
+    return $matches[1];
+  }
+  return NULL;
+}
