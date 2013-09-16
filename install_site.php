@@ -172,37 +172,6 @@ function install_site($domain, $db_role, $gardens_site_info = array()) {
     user_set_authmaps($account, array('authname_openid' => ''));
     gardens_client_add_authmaps($account, array('authname_openid' => $gardens_site_info['openid']));
 
-    // If the gardener passed an enterprise client name, we switch to and install
-    // a profile of the same name, if it exists.  All custom configurations for
-    // the client and  additional modules can be handled from there.
-    $profile_name = empty($gardens_site_info['gardens_client_name']) ? '' : $gardens_site_info['gardens_client_name'];
-    if ($profile_name && file_exists(DRUPAL_ROOT . "/profiles/{$profile_name}/{$profile_name}.info")) {
-      $profile_name = $gardens_site_info['gardens_client_name'];
-      // Save the value for future use.
-      variable_set('gardens_client_name', $profile_name);
-      $previous_profile = variable_get('install_profile', 'gardens');
-      // First set the profile to make sure the profile "module" is found when we ...
-      variable_set('install_profile', $profile_name);
-      // ... rebuild module data (making sure it's not cached).
-      system_list_reset();
-      system_rebuild_module_data();
-      // If the profile "module" is not found, reset to the previous profile.
-      if (db_query("SELECT 1 FROM {system} WHERE type = 'module' AND name = :name", array(':name' => $profile_name))->fetchField()) {
-        // Pass TRUE to module_enable() so that dependent modules are also enabled.
-        // Normally, for performance, we would list dependencies here explicitly and
-        // pass FALSE, but in this case, we've already incurred the penalty of rebuilding
-        // the module data, so can allow module_enable() to benefit from that.
-        module_enable(array($profile_name), TRUE);
-      }
-      else {
-        // If the profile "module" is not found, reset to the previous profile. This
-        // should not happen.
-        variable_set('install_profile', $previous_profile);
-        system_list_reset();
-        system_rebuild_module_data();
-      }
-    }
-
     db_delete('semaphore')->condition('value', $lock_id)->execute();
 
   }
