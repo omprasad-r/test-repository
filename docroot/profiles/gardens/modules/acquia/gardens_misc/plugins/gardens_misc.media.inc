@@ -56,14 +56,25 @@ function gardens_misc_wysiwyg_editor_settings_alter(&$settings, &$context) {
     // Setup our new toolbar
     $new_toolbar =  array();
 
+    $comment_allowed_buttons = variable_get('warner_misc_comment_form_buttons_for_' . $context['profile']->format, array());
+
     // See if the allowed buttons for comments are enabled and add them to the
     // toolbar
-    foreach(array('Bold', 'Italic', 'BulletedList', 'NumberedList', 'Link', 'Unlink', 'Blockquote') as $button) {
-      if (in_array($button, $settings['toolbar'][0])) {
-        $new_toolbar[0][] = $button;
+    if (!empty($comment_allowed_buttons)) {
+      foreach ($comment_allowed_buttons as $button => $value) {
+        if (in_array($button, $settings['toolbar'][0])) {
+          $new_toolbar[0][] = $button;
+        }
       }
     }
-    
+    else {
+      foreach(array('Bold', 'Italic', 'BulletedList', 'NumberedList', 'Link', 'Unlink', 'Blockquote') as $button) {
+        if (in_array($button, $settings['toolbar'][0])) {
+          $new_toolbar[0][] = $button;
+        }
+      }
+    }
+
     // Check to see if the media button is enabled
     if (isset($settings['toolbar'][1]) && in_array('media', $settings['toolbar'][1])) {
       $new_toolbar[1] = array('media');
