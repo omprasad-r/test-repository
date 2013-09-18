@@ -376,7 +376,8 @@ function install_gardens($hosting_site_name, $hosting_site_environment, $data = 
       variable_set('gardens_misc_standard_domain', $standard_domain);
       // Normally we only have one domain during configure, so just set the last value.
       // @see: AN-19653  this is a quick fix for imagecache problems.
-      variable_set('file_public_path', "sites/g/files/{$gardens_site_id}/f");
+      $domain = end($domains);
+      variable_set('file_public_path', "sites/{$domain}/files");
       variable_set('site_name', $gardens_site_info['site_name']);
       variable_set('site_mail', $gardens_site_info['site_mail']);
 
