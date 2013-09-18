@@ -28,6 +28,15 @@ abstract class RRMigration extends Migration {
    */
   protected $artistSiteUrl;
 
+  /**
+   * Items with these topic_id values should be migrated as news nodes, and NOT
+   * migrated as forum nodes.
+   *
+   * @var array
+   */
+  protected $newsTopicIds = array(58, 101, 156, 170, 184, 190, 313, 346, 366,
+    376, 409, 507, 536, 550, 551, 566, 576);
+
   public function __construct($arguments) {
     $this->arguments = $arguments;
     parent::__construct($arguments);
