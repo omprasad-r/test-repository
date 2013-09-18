@@ -35,7 +35,7 @@ abstract class RRMigration extends Migration {
    * @var array
    */
   protected $newsTopicIds = array(58, 101, 156, 170, 184, 190, 313, 346, 366,
-    376, 409, 507, 536, 550, 551, 566, 576, 599);
+    376, 409, 507, 536, 550, 551, 566, 576);
 
   public function __construct($arguments) {
     $this->arguments = $arguments;
