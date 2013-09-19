@@ -43,6 +43,21 @@ function forum_merge_permission() {
 }
 
 /**
+ * Access callback to forum merge page.
+ *
+ * @see forum_merge_menu().
+ */
+function forum_merge_access_callback($nid) {
+  $node = node_load($nid);
+  // If the displayed content is a forum topic, and the viewing user has the rights to merge and update
+  // forum topics and create redirect for it.
+  if ($node->type === 'forum' && user_access('merge forums') && node_access('update', $node) && redirect_access('create', 'redirect')) {
+    return TRUE;
+  }
+  return FALSE;
+}
+
+/**
  * Form builder to forum merge page.
  *
  * @see forum_merge_menu().
@@ -118,10 +133,11 @@ function forum_merge_page_form_validate($form, &$form_state) {
           $message = 'The topic with id !nid doesn\'t exist.';
           form_set_error('forum', t( $message, array('!nid' => drupal_placeholder($forum_id))));
         }
-        elseif (node_access('delete', $node)) {
-          $message = 'You have no grants to be able to delete the forum topic with the following name: !title';
+        elseif (!node_access('delete', $node)) {
+          $message = 'You have no grants to be able to delete the forum topic with the following title: !title';
           form_set_error('forum', t( $message, array('!title' => drupal_placeholder($node->title))));
         }
+        $form_state['forum_ids'][$forum_id] = $forum_id;
       }
     }
   }
@@ -133,40 +149,99 @@ function forum_merge_page_form_validate($form, &$form_state) {
 function forum_merge_page_form_submit($form, $form_state) {
   $batch = array(
     'title' => t('Merging...'),
-    'operations' => array(
-      array('forum_merge_save_comments', array($form['#nid'], $form_state['forum_nids'])),
-      array('forum_merge_delete_forums', array($form['#nid'], $form_state['forum_nids']))
-    ),
+    'operations' => array(),
     'finished' => 'forum_merge_finished_callback',
   );
+
+  $base_node = node_load($form['#nid']);
+  // Add operations.
+  foreach ($form_state['forum_ids'] as $forum_id) {
+    $forum_node = node_load($forum_id);
+    $batch['operations'][] = array('forum_merge_save_comments', array($base_node, $forum_node));
+  }
   batch_set($batch);
 }
 
-function forum_merge_save_comments($base_nid, $forum_ids, &$context) {
-  // Save all the comments to the base node.
-}
+/**
+ * Batch operation to save the comments of the old forum to the updated one.
+ *
+ * @param $base_nid
+ *   The node id of the updated forum.
+ * @param $forum_id
+ *   The node id of the deprecated forum.
+ * @param $context
+ *   The context parameter for the batch process.
+ *
+ * @see forum_merge_page_form_submit().
+ */
+function forum_merge_save_comments($base_node, $forum_node, &$context) {
+  global $user;
 
-function forum_merge_delete_forums($redirect_nid, $forum_ids, &$context) {
-  // Delete all the merged forums and make a redirect to the base node.
-}
+  if (empty($context['sandbox'])) {
+    $context['sandbox']['progress'] = 0;
+    $context['sandbox']['current_comment'] = 0;
+    $context['sandbox']['max'] = db_query('SELECT COUNT(cid) FROM {comment} WHERE nid = :nid',
+      array(':nid' => $forum_node->nid))->fetchField();
+  }
+  // Set the limit to 5.
+  $limit = 5;
+  $result = db_select('comment')
+    ->fields('comment', array('cid'))
+    ->condition('cid', $context['sandbox']['current_comment'], '>')
+    ->condition('nid', $forum_node->nid)
+    ->orderBy('cid')
+    ->range(0, $limit)
+    ->execute();
 
-function forum_merge_finished_callback($success, $results, $operations) {
-  // Finished the batch operation with a message.
+  foreach ($result as $row) {
+    // Move the comments under the old forums to the new one.
+    $comment = comment_load($row->cid);
+    $comment->nid = $base_node->nid;
+    comment_save($comment);
+
+    // Update the status variables.
+    $context['sandbox']['progress']++;
+    $context['sandbox']['current_comment'] = $comment->cid;
+  }
+
+  // Delete the deprecated forum topic.
+  node_delete($forum_node->nid);
+
+  // Create redirect from the old topic to the updated one.
+  $redirect = new stdClass();
+  $redirect->uid = $user->uid;
+  $redirect->type = 'redirect';
+  $redirect->source = 'node/' . $forum_node->nid;
+  $redirect->source_options = serialize(array());
+  $redirect->redirect = 'node/' . $base_node->nid;
+  $redirect->redirect_options = serialize(array());
+  $redirect->language = $forum_node->language;
+  $redirect->status_code = 301;
+  redirect_save($redirect);
+
+  // Progress bar.
+  if ($context['sandbox']['progress'] != $context['sandbox']['max']) {
+    $context['finished'] = $context['sandbox']['progress'] / $context['sandbox']['max'];
+  }
 }
 
 /**
- * Access callback to forum merge page.
+ * Finished callback to the batch operation.
  *
- * @see forum_merge_menu().
+ * @see forum_merge_page_form_submit().
  */
-function forum_merge_access_callback($nid) {
-  $node = node_load($nid);
-  // If the displayed content is a forum topic, and the viewing user has the rights to merge and update
-  // forum topics.
-  if ($node->type === 'forum' && user_access('merge forums') && node_access('update', $node)) {
-    return TRUE;
+function forum_merge_finished_callback($success, $results, $operations) {
+  // The 'success' parameter means no fatal PHP errors were detected. All
+  // other error management should be handled using 'results'.
+  if ($success) {
+    $message = t('The Forum topics have been merge correctly.');
+    $type = 'status';
   }
-  return FALSE;
+  else {
+    $message = t('Finished with an error.');
+    $type = 'error';
+  }
+  drupal_set_message($message, $type);
 }
 
 /**
