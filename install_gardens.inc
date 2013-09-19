@@ -120,7 +120,7 @@ require_once('library/acquia_gardens_xmlrpc.inc');
  * that might already be assigned to it, pointing to the appropriate location
  * within that directory; for example, a typical symlink might point from
  * sites/mysite.drupalgardens.com (in the local docroot) to something like
- * gardens-sites/g12446 (on the shared filesystem), thereby tying that domain
+ * sites/g/files/g12446 (on the shared filesystem), thereby tying that domain
  * to that particular Gardens site.
  *
  * Throws an exception on error.
@@ -364,6 +364,10 @@ function install_gardens($hosting_site_name, $hosting_site_environment, $data = 
       // Have to make the directory writable again or the touch fails.
       chmod($site_directory, 0755);
       touch("$site_directory/installed");
+
+      // Rename files to f and symlink files -> f.
+      rename("$site_directory/files", "$site_directory/f");
+      acquia_gardens_ensure_symlink("$site_directory/f", "$site_directory/files");
 
       // Save the site's original (standard *.drupalgardens.com) domain.
       $standard_domain = reset($domains);
@@ -773,7 +777,7 @@ function acquia_gardens_update_file($path, $content) {
  * store the sites directories of its Gardens sites.
  */
 function acquia_gardens_sites_directory($hosting_site_name, $hosting_site_environment) {
-  return "/mnt/files/{$hosting_site_name}.{$hosting_site_environment}/gardens-sites";
+  return "/mnt/files/{$hosting_site_name}.{$hosting_site_environment}/sites/g/files";
 }
 
 /**
@@ -790,7 +794,7 @@ function acquia_gardens_site_directory($hosting_site_name, $hosting_site_environ
  * Legacy version of acquia_gardens_sites_directory that does not use the environment name.
  */
 function acquia_gardens_sites_directory_legacy($hosting_site_name) {
-  return "/mnt/files/{$hosting_site_name}/gardens-sites";
+  return "/mnt/files/{$hosting_site_name}/sites/g/files";
 }
 
 /**
