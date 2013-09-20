@@ -673,7 +673,7 @@ function acquia_gardens_configure_duplicated_site($gardens_site_info) {
   // Normally we only have one domain during configure, so just set it.
   // @see: AN-19653  this is a quick fix for imagecache problems.
   $domain = end($domains);
-  variable_set('file_public_path', "sites/{$domain}/files");
+  variable_set('file_public_path', "sites/g/files/{$gardens_site_info->site_id}/f");
   module_enable(array('gardens_duplication'), FALSE);
   $scrub_options = array();
   $scrub_options['retain_janrain_settings'] = $gardens_site_info->exact_copy || $gardens_site_info->retain_janrain_settings;
