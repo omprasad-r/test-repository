@@ -69,6 +69,7 @@ function comment_goodness_form_node_type_form_alter(&$form, $form_state) {
   // Set "Comments per page" setting to textfield so it allows more gradual
   // control over the number of comments to show.
   $form['comment']['comment_default_per_page']['#type'] = 'textfield';
+  $form['comment']['comment_default_per_page']['#required'] = TRUE;
   $form['comment']['comment_default_per_page']['#element_validate'] = array('element_validate_integer_positive');
   unset($form['comment']['comment_default_per_page']['#options']);
 
