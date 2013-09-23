@@ -1,0 +1,1046 @@
+<?php
+
+/**
+ * @file
+ * Tweaks signatures in ways inspired by other traditional forum software:
+ *
+ * - Signatures are longer than the the Drupal default (to match other forum
+ *   software).
+ * - Conditional signatures, these are hidden (or rel=nofollow'd) if a post is
+ *   under a particular length.
+ * - Show signature only once per conversation (also works with threading).
+ */
+
+/**
+ * Do nothing special if a signature is under a certain length.
+ */
+define('SIGNATURE_FORUM_DO_NOTHING', -1);
+
+/**
+ * Do not display a signature when the content is under a certain length.
+ */
+define('SIGNATURE_FORUM_DO_NOT_DISPLAY', 0);
+
+/**
+ * Run the signature through an additional filter if the content is under a
+ * certain length. Good for adding rel=nofollow to all links.
+ */
+define('SIGNATURE_FORUM_ADDITIONAL_FILTER_FORMAT', 1);
+
+/**
+ * Show a signature in all user posts.
+ */
+define('SIGNATURE_FORUM_SHOW_ALWAYS', 0);
+
+/**
+ * Show a user's signature only once per conversation.
+ */
+define('SIGNATURE_FORUM_SHOW_ONCE', 1);
+
+/**
+ * Allow no per post settings.
+ */
+define('SIGNATURE_FORUM_PER_POST_DISABLED', 0);
+
+/**
+ * Allow per post settings with global defaults.
+ */
+define('SIGNATURE_FORUM_PER_POST_GLOBAL', 1);
+
+/**
+ * Allow per post settings with user defaults.
+ */
+define('SIGNATURE_FORUM_PER_POST_USER', 2);
+
+/**
+ * The new length of the signature field of the user table.
+ */
+define('SIGNATURE_FORUM_FIELD_LENGTH', 16383);
+
+/**
+ * Implementation of hook_help().
+ */
+function signature_forum_help($path, $arg) {
+  switch ($path) {
+    case "admin/modules#description":
+      return t("Tweaks signatures in ways inspired by other traditional forum software. Allows much longer signatures than the Drupal default; also users may be allowed to use different formats like BBCode (with the BBCode module downloadable from drupal.org) or HTML in their signatures.");
+  };
+}
+
+/**
+ * Alter the account settings form.
+ *
+ * Implements hook_form_FORM_ID_alter().
+ */
+function signature_forum_form_user_admin_settings_alter(&$form, &$form_state) {
+  // Set #weight on the user_signatures checkbox.
+  if (!isset($form['personalization']['user_signatures']['#weight'])) {
+    $form['personalization']['user_signatures']['#weight'] = 0;
+  }
+  $weight = $form['personalization']['user_signatures']['#weight'];
+
+  // Add a container directly after that checkbox, that is only visible while
+  // the user_signatures checkbox is checked.
+  $form['personalization']['signatures'] = array(
+    '#type' => 'container',
+    '#states' => array(
+      'invisible' => array(
+        ':input[name="user_signatures"]' => array('checked' => FALSE),
+      ),
+    ),
+    '#weight' => ++$weight,
+  );
+
+  // Add #weight to keep the order of the other elements.
+  foreach ($form['personalization'] as $key => &$element) {
+    if (is_array($element) && !isset($element['#weight'])) {
+      $element['#weight'] = ++$weight;
+    }
+  }
+
+  // Use vertical tabs to display the signature_forum settings.
+  $form['personalization']['signatures']['signature_forum'] = array(
+    '#type' => 'vertical_tabs',
+    '#title' => t('Signatures for Forums settings'),
+    '#attached' => array(
+      'js' => array(drupal_get_path('module', 'signature_forum') . '/signature_forum.js'),
+    ),
+  );
+
+  // Short content behaviour.
+  $form['personalization']['signatures']['signature_forum_short_content'] = array(
+    '#type' => 'fieldset',
+    '#group' => 'signature_forum',
+    '#title' => t('Short content behaviour'),
+    '#description' => t('Settings for handling signatures, if the content is short.'),
+    'signature_forum_short_content_action' => array(
+      '#type' => 'radios',
+      '#title' => t('Minimum content action'),
+      '#default_value' => variable_get('signature_forum_short_content_action', SIGNATURE_FORUM_DO_NOTHING),
+      '#description' => t('What to do if the content is under the minimum length.'),
+      '#options' => array(
+        SIGNATURE_FORUM_DO_NOTHING => t('No special behaviour for short content.'),
+        SIGNATURE_FORUM_DO_NOT_DISPLAY => t('Do not display the signature.'),
+        SIGNATURE_FORUM_ADDITIONAL_FILTER_FORMAT => t('Run the signature through an additional filter format.'),
+      ),
+    ),
+    'signature_forum_short_content_length' => array(
+      '#type' => 'textfield',
+      '#title' => t('Minimum content length'),
+      '#size' => 3,
+      '#maxlength' => 10,
+      '#element_validate' => array('_signature_forum_validate_short_content_length'),
+      '#description' => t('The minimum number of characters in the content, before either no signature is shown or a special input filter is applied.'),
+      '#default_value' => variable_get('signature_forum_short_content_length', 50),
+      '#states' => array(
+        'invisible' => array(
+          ':input[name="signature_forum_short_content_action"]' => array(
+            'value' => strval(SIGNATURE_FORUM_DO_NOTHING),
+          ),
+        ),
+      ),
+    ),
+    'signature_forum_short_content_format' => array(
+      '#type' => 'select',
+      '#title' => t('Additional filter format for short content'),
+      '#options' => _signature_forum_filter_formats(),
+      '#description' => t('If enabled: Run the signature through this filter format, if the minimum content length isn\'t reached. This is useful for adding <em>rel="nofollow"</em> if the content is too short, for example. The filter format selected by the user will run first, then this one.'),
+      '#element_validate' => array('_signature_forum_validate_short_content_format'),
+      '#states' => array(
+        'visible' => array(
+          ':input[name="signature_forum_short_content_action"]' => array(
+            'value' => strval(SIGNATURE_FORUM_ADDITIONAL_FILTER_FORMAT),
+          ),
+        ),
+      ),
+    ),
+    'signature_forum_short_content_exempt_roles' => array(
+      '#type' => 'checkboxes',
+      '#title' => t('Exempt roles'),
+      '#default_value' => variable_get('signature_forum_short_content_exempt_roles', array()),
+      '#options' => user_roles(TRUE),
+      '#description' => t('Members of these roles will be exempt from content length settings.'),
+      '#states' => array(
+        'invisible' => array(
+          ':input[name="signature_forum_short_content_action"]' => array(
+            'value' => strval(SIGNATURE_FORUM_DO_NOTHING),
+          ),
+        ),
+      ),
+    ),
+  );
+
+  // Show once options.
+  $form['personalization']['signatures']['signature_forum_show_once'] = array(
+    '#type' => 'fieldset',
+    '#group' => 'signature_forum',
+    '#title' => t('Per-conversation signatures'),
+    '#description' => t('Show signatures only once per conversations or for every post.'),
+    'signature_forum_show_once_options' => array(
+      '#type' => 'radios',
+      '#title' => t('Show a user\'s signature'),
+      '#default_value' => variable_get('signature_forum_show_once_options', SIGNATURE_FORUM_SHOW_ALWAYS),
+      '#options' => array(
+        SIGNATURE_FORUM_SHOW_ALWAYS => t('Always'),
+        SIGNATURE_FORUM_SHOW_ONCE => t('Once per conversation'),
+      ),
+    ),
+    'signature_forum_show_once_exempt_roles' => array(
+      '#type' => 'checkboxes',
+      '#title' => t('Exempt roles'),
+      '#default_value' => variable_get('signature_forum_show_once_exempt_roles', array()),
+      '#options' => user_roles(TRUE),
+      '#description' => t('Members of these roles will have their signatures shown in every post.'),
+      '#states' => array(
+        'invisible' => array(
+          ':input[name="signature_forum_show_once_options"]' => array(
+            'value' => strval(SIGNATURE_FORUM_SHOW_ALWAYS),
+          ),
+        ),
+      ),
+    ),
+  );
+
+  // Per post settings.
+  $form['personalization']['signatures']['signature_forum_defaults'] = array(
+    '#type' => 'fieldset',
+    '#group' => 'signature_forum',
+    '#title' => t('Per-post settings'),
+    '#description' => t('Users will see a checkbox below the comment form allowing them to choose whether or not to use their signature.'),
+    'signature_forum_defaults_mode' => array(
+      '#type' => 'radios',
+      '#title' => t('Enable per-post settings'),
+      '#options' => array(
+        SIGNATURE_FORUM_PER_POST_DISABLED => t('Don\'t allow per post settings.'),
+        SIGNATURE_FORUM_PER_POST_GLOBAL => t('Allow per post settings and use global defaults.'),
+        SIGNATURE_FORUM_PER_POST_USER => t('Allow per post settings and use the default set in the user\'s profile.'),
+      ),
+      '#description' => t('Allow users to decide per post, if they want to use their signature.'),
+      '#default_value' => variable_get('signature_forum_defaults_mode', SIGNATURE_FORUM_PER_POST_DISABLED),
+    ),
+    'signature_forum_defaults_global' => array(
+      '#type' => 'checkboxes',
+      '#title' => t('Global defaults'),
+      '#options' => _signature_forum_active_content_types(),
+      '#description' => t('Signatures will be enabled by default for the selected content types. Only those content types are displayed, that have signatures enabled in the field UI.'),
+      '#default_value' => variable_get('signature_forum_defaults_global', array()),
+      '#states' => array(
+        'visible' => array(
+          ':input[name="signature_forum_defaults_mode"]' => array(
+            'value' => strval(SIGNATURE_FORUM_PER_POST_GLOBAL),
+          ),
+        ),
+      ),
+    ),
+  );
+
+  // Character and line limit settings.
+  $form['personalization']['signatures']['signature_forum_max'] = array(
+    '#type' => 'fieldset',
+    '#group' => 'signature_forum',
+    '#title' => t('Limits'),
+    '#description' => t('Limit character or line count.'),
+    'signature_forum_max_characters' => array(
+      '#type' => 'textfield',
+      '#size' => 10,
+      '#maxlength' => 10,
+      '#element_validate' => array('_signature_forum_validate_max_characters'),
+      '#title' => t('Character limit'),
+      '#description' => t('The maximum number of characters in a signature. Note: Existing signatures that are too long will not be changed.'),
+      '#default_value' => _signature_forum_get_max_characters(),
+      '#required' => TRUE,
+    ),
+    'signature_forum_max_lines' => array(
+      '#type' => 'textfield',
+      '#size' => 5,
+      '#maxlength' => 10,
+      '#element_validate' => array('_signature_forum_validate_max_lines'),
+      '#title' => t('Line limit'),
+      '#description' => t('The maximum number of lines allowed in a signature. 0 means no limit. Note: Exisiting signatures that are too long will not be changed.'),
+      '#default_value' => variable_get('signature_forum_max_lines', ''),
+    ),
+  );
+
+  // Submit callback.
+  $form['#submit'][] = '_signature_forum_submit_admin_form';
+}
+
+/**
+ * FAPI validation for the signature_forum_short_content_length field.
+ */
+function _signature_forum_validate_short_content_length($element, &$form_state, $form) {
+  // Check boundaries of 1 to SIGNATURE_FORUM_FIELD_LENGTH.
+  $value = intval($element['#value']);
+  if ($value <= 0 || $value >= SIGNATURE_FORUM_FIELD_LENGTH) {
+    if ($form_state['values']['signature_forum_short_content_action'] == SIGNATURE_FORUM_DO_NOTHING) {
+      $form_state['values']['signature_forum_short_content_length'] = $value = variable_get('signature_forum_short_content_length', 50);
+    }
+    else {
+      form_error($element, t('The minimum content length must be between @min and @max characters.', array('@min' => 1, '@max' => SIGNATURE_FORUM_FIELD_LENGTH - 1)));
+    }
+  }
+  else {
+    $form_state['values']['signature_forum_short_content_length'] = $value;
+  }
+
+  // Check against maximum content length
+  $max = intval($form_state['values']['signature_forum_max_characters']);
+  if ($max > 0 && $value > $max) {
+    form_error($element, t('A minimum content length of %value and a limit of %max characters would make it impossible to meet the minimum content length.', array('%value' => $value, '%max' => $max)));
+  }
+}
+
+/**
+ * FAPI validation for the signature_forum_short_content_format.
+ */
+function _signature_forum_validate_short_content_format($element, &$form_state, $form) {
+  $formats = _signature_forum_filter_formats();
+  if (!isset($formats[$element['#value']])) {
+    form_error($element, t('Select a valid filter format.'));
+  }
+}
+
+/**
+ * FAPI validation for the signature_forum_max_characters field.
+ */
+function _signature_forum_validate_max_characters($element, &$form_state, $form) {
+  $value = intval($element['#value']);
+  if ($value <= 0 || $value > SIGNATURE_FORUM_FIELD_LENGTH) {
+    form_error($element, t('The character limit must be between @min and @max characters.', array('@min' => 1, '@max' => SIGNATURE_FORUM_FIELD_LENGTH)));
+  }
+  else {
+    $form_state['values']['signature_forum_max_characters'] = $value;
+  }
+}
+
+/**
+ * FAPI validation for the signature_forum_max_lines field.
+ */
+function _signature_forum_validate_max_lines($element, &$form_state, $form) {
+  // A huge or negative limit means no limit.
+  $value = intval($element['#value']);
+  if ($value < 0 || $value >= SIGNATURE_FORUM_FIELD_LENGTH) {
+    $value = 0;
+  }
+
+  $form_state['values']['signature_forum_max_lines'] = $value;
+}
+
+/**
+ * FAPI submit callback for the admin form.
+ */
+function _signature_forum_submit_admin_form($form, &$form_state) {
+  // Once signatures are enabled or disabled, mark the field cache to be
+  // cleared, so that hook_field_extra_fields() will be invoked for the
+  // corresponding display elements.
+  if ($form_state['values']['user_signatures'] != $form['personalization']['user_signatures']['#default_value']) {
+    $clear_field_cache = TRUE;
+    if ($form_state['values']['user_signatures']) {
+      _signature_forum_update_extra_fields_visibilities();
+    }
+  }
+  else {
+    // If the per-post settings are changed hook_fields_extra_fields() must be
+    // invoked for the corresponding form elements.
+    $was_disabled = $form['personalization']['signatures']['signature_forum_defaults']['signature_forum_defaults_mode']['#default_value'] == SIGNATURE_FORUM_PER_POST_DISABLED;
+    $is_disabled = $form_state['values']['signature_forum_defaults_mode'] == SIGNATURE_FORUM_PER_POST_DISABLED;
+    $clear_field_cache = $was_disabled != $is_disabled;
+  }
+
+  // Clear the field cache.
+  if ($clear_field_cache) {
+    cache_clear_all('field_info_fields', 'cache_field');
+  }
+}
+
+/**
+ * Get a list of filter formats, the currently logged in user can use. Usually
+ * this is an administrator, so all are returned.
+ *
+ * @return
+ *   An associative array. Keys are format IDs. Values are format names.
+ */
+function _signature_forum_filter_formats() {
+  global $user;
+
+  $formats = array();
+  foreach (filter_formats($user) as $format) {
+    $formats[$format->format] = $format->name;
+  }
+  return $formats;
+}
+
+/**
+ * Get a list of content types that have signatures enabled.
+ *
+ * @return
+ *   An array. Keys are machine names. Values are display names.
+ */
+function _signature_forum_active_content_types() {
+  static $static_cache = NULL;
+
+  if ($static_cache === NULL) {
+    $static_cache = array();
+    $entities = entity_get_info();
+
+    foreach ($entities['node']['bundles'] as $node_bundle_name => $node_bundle) {
+      // Check if the signature is displayed in any of the bundles view modes.
+      foreach ($entities['node']['view modes'] as $node_view_mode_name => $node_view_mode_settings) {
+        $extra_fields = field_extra_fields_get_display('node', $node_bundle_name, $node_view_mode_name);
+        if (isset($extra_fields['signature_forum']) && !empty($extra_fields['signature_forum']['visible'])) {
+          $static_cache[$node_bundle_name] = $node_bundle['label'];
+          break;
+        }
+      }
+
+      // Check if the signature is displayed in any of the comment view modes.
+      if (!isset($static_cache[$node_bundle_name]) && isset($entities['comment'])) {
+        foreach ($entities['comment']['view modes'] as $comment_view_mode_name => $comment_view_mode_settings) {
+          $comment_bundle_name = 'comment_node_' . $node_bundle_name;
+          $extra_fields = field_extra_fields_get_display('comment', $comment_bundle_name, $comment_view_mode_name);
+          if (isset($extra_fields['signature_forum']) && !empty($extra_fields['signature_forum']['visible'])) {
+            $static_cache[$node_bundle_name] = $node_bundle['label'];
+            break;
+          }
+        }
+      }
+    }
+  }
+
+  return $static_cache;
+}
+
+/**
+ * Allow the administrator to enable and disable signatures for content types
+ * and their comment bundles.
+ *
+ * Allow the administrator to reposition the signature_forum display and form
+ * elements.
+ *
+ * Set reasonable defaults on first time use.
+ *
+ * Implementation of hook_field_extra_fields().
+ */
+function signature_forum_field_extra_fields() {
+  $extra = array();
+
+  if (variable_get('user_signatures')) {
+    $per_post = variable_get('signature_forum_defaults_mode', SIGNATURE_FORUM_PER_POST_DISABLED) != SIGNATURE_FORUM_PER_POST_DISABLED;
+
+    foreach (node_type_get_types() as $type) {
+      $comment_bundle = 'comment_node_' . $type->type;
+
+      // Let signatures be only visible in forum posts, by default.
+      // Note that unless #1256368 will make it into core,
+      // _signature_forum_update_extra_fields_visibilities has to be called for
+      // this.
+      $visible = $type->type == 'forum';
+
+      // Populate the extra fields array with display elements.
+      $extra['node'][$type->type] = array(
+        'display' => array(
+          'signature_forum' => array(
+            'label' => t('User signature'),
+            'description' => t('The personal signature of the node author.'),
+            'weight' => 20,
+            'visible' => $visible,
+          ),
+        ),
+      );
+
+      $extra['comment'][$comment_bundle] = array(
+        'display' => array(
+          'signature_forum' => array(
+            'label' => t('User signature'),
+            'description' => t('The personal signature of the comment author.'),
+            'weight' => 20,
+            'visible' => $visible,
+          ),
+        ),
+      );
+
+      // Add form elements.
+      if ($per_post) {
+        $extra['node'][$type->type] = array(
+          'form' => array(
+            'signature_forum_status' => array(
+              'label' => t('Display user signature'),
+              'description' => t('A checkbox whether a signature should be displayed for the node.'),
+              'weight' => 3,
+            ),
+          ),
+        );
+
+        $extra['comment'][$comment_bundle] = array(
+          'form' => array(
+            'signature_forum_status' => array(
+              'label' => t('Display user signature'),
+              'description' => t('A checkbox whether a signature should be displayed for the comment.'),
+              'weight' => 3,
+            ),
+          ),
+        );
+      }
+    }
+  }
+
+  return $extra;
+}
+
+/**
+ * Use the visbilities defined by hook_field_extra_fields() as default
+ * visibilities.
+ *
+ * @todo Remove this once #1256368 gets fixed.
+ */
+function _signature_forum_update_extra_fields_visibilities() {
+  $extra = signature_forum_field_extra_fields();
+  $extra += array('node' => array());
+  $extra['node'] += array('display' => array());
+
+  $bundles = array();
+  foreach ($extra['node'] as $bundle => $settings) {
+    if (isset($settings['display']['signature_forum'])) {
+      $bundles[$bundle] = !empty($settings['display']['signature_forum']['visible']);
+    }
+  }
+
+  _signature_forum_update_bundle_settings('node', $bundles, TRUE);
+}
+
+/**
+ * Update bundle settings.
+ *
+ * On use case is that hook_field_extra_fields() doesn't support default
+ * visibility settings yet. Use this function to set them.
+ *
+ * @param $entity_type
+ *   The entity type "node" or "comment". If it is node, all corresponding
+ *   comment view modes will be updated as well.
+ *
+ * @param $bundles
+ *   An array of visibility settings, keyed by bundle name. These bundles will
+ *   be updated.
+ *   An array value of TRUE means visible, FALSE means hidden, NULL means don't
+ *   change anything.
+ *
+ * @param $skip_if_set = FALSE
+ *   Optional. TRUE if you want to update bundles, but not override any
+ *   settings the user has selected in the field UI.
+ */
+function _signature_forum_update_bundle_settings($entity_type, $bundles, $skip_if_set = FALSE) {
+  foreach ($bundles as $bundle => $visible) {
+    // NULL means skip.
+    if ($visible === NULL) {
+      continue;
+    }
+
+    // Get current settings.
+    $bundle_settings = field_bundle_settings($entity_type, $bundle);
+
+    // Optionally skip bundles with existing settings.
+    if ($skip_if_set && isset($bundle_settings['extra_fields']['display']['signature_forum'])) {
+      continue;
+    }
+
+    // Default view mode.
+    $default = array(
+      'weight' => 20,
+      'visible' => $visible,
+    );
+    $bundle_settings['extra_fields']['display']['signature_forum'] = array(
+      'default' => $default,
+    );
+
+    // Build view_modes array.
+    if (empty($bundle_settings['view_modes'])) {
+      $bundle_settings['view_modes'] = field_view_mode_settings($entity_type, $bundle);
+    }
+
+    // All view modes that use their custom settings.
+    foreach ($bundle_settings['view_modes'] as $view_mode_name => $view_mode_settings) {
+      if (!empty($view_mode_settings['custom_settings'])) {
+        $bundle_settings['extra_fields']['display']['signature_forum'][$view_mode_name] = $default;
+      }
+    }
+
+    // Save settings.
+    field_bundle_settings($entity_type, $bundle, $bundle_settings);
+
+    // If updating nodes, update the matching comment bundle.
+    if ($entity_type == 'node') {
+      _signature_forum_update_bundle_settings('comment', array('comment_node_' . $bundle => $visible), $skip_if_set);
+    }
+  }
+}
+
+/**
+ * Implementation of hook_node_view().
+ */
+function signature_forum_node_view($node, $view_mode, $langcode) {
+  if (variable_get('user_signatures') && !empty($node->uid)) {
+    // Fast return if the signature is disabled per post.
+    if (isset($node->signature_forum_status) && !$node->signature_forum_status) {
+      return $node;
+    }
+
+    // Add signature_forum to the render array.
+    $user = user_load($node->uid);
+
+    $node->content['signature_forum'] = array(
+      '#signature' => check_markup($user->signature, $user->signature_format, '', TRUE),
+      '#theme' => 'user_signature',
+      '#pre_render' => array('signature_forum_pre_render_user_signature'),
+      '#user' => $user,
+    );
+
+    $body = field_get_items('node', $node, 'body', $langcode);
+    if ($body) {
+      // Some body fields appear not to have a 'safe_value'.
+      if (!empty($body[0]['safe_value'])) {
+        $content = $body[0]['safe_value'];
+      }
+      else {
+        $content = $body[0]['value'];
+      }
+
+      $node->content['signature_forum']['#content_length'] = drupal_strlen(strip_tags($content));
+    }
+    else {
+      $node->content['signature_forum']['#content_length'] = 0;
+    }
+
+    $node->content['signature_forum']['#node'] = $node;
+  }
+  return $node;
+}
+
+/**
+ * Implementation of hook_comment_view().
+ */
+function signature_forum_comment_view($comment, $view_mode, $langcode) {
+  if (variable_get('user_signatures') && !empty($comment->uid) && !empty($comment->signature) && !empty($comment->signature_format)) {
+    // Add signature_forum to the render array.
+    if (!isset($comment->signature_forum_status) || $comment->signature_forum_status) {
+      $comment->content['signature_forum'] = array(
+        '#signature' => check_markup($comment->signature, $comment->signature_format, '', TRUE),
+        '#theme' => 'user_signature',
+        '#pre_render' => array('signature_forum_pre_render_user_signature'),
+        '#user' => user_load($comment->uid),
+      );
+      $body = field_get_items('comment', $comment, 'comment_body', $langcode);
+      if ($body) {
+        // Some body fields appear not to have a 'safe_value'.
+        if (!empty($body[0]['safe_value'])) {
+          $content = $body[0]['safe_value'];
+        }
+        else {
+          $content = $body[0]['value'];
+        }
+        $comment->content['signature_forum']['#content_length'] = drupal_strlen(strip_tags($content));
+      }
+      else {
+        $comment->content['signature_forum']['#content_length'] = 0;
+      }
+
+      $comment->content['signature_forum']['#comment'] = $comment;
+    }
+
+    // Unset the core signature.
+    unset($comment->signature);
+    unset($comment->signature_format);
+  }
+  return $comment;
+}
+
+/**
+ * Implementation of hook_theme_registry_alter().
+ */
+function signature_forum_theme_registry_alter(&$theme_registry) {
+  $theme_registry['user_signature']['variables']['content_length'] = NULL;
+  $theme_registry['user_signature']['variables']['node'] = NULL;
+  $theme_registry['user_signature']['variables']['comment'] = NULL;
+  $theme_registry['user_signature']['variables']['user'] = NULL;
+}
+
+/**
+ * Prerender function for user signatures.
+ *
+ * Decide if a signature is displayed or not by setting #printed and change the
+ * signature markup that is in #signature.
+ *
+ * Available variables: #signature, #content_length, #node, #comment, #user.
+ */
+function signature_forum_pre_render_user_signature($element) {
+  static $show_once_cache = array();
+
+  $uid = $element['#user']->uid;
+
+  // Apply show once setting.
+  $show_once = variable_get('signature_forum_show_once_options', SIGNATURE_FORUM_SHOW_ALWAYS) == SIGNATURE_FORUM_SHOW_ONCE;
+  if ($show_once) {
+    if (isset($show_once_cache[$uid])) {
+      if ($show_once_cache[$uid] == TRUE) {
+        $element['#printed'] = TRUE;
+      }
+    }
+    else {
+    }
+  }
+
+  // Apply short content action.
+  $short_content_action = variable_get('signature_forum_short_content_action', SIGNATURE_FORUM_DO_NOTHING);
+  if (empty($element['#printed']) && $short_content_action != SIGNATURE_FORUM_DO_NOTHING) {
+    if ($element['#content_length'] < variable_get('signature_forum_short_content_length', 0)) {
+      if (!_signature_forum_user_exception($element['#user'], 'short_content')) {
+        switch ($short_content_action) {
+          case SIGNATURE_FORUM_DO_NOT_DISPLAY:
+            $element['#printed'] = TRUE;
+            break;
+
+          case SIGNATURE_FORUM_ADDITIONAL_FILTER_FORMAT:
+            $element['#signature'] = check_markup($element['#signature'], variable_get('signature_forum_short_content_format'), '', TRUE);
+            breaK;
+        }
+      }
+    }
+  }
+
+  // Set the cache, to show signatures only once.
+  if ($show_once && !isset($show_once_cache[$uid])) {
+    if (empty($element['#printed'])) {
+      $show_once_cache[$uid] = !_signature_forum_user_exception($element['#user'], 'show_once');
+    }
+  }
+
+  return $element;
+}
+
+/**
+ * Alter the user form.
+ *
+ * Implementation of hook_form_FORM_ID_alter().
+ */
+function signature_forum_form_user_profile_form_alter(&$form, &$form_state) {
+  if (variable_get('user_signatures') && isset($form['signature_settings'])) {
+    if (!isset($form['signature_settings']['#access']) || $form['signature_settings']['#access']) {
+      $form['signature_settings']['signature']['#element_validate'] = array(
+        '_signature_forum_validate_signature',
+      );
+
+      if (variable_get('signature_forum_defaults_mode', SIGNATURE_FORUM_PER_POST_DISABLED) == SIGNATURE_FORUM_PER_POST_USER) {
+        $form['signature_settings']['signature_forum_default'] = array(
+          '#type' => 'checkbox',
+          '#title' => t('Show signatures by default'),
+          '#description' => t('Whenever you add a comment you can choose not to use your signature. Set your default selection.'),
+          '#weight' => -1,
+          '#default_value' => _signature_forum_get_default($form['#user']),
+        );
+      }
+    }
+  }
+
+  array_unshift($form['#submit'], '_signature_forum_submit_user_profile');
+}
+
+/**
+ * FAPI validation for the signature field of the user form.
+ */
+function _signature_forum_validate_signature($element, &$form_state, $form) {
+  if (isset($element['#value'])) {
+    // Check character limit.
+    if (drupal_strlen($element['#value']) > _signature_forum_get_max_characters()) {
+      form_error($element, t('Your signature can\'t be longer than %count characters.', array('%count' => _signature_forum_get_max_characters())));
+    }
+
+    // Check line limit.
+    $max_lines = variable_get('signature_forum_max_lines');
+    if ($max_lines && substr_count($element['#value'], "\n") > $max_lines) {
+      form_error($element, t('Maximum number of %count lines allowed in signatures exceeded.', array('%count' => $max_lines)));
+    }
+  }
+}
+
+/**
+ * FAPI submit callback for the user profile.
+ */
+function _signature_forum_submit_user_profile($form, &$form_state) {
+  if (!is_array($form_state['user']->data)) {
+    $form_state['user']->data = array();
+  }
+
+  if (isset($form_state['values']['signature_forum_default'])) {
+    $form_state['user']->data['signature_forum_default'] = $form_state['values']['signature_forum_default'];
+  }
+}
+
+/**
+ * Get the maximum character count allowed for signatures.
+ */
+function _signature_forum_get_max_characters() {
+  $value = variable_get('signature_forum_max_characters');
+  if (!$value) {
+    // Default to core signature field length.
+    $users_table = drupal_get_schema_unprocessed('user', 'users');
+    $value = $users_table['fields']['signature']['length'];
+    variable_set('signature_forum_max_characters', $value);
+  }
+  return $value;
+}
+
+/**
+ * Get the default per-post display setting.
+ *
+ * @param $user
+ *   Use the defaults of this user. Give a uid for lazy loading.
+ *
+ * @param $bundle = NULL
+ *   If given, use this bundle.
+ *
+ * @param $object = NULL
+ *   If given, get the setting of that existing node or comment.
+ *
+ * @return
+ *   TRUE means signatures should be used.
+ */
+function _signature_forum_get_default($user, $bundle = NULL, $object = NULL) {
+  $mode = variable_get('signature_forum_defaults_mode', SIGNATURE_FORUM_PER_POST_DISABLED);
+
+  // Fast return, if the property is set.
+  if ($mode != SIGNATURE_FORUM_PER_POST_DISABLED && $object && isset($object->signature_forum_status)) {
+    return $object->signature_forum_status;
+  }
+
+  // Get global or user settings.
+  switch ($mode) {
+    case SIGNATURE_FORUM_PER_POST_DISABLED:
+      return TRUE;
+
+    case SIGNATURE_FORUM_PER_POST_USER:
+      if (!$user) {
+        return TRUE;
+      }
+      if (is_int($user)) {
+        $user = user_load($user);
+      }
+      if (!isset($user->data) || !isset($user->data['signature_forum_default'])) {
+        return TRUE;
+      }
+      return !!$user->data['signature_forum_default'];
+
+    case SIGNATURE_FORUM_PER_POST_GLOBAL:
+      $settings = variable_get('signature_forum_defaults_global', array());
+      return !empty($settings[$bundle]);
+  }
+}
+
+/**
+ * Load nodes or comments.
+ *
+ * @param $type
+ *   "node" or "comment".
+ *
+ * @param $objects
+ *   An array of objects of $type. Keyed by cid or nid. Values are objects.
+ */
+function _signature_forum_object_load($type, $objects) {
+  // Load from the database.
+  $query = db_select('signature_forum_post', 'p')
+    ->fields('p', array('delta', 'status'))
+    ->condition('type', $type)
+    ->condition('delta', array_keys($objects), 'IN')
+    ->execute();
+  foreach ($query as $row) {
+    $objects[$row->delta]->signature_forum_status = !!$row->status;
+  }
+
+  // Load default settings.
+  foreach ($objects as $delta => $object) {
+    if ($type == 'comment') {
+      $bundle = substr($object->node_type, strlen('comment_node_'));
+    }
+    else {
+      $bundle = $object->type;
+    }
+    $objects[$delta]->signature_forum_status = _signature_forum_get_default($object->uid, $bundle, $object);
+  }
+}
+
+/**
+ * Implementation of hook_comment_load().
+ */
+function signature_forum_comment_load($comments) {
+  _signature_forum_object_load('comment', $comments);
+}
+
+/**
+ * Implementation of hook_node_load().
+ */
+function signature_forum_node_load($nodes, $types) {
+  _signature_forum_object_load('node', $nodes);
+}
+
+/**
+ * Delete data stored by signature_forum, when a node or comment is deleted.
+ *
+ * @param $type
+ *   "node" or "comment"
+ *
+ * @param $object
+ *   The object that has been deleted.
+ */
+function _signature_forum_object_delete($type, $object) {
+  db_delete('signature_forum_post')
+    ->condition('type', $type)
+    ->condition('delta', $type == 'node' ? $object->nid : $object->cid)
+    ->execute();
+}
+
+/**
+ * Implementation of hook_comment_delete().
+ */
+function signature_forum_comment_delete($comment) {
+  _signature_forum_object_delete('comment', $comment);
+}
+
+/**
+ * Implementation of hook_node_delete().
+ */
+function signature_forum_node_delete($node) {
+  _signature_forum_object_delete('node', $node);
+}
+
+/**
+ * Insert or update data, when a node or comment is saved.
+ */
+function _signature_forum_object_update($type, $object) {
+  if (isset($object->signature_forum_status)) {
+    $delta = $type == 'node' ? $object->nid : $object->cid;
+
+    db_merge('signature_forum_post')
+      ->key(array(
+        'type' => $type,
+        'delta' => $delta,
+      ))
+      ->fields(array(
+        'type' => $type,
+        'delta' => $delta,
+        'status' => $object->signature_forum_status,
+      ))
+      ->execute();
+  }
+}
+
+/**
+ * Implementation of hook_comment_update().
+ */
+function signature_forum_comment_update($comment) {
+   _signature_forum_object_update('comment', $comment);
+}
+
+/**
+ * Implementation of hook_node_update().
+ */
+function signature_forum_node_update($node) {
+  _signature_forum_object_update('node', $node);
+}
+
+/**
+ * Implementation of hook_comment_insert().
+ */
+function signature_forum_comment_insert($comment) {
+  _signature_forum_object_update('comment', $comment);
+}
+
+/**
+ * Implementation of hook_node_insert().
+ */
+function signature_forum_node_insert($node) {
+  _signature_forum_object_update('node', $node);
+}
+
+/**
+ * Implementation of hook_form_alter().
+ */
+function signature_forum_form_alter(&$form, &$form_state, $form_id) {
+  global $user;
+
+  // Determine if it is a node or comment form and get settings.
+  if (!empty($form['#node_edit_form'])) {
+    $type = 'node';
+    $object = $form['#node'];
+    $bundle = $form['#bundle'];
+  }
+  elseif ($form['#id'] == 'comment-form') {
+    $type = 'comment';
+    $bundle = $form['#node']->type;
+    $object = $form_state['comment'];
+  }
+
+  // Add a signature checkbox.
+  if (isset($type) && variable_get('signature_forum_defaults_mode', SIGNATURE_FORUM_PER_POST_DISABLED) != SIGNATURE_FORUM_PER_POST_DISABLED) {
+    $account = $object->uid;
+    if (!$account) {
+      $account = $user;
+    }
+
+    $form['signature_forum_status'] = array(
+      '#type' => 'checkbox',
+      '#title' => 'Show signature',
+      '#default_value' => _signature_forum_get_default($account, $bundle, $object),
+    );
+  }
+}
+
+/**
+ * Find if a user is in exception lists.
+ *
+ * @param $uid
+ *   User object.
+ * @param $op
+ *   Which exception list, this may be:
+ *     - "short_content".
+ *     - "show_once".
+ * @return
+ *   TRUE if uid is in exception list. FALSE otherwise.
+ */
+function _signature_forum_user_exception($user, $op) {
+  // Load the exempt roles.
+  switch ($op) {
+    case 'short_content':
+      $exempt_roles = variable_get('signature_forum_short_content_exempt_roles', array());
+      break;
+
+    case 'show_once':
+      $exempt_roles = variable_get('signature_forum_show_once_exempt_roles', array());
+      break;
+  }
+
+  // Check for intersections.
+  foreach ($user->roles as $rid => $rolename) {
+    if (!empty($exempt_roles[$rid])) {
+      return TRUE;
+    }
+  }
+  return FALSE;
+}
+
+/**
+ * Implements hook_node_type_insert().
+ */
+function signature_forum_node_type_insert($info) {
+  // Postpone the actual update for hook_exit(), because the bundle might not
+  // be fully created.
+  if (!defined('SIGNATURE_FORUM_UPDATE_EXTRA_FIELDS')) {
+    define('SIGNATURE_FORUM_UPDATE_EXTRA_FIELDS', TRUE);
+  }
+}
+
+/**
+ * Implementation of hook_exit().
+ */
+function signature_forum_exit() {
+  if (defined('SIGNATURE_FORUM_UPDATE_EXTRA_FIELDS')) {
+    _signature_forum_update_extra_fields_visibilities();
+  }
+}

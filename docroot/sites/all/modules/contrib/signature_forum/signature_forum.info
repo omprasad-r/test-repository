@@ -1,0 +1,10 @@
+name = Signatures for Forums
+description = Tweaks signatures in ways inspired by other traditional forum software.
+core = 7.x
+
+; Information added by drupal.org packaging script on 2013-09-12
+version = "7.x-1.x-dev"
+core = "7.x"
+project = "signature_forum"
+datestamp = "1378982726"
+

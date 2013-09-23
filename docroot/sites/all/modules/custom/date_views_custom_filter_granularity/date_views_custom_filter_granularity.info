@@ -1,0 +1,8 @@
+name = Date Views Custom Filter Granularity
+description = Filter on date fields based on any combination of date components.
+package = Development
+core = 7.x
+
+dependencies[] = date_views
+
+files[] = includes/date_views_custom_filter_granularity_filter_handler.inc
