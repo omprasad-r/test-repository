@@ -1333,3 +1333,23 @@ function scarecrow_update_11188() {
     }
   }
 }
+
+/**
+ * Preparation for the move to sites.php.
+ */
+function scarecrow_update_11189() {
+  require_once '/var/www/site-scripts/site-info.php';
+  list($name, $site, $env, $secret) = ah_site_info();
+  $gardens_site_id = variable_get('gardens_db_name', '');
+  $new_location = "/mnt/files/{$site}.{$env}/sites/g/files/{$gardens_site_id}";
+  $old_location = "/mnt/files/{$site}.{$env}/gardens-sites/{$gardens_site_id}";
+
+  // Currently, $new_location is a symlink to $old_location. First remove the symlink,
+  // then rename the directory to the new location, then symlink the other way.
+  $command = "rm -f {$new_location} && mv {$old_location} {$new_location} && ln -s {$new_location} {$old_location}";
+  shell_exec($command);
+
+  // We also need to move files/ to f/ and symlink files/ -> f/
+  $command = "mv {$new_location}/files {$new_location}/f && ln -s {$new_location}/f {$new_location}/files";
+  shell_exec($command);
+}
