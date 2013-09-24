@@ -53,6 +53,16 @@ define('SIGNATURE_FORUM_PER_POST_GLOBAL', 1);
 define('SIGNATURE_FORUM_PER_POST_USER', 2);
 
 /**
+ * Render signature as plain text if used in views as a field.
+ */
+define('SIGNATURE_FORUM_VIEWS_FIELD_DEFAULT', 0);
+
+/**
+ * Render signature using a filter format if used in views as a field.
+ */
+define('SIGNATURE_FORUM_VIEWS_FIELD_FORMAT', 1);
+
+/**
  * The new length of the signature field of the user table.
  *
  * Limiting factor |  Bytes
@@ -267,6 +277,41 @@ function signature_forum_form_user_admin_settings_alter(&$form, &$form_state) {
     ),
   );
 
+  // Views settings.
+  if (module_exists('views')) {
+    $form['personalization']['signatures']['signature_forum_views'] = array(
+      '#type' => 'fieldset',
+      '#group' => 'signature_forum',
+      '#title' => t('Views settings'),
+      '#description' => t('Views settings'),
+      'signature_forum_views_field_rendering' => array(
+        '#type' => 'radios',
+        '#title' => t('Field rendering options when signature is used as views field'),
+        '#default_value' => variable_get('signature_forum_views_field_rendering', SIGNATURE_FORUM_VIEWS_FIELD_DEFAULT),
+        '#description' => t('How to render the signature field in views.'),
+        '#options' => array(
+          SIGNATURE_FORUM_VIEWS_FIELD_DEFAULT => t('Use default views rendering.'),
+          SIGNATURE_FORUM_VIEWS_FIELD_FORMAT => t('Use a filter format.'),
+        ),
+      ),
+      'signature_forum_views_field_format' => array(
+        '#type' => 'select',
+        '#title' => t('Filter format to use'),
+        '#default_value' => variable_get('signature_forum_views_field_format'),
+        '#options' => _signature_forum_filter_formats(),
+        '#description' => t('If enabled: Run the signature through this filter format.'),
+        '#element_validate' => array('_signature_forum_validate_short_content_format'),
+        '#states' => array(
+          'visible' => array(
+            ':input[name="signature_forum_views_field_rendering"]' => array(
+              'value' => SIGNATURE_FORUM_VIEWS_FIELD_FORMAT,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
   // Submit callback.
   $form['#submit'][] = '_signature_forum_submit_admin_form';
 }
@@ -356,6 +401,11 @@ function _signature_forum_submit_admin_form($form, &$form_state) {
   // Clear the field cache.
   if ($clear_field_cache) {
     cache_clear_all('field_info_fields', 'cache_field');
+  }
+
+  if (isset($form_state['values']['signature_forum_views_field_rendering'])) {
+    drupal_flush_all_caches();
+    cache_clear_all();
   }
 }
 
@@ -1059,5 +1109,16 @@ function signature_forum_user_presave(&$edit, $account, $category) {
   // @see: http://bugs.mysql.com/bug.php?id=21532.
   if (!isset($account->signature) && !isset($edit['signature'])) {
     $edit['signature'] = '';
+  }
+}
+
+/**
+ * Implements hook_views_data_alter().
+ */
+function signature_forum_views_data_alter(&$data) {
+  $signature_render_method = variable_get('signature_forum_views_field_rendering', SIGNATURE_FORUM_VIEWS_FIELD_DEFAULT);
+
+  if ($signature_render_method == SIGNATURE_FORUM_VIEWS_FIELD_FORMAT) {
+    $data['users']['signature']['field']['format'] = variable_get('signature_forum_views_field_format', 'plain_text');
   }
 }
