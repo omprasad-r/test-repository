@@ -1,0 +1,24 @@
+<?php
+/**
+ * @file
+ * Installation/update functions for Artist Arena migrations.
+ */
+
+/**
+ * For bieber only, deregister the old gallery and photo migrations in favor
+ * of the new ones.
+ */
+function migrate_aa_update_7001() {
+  if (variable_get('migrate_aa_sitename', '') == 'bieberfever') {
+    Migration::deregisterMigration('admin_gallery');
+    Migration::deregisterMigration('fan_gallery');
+    Migration::deregisterMigration('fan_with_artist_gallery');
+    Migration::deregisterMigration('meet_greet');
+    Migration::deregisterMigration('photo');
+    Migration::deregisterMigration('admin_photo');
+    Migration::deregisterMigration('fan_with_artist_photo');
+    Migration::deregisterMigration('Commentadmin_photo');
+    Migration::deregisterMigration('Commentphoto');
+    Migration::deregisterMigration('Commentfan_with_artist_photo');
+  }
+}

@@ -40,7 +40,7 @@ class bieberfeverRegistry extends AAMigrationRegistry {
     $this->registerGallery('admin_gallery', 'photo_category');
     $this->registerGallery('fan_gallery', 'photo_category');
     $this->registerGallery('fan_with_artist_gallery', 'photo_category');
-    $this->registerGallery('meet_greet', 'photo_category');
+    $this->registerNode('meet_greet', 'media_gallery');
     $this->registerNode('admin_photo', 'photo');
     $this->registerComment('admin_photo', 'photo');
     $this->registerNode('contest_media', 'photo');
@@ -62,7 +62,8 @@ class bieberfeverRegistry extends AAMigrationRegistry {
       'source_type' => 'uprofile',
       'destination_type' => 'comment_on_anything',
     );
-    $this->registerMigration("Commentuprofile", $arguments);
+    $this->registerMigration('Commentuprofile', $arguments);
+    $this->registerMigration('PrivateMessage', $this->commonArguments);
   }
 }
 
@@ -95,6 +96,7 @@ class bieberfeverPictureMigration extends AAPicture6Migration {
 
 class bieberfeverUserMigration extends AAUser6Migration {
   public function __construct(array $arguments) {
+    $this->sourceFields['friend'] = 'List of friend uids';
     parent::__construct($arguments);
 
     // Known mappings
@@ -105,6 +107,15 @@ class bieberfeverUserMigration extends AAUser6Migration {
     $this->addFieldMapping('field_hobbies', 'field_interests');
     $this->addFieldMapping('field_country', 'profile_country');
     $this->addFieldMapping('field_birthdate', 'profile_user_birthday');
+    $this->addFieldMapping('friend', 'friend')
+         ->sourceMigration($this->machineName);
+    $this->addFieldMapping('name', 'name', FALSE);
+
+    // Prevent flag from setting cookies
+    global $user;
+    if ($user->uid == 0) {
+      $user = user_load(1);
+    }
 
     // Provide a blank slate for all these fields.
     $this->addUnmigratedDestinations(array(
@@ -149,8 +160,9 @@ class bieberfeverUserMigration extends AAUser6Migration {
     // path in the map table.
     $row->picture = str_replace('sites/bieberfever.com/files/', '', $row->picture);
 
-    // Birthdays are serialized arrays, convert to a datetime string
-    if (!empty($row->profile_user_birthday)) {
+    // Birthdays are (sometimes) serialized arrays, convert to a datetime string
+    if (!empty($row->profile_user_birthday) &&
+        substr($row->profile_user_birthday, 0, 1) == '{') {
       static $threshold_date;
       if (!isset($threshold_date)) {
         $threshold_date = strftime('%Y-%m-%d', strtotime('13 years ago'));
@@ -162,6 +174,47 @@ class bieberfeverUserMigration extends AAUser6Migration {
       if ($row->profile_user_birthday > $threshold_date) {
         return FALSE;
       }
+    }
+
+    $query = Database::getConnection('default', $this->sourceConnection)
+           ->select('user_relationships', 'ur')
+           ->fields('ur', array('requestee_id'))
+           ->condition('requester_id', $row->uid)
+           ->condition('approved', 1);
+    // Make sure the friend actually exists.
+    $query->innerJoin('users', 'u', 'ur.requestee_id = u.uid');
+    $row->friend = $query->execute()->fetchCol();
+  }
+
+  protected function createStub($migration, $source_key) {
+    migrate_instrument_start('bieberfeverUserMigration::createStub');
+    $account = new stdClass;
+    $name = 'Stub_' . $source_key[0];
+    $account->name = $name;
+    $account->mail = $name . '@example.com';
+    $account->status = 0;
+    $account->signature = '';
+    user_save($account, array());
+    migrate_instrument_stop('bieberfeverUserMigration::createStub');
+    if (isset($account->uid)) {
+      return array($account->uid);
+    }
+    else {
+      return FALSE;
+    }
+  }
+
+  public function prepare($account, $row) {
+    if (!empty($account->friend)) {
+      if (is_array($account->friend)) {
+        $this->friend = $account->friend;
+      }
+      else {
+        $this->friend = array($account->friend);
+      }
+    }
+    else {
+      $this->friend = array();
     }
   }
 
@@ -179,6 +232,21 @@ class bieberfeverUserMigration extends AAUser6Migration {
       ),
     );
     entity_save('user', $account);
+
+    // Overrides broken migrate_extras handler.
+    foreach ($this->friend as $friend) {
+      try {
+        // Make it two-way.
+        flag('flag', 'friend', $friend, $account);
+      }
+      catch (Exception $e) {
+        // Ignore "Cannot modify header information" based on setcookie
+        if (strstr($e->getMessage(), 'Cannot modify header information') === FALSE) {
+          throw $e;
+        }
+      }
+    }
+
     migrate_instrument_stop('User complete');
   }
 }
@@ -217,14 +285,6 @@ class bieberfeverfan_galleryMigration extends AAGallery6Migration {
 }
 
 class bieberfeverfan_with_artist_galleryMigration extends AAGallery6Migration {
-  public function __construct($arguments) {
-    parent::__construct($arguments);
-    $this->addFieldMapping('field_is_pro', NULL, FALSE)
-         ->defaultValue(0);
-  }
-}
-
-class bieberfevermeet_greetMigration extends AAGallery6Migration {
   public function __construct($arguments) {
     parent::__construct($arguments);
     $this->addFieldMapping('field_is_pro', NULL, FALSE)
@@ -289,6 +349,49 @@ class bieberfeveradmin_photoMigration extends bieberfeverNodeMigration {
   }
 }
 
+class bieberfevermeet_greetMigration extends bieberfeverNodeMigration {
+  public function __construct($arguments) {
+    parent::__construct($arguments);
+    $this->dependencies[] = 'File';
+
+    $this->removeFieldMapping('field_is_pro');
+    $this->removeFieldMapping('migrate_redirects');
+    $this->addFieldMapping('media_gallery_description', 'body');
+    $this->addFieldMapping('media_gallery_description:format', 'format');
+    $this->addFieldMapping('media_gallery_media', 'field_mg_photo')
+         ->sourceMigration('File');
+    $this->addFieldMapping('media_gallery_media:file_class')
+         ->defaultValue('MigrateFileFid');
+    $this->addFieldMapping('media_gallery_media:preserve_files')
+         ->defaultValue(1);
+
+    $this->addUnmigratedDestinations(array(
+      'media_gallery_allow_download',
+      'media_gallery_block_columns',
+      'media_gallery_block_rows',
+      'media_gallery_collection', 'media_gallery_collection:source_type',
+        'media_gallery_collection:create_term', 'media_gallery_collection:ignore_case',
+      'media_gallery_columns',
+        'media_gallery_description:language',
+      'media_gallery_expose_block',
+      'media_gallery_format',
+      'media_gallery_image_info_where',
+      'media_gallery_lightbox_extras',
+        'media_gallery_media:language', 'media_gallery_media:data',
+        'media_gallery_media:title',
+      'media_gallery_rows',
+    ));
+
+    $this->addUnmigratedSources(array(
+        'field_mg_photo:list',
+      'log',
+      'revision',
+      'revision_uid',
+      'upload', 'upload:description', 'upload:list', 'upload:weight',
+    ));
+  }
+}
+
 class bieberfevercontest_mediaMigration extends bieberfeverNodeMigration {
   public function __construct($arguments) {
     parent::__construct($arguments);
@@ -319,10 +422,36 @@ class bieberfevercontest_mediaMigration extends bieberfeverNodeMigration {
   }
 }
 
-class bieberfevereventMigration extends bieberfeverNodeMigration {
+abstract class bieberfeverflagMigration extends AANode6Migration {
+  protected $flagName;
+  public function __construct(array $arguments) {
+    $this->flagName = $arguments['flag_name'];
+    parent::__construct($arguments);
+  }
+
+  public function complete($node, $row) {
+    $query = Database::getConnection('default', $this->sourceConnection)
+           ->select('flag_content', 'fc')
+           ->fields('fc', array('uid'))
+           ->condition('fc.content_type', 'node')
+           ->condition('fc.content_id', $row->nid);
+    $query->innerJoin('flags', 'f', "fc.fid=f.fid AND f.name='{$this->flagName}'");
+    $uids = $query->execute()->fetchCol();
+    foreach ($uids as $legacy_uid) {
+      $uid = $this->handleSourceMigration('User', array($legacy_uid));
+      if ($uid) {
+        $account = user_load($uid);
+        flag('flag', $this->flagName, $node->nid, $account);
+      }
+    }
+  }
+}
+
+class bieberfevereventMigration extends bieberfeverflagMigration {
   public function __construct($arguments) {
     $this->sourceFields['state'] = 'State extracted from location';
     $this->sourceFields['country'] = 'Country extracted from location';
+    $arguments['flag_name'] = 'rsvp';
     parent::__construct($arguments);
 
     $this->addFieldMapping('field_event_date', 'field_event_date_time');
@@ -430,8 +559,9 @@ class bieberfeverfan_photoMigration extends bieberfeverNodeMigration {
   }
 }
 
-class bieberfeverforumMigration extends bieberfeverNodeMigration {
+class bieberfeverforumMigration extends bieberfeverflagMigration {
   public function __construct($arguments) {
+    $arguments['flag_name'] = 'bookmarks';
     parent::__construct($arguments);
     $this->dependencies[] = '1Term';
 
@@ -517,8 +647,9 @@ class bieberfeverphotoMigration extends bieberfeverNodeMigration {
   }
 }
 
-class bieberfeverstoryMigration extends bieberfeverNodeMigration {
+class bieberfeverstoryMigration extends bieberfeverflagMigration {
   public function __construct(array $arguments) {
+    $arguments['flag_name'] = 'bookmarks';
     parent::__construct($arguments);
     $this->dependencies[] = 'File';
 
@@ -666,10 +797,89 @@ class bieberfeverCommentuprofileMigration extends AAComment6Migration {
              ->condition('entity_id', $uid)
              ->execute()
              ->fetchField();
+      if (!$row->nid) {
+        // Unresolved stubs have no comment_on_anything node, ignore.
+        return FALSE;
+      }
     }
     // We have orphaned comments - target uid has been deleted
     else {
       return FALSE;
     }
+  }
+}
+
+class bieberfeverPrivateMessageMigration extends DrupalMigration {
+  public function __construct($arguments) {
+    parent::__construct($arguments);
+    $this->dependencies[] = 'User';
+
+    $fields = array(
+      'mid' => '',
+      'author' => '',
+      'subject' => '',
+      'body' => '',
+      'format' => '',
+      'timestamp' => '',
+      'recipients' => '',
+      'is_new' => '',
+    );
+    $this->source = new MigrateSourceSQL($this->query(), $fields, NULL,
+      array('map_joinable' => FALSE));
+    $this->destination = new MigrateDestinationPrivateMsg();
+    $this->map = new MigrateSQLMap($this->machineName,
+       array(
+         'mid' => array('type' => 'int',
+                        'unsigned' => TRUE,
+                        'not null' => TRUE,
+                        'description' => 'Message ID',
+                        'alias' => 's',
+                       ),
+       ),
+       MigrateDestinationPrivateMsg::getKeySchema()
+    );
+
+    $this->addSimpleMappings(array('subject', 'body', 'timestamp',
+                             'is_new'));
+    $this->addFieldMapping('author', 'author')
+         ->sourceMigration('User');
+    $this->addFieldMapping('recipients', 'recipients')
+         ->sourceMigration('User');
+    $this->addFieldMapping('format')
+         ->defaultValue('1');
+  }
+
+  protected function query() {
+    $query = Database::getConnection('default', $this->sourceConnection)
+               ->select('pm_message', 'm')
+               ->fields('m');
+    $query->innerJoin('users', 'u', 'm.author=u.uid');
+    return $query;
+  }
+
+  public function prepareRow($row) {
+    if (parent::prepareRow($row) === FALSE) {
+      return FALSE;
+    }
+
+    $row->body = strip_tags($row->body);
+
+    $result = Database::getConnection('default', $this->sourceConnection)
+                   ->select('pm_index', 'i')
+                   ->fields('i', array('recipient', 'is_new'))
+                   ->condition('i.mid', $row->mid)
+                   ->condition('recipient', $row->author, '<>')
+                   ->execute();
+    $row->recipients = array();
+    foreach ($result as $pm_row) {
+      $row->recipients[] = $pm_row->recipient;
+      // Plugin only supports one is_new value, not one per recipient, so for
+      // the few multi-recipient cases we'll settle for the last value.
+      $row->is_new = $pm_row->is_new;
+    }
+    if (empty($row->recipients)) {
+      return FALSE;
+    }
+    return TRUE;
   }
 }
