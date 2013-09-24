@@ -1338,48 +1338,12 @@ function scarecrow_update_11188() {
  * Preparation for the move to sites.php.
  */
 function scarecrow_update_11189() {
-  require_once '/var/www/site-scripts/site-info.php';
-  list($name, $site, $env, $secret) = ah_site_info();
-  $gardens_site_id = variable_get('gardens_db_name', '');
-  $new_location = "/mnt/files/{$site}.{$env}/sites/g/files/{$gardens_site_id}";
-  $old_location = "/mnt/files/{$site}.{$env}/gardens-sites/{$gardens_site_id}";
-
-  $success = TRUE;
-
-  if (is_link($new_location)) {
-    $command = 'rm -f ' . $new_location;
-    shell_exec($command);
-  }
-  if (!is_dir($new_location) && file_exists($old_location)) {
-    $command = 'mv ' . $old_location . ' ' . $new_location;
-    shell_exec($command);
-  }
-  if (!is_link($new_location) && is_dir($new_location) && !file_exists($old_location)) {
-    $command = 'ln -s ' . $new_location .' ' . $old_location;
-    shell_exec($command);
-  }
-  $success = !is_link($new_location) && is_dir($new_location) && is_link($old_location) && is_dir($old_location);
-
-  if ($success) {
-    if (is_dir($new_location . '/files') && !is_link($new_location . '/files') && !file_exists($new_location . '/f')) {
-      $command = 'mv ' . $new_location . '/files ' . $new_location . '/f';
-      shell_exec($command);
-    }
-    if (!file_exists($new_location . '/files') && is_dir($new_location . '/f')) {
-      $command = 'ln -s ' . $new_location . '/f ' . $new_location . '/files';
-      shell_exec($command);
-    }
-    $success = is_dir($new_location . '/f') && is_link($new_location . '/files');
-  }
-
-  if (!$success) {
-    throw new DrupalUpdateException(t('Site update scarecrow_update_11189 failed.', array('@url' => $GLOBALS['base_url'])));
-  }
+  // Removed in favor of a standalone script.
 }
 
 /**
  * Reruns scarecrow_update_11189() to fix possible issues.
  */
 function scarecrow_update_11190() {
-  scarecrow_update_11189();
+  // Removed in favor of a standalone script.
 }
