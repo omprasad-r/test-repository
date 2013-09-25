@@ -22,6 +22,21 @@ class quote_handler_field_comment_link_quote extends views_handler_field_comment
     $this->options['alter']['make_link'] = TRUE;
     $this->options['alter']['path'] = "comment/reply/" . $nid . '/' . $cid . '?quote=1#comment-form';
 
+    if (_quote_variable_get('highlighted_text')) {
+      $this->options['alter']['link_class'] = 'quote-link';
+      $this->options['alter']['link_attributes']['id'] = 'quote-link-comment-' . $cid;
+
+      foreach ($this->entities as $entity) {
+        if ($entity->cid == $cid) {
+          $id = 'quote-link-comment-' . $entity->cid;
+          $settings['quote'][$id]['author'] = $entity->name;
+          $settings['quote'][$id]['body'] = $entity->comment_body[$entity->language][0]['value'];
+          $settings['quote'][$id]['textarea'] = "#edit-comment-body-{$entity->language}-0-value";
+        }
+      }
+      drupal_add_js($settings, 'setting');
+    }
+
     return $text;
   }
 }
