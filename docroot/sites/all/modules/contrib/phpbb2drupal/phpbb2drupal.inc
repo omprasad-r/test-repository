@@ -137,7 +137,9 @@ class PhpbbContentHelpers {
    * @param unknown_type $uid The BBCode UId to remove
    */
   static function stripUid($text, $uid) {
-    return preg_replace("/(:[a-z])?:$uid\]/", ']', $text);
+    // Pick up :<uid> when followed by either a ] or = (so, fixes
+    // up both [quote:cb43f1dd29="username"] and [/quote:cb43f1dd29]).
+    return preg_replace("/(:[a-z])?:$uid([\]=])/", '$2', $text);
   }
 
   /**
