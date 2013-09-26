@@ -58,6 +58,10 @@
     // The login form container.
     var $this = $(this);
 
+    // Theoretically this is responsible for initializing the Janrain Engage
+    // widget. Suddenly we just had to start calling it ourselves.
+    janrain.engage.signin.widget.init();
+
     //store a reference to widget container
     var $rpxWidgetEmbed = $this.find('#rpx-widget-embed'),
       $janrainView = $('#janrainEngageEmbed').find("#janrainView");
