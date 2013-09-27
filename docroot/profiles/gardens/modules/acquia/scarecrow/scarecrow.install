@@ -1333,3 +1333,17 @@ function scarecrow_update_11188() {
     }
   }
 }
+
+/**
+ * Preparation for the move to sites.php.
+ */
+function scarecrow_update_11189() {
+  // Removed in favor of a standalone script.
+}
+
+/**
+ * Reruns scarecrow_update_11189() to fix possible issues.
+ */
+function scarecrow_update_11190() {
+  // Removed in favor of a standalone script.
+}
