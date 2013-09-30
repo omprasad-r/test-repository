@@ -86,59 +86,55 @@ function forum_merge_page_form($form, $form_state, $nid) {
  */
 function forum_merge_page_form_validate($form, &$form_state) {
   if ($form_state['values']['forum']) {
-    $form_state['forum_ids'] = array();
-    $forums = drupal_explode_tags($form_state['values']['forum']);
+    $form_state['forum_id'] = 0;
+    $forum_id = forum_merge_parse_id($form_state['values']['forum']);
+    // If just the title has been given.
+    if (!$forum_id) {
+      // Get the topics that satisfy the conditions.
+      $query = db_select('node', 'n');
+      $query->addTag('node_access');
 
-    foreach ($forums as $forum) {
-      $forum_id = forum_merge_parse_id($forum);
-      // If just the title has been given.
-      if (!$forum_id) {
-        // Get the topics that satisfy the conditions.
-        $query = db_select('node', 'n');
-        $query->addTag('node_access');
+      // Select rows that match by node name.
+      $result = $query
+        ->fields('n', array('nid', 'title'))
+        ->condition('n.title', $form_state['values']['forum'])
+        ->execute()
+        ->fetchAll();
 
-        // Select rows that match by node name.
-        $result = $query
-          ->fields('n', array('nid', 'title'))
-          ->condition('n.title', $forum)
-          ->execute()
-          ->fetchAll();
-
-        // If get results based on the given title.
-        if ($result) {
-          // More than one results.
-          if (count($result) > 1) {
-            $message = 'There are more than one title of forum topics are matched to the following: !title';
-            form_set_error('forum', t($message, array('!title' => drupal_placeholder($forum))));
-          }
-          $result = reset($result);
-          $forum_id = $result->nid;
+      // If get results based on the given title.
+      if ($result) {
+        // More than one results.
+        if (count($result) > 1) {
+          $message = 'There are more than one title of forum topics are matched to the following: !title';
+          form_set_error('forum', t($message, array('!title' => drupal_placeholder($form_state['values']['forum']))));
         }
-        else {
-          // No result.
-          $message = 'There is no forum topic named: !title';
-          form_set_error('forum', t($message, array('!title' => drupal_placeholder($forum))));
-        }
+        $result = reset($result);
+        $forum_id = $result->nid;
       }
-      if ($forum_id) {
-        // If one of the given topic is the topic that the user wants to merge into.
-        if ($forum_id === $form['#nid']) {
-          $message = 'You can\'t merge a topic into itself!';
-          form_set_error('forum', t($message));
-        }
-
-        // Check the node and the node access.
-        $node = node_load($forum_id);
-        if (!$node) {
-          $message = 'The topic with id !nid doesn\'t exist.';
-          form_set_error('forum', t( $message, array('!nid' => drupal_placeholder($forum_id))));
-        }
-        elseif (!node_access('delete', $node)) {
-          $message = 'You have no grants to be able to delete the forum topic with the following title: !title';
-          form_set_error('forum', t( $message, array('!title' => drupal_placeholder($node->title))));
-        }
-        $form_state['forum_ids'][$forum_id] = $forum_id;
+      else {
+        // No result.
+        $message = 'There is no forum topic named: !title';
+        form_set_error('forum', t($message, array('!title' => drupal_placeholder($form_state['values']['forum']))));
       }
+    }
+    if ($forum_id) {
+      // If one of the given topic is the topic that the user wants to merge into.
+      if ($forum_id === $form['#nid']) {
+        $message = 'You can\'t merge a topic into itself!';
+        form_set_error('forum', t($message));
+      }
+
+      // Check the node and the node access.
+      $node = node_load($forum_id);
+      if (!$node) {
+        $message = 'The topic with id !nid doesn\'t exist.';
+        form_set_error('forum', t( $message, array('!nid' => drupal_placeholder($forum_id))));
+      }
+      elseif (!node_access('delete', $node)) {
+        $message = 'You have no rights to be able to delete the forum topic with the following title: !title';
+        form_set_error('forum', t( $message, array('!title' => drupal_placeholder($node->title))));
+      }
+      $form_state['forum_id'] = $forum_id;
     }
   }
 }
@@ -147,36 +143,33 @@ function forum_merge_page_form_validate($form, &$form_state) {
  * Submit handler for forum_merge_page_form().
  */
 function forum_merge_page_form_submit($form, $form_state) {
+  $base_node = node_load($form['#nid']);
+  $forum_node = node_load($form_state['forum_id']);
+
   $batch = array(
     'title' => t('Merging...'),
-    'operations' => array(),
+    'operations' => array(
+      array('forum_merge_save_comments', array($base_node, $forum_node)),
+    ),
     'finished' => 'forum_merge_finished_callback',
   );
 
-  $base_node = node_load($form['#nid']);
-  // Add operations.
-  foreach ($form_state['forum_ids'] as $forum_id) {
-    $forum_node = node_load($forum_id);
-    $batch['operations'][] = array('forum_merge_save_comments', array($base_node, $forum_node));
-  }
   batch_set($batch);
 }
 
 /**
  * Batch operation to save the comments of the old forum to the updated one.
  *
- * @param $base_nid
- *   The node id of the updated forum.
- * @param $forum_id
- *   The node id of the deprecated forum.
+ * @param $forum_node
+ *   The forum topic which will be deleted and the deprecated path will be redirected to the updated one.
+ * @param $base_node
+ *   The updated node object.
  * @param $context
  *   The context parameter for the batch process.
  *
  * @see forum_merge_page_form_submit().
  */
 function forum_merge_save_comments($base_node, $forum_node, &$context) {
-  global $user;
-
   if (empty($context['sandbox'])) {
     $context['sandbox']['progress'] = 0;
     $context['sandbox']['current_comment'] = 0;
@@ -197,6 +190,9 @@ function forum_merge_save_comments($base_node, $forum_node, &$context) {
     // Move the comments under the old forums to the new one.
     $comment = comment_load($row->cid);
     $comment->nid = $base_node->nid;
+
+    // Needs to rebuild the thread based on the existing comments in the updated node.
+    _forum_merge_rebuild_comment_thread($comment);
     comment_save($comment);
 
     // Update the status variables.
@@ -204,19 +200,12 @@ function forum_merge_save_comments($base_node, $forum_node, &$context) {
     $context['sandbox']['current_comment'] = $comment->cid;
   }
 
+  // Create redirect from the old topic to the updated one. We should do this, before we delete the deprecated node,
+  // because we need to get the path alias based on the node path.
+  $redirect = forum_merge_prepare_redirect($forum_node, $base_node);
   // Delete the deprecated forum topic.
   node_delete($forum_node->nid);
-
-  // Create redirect from the old topic to the updated one.
-  $redirect = new stdClass();
-  $redirect->uid = $user->uid;
-  $redirect->type = 'redirect';
-  $redirect->source = 'node/' . $forum_node->nid;
-  $redirect->source_options = serialize(array());
-  $redirect->redirect = 'node/' . $base_node->nid;
-  $redirect->redirect_options = serialize(array());
-  $redirect->language = $forum_node->language;
-  $redirect->status_code = 301;
+  // Save the redirect after the deprecated node has been deleted, because the redirect will also be deleted otherwise.
   redirect_save($redirect);
 
   // Progress bar.
@@ -234,7 +223,7 @@ function forum_merge_finished_callback($success, $results, $operations) {
   // The 'success' parameter means no fatal PHP errors were detected. All
   // other error management should be handled using 'results'.
   if ($success) {
-    $message = t('The Forum topics have been merge correctly.');
+    $message = t('The Forum topics have been merged correctly.');
     $type = 'status';
   }
   else {
@@ -251,11 +240,8 @@ function forum_merge_finished_callback($success, $results, $operations) {
  */
 function forum_merge_autocomplete_callback($string = '') {
   // The user enters a comma-separated list of tags. We only autocomplete the last tag.
-  $forum_typed = drupal_explode_tags($string);
-  $forum_last = array_pop($forum_typed);
-
   $matches = array();
-  if ($forum_typed != '') {
+  if ($string != '') {
 
     // Get the topics that satisfy the conditions.
     $query = db_select('node', 'n');
@@ -264,15 +250,13 @@ function forum_merge_autocomplete_callback($string = '') {
     // Select rows that match by node name.
     $results = $query
       ->fields('n', array('nid', 'title'))
-      ->condition('n.title', '%' . db_like($forum_last) . '%', 'LIKE')
+      ->condition('n.title', '%' . db_like($string) . '%', 'LIKE')
       ->range(0, 10)
       ->execute()
       ->fetchAll();
 
-    $prefix = count($forum_typed) ? drupal_implode_tags($forum_typed) . ', ' : '';
-
     foreach ($results as $result) {
-      $matches[$prefix . "{$result->title} [id:{$result->nid}]"] = "{$result->title} [id:{$result->nid}]";
+      $matches["{$result->title} [id:{$result->nid}]"] = "{$result->title} [id:{$result->nid}]";
     }
   }
   drupal_json_output($matches);
@@ -283,7 +267,7 @@ function forum_merge_autocomplete_callback($string = '') {
  *
  * @param $string
  *   Forum name with ID in form of "title [id:123]".
- * @return
+ * @return mixed
  *   Int value of the ID or NULL if not found.
  */
 function forum_merge_parse_id($string) {
@@ -292,4 +276,82 @@ function forum_merge_parse_id($string) {
     return $matches[1];
   }
   return NULL;
+}
+
+/**
+ * Helper function to be able to create a redirect from the deprecated node to the updated one.
+ *
+ * @param $redirected_node
+ *   The forum topic which will be deleted and the deprecated path will be redirected to the updated one.
+ * @param $base_node
+ *   The updated node object.
+ * @return stdClass
+ *   The prepared redirect object.
+ *
+ * @see forum_merge_save_comments().
+ */
+function forum_merge_prepare_redirect($redirected_node, $base_node) {
+  // Create the redirect object.
+  $redirect = new stdClass();
+  redirect_object_prepare($redirect);
+  $redirect->source = drupal_get_path_alias('node/' . $redirected_node->nid);
+  $redirect->redirect = 'node/' . $base_node->nid;
+
+  return $redirect;
+}
+
+/**
+ * Helper function to rebuild comment thread based on the existing comments in the updated forum topic.
+ * This code is a re-use of the proper part of the comment_save() function.
+ *
+ * @param $comment
+ *   The moving comment object.
+ *
+ * @see forum_merge_save_comments().
+ * @see comment_save().
+ */
+function _forum_merge_rebuild_comment_thread(&$comment) {
+  if ($comment->pid == 0) {
+    // This is a comment with no parent comment (depth 0): we start
+    // by retrieving the maximum thread level.
+    $max = db_query('SELECT MAX(thread) FROM {comment} WHERE nid = :nid', array(':nid' => $comment->nid))->fetchField();
+    // Strip the "/" from the end of the thread.
+    $max = rtrim($max, '/');
+    // We need to get the value at the correct depth.
+    $parts = explode('.', $max);
+    $firstsegment = $parts[0];
+    // Finally, build the thread field for this new comment.
+    $thread = int2vancode(vancode2int($firstsegment) + 1) . '/';
+  }
+  else {
+    // This is a comment with a parent comment, so increase the part of the
+    // thread value at the proper depth.
+
+    // Get the parent comment:
+    $parent = comment_load($comment->pid);
+    // Strip the "/" from the end of the parent thread.
+    $parent->thread = (string) rtrim((string) $parent->thread, '/');
+    // Get the max value in *this* thread.
+    $max = db_query("SELECT MAX(thread) FROM {comment} WHERE thread LIKE :thread AND nid = :nid", array(
+      ':thread' => $parent->thread . '.%',
+      ':nid' => $comment->nid,
+    ))->fetchField();
+
+    if ($max == '') {
+      // First child of this parent.
+      $thread = $parent->thread . '.' . int2vancode(0) . '/';
+    }
+    else {
+      // Strip the "/" at the end of the thread.
+      $max = rtrim($max, '/');
+      // Get the value at the correct depth.
+      $parts = explode('.', $max);
+      $parent_depth = count(explode('.', $parent->thread));
+      $last = $parts[$parent_depth];
+      // Finally, build the thread field for this new comment.
+      $thread = $parent->thread . '.' . int2vancode(vancode2int($last) + 1) . '/';
+    }
+  }
+  // Set the updated thread to the comment.
+  $comment->thread = $thread;
 }
