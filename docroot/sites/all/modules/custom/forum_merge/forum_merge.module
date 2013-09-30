@@ -13,7 +13,7 @@ function forum_merge_menu() {
 
   $items['node/%/merge'] = array(
     'type' => MENU_LOCAL_TASK,
-    'title' => 'Merge forum',
+    'title' => 'Merge threads',
     'page callback' => 'drupal_get_form',
     'page arguments' => array('forum_merge_page_form', 1),
     'access callback' => 'forum_merge_access_callback',
@@ -24,7 +24,7 @@ function forum_merge_menu() {
     'type' => MENU_CALLBACK,
     'title' => 'Forum topic autocomplete',
     'page callback' => 'forum_merge_autocomplete_callback',
-    'access arguments' => array('merge forums'),
+    'access arguments' => array('merge threads'),
   );
 
   return $items;
@@ -35,9 +35,9 @@ function forum_merge_menu() {
  */
 function forum_merge_permission() {
   return array(
-    'merge forums' => array(
-      'title' => t('Merge forums'),
-      'description' => t('Permission to merge two forum topics into one.'),
+    'merge threads' => array(
+      'title' => t('Merge threads'),
+      'description' => t('Permission to merge threads of two forum topics into one.'),
     ),
   );
 }
@@ -51,7 +51,7 @@ function forum_merge_access_callback($nid) {
   $node = node_load($nid);
   // If the displayed content is a forum topic, and the viewing user has the rights to merge and update
   // forum topics and create redirect for it.
-  if ($node->type === 'forum' && user_access('merge forums') && node_access('update', $node) && redirect_access('create', 'redirect')) {
+  if ($node->type === 'forum' && user_access('merge threads') && node_access('update', $node) && redirect_access('create', 'redirect')) {
     return TRUE;
   }
   return FALSE;
@@ -67,9 +67,9 @@ function forum_merge_page_form($form, $form_state, $nid) {
 
   $form['forum'] = array(
     '#type' => 'textfield',
-    '#title' => t('Topic titles'),
+    '#title' => t('Topic title'),
     '#required' => TRUE,
-    '#description' => t('Choose forum topics which you would like to merge into the actual one. Type comma-separated topic names.'),
+    '#description' => t('Choose forum topic which you would like to merge into the actual one.'),
     '#autocomplete_path' => 'forum_merge/autocomplete/',
   );
 
