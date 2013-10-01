@@ -19,13 +19,17 @@
       $('fieldset#edit-scheduler-settings', context).drupalSetSummary(function (context) {
         var vals = [];
         if ($('#edit-publish-on').val() || $('#edit-publish-on-datepicker-popup-0').val()) {
-          vals.push(Drupal.t('Scheduled publishing on !date', {
-            '!date': $('#edit-publish-on-datepicker-popup-0').val()
+          vals.push(Drupal.t('Scheduled publishing on !date !time !timezone', {
+            '!date': $('#edit-publish-on-datepicker-popup-0').val(),
+            '!time': $('#edit-publish-on-timepicker-popup-1').val(),
+            '!timezone': Drupal.settings.warnerMiscScheduler.userTimezoneOffset
           }));
         }
         if ($('#edit-unpublish-on').val() || $('#edit-unpublish-on-datepicker-popup-0').val()) {
-          vals.push(Drupal.t('Scheduled unpublishing on !date', {
-            '!date': $('#edit-unpublish-on-datepicker-popup-0').val()
+          vals.push(Drupal.t('Scheduled unpublishing on !date !time !timezone', {
+            '!date': $('#edit-unpublish-on-datepicker-popup-0').val(),
+            '!time': $('#edit-unpublish-on-timepicker-popup-1').val(),
+            '!timezone': Drupal.settings.warnerMiscScheduler.userTimezoneOffset
           }));
         }
         if (!vals.length) {

@@ -863,20 +863,47 @@ function warner_misc_is_user_admin($account) {
  * Implements hook_form_FORM_ID_alter().
  */
 function warner_misc_form_node_type_form_alter(&$form, $form_state) {
-  $form['scheduler']['#attached']['js']['vertical-tabs'] = drupal_get_path('module', 'warner_misc') . "/js/warner_misc_scheduler_vertical_tabs.js";
+  if (module_exists('scheduler')) {
+    _warner_misc_scheduler_attach_js_vertical_tabs($form['scheduler']);
+    $form['scheduler']['publish']['advanced']['scheduler_publish_past_date']['#default_value'] = variable_get('scheduler_publish_past_date_' . $form['#node_type']->type, 'publish');
+    $form['scheduler']['publish']['advanced']['#access'] = FALSE;
+  }
 }
 
 /**
  * Implements hook_form_alter().
  */
 function warner_misc_form_alter(&$form, $form_state) {
-  if (!empty($form['#node_edit_form']) && user_access('schedule (un)publishing of nodes')) {
+  if (!empty($form['#node_edit_form']) && module_exists('scheduler') && user_access('schedule (un)publishing of nodes')) {
     $publishing_enabled = variable_get('scheduler_publish_enable_' . $form['type']['#value'], 0) == 1;
     $unpublishing_enabled = variable_get('scheduler_unpublish_enable_' . $form['type']['#value'], 0) == 1;
 
     // if scheduling has been enabled for this node type
     if ($publishing_enabled || $unpublishing_enabled) {
-      $form['scheduler_settings']['#attached']['js']['vertical-tabs'] = drupal_get_path('module', 'warner_misc') . "/js/warner_misc_scheduler_vertical_tabs.js";
+      _warner_misc_scheduler_attach_js_vertical_tabs($form['scheduler_settings']);
+
+      $user_timezone = drupal_get_user_timezone();
+      $timezone = new DateTimeZone($user_timezone);
+      $now = new DateTime("now", $timezone);
+      $user_timezone_abbreviation = $now->format('T');
+      $user_timezone_offset = $now->format('O');
+
+      $settings = array(
+        'userTimezoneName' => $user_timezone,
+        'userTimezoneAbbr' => $user_timezone_abbreviation,
+        'userTimezoneOffset' => $user_timezone_offset,
+      );
+      drupal_add_js(array('warnerMiscScheduler' => $settings), 'setting');
     }
   }
+}
+
+/**
+ * Attach the overridden scheduler vertical tabs javascript.
+ *
+ * @param $element
+ *   The form element to which the javascript should be attached.
+ */
+function _warner_misc_scheduler_attach_js_vertical_tabs(&$element) {
+  $element['#attached']['js']['vertical-tabs'] = drupal_get_path('module', 'warner_misc') . "/js/warner_misc_scheduler_vertical_tabs.js";
 }
