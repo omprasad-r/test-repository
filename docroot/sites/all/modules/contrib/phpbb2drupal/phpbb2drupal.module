@@ -111,11 +111,19 @@ function phpbb2drupal_menu() {
  * @param unknown_type $machine_name
  */
 function phpbb2drupal_get_migration_settings($machine_name) {
- // There is a case after upgrade where the settings are not set
- // Upgraded settings are saved as phpbb2drupal.
- if (!isset($machine_name['machine_name'])) {
-  $machine_name = 'phpbb2drupal';
- }
+  // There is a case after upgrade where the settings are not set
+  // Upgraded settings are saved as phpbb2drupal.
+  if (!isset($machine_name['group_name'])) {
+    if (isset($machine_name['machine_name'])) {
+      $machine_name = $machine_name['machine_name'];
+    }
+    else {
+      $machine_name = 'phpbb2drupal';
+    }
+  }
+  else {
+    $machine_name = $machine_name['group_name'];
+  }
   $migration = db_select('phpbb2drupal_instances','i')
    ->fields('i')
    ->condition('machine_name', $machine_name) // field & value
