@@ -331,7 +331,7 @@ function drush_hosting_move_domains_to_staging() {
   }
   catch (Exception $e) {
     return drush_set_error('HOSTING_ERROR', $e->getMessage());
-  }  
+  }
   // Move back wildcard domains.
   $domains_back = array();
   foreach ($site_info['domains'] as $name) {
@@ -539,7 +539,7 @@ function drush_hosting_move_gsite_domains() {
       $default_fqdn = $site_base[$hosting_site_name]['default_fqdn'];
       foreach ($domains as $domain) {
         $ch = curl_init("http://$default_fqdn/files/ms-drush/$test.txt");
-        curl_setopt($ch, CURLOPT_HTTPHEADER, array('Host: ' . $domain)); 
+        curl_setopt($ch, CURLOPT_HTTPHEADER, array('Host: ' . $domain));
         curl_setopt($ch, CURLOPT_RETURNTRANSFER, TRUE);
         curl_setopt($ch, CURLOPT_TIMEOUT, 3);
         $content = curl_exec($ch);
@@ -681,7 +681,7 @@ function drush_hosting_et_phone_home() {
   }
   else {
     drush_log("Failed to phone home to the gardener", 'error');
-  }     
+  }
 }
 
 /**
@@ -721,7 +721,7 @@ function drush_hosting_domain_sync() {
   $hosting_site_name = _drush_hosting_get_hosting_site_name();
   $hosting_site_group = _drush_hosting_get_hosting_site_group();
   $environment = acquia_gardens_get_site_environment();
-  
+
   $active_domains = acquia_gardens_call('get.active.domains.by.site', array($hosting_site_group, $environment));
 
   syslog(LOG_INFO, "Got " . count($active_domains) . " domains from the gardener");
