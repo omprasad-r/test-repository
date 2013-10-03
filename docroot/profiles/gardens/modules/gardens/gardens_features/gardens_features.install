@@ -19,7 +19,7 @@ function gardens_features_install() {
     ->execute();
 
   // Don't enable the responsive libraries for SMB.
-  if (!gardens_features_is_smb()) {
+  if (!gardens_misc_is_smb()) {
     _gardens_features_responsive_libraries_enable();
   }
 }
@@ -277,7 +277,7 @@ function gardens_features_update_11125() {
   module_load_include('module', 'gardens_features', 'gardens_features');
 
   // Only run this update hook for SMB.
-  if (!gardens_features_is_smb()) {
+  if (!gardens_misc_is_smb()) {
     return;
   }
 
