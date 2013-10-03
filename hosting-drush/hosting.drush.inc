@@ -155,19 +155,6 @@ function hosting_drush_command() {
     'bootstrap' => DRUSH_BOOTSTRAP_DRUSH, // No bootstrap at all.
   );
 
-  $items['gardens-migrate-7059'] = array(
-    'bootstrap' => DRUSH_BOOTSTRAP_DRUPAL_ROOT,
-    'description' => dt('Migrate all (or one) sites from the old symlinked system to sites.php'),
-    'options' => array(
-      'one' => dt('Migrate just one (randomly selected) site for testing'),
-      'site' => dt('A single specific gardens site specified by site ID (DB role) to migrate'),
-    ),
-    'arguments' => array(
-      'sitegroup' => dt('Sitegroup name'),
-      'environment' => dt('Environment name.'),
-    )
-  );
-
   return $items;
 }
 
@@ -964,70 +951,4 @@ function _drush_hosting_sql_query($query, $db_spec = NULL) {
     //drush_op('exec', $exec, $output, $status);
     $return = array('output' => implode("\n", $output), 'status' => $status);
     return $return;
-}
-
-function drush_hosting_gardens_migrate_7059($sitegroup, $env) {
-  if (empty($sitegroup) || empty($env)) {
-    return drush_set_error('BAD_ARGUMENTS', dt('Missing required argument'));
-  }
-  drush_hosting_include_install_gardens();
-  $active_domains = acquia_gardens_call('get.active.domains.by.site', array($sitegroup, $env));
-
-  if ($site = drush_get_option('site')) {
-    if (!isset($active_domains[$site])) {
-      return drush_set_error(dt('Unable to perform migration - site !site does not exist in the gardener sites list', array('!site' => $site)));
-    }
-    $active_domains = array($site => $active_domains[$site]);
-  }
-
-  if (drush_get_option('one')) {
-    $random = array_rand($active_domains);
-    $active_domains = array($random => $active_domains[$random]);
-    drush_log('Processing just one site for testing: !key (!domains)', array('!key' => $random, '!domains' => implode(',', $active_domains[$random])), 'ok');
-  }
-
-  $docroot = "/var/www/html/$sitegroup.$env/docroot";
-  foreach ($active_domains as $gardens_site_id => $domains) {
-    // @TODO - centralize directory path logic more.
-    // @TODO - set maintenance mode?
-    $source_dir = "/mnt/gfs/$sitegroup.$env/gardens-sites/$gardens_site_id";
-    $dest_dir = "/mnt/gfs/$sitegroup.$env/sites/g/files/$gardens_site_id";
-    if (is_dir($source_dir)) {
-      // Move the files directory
-      rename($source_dir, $dest_dir);
-      foreach ($domains as $domain) {
-        // Remove old symlink domains.
-        $symlink_path = "/var/www/html/$sitegroup.$env/docroot/sites/$domain";
-        if (readlink($symlink_path)) {
-          unlink($symlink_path);
-          drush_log(dt('Removed symlink at !path', array('!path' => $symlink_path)), 'ok');
-        }
-        else {
-          drush_log(dt('Failed to remove symlink at !path. It may have been removed previously.', array('!path' => $symlink_path)), 'warning');
-        }
-      }
-      // Back up the existing settings.php to settings.bak
-      if (rename("$dest_dir/settings.php", "$dest_dir/settings.bak")) {
-        drush_log(dt('Backed up settings.php to settings.bak in !path', array('!path' => $dest_dir)), 'ok');
-      }
-      else {
-        drush_log(dt('Failed to backup settings.php in directory !path', array('!path' => $dest_dir)), 'warning');
-      }
-      // Link the site's settings.php to the common settings.php file.
-      symlink("$docroot/sites/g/settings.php", "$dest_dir/settings.php");
-      // Set the public file path on the site
-      $file_public_path = escapeshellarg("sites/g/files/$gardens_site_id/files");
-      $canonical = escapeshellarg(reset($domains));
-      $cmd = "drush5 -l $canonical -r $docroot vset file_public_path $file_public_path";
-      drush_log(dt('Calling !cmd', array('!cmd' => $cmd)), 'ok');
-      system($cmd);
-      // Full cache clear
-      $cmd = "drush5 -l $canonical -r $docroot cc all";
-      drush_log(dt('Calling !cmd', array('!cmd' => $cmd)), 'ok');
-      system($cmd);
-    }
-    else {
-      drush_log(dt('Attempted to migrate site !id but could not find the source directory !dir. This site may have been migrated already.', array('!id' => $gardens_site_id, '!dir' => $source_dir)), 'warning');
-    }
-  }
 }
