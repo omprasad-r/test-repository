@@ -1855,7 +1855,7 @@ function gardens_features_library() {
   );
 
   // Temporarily disable the responsive JavaScript libraries for SMB.
-  if (!gardens_features_is_smb() || gardens_features_responsive_enabled()) {
+  if (!gardens_misc_is_smb() || gardens_features_responsive_enabled()) {
     $libraries['breakup'] = array(
       'title' => 'BreakUp',
       'website' => 'https://github.com/jessebeach/breakup',
@@ -1920,7 +1920,7 @@ function gardens_features_library_alter(&$libraries, $module) {
 function gardens_features_javascript_libraries_available_alter(&$groups) {
   $groups['Development']['library'][] = 'modernizr';
   $groups['Development']['library'][] = 'formalize';
-  if (!gardens_features_is_smb() || gardens_features_responsive_enabled()) {
+  if (!gardens_misc_is_smb() || gardens_features_responsive_enabled()) {
     $groups['Development']['library'][] = 'breakup';
     $groups['Development']['library'][] = 'responsivizer';
   }
@@ -1946,16 +1946,6 @@ function gardens_features_domain_301_redirect_exclude() {
     'user/logout',
     'gardens-logout',
   );
-}
-
-/**
- * Calculates whether the site is an SMB site or not.
- *
- * @return boolean
- *   Returns TRUE if this is an SMB site, otherwise FALSE.
- */
-function gardens_features_is_smb() {
-  return (variable_get('install_profile', 'standard') === 'gardens');
 }
 
 /**
