@@ -366,8 +366,11 @@ function install_gardens($hosting_site_name, $hosting_site_environment, $data = 
       touch("$site_directory/installed");
 
       // Rename files to f and symlink files -> f.
-      rename("$site_directory/files", "$site_directory/f");
-      acquia_gardens_ensure_symlink("$site_directory/f", "$site_directory/files");
+      // This renaming is no longer needed since we're going to use files until
+      // the release of sites.php. Once sites.php is release, this install code
+      // will no longer be used (DG-9602).
+      // rename("$site_directory/files", "$site_directory/f");
+      exec("cd $site_directory && ln -s files f");
 
       // Save the site's original (standard *.drupalgardens.com) domain.
       $standard_domain = reset($domains);
