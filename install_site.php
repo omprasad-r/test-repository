@@ -113,7 +113,7 @@ function install_site($domain, $db_role, $gardens_site_info = array()) {
 
     variable_set('gardens_misc_standard_domain', $domain);
 
-    variable_set('file_public_path', "sites/g/files/{$db_role}/f");
+    variable_set('file_public_path', "sites/g/files/{$db_role}/files");
     variable_set('gardens_site_id', $gardens_site_info['site_id']);
     variable_set('site_name', $gardens_site_info['site_name']);
     variable_set('site_mail', $gardens_site_info['site_mail']);
