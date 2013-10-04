@@ -365,6 +365,10 @@ function install_gardens($hosting_site_name, $hosting_site_environment, $data = 
       chmod($site_directory, 0755);
       touch("$site_directory/installed");
 
+      // Rename files to f and symlink files -> f.
+      rename("$site_directory/files", "$site_directory/f");
+      acquia_gardens_ensure_symlink("$site_directory/f", "$site_directory/files");
+
       // Save the site's original (standard *.drupalgardens.com) domain.
       $standard_domain = reset($domains);
       drupal_override_server_variables(array('url' => $gardens_site_info['url'] . '/index.php'));
@@ -666,7 +670,7 @@ function acquia_gardens_configure_duplicated_site($gardens_site_info) {
   // Normally we only have one domain during configure, so just set it.
   // @see: AN-19653  this is a quick fix for imagecache problems.
   $domain = end($domains);
-  variable_set('file_public_path', "sites/g/files/{$gardens_site_info->site_id}/files");
+  variable_set('file_public_path', "sites/g/files/{$gardens_site_info->site_id}/f");
   module_enable(array('gardens_duplication'), FALSE);
   $scrub_options = array();
   $scrub_options['retain_janrain_settings'] = $gardens_site_info->exact_copy || $gardens_site_info->retain_janrain_settings;
