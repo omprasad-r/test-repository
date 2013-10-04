@@ -64,8 +64,8 @@ puts "Base gfs directory: #{gfs_files_base}"
 failed_fix = []
 unsupported = []
 Dir.foreach(gfs_files_base) do |filename|
-  # sanity check: this should be g12345
-  next unless filename.match('^g[0-9]+$')
+  # sanity check: this should be az12345
+  next unless filename.match('^[a-zA-Z]+[0-9]+$')
 
   gfs_files_g123 = "#{gfs_files_base}#{filename}"
 
@@ -75,6 +75,8 @@ Dir.foreach(gfs_files_base) do |filename|
     cmd =  "rm #{gfs_files_g123}/files && "
     cmd += "mv #{gfs_files_g123}/f #{gfs_files_g123}/files && "
     cmd += "cd #{gfs_files_g123} && ln -s files f"
+    # Command needs to run as tangle user.
+    cmd = "sudo su -l #{options[:sitegroup]} -c '#{cmd}'"
     puts "Command: #{cmd}"
     if options[:run]
       output = `#{cmd}`
