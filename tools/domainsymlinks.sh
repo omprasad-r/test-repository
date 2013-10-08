@@ -9,30 +9,33 @@
 # the form sites/<domain>/files... which we rewrite in .htaccess to
 # /files/domain... .
 #
-# We don't check that symlinks can be written because this script should be the
-# first time they've ever been written - the only symlinks created should be
-# from this script, as the site user. A quick survey of the /docroot/files dir
-# on WMG and SMB shows it should be writable by the site user.
+# We don't check that symlinks are writable (if we have permission to overwrite
+# a symlink) because when running this script should be the first time they've
+# ever been written. The only symlinks created should be from this script, as
+# the site user, resulting in symlinks that the site user can still write. A
+# quick survey of the /docroot/files dir on WMG and SMB shows it should be
+# writable by the site user.
 #
 # Per the shebang line above, this must only be run under bash, not sh, which
 # seems to turn out to be dash.
 
 usage() {
   echo 'Usage: domainsymlinks.sh <sitegroup> <environment> <update environment> [limit]'
+  echo 'Example: sudo -u tangle001 domainsymlinks.sh tangle001 prod-gsteamer test-gsteamer 5'
+  echo 'The above example runs the script on both tangle001 and the corresponding up tangle'
+  echo 'on gsteamer, limiting to the first 5 directories.'
 }
 
 # Sanity check we have a sitegroup, env and up_env
 
-if [ "$1" = "" ] || [ "$2" = "" ] || [ "$3" = "" ]
-then
+if [ "$1" = "" ] || [ "$2" = "" ] || [ "$3" = "" ]; then
   usage
-  exit
+  exit 1
 fi
 
 # Sanity check this is running as the sitegroup user so we don't create symlinks unalterable by the sitegroup user.
 
-if [ "$1" !=  $USER ]
-then
+if [ "$1" !=  $USER ]; then
   echo "Looks like your sitegroup ($1) does not match the current user ($USER). I'm sorry, $USER, I'm afraid I can't do that."
   exit 1
 fi
@@ -43,8 +46,7 @@ UP_ENV=$3
 
 LIMIT=$4
 
-if [ ! -d /mnt/www/html/$SITEGROUP.$ENV ] || [ ! -d /mnt/www/html/$SITEGROUP.$UP_ENV ] || [ ! -d /mnt/gfs/$SITEGROUP.$ENV/sites/g/files ]
-then
+if [ ! -d /mnt/www/html/$SITEGROUP.$ENV ] || [ ! -d /mnt/www/html/$SITEGROUP.$UP_ENV ] || [ ! -d /mnt/gfs/$SITEGROUP.$ENV/sites/g/files ]; then
   echo "Required directories not present. Aborting."
   exit 1
 fi
@@ -54,8 +56,7 @@ UP_BASE=/mnt/www/html/$SITEGROUP.$UP_ENV/docroot
 FILES_BASE=/mnt/gfs/$SITEGROUP.$ENV/sites/g/files
 counter=0
 while read DOMAIN_DIR; do
-  if [ "$LIMIT" != "" ] && [ "$counter" -ge "$LIMIT" ]
-  then
+  if [ "$LIMIT" != "" ] && [ "$counter" -ge "$LIMIT" ]; then
     echo "Aborting because you asked me to limit to $LIMIT symlinks."
     break
   fi
