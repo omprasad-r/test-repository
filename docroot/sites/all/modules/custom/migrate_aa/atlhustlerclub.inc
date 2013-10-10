@@ -78,6 +78,8 @@ class atlhustlerclubadmin_galleryMigration extends AANode6Migration {
     $this->addFieldMapping('media_gallery_media:preserve_files')
          ->defaultValue(TRUE);
     $this->addFieldMapping('media_gallery_media:title', 'titles');
+    $this->addFieldMapping('media_gallery_lightbox_extras')
+         ->defaultValue(TRUE);
 
     $this->addUnmigratedDestinations(array(
       'media_gallery_allow_download',
@@ -90,7 +92,6 @@ class atlhustlerclubadmin_galleryMigration extends AANode6Migration {
       'media_gallery_expose_block',
       'media_gallery_format',
       'media_gallery_image_info_where',
-      'media_gallery_lightbox_extras',
         'media_gallery_media:language', 'media_gallery_media:data',
       'media_gallery_rows',
     ));
@@ -114,6 +115,7 @@ class atlhustlerclubadmin_galleryMigration extends AANode6Migration {
     $query->fields('fap', array('field_admin_photo_fid'));
     $query->innerJoin('node', 'n', 'tap.vid=n.vid');
     $query->fields('n', array('title'));
+    $query->orderBy('n.created', 'DESC');
     $result = $query->execute();
     foreach ($result as $photo_row) {
       $row->photos[] = $photo_row->field_admin_photo_fid;

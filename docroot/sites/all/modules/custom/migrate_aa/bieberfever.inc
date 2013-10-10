@@ -38,7 +38,7 @@ class bieberfeverRegistry extends AAMigrationRegistry {
 
     // @todo: Lots of gallery comments in the legacy site
     $this->registerGallery('admin_gallery', 'photo_category');
-    $this->registerGallery('fan_gallery', 'photo_category');
+    $this->registerGallery('fan_gallery', 'fans_photo_category');
     $this->registerGallery('fan_with_artist_gallery', 'photo_category');
     $this->registerNode('meet_greet', 'media_gallery');
     $this->registerNode('admin_photo', 'photo');
@@ -51,8 +51,8 @@ class bieberfeverRegistry extends AAMigrationRegistry {
     $this->registerNode('forum', 'forum');
     $this->registerComment('forum', 'forum');
     $this->registerNode('image', 'photo');
-    $this->registerNode('photo', 'photo');
-    $this->registerComment('photo', 'photo');
+    $this->registerNode('photo', 'fan_photo');
+    $this->registerComment('photo', 'fan_photo');
     // @todo: product, product_kit
     $this->registerNode('story', 'blog');
     $this->registerComment('story', 'blog');
@@ -364,6 +364,8 @@ class bieberfevermeet_greetMigration extends bieberfeverNodeMigration {
          ->defaultValue('MigrateFileFid');
     $this->addFieldMapping('media_gallery_media:preserve_files')
          ->defaultValue(1);
+    $this->addFieldMapping('media_gallery_lightbox_extras')
+         ->defaultValue(TRUE);
 
     $this->addUnmigratedDestinations(array(
       'media_gallery_allow_download',
@@ -376,7 +378,6 @@ class bieberfevermeet_greetMigration extends bieberfeverNodeMigration {
       'media_gallery_expose_block',
       'media_gallery_format',
       'media_gallery_image_info_where',
-      'media_gallery_lightbox_extras',
         'media_gallery_media:language', 'media_gallery_media:data',
         'media_gallery_media:title',
       'media_gallery_rows',
@@ -427,6 +428,8 @@ abstract class bieberfeverflagMigration extends AANode6Migration {
   public function __construct(array $arguments) {
     $this->flagName = $arguments['flag_name'];
     parent::__construct($arguments);
+    $this->addFieldMapping($this->flagName)
+         ->description('Populated in complete()');
   }
 
   public function complete($node, $row) {
@@ -586,6 +589,8 @@ class bieberfeverimageMigration extends bieberfeverNodeMigration {
          ->sourceMigration('File');
     $this->addFieldMapping('field_photo_asset:file_class')
          ->defaultValue('MigrateFileFid');
+    $this->addFieldMapping('field_photo_asset:preserve_files')
+         ->defaultValue(TRUE);
     $this->addFieldMapping('field_photo_category')
          ->defaultValue('Official');
 
@@ -627,22 +632,26 @@ class bieberfeverphotoMigration extends bieberfeverNodeMigration {
          ->sourceMigration('File');
     $this->addFieldMapping('field_photo_asset:file_class')
          ->defaultValue('MigrateFileFid');
-    $this->addFieldMapping('field_photo_category', 'field_gallery')
+    $this->addFieldMapping('field_photo_asset:preserve_files')
+         ->defaultValue(TRUE);
+    $this->addFieldMapping('field_fan_photo_category', 'field_gallery')
          ->sourceMigration('fan_gallery');
-    $this->addFieldMapping('field_photo_category:source_type')
+    $this->addFieldMapping('field_fan_photo_category:source_type')
          ->defaultValue('tid');
+    $this->removeFieldMapping('field_is_pro');
 
     $this->addUnmigratedDestinations(array(
-      'field_copyright_name', 'field_copyright_name:language',
-      'field_copyright_url', 'field_copyright_url:language',
         'field_photo_asset:language', 'field_photo_asset:title', 'field_photo_asset:data',
-        'field_photo_category:create_term', 'field_photo_category:ignore_case',
-      'field_rating',
-      'field_secondary_title', 'field_secondary_title:language',
+        'field_fan_photo_category:create_term', 'field_fan_photo_category:ignore_case',
+      'field_fan_rating',
     ));
 
     $this->addUnmigratedSources(array(
-        'field_image:list', 'field_image:data',
+        'field_image:list',
+      'log',
+      'revision',
+      'revision_uid',
+      'upload', 'upload:description', 'upload:list', 'upload:weight',
     ));
   }
 }
