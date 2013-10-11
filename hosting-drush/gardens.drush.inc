@@ -280,7 +280,7 @@ function drush_gardens_getsite($sitename = '', $tangle = '') {
       }
 
       // Create the database dump command string.
-      $drush = "/mnt/www/html/$tangle/drush/drush --include=../hosting-drush";
+      $drush = "drush5 --include=" . dirname(__FILE__);
       $db_command = "$drush --uri=$domain gardens-sql-dump";
 
       // Set the SQL dump filepath.
