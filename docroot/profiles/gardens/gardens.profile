@@ -5,6 +5,11 @@
  * Implements hook_install_tasks_alter().
  */
 function gardens_install_tasks_alter(&$tasks, $install_state) {
+  // @hack - We need the file path set as early as possible: even just before
+  // system.module is installed (top of gardens_install_system_module()) would
+  // be too late (the default files/ dir would be already created).
+  $db_role = $GLOBALS['conf']['gardens_db_name'];
+  $GLOBALS['conf']['file_public_path'] = "sites/g/files/{$db_role}/f";
   $tasks['install_system_module']['function'] = 'gardens_install_system_module';
 }
 
@@ -22,6 +27,14 @@ function gardens_install_system_module(&$install_state) {
   // Enable clean URLs now, so that any calls to url() during the module
   // installation phase will generate clean links.
   variable_set('clean_url', TRUE);
+
+  // IMPORTANT!! If and when we stop using the gardens profile for installation,
+  // we will need to find a point early enough in installation to set up the
+  // file path so that it's in the right place during install.  Here is good
+  // enough until that point.
+  if ($db_role = variable_get('gardens_db_name', FALSE)) {
+    variable_set('file_public_path', "sites/g/files/{$db_role}/f");
+  }
 }
 
 /**

@@ -9,10 +9,6 @@
  */
 function gardens_client_drush_command() {
   $items = array();
-  // Cause a gardens site to call the gardener.
-  $items['gardens-phone-home'] = array(
-    'description' => "Cause a gardens site to call the gardener for site-specific data.",
-  );
 
   $items['gardens-stats'] = array(
     'description' => "List all the available features for your site.",
@@ -80,8 +76,6 @@ function gardens_client_drush_command() {
  */
 function gardens_client_drush_help($section) {
   switch ($section) {
-    case 'drush:gardens-phone-home':
-      return dt("Fetch site data from the gardener.");
     case 'drush:gardens-stats':
       return dt("Sends stats to the gardener");
     case 'drush:gardens-move-cluster':
@@ -96,19 +90,6 @@ function gardens_client_drush_help($section) {
       return dt('Remove flood protection from user registration or forgotten password form.');
   }
 }
-
-/**
- * drush command callback. Get the Gardens site to call the Gardener.
- */
-function drush_gardens_client_gardens_phone_home() {
-  if (gardens_client_phone_home()) {
-    drush_log("Got data from the gardener", 'success');
-  }
-  else {
-    drush_log("Failed to phone home to the gardener", 'error');
-  }
-}
-
 
 /**
  * Sends stats to the gardener.

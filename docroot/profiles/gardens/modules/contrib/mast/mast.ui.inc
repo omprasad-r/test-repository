@@ -46,6 +46,11 @@ function mast_settings_form() {
     '#title' => t('Roles'),
     '#default_value' => variable_get('mast_settings_roles', array())
   );
+  $form['mast_use_original_author'] = array(
+    '#title' => t('Use Original Author module to find content created by a given user.'),
+    '#type' => 'checkbox',
+    '#default_value' => variable_get('mast_use_original_author', 1),
+  );
   $form['#submit'][] = 'mast_settings_form_submit';
   $form['#validate'][] = 'mast_settings_form_validate';
   return system_settings_form($form);
@@ -488,6 +493,7 @@ function mast_field_delete_instance($instance) {
  * Updates the cached eligibility state for a bundle.
  */
 function mast_bundle_update_eligibility($entity_type, $bundle) {
+  $eligibility = &drupal_static('mast_get_bundle_eligibility', array());
   $bundle_eligibility = mast_get_bundle_eligibility();
   $eligible = _mast_determine_eligibility($entity_type, $bundle);
   if (!isset($bundle_eligibility[$entity_type])) {
@@ -497,7 +503,7 @@ function mast_bundle_update_eligibility($entity_type, $bundle) {
     $bundle_eligibility[$entity_type][$bundle] = $eligible;
   }
   cache_set('mast_bundle_eligibility', $bundle_eligibility);
-  drupal_static_reset('mast_get_bundle_eligibility');
+  $eligibility = $bundle_eligibility;
 }
 
 /**
