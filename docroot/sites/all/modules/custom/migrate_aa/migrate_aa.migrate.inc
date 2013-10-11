@@ -723,7 +723,7 @@ class AAComment6Migration extends DrupalComment6Migration {
     global $conf;
     $conf['comment_notify_node_types'] = array();
     parent::__construct($arguments);
-    $this->addUnmigratedDestinations(array('migrate_redirects'));
+    $this->addUnmigratedDestinations(array('migrate_redirects', 'path'));
   }
 
   /**

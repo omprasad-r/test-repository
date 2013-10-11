@@ -39,15 +39,17 @@ class bieberfeverRegistry extends AAMigrationRegistry {
     // @todo: Lots of gallery comments in the legacy site
     $this->registerGallery('admin_gallery', 'photo_category');
     $this->registerGallery('fan_gallery', 'fans_photo_category');
-    $this->registerGallery('fan_with_artist_gallery', 'photo_category');
+//    $this->registerGallery('fan_with_artist_gallery', 'photo_category');
+    $this->registerNode('fan_with_artist_gallery', 'media_gallery');
+    $this->registerComment('fan_with_artist_gallery', 'media_gallery');
     $this->registerNode('meet_greet', 'media_gallery');
     $this->registerNode('admin_photo', 'photo');
     $this->registerComment('admin_photo', 'photo');
     $this->registerNode('contest_media', 'photo');
     $this->registerNode('event', 'event');
     $this->registerComment('event', 'event');
-    $this->registerNode('fan_with_artist_photo', 'photo');
-    $this->registerComment('fan_with_artist_photo', 'photo');
+//    $this->registerNode('fan_with_artist_photo', 'photo');
+//    $this->registerComment('fan_with_artist_photo', 'photo');
     $this->registerNode('forum', 'forum');
     $this->registerComment('forum', 'forum');
     $this->registerNode('image', 'photo');
@@ -284,14 +286,6 @@ class bieberfeverfan_galleryMigration extends AAGallery6Migration {
   }
 }
 
-class bieberfeverfan_with_artist_galleryMigration extends AAGallery6Migration {
-  public function __construct($arguments) {
-    parent::__construct($arguments);
-    $this->addFieldMapping('field_is_pro', NULL, FALSE)
-         ->defaultValue(0);
-  }
-}
-
 class bieberfeverNodeMigration extends AANode6Migration {
   public function __construct(array $arguments) {
     parent::__construct($arguments);
@@ -329,6 +323,9 @@ class bieberfeveradmin_photoMigration extends bieberfeverNodeMigration {
          ->sourceMigration('File');
     $this->addFieldMapping('field_photo_asset:file_class')
          ->defaultValue('MigrateFileFid');
+    $this->addFieldMapping('field_photo_asset:preserve_files')
+         ->defaultValue(TRUE);
+    $this->addFieldMapping('field_photo_asset:title', 'field_admin_photo:title');
     $this->addFieldMapping('field_photo_category', 'field_admin_gallery')
          ->sourceMigration('admin_gallery');
     $this->addFieldMapping('field_photo_category:source_type')
@@ -337,15 +334,72 @@ class bieberfeveradmin_photoMigration extends bieberfeverNodeMigration {
     $this->addUnmigratedDestinations(array(
       'field_copyright_name', 'field_copyright_name:language',
       'field_copyright_url', 'field_copyright_url:language',
-        'field_photo_asset:language', 'field_photo_asset:title', 'field_photo_asset:data',
+        'field_photo_asset:language', 'field_photo_asset:data',
         'field_photo_category:create_term', 'field_photo_category:ignore_case',
       'field_rating',
       'field_secondary_title', 'field_secondary_title:language',
     ));
 
     $this->addUnmigratedSources(array(
-        'field_admin_photo:list', 'field_admin_photo:data',
+        'field_admin_photo:list', 'field_admin_photo:title',
     ));
+  }
+}
+
+class bieberfeverfan_with_artist_galleryMigration extends bieberfeverNodeMigration {
+  public function __construct($arguments) {
+    $this->sourceFields['fwa_photos'] = 'Fan With Artist photos';
+    parent::__construct($arguments);
+    $this->dependencies[] = 'File';
+
+    $this->removeFieldMapping('field_is_pro');
+    $this->removeFieldMapping('migrate_redirects');
+    $this->addFieldMapping('media_gallery_description', 'body');
+    $this->addFieldMapping('media_gallery_description:format', 'format');
+    $this->addFieldMapping('media_gallery_media', 'fwa_photos')
+         ->sourceMigration('File');
+    $this->addFieldMapping('media_gallery_media:file_class')
+         ->defaultValue('MigrateFileFid');
+    $this->addFieldMapping('media_gallery_media:preserve_files')
+         ->defaultValue(1);
+    $this->addFieldMapping('media_gallery_lightbox_extras')
+         ->defaultValue(TRUE);
+
+    $this->addUnmigratedDestinations(array(
+      'media_gallery_allow_download',
+      'media_gallery_block_columns',
+      'media_gallery_block_rows',
+      'media_gallery_collection', 'media_gallery_collection:source_type',
+        'media_gallery_collection:create_term', 'media_gallery_collection:ignore_case',
+      'media_gallery_columns',
+        'media_gallery_description:language',
+      'media_gallery_expose_block',
+      'media_gallery_format',
+      'media_gallery_image_info_where',
+        'media_gallery_media:language', 'media_gallery_media:data',
+        'media_gallery_media:title',
+      'media_gallery_rows',
+    ));
+
+    $this->addUnmigratedSources(array(
+      'field_display_image', 'field_display_image:list',
+      'log',
+      'revision',
+      'revision_uid',
+      'upload', 'upload:description', 'upload:list', 'upload:weight',
+    ));
+  }
+
+  public function prepareRow($row) {
+    if (parent::prepareRow($row) === FALSE) {
+      return FALSE;
+    }
+    $row->fwa_photos = Database::getConnection('default', $this->sourceConnection)
+      ->select('content_type_fan_with_artist_photo', 'p')
+      ->fields('p', array('field_fan_with_artist_photo_fid'))
+      ->condition('p.field_fan_with_artist_gallery_nid', $row->nid)
+      ->execute()
+      ->fetchCol();
   }
 }
 
@@ -402,6 +456,8 @@ class bieberfevercontest_mediaMigration extends bieberfeverNodeMigration {
          ->sourceMigration('File');
     $this->addFieldMapping('field_photo_asset:file_class')
          ->defaultValue('MigrateFileFid');
+    $this->addFieldMapping('field_photo_asset:preserve_files')
+         ->defaultValue(TRUE);
     $this->addFieldMapping('field_photo_category')
          ->defaultValue('Never Say Never Movie Poster');
     $this->addFieldMapping('field_photo_category:create_term')
@@ -410,7 +466,8 @@ class bieberfevercontest_mediaMigration extends bieberfeverNodeMigration {
     $this->addUnmigratedDestinations(array(
       'field_copyright_name', 'field_copyright_name:language',
       'field_copyright_url', 'field_copyright_url:language',
-        'field_photo_asset:language', 'field_photo_asset:title', 'field_photo_asset:data',
+        'field_photo_asset:language', 'field_photo_asset:data',
+          'field_photo_asset:title',
         'field_photo_category:source_type', 'field_photo_category:ignore_case',
       'field_rating',
       'field_secondary_title', 'field_secondary_title:language',
@@ -418,7 +475,7 @@ class bieberfevercontest_mediaMigration extends bieberfeverNodeMigration {
 
     $this->addUnmigratedSources(array(
       '11',
-        'field_media_upload:list', 'field_media_upload:data',
+        'field_media_upload:list',
     ));
   }
 }
@@ -501,36 +558,6 @@ class bieberfevereventMigration extends bieberfeverflagMigration {
       return FALSE;
     }
     $this->parseLocation($row, 'field_event_location');
-  }
-}
-
-class bieberfeverfan_with_artist_photoMigration extends bieberfeverNodeMigration {
-  public function __construct($arguments) {
-    parent::__construct($arguments);
-    $this->dependencies[] = 'File';
-    $this->dependencies[] = 'fan_with_artist_gallery';
-
-    $this->addFieldMapping('field_photo_asset', 'field_fan_with_artist_photo')
-         ->sourceMigration('File');
-    $this->addFieldMapping('field_photo_asset:file_class')
-         ->defaultValue('MigrateFileFid');
-    $this->addFieldMapping('field_photo_category', 'field_fan_with_artist_gallery')
-         ->sourceMigration('fan_with_artist_gallery');
-    $this->addFieldMapping('field_photo_category:source_type')
-         ->defaultValue('tid');
-
-    $this->addUnmigratedDestinations(array(
-      'field_copyright_name', 'field_copyright_name:language',
-      'field_copyright_url', 'field_copyright_url:language',
-        'field_photo_asset:language', 'field_photo_asset:title', 'field_photo_asset:data',
-        'field_photo_category:create_term', 'field_photo_category:ignore_case',
-      'field_rating',
-      'field_secondary_title', 'field_secondary_title:language',
-    ));
-
-    $this->addUnmigratedSources(array(
-        'field_fan_with_artist_photo:list', 'field_fan_with_artist_photo:data',
-    ));
   }
 }
 
@@ -665,14 +692,21 @@ class bieberfeverstoryMigration extends bieberfeverflagMigration {
     $this->addFieldMapping('field_blog_category', '3');
     $this->addFieldMapping('field_blog_category:create_term')
          ->defaultValue(TRUE);
+    $this->addFieldMapping('field_blog_media', 'field_story_image')
+         ->sourceMigration('File');
+    $this->addFieldMapping('field_blog_media:file_class')
+         ->defaultValue('MigrateFileFid');
+    $this->addFieldMapping('field_blog_media:preserve_files')
+         ->defaultValue(TRUE);
 
     $this->addUnmigratedDestinations(array(
+      'field_blog_category:source_type', 'field_blog_category:ignore_case',
+      'field_blog_media:language', 'field_blog_media:title', 'field_blog_media:data',
       'field_tags', 'field_tags:source_type', 'field_tags:create_term', 'field_tags:ignore_case',
-        'field_blog_category:source_type', 'field_blog_category:ignore_case',
     ));
 
     $this->addUnmigratedSources(array(
-      'field_story_image', 'field_story_image:list', 'field_story_image:data',
+        'field_story_image:list',
     ));
   }
 
@@ -695,6 +729,7 @@ class bieberfeverstoryMigration extends bieberfeverflagMigration {
         $row->$term_field_name = '';
         break;
     }
+    return TRUE;
     if ($row->field_story_image) {
       $new_fid = db_select('migrate_map_file', 'map')
                  ->fields('map', array('destid1'))
@@ -769,7 +804,7 @@ class bieberfeverCommentMigration extends AAComment6Migration {
 
 class bieberfeverCommentadmin_photoMigration extends bieberfeverCommentMigration {}
 class bieberfeverCommenteventMigration extends bieberfeverCommentMigration {}
-class bieberfeverCommentfan_with_artist_photoMigration extends bieberfeverCommentMigration {}
+class bieberfeverCommentfan_with_artist_galleryMigration extends bieberfeverCommentMigration {}
 class bieberfeverCommentforumMigration extends bieberfeverCommentMigration {}
 class bieberfeverCommentphotoMigration extends bieberfeverCommentMigration {}
 class bieberfeverCommentstoryMigration extends bieberfeverCommentMigration {}
@@ -856,6 +891,8 @@ class bieberfeverPrivateMessageMigration extends DrupalMigration {
          ->sourceMigration('User');
     $this->addFieldMapping('format')
          ->defaultValue('1');
+    $this->addUnmigratedDestinations(array('path'));
+    $this->addUnmigratedSources(array('format'));
   }
 
   protected function query() {
