@@ -46,8 +46,8 @@ class atlhustlerclubRegistry extends AAMigrationRegistry {
     // two parts here - event nodes for tour dates, and blog nodes for
     // other events. We register the other events normally, but give the tour
     // dates a distinct machine name while making sure we get the source_type right.
-    $this->registerNode('event', 'blog');
-    $this->registerComment('event', 'blog');
+    $this->registerNode('event', 'event');
+    $this->registerComment('event', 'event');
     $this->registerNode('tourdate', 'event');
     $this->registerComment('tourdate', 'event');
 
@@ -148,25 +148,36 @@ class atlhustlerclubeventMigration extends AANode6Migration {
     parent::__construct($arguments);
     $this->defaultUid = 21521;
 
-    $this->addFieldMapping('field_blog_category')
+    $this->addFieldMapping('field_tour_category')
          ->defaultValue('Events');
-    $this->addFieldMapping('field_blog_category:create_term')
+    $this->addFieldMapping('field_tour_category:create_term')
          ->defaultValue(TRUE);
+    $this->addFieldMapping('field_event_date', 'field_event_date_time');
+    $this->addFieldMapping('field_event_venue', 'field_event_venue');
+    $this->addFieldMapping('field_event_address', 'field_event_location');
+    $this->addFieldMapping('field_event_buylink', 'field_tour_buy');
+    $this->removeFieldMapping('field_is_pro');
+    $this->removeFieldMapping('migrate_redirects');
 
     $this->addUnmigratedDestinations(array(
-        'field_blog_category:source_type', 'field_blog_category:ignore_case',
-      'field_tags', 'field_tags:source_type', 'field_tags:create_term', 'field_tags:ignore_case',
+        'field_event_address:language',
+      'field_event_availability', 'field_event_availability:language',
+        'field_event_buylink:format', 'field_event_buylink:language',
+      'field_event_city', 'field_event_city:language',
+      'field_event_country', 'field_event_country:language',
+      'field_event_maplink', 'field_event_maplink:format',
+        'field_event_maplink:language',
+      'field_event_state',  'field_event_state:language',
+        'field_event_venue:language',
+        'field_tour_category:source_type', 'field_tour_category:ignore_case',
     ));
 
     $this->addUnmigratedSources(array(
       '4',
-      'field_event_date_time',
-      'field_event_location',
-      'field_event_venue',
       'field_mng_enabled',
       'field_mng_window', 'field_mng_window:value2',
       'field_supporting_act',
-       'field_tour_buy', 'field_tour_buy:title', 'field_tour_buy:attributes',
+        'field_tour_buy:title', 'field_tour_buy:attributes',
       'format',
     ));
   }
@@ -176,19 +187,6 @@ class atlhustlerclubeventMigration extends AANode6Migration {
     // tid 2 is Event
     $query->innerJoin('term_node', 'tn', 'n.vid=tn.vid AND tn.tid=2');
     return $query;
-  }
-
-  public function prepareRow($row) {
-    if (parent::prepareRow($row) === FALSE) {
-      return FALSE;
-    }
-    if (is_array($row->body)) {
-      $row->body = reset($row->body);
-    }
-    $row->body = "<strong>Event date:</strong> {$row->field_event_date_time}<br />\n"
-      . "<strong>Venue:</strong> {$row->field_event_venue}<br />\n"
-      . "<strong>Location:</strong> {$row->field_event_location}<br />\n"
-      . $row->body;
   }
 }
 
