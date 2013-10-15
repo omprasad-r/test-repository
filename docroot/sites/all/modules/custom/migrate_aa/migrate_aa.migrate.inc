@@ -10,7 +10,7 @@
 class AAFile6Migration extends DrupalFile6Migration {
   public function __construct(array $arguments) {
     parent::__construct($arguments);
-    $this->addUnmigratedDestinations(array('migrate_redirects'));
+    $this->addUnmigratedDestinations(array('path', 'urlencode'));
   }
 }
 class AAFile7Migration extends DrupalFile7Migration {
@@ -367,11 +367,25 @@ class AANode6Migration extends DrupalNode6Migration {
     $this->addFieldMapping(NULL, 'path');
     $this->addFieldMapping('pathauto', NULL, FALSE)
          ->defaultValue(1);
-    $this->addFieldMapping('migrate_redirects', 'path');
+    if (module_exists('redirect')) {
+      $this->addFieldMapping('migrate_redirects', 'path');
+    }
     $this->addFieldMapping('created', 'created', FALSE)
          ->callbacks(array($this, 'adjustTimestamp'));
     $this->addFieldMapping('changed', 'changed', FALSE)
          ->callbacks(array($this, 'adjustTimestamp'));
+    if (module_exists('statistics')) {
+      $this->addFieldMapping('daycount', NULL, FALSE)
+           ->defaultValue(0);
+      $this->addFieldMapping('totalcount', NULL, FALSE)
+           ->defaultValue(0);
+    }
+    $this->addUnmigratedSources(array(
+      'log',
+      'revision',
+      'revision_uid',
+      'upload', 'upload:description', 'upload:list', 'upload:weight',
+    ));
   }
 
   protected function adjustTimestamp($value) {
@@ -709,7 +723,7 @@ class AAComment6Migration extends DrupalComment6Migration {
     global $conf;
     $conf['comment_notify_node_types'] = array();
     parent::__construct($arguments);
-    $this->addUnmigratedDestinations(array('migrate_redirects'));
+    $this->addUnmigratedDestinations(array('migrate_redirects', 'path'));
   }
 
   /**

@@ -61,6 +61,7 @@ abstract class AAMigrationRegistry {
     $this->commonArguments = array(
       'source_version' => $this->sourceVersion,
       'group' => $this->siteName,
+      'group_name' => $this->siteName,
       'source_connection' => 'legacy',
       'source_database' => array(
         'driver' => 'mysql',

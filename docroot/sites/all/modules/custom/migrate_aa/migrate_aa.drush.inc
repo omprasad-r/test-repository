@@ -12,6 +12,10 @@ function migrate_aa_drush_command() {
   $items['migrate-aa-fix-passwords'] = array(
     'description' => 'Fix passwords mistakenly double-encrypted',
   );
+  $items['migrate-aa-delete-stub-users'] = array(
+    'description' => 'Remove dangling user stub accounts',
+
+  );
   return $items;
 }
 
@@ -40,4 +44,24 @@ function drush_migrate_aa_fix_passwords() {
       ->condition('mail', $row->mail)
       ->execute();
   }
+}
+
+/**
+ * Delete any stub user accounts.
+ */
+function drush_migrate_aa_delete_stub_users() {
+  $count = 0;
+  $result = db_select('users', 'u')
+            ->fields('u', array('uid'))
+            ->condition('status', 0)
+            ->condition('name', 'Stub\_%', 'LIKE')
+            ->execute();
+  foreach ($result as $row) {
+    user_delete($row->uid);
+    db_delete('migrate_map_user')
+      ->condition('destid1', $row->uid)
+      ->execute();
+    $count++;
+  }
+  drush_print("$count stub users deleted");
 }

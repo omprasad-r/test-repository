@@ -217,6 +217,9 @@ class mariahcareystoryMigration extends AANode6Migration {
     parent::__construct($arguments);
     $this->dependencies[] = 'File';
     $this->defaultUid = 21581;
+    $this->addFieldMapping('field_blog_image', 'field_story_image');
+    $this->addFieldMapping('field_blog_image:file_class')
+         ->defaultValue('File');
     $this->addFieldMapping('field_blog_category')
          ->defaultValue('News');
     $this->addFieldMapping('field_blog_category:create_term')
@@ -230,37 +233,12 @@ class mariahcareystoryMigration extends AANode6Migration {
 
     $this->addUnmigratedSources(array(
       '11',
-      'field_story_image', 'field_story_image:list', 'field_story_image:data',
+      'field_story_image:list',
         'field_teaser:format',
       'teaser',
     ));
   }
 
-  public function prepareRow($row) {
-    if (parent::prepareRow($row) === FALSE) {
-      return FALSE;
-    }
-
-    // If the former image field was populated, prepend the image
-    if (isset($row->field_story_image)) {
-      $new_fid = db_select('migrate_map_file', 'map')
-                 ->fields('map', array('destid1'))
-                 ->condition('sourceid1', $row->field_story_image)
-                 ->execute()
-                 ->fetchField();
-      if ($new_fid) {
-        $img_info = array(
-          'type' => 'media',
-          'view_mode' => 'media_large',
-          'fid' => $new_fid,
-          'attributes' => array(),
-        );
-        $media_tag = '[[' . drupal_json_encode($img_info) . ']]' . '<br />';
-//        $row->body = $media_tag . $row->body;
-        $row->field_teaser = $media_tag . reset($row->field_teaser);
-      }
-    }
-  }
 }
 
 class mariahcareyvideoMigration extends AANode6Migration {
