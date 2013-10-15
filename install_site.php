@@ -117,6 +117,7 @@ function install_site($domain, $db_role, $gardens_site_info = array()) {
     variable_set('gardens_site_id', $gardens_site_info['site_id']);
     variable_set('site_name', $gardens_site_info['site_name']);
     variable_set('site_mail', $gardens_site_info['site_mail']);
+    variable_set('gardens_client_name', $gardens_site_info['gardens_client_name']);
 
     if ($gardens_site_info['account_method'] == 'local') {
       scarecrow_allow_local_user_logins();
