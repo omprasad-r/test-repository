@@ -217,9 +217,12 @@ class mariahcareystoryMigration extends AANode6Migration {
     parent::__construct($arguments);
     $this->dependencies[] = 'File';
     $this->defaultUid = 21581;
-    $this->addFieldMapping('field_blog_image', 'field_story_image');
+    $this->addFieldMapping('field_blog_image', 'field_story_image')
+         ->sourceMigration('File');
     $this->addFieldMapping('field_blog_image:file_class')
-         ->defaultValue('File');
+         ->defaultValue('MigrateFileFid');
+    $this->addFieldMapping('field_blog_image:preserve_files')
+         ->defaultValue(TRUE);
     $this->addFieldMapping('field_blog_category')
          ->defaultValue('News');
     $this->addFieldMapping('field_blog_category:create_term')

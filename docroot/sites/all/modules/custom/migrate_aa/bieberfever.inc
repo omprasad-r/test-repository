@@ -368,6 +368,8 @@ class bieberfeverfan_with_artist_galleryMigration extends bieberfeverNodeMigrati
          ->defaultValue(5);
     $this->addFieldMapping('media_gallery_rows')
          ->defaultValue(5);
+    $this->addFieldMapping('media_gallery_format')
+         ->defaultValue('node');
 
     $this->addUnmigratedDestinations(array(
       'media_gallery_allow_download',
@@ -376,7 +378,6 @@ class bieberfeverfan_with_artist_galleryMigration extends bieberfeverNodeMigrati
       'media_gallery_block_columns',
         'media_gallery_description:language',
       'media_gallery_expose_block',
-      'media_gallery_format',
       'media_gallery_image_info_where',
         'media_gallery_media:language', 'media_gallery_media:data',
         'media_gallery_media:title',
@@ -396,12 +397,13 @@ class bieberfeverfan_with_artist_galleryMigration extends bieberfeverNodeMigrati
     if (parent::prepareRow($row) === FALSE) {
       return FALSE;
     }
-    $row->fwa_photos = Database::getConnection('default', $this->sourceConnection)
+    $query = Database::getConnection('default', $this->sourceConnection)
       ->select('content_type_fan_with_artist_photo', 'p')
       ->fields('p', array('field_fan_with_artist_photo_fid'))
-      ->condition('p.field_fan_with_artist_gallery_nid', $row->nid)
-      ->execute()
-      ->fetchCol();
+      ->condition('p.field_fan_with_artist_gallery_nid', $row->nid);
+    $query->innerJoin('node', 'n', 'p.nid=n.nid');
+    $query->orderBy('n.created', 'DESC');
+    $row->fwa_photos = $query->execute()->fetchCol();
   }
 }
 
@@ -426,6 +428,8 @@ class bieberfevermeet_greetMigration extends bieberfeverNodeMigration {
          ->defaultValue(5);
     $this->addFieldMapping('media_gallery_rows')
          ->defaultValue(5);
+    $this->addFieldMapping('media_gallery_format')
+         ->defaultValue('node');
 
     $this->addUnmigratedDestinations(array(
       'media_gallery_allow_download',
@@ -435,7 +439,6 @@ class bieberfevermeet_greetMigration extends bieberfeverNodeMigration {
         'media_gallery_collection:create_term', 'media_gallery_collection:ignore_case',
         'media_gallery_description:language',
       'media_gallery_expose_block',
-      'media_gallery_format',
       'media_gallery_image_info_where',
         'media_gallery_media:language', 'media_gallery_media:data',
         'media_gallery_media:title',
