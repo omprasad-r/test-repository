@@ -397,12 +397,13 @@ class bieberfeverfan_with_artist_galleryMigration extends bieberfeverNodeMigrati
     if (parent::prepareRow($row) === FALSE) {
       return FALSE;
     }
-    $row->fwa_photos = Database::getConnection('default', $this->sourceConnection)
+    $query = Database::getConnection('default', $this->sourceConnection)
       ->select('content_type_fan_with_artist_photo', 'p')
       ->fields('p', array('field_fan_with_artist_photo_fid'))
-      ->condition('p.field_fan_with_artist_gallery_nid', $row->nid)
-      ->execute()
-      ->fetchCol();
+      ->condition('p.field_fan_with_artist_gallery_nid', $row->nid);
+    $query->innerJoin('node', 'n', 'p.nid=n.nid');
+    $query->orderBy('n.created', 'DESC');
+    $row->fwa_photos = $query->execute()->fetchCol();
   }
 }
 
