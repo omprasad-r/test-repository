@@ -18,9 +18,8 @@ function gardens_features_install() {
     ->condition('name', 'gardens_features')
     ->execute();
 
-  // Don't enable the responsive libraries for SMB.
-  require_once DRUPAL_ROOT . '/profiles/gardens/modules/acquia/gardens_misc/gardens_misc.module';
-  if (!gardens_misc_is_smb()) {
+  module_load_include('module', 'gardens_features', 'gardens_features');
+  if (gardens_features_responsive_enabled()) {
     _gardens_features_responsive_libraries_enable();
   }
 }
