@@ -201,7 +201,8 @@ function install_site($domain, $db_role, $gardens_site_info = array()) {
 
   // If we got here, the overall operation was a success.
   $memory_used = acquia_gardens_peak_memory_usage();
-  syslog(LOG_NOTICE, "Successfully installed Gardens site $gardens_site_id on Hosting site {$hosting_site}.{}. ($memory_used)");
+  $dir = dirname(__FILE__);
+  syslog(LOG_NOTICE, "Successfully installed Gardens site $gardens_site_id in $dir. ($memory_used)");
   // For any operation except install, populate data from gardener.
   // This should ALSO happen via task from the gardener.
   if (!gardens_client_phone_home()) {
