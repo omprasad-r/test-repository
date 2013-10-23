@@ -69,6 +69,19 @@ function _gardens_client_get_site_stats($stats) {
   // date of most recent node created
   $stats->last_node = db_query('SELECT MAX(created) FROM {node}')->fetchField();
 
+  // date of most recent node edit
+  $stats->last_node_edit = db_query('SELECT MAX(changed) FROM {node}')->fetchField();
+
+  // duration of node edits (measured from the creation of the first node)
+  $stats->node_edit_duration = db_query('select (MAX(changed) - MIN(created)) FROM {node}')->fetchField();
+
+  // creation time of the site
+  try {
+    $stats->created = db_query('SELECT created FROM {users} WHERE uid = 1')->fetchField();
+  }
+  catch (Exception $e) {
+    $stats->created = 0;
+  }
 
   // Date of most recent activity by a logged-in, non-support user.
   $stats->last_login = db_query('SELECT MAX(access) FROM {users} WHERE uid > 1')->fetchField();
@@ -78,10 +91,13 @@ function _gardens_client_get_site_stats($stats) {
     $stats->comments = intval(db_query('SELECT COUNT(nid) FROM {comment}')->fetchField());
     // date of most recent comment
     $stats->last_comment = db_query('SELECT MAX(created) FROM {comment}')->fetchField();
+    // duration of comment edits (measured from the creation of the first comment)
+    $stats->comment_edit_duration = db_query('SELECT (MAX(changed) - MIN(created)) FROM {comment}')->fetchField;
   }
   catch (PDOException $e) {
     $stats->comments = 0;
     $stats->last_comment = 0;
+    $stats->comment_edit_duration = 0;
   }
 
   // We no longer measure disk space on the filesystem because it is too expensive.
