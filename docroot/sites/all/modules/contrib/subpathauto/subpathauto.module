@@ -149,3 +149,58 @@ function subpathauto_cache_subpath_alias($source, $alias, $langcode) {
   $cache['map'][$langcode][$source] = $alias;
   unset($cache['no_source'][$langcode][$alias]);
 }
+
+/**
+ * Implements hook_form_alter().
+ *
+ * Override the default path validation to be able to set an alias to views
+ * pages with arguments (these pages give 403 if called without a parameter).
+ */
+function subpathauto_form_path_admin_form_alter(&$form, $form_state) {
+  $key = array_search('path_admin_form_validate', $form['#validate']);
+  $form['#validate'][$key] = 'subpathauto_path_admin_form_validate';
+}
+
+/**
+ * Form validate callback.
+ */
+function subpathauto_path_admin_form_validate($form, &$form_state) {
+  $source = &$form_state['values']['source'];
+  $source = drupal_get_normal_path($source);
+  $alias = $form_state['values']['alias'];
+  $pid = isset($form_state['values']['pid']) ? $form_state['values']['pid'] : 0;
+  // Language is only set if locale module is enabled, otherwise save for all languages.
+  $language = isset($form_state['values']['language']) ? $form_state['values']['language'] : LANGUAGE_NONE;
+
+  $has_alias = db_query("SELECT COUNT(alias) FROM {url_alias} WHERE pid <> :pid AND alias = :alias AND language = :language", array(
+      ':pid' => $pid,
+      ':alias' => $alias,
+      ':language' => $language,
+    ))
+    ->fetchField();
+
+  if ($has_alias) {
+    form_set_error('alias', t('The alias %alias is already in use in this language.', array('%alias' => $alias)));
+  }
+  if (!(drupal_valid_path($source) || subpathauto_menu_path_prefix_exists($source))) {
+    form_set_error('source', t("The path '@link_path' is either invalid or you do not have access to it.", array('@link_path' => $source)));
+  }
+}
+
+/**
+ * Helper function to check if a path is a prefix of an existing menu path.
+ *
+ * @param $path
+ *   Internal drupal path.
+ *
+ * @return Bool
+ */
+function subpathauto_menu_path_prefix_exists($path) {
+  $query = db_query("SELECT path FROM {menu_router} WHERE path LIKE :source ORDER BY fit DESC", array(':source' => $path . '/%%'));
+  if ($record = $query->fetchColumn()) {
+    return drupal_valid_path($record, TRUE);
+  }
+
+  return FALSE;
+}
+
