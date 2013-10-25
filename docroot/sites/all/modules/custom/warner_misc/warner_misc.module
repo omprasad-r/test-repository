@@ -212,6 +212,12 @@ function warner_misc_disallowed_modules_alter(&$modules) {
     'janrain_client',
     'janrain_login',
     'mast',
+    'migrate',
+    'migrate_ui',
+    'migrate_extras',
+    'migrate_d2d',
+    'migrate_d2d_ui',
+    'migrate_aa',
   ));
 
   // Modules that are not in the distro but are add-ons in this codebase and
