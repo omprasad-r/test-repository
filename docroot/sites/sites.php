@@ -1,12 +1,11 @@
 <?php
 
-include_once(dirname(__FILE__) . '/sites.inc');
+if (empty($_SERVER['HTTP_HOST'])) {
+  // This only happens during early drush bootstrap.
+  return;
+}
 
-// TTL set to 6 minutes to allow a cron to run full refreshes every 5 mins
-define('GARDENS_SITE_DATA_TTL', 1800);
-define('GARDENS_SITE_DATA_VERSION_KEY', '_GARDENS_SITE_DATA_VERSION_STRING');
-// It is possible to set this config var in php.ini via hosting/fields-provision.
-define('GARDENS_SITE_DATA_USE_APC', get_cfg_var('gardens.disable_apc_for_sites_php') != 1);
+require_once(dirname(__FILE__) . '/g/sites.inc');
 
 $host = rtrim($_SERVER['HTTP_HOST'], '.');
 $dir = implode('.', array_reverse(explode(':', $host)));

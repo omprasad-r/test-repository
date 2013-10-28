@@ -1,5 +1,26 @@
 <?php
 
+// Make sure to use require_once() so this file is never loaded more than
+// once per page.
+define('GARDENS_SITE_DATA_USE_APC', (get_cfg_var('gardens.disable_apc_for_sites_php') != 1));
+// TTL set to 30 minutes to allow a cron to run full refreshes.
+define('GARDENS_SITE_DATA_TTL', 1800);
+
+// Populate $_ENV if we are running cli.
+if (!isset($_ENV['AH_SITE_NAME']) && file_exists('/var/www/site-scripts/site-info.php')) {
+  require_once '/var/www/site-scripts/site-info.php';
+  list($name, $group, $stage, $secret) = ah_site_info();
+  if (!isset($_ENV['AH_SITE_NAME'])) {
+    $_ENV['AH_SITE_NAME'] = $name;
+  }
+  if (!isset($_ENV['AH_SITE_GROUP'])) {
+    $_ENV['AH_SITE_GROUP'] = $group;
+  }
+  if (!isset($_ENV['AH_SITE_ENVIRONMENT'])) {
+    $_ENV['AH_SITE_ENVIRONMENT'] = $stage;
+  }
+}
+
 /**
  * Returns the sites data structure containing information about all sites/domains.
  *
@@ -26,7 +47,9 @@ function gardens_site_data_load_file() {
  *   The json file location.
  */
 function gardens_site_data_get_filepath() {
-  return realpath(dirname(__FILE__) . '/../files') . '-private/sites.json';
+  // Use the "real" path here rather than the canonical hosting path
+  // to minimize symlink traversal.
+  return "/mnt/gfs/{$_ENV['AH_SITE_NAME']}/files-private/sites.json";
 }
 
 /*
@@ -130,8 +153,9 @@ function gardens_site_data_refresh_domains($domains) {
       // (with or without the trailing comma).
       $matches = array();
       $pattern = '@^\s*"' . preg_quote($domain, '@') . '": ({.+}),?$@';
-      preg_match($pattern, trim($result), $matches);
-      $found_site = json_decode($matches[1], TRUE);
+      if (preg_match($pattern, trim($result), $matches)) {
+        $found_site = json_decode($matches[1], TRUE);
+      }
 
       // Retrieve the first line of the JSON file, which contains the global
       // site settings data.
@@ -172,8 +196,10 @@ function gardens_site_data_refresh_domains($domains) {
  *   'gardens_site_settings'
  */
 function gardens_site_data_cache_set($domain, $data) {
-  $domain_key = "gardens_domain:$domain";
-  apc_store($domain_key, $data, GARDENS_SITE_DATA_TTL);
+  if (function_exists('apc_store')) {
+    $domain_key = "gardens_domain:$domain";
+    apc_store($domain_key, $data, GARDENS_SITE_DATA_TTL);
+  }
 }
 
 /**
@@ -186,6 +212,8 @@ function gardens_site_data_cache_set($domain, $data) {
  *   cached data was found for the domain.
  */
 function gardens_site_data_cache_get($domain) {
-  $domain_key = "gardens_domain:$domain";
-  return apc_fetch($domain_key);
+  if (function_exists('apc_fetch')) {
+    $domain_key = "gardens_domain:$domain";
+    return apc_fetch($domain_key);
+  }
 }

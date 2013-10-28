@@ -359,38 +359,9 @@ function gardens_installer_custom_submit($form, &$form_state) {
     gardens_misc_replace_default_theme($default_theme_name);
   }
 
-  // If the gardener passed an enterprise client name, we switch to and install a
-  // profile of the same name, if it exists.  All custom configurations for
-  // the client and  additional modules can be handled from there.
+  // Store any client name set in the form.
   $profile_name = empty($form_state['values']['gardens_client_name']) ? '' : $form_state['values']['gardens_client_name'];
-  if ($profile_name && file_exists(DRUPAL_ROOT . "/profiles/{$profile_name}/{$profile_name}.info")) {
-    // Save the value for future use.
-    variable_set('gardens_client_name', $profile_name);
-    $previous_profile = variable_get('install_profile', 'gardens');
-    // First set the profile to make sure the profile "module" is found when we ...
-    variable_set('install_profile', $profile_name);
-    $GLOBALS['install_state']['parameters']['profile'] = $profile_name;
-    // ... rebuild module data.
-    system_list_reset();
-    registry_rebuild();
-    system_rebuild_module_data();
-    if (db_query("SELECT 1 FROM {system} WHERE type = 'module' AND name = :name", array(':name' => $profile_name))->fetchField()) {
-      // Make sure we pick up any themes included in the profile directory.
-      system_rebuild_theme_data();
-      // Pass TRUE to module_enable() so that dependent modules are also enabled.
-      // Normally, for performance, we would list dependencies here explicitly and
-      // pass FALSE, but in this case, we've already incurred the penalty of rebuilding
-      // the module data, so can allow module_enable() to benefit from that.
-      module_enable(array($profile_name), TRUE);
-    }
-    else {
-      // If the profile "module" is not found, reset to the previous profile. This
-      // should not happen.
-      variable_set('install_profile', $previous_profile);
-      system_list_reset();
-      system_rebuild_module_data();
-    }
-  }
+  variable_set('gardens_client_name', $profile_name);
 
   // Rebuild the sitemap so we pick up all menu links that were created earlier
   // in the setup process.

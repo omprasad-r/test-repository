@@ -3,26 +3,12 @@
 if (file_exists('/var/www/site-php')) {
   // The DB role will be the same as the gardens site directory name
   $role = basename(conf_path());
-  // Theis global is set in sites.php. It's used to reference the
+  // This global is set in sites.php. It's used to reference the
   // live environment DB setting even when running on the update env.
   $site_settings = !empty($GLOBALS['gardens_site_settings']) ? $GLOBALS['gardens_site_settings'] : array('site' => '', 'env' => '');
   $site = $site_settings['site'];
   $env = $site_settings['env'];
 
-  // Populate $_ENV if we are running cli.
-  if (!isset($_ENV['AH_SITE_NAME']) && file_exists('/var/www/site-scripts/site-info.php')) {
-    require_once '/var/www/site-scripts/site-info.php';
-    list($name, $group, $stage, $secret) = ah_site_info();
-    if (!isset($_ENV['AH_SITE_NAME'])) {
-      $_ENV['AH_SITE_NAME'] = $name;
-    }
-    if (!isset($_ENV['AH_SITE_GROUP'])) {
-      $_ENV['AH_SITE_GROUP'] = $group;
-    }
-    if (!isset($_ENV['AH_SITE_ENVIRONMENT'])) {
-      $_ENV['AH_SITE_ENVIRONMENT'] = $stage;
-    }
-  }
   $settings_inc = "/var/www/site-php/{$site}.{$env}/D7-{$env}-{$role}-settings.inc";
   if (file_exists($settings_inc)) {
     include($settings_inc);
