@@ -92,7 +92,7 @@ function _gardens_client_get_site_stats($stats) {
     // date of most recent comment
     $stats->last_comment = db_query('SELECT MAX(created) FROM {comment}')->fetchField();
     // duration of comment edits (measured from the creation of the first comment)
-    $stats->comment_edit_duration = db_query('SELECT (MAX(changed) - MIN(created)) FROM {comment}')->fetchField;
+    $stats->comment_edit_duration = db_query('SELECT (MAX(changed) - MIN(created)) FROM {comment}')->fetchField();
   }
   catch (PDOException $e) {
     $stats->comments = 0;
