@@ -245,7 +245,7 @@ function mast_services_resources() {
   );
   $res['content-by-user'] = array(
     'index' => array(
-      'help' => 'Retrieves a listing of content by the current user',
+      'help' => 'Retrieves a listing of content by either the current or any user.',
       'callback' => '_mast_content_by_user_index',
       'access callback' => 'user_access',
       'access arguments' => array('access content'),
@@ -263,10 +263,35 @@ function mast_services_resources() {
         array(
           'name' => 'count',
           'optional' => TRUE,
-          'type' => 'init',
+          'type' => 'int',
           'description' => 'Number of records to get per page.',
           'default value' => variable_get('services_node_index_page_size', 20),
           'source' => array('param' => 'count'),
+        ),
+        array(
+          'name' => 'uid',
+          'optional' => TRUE,
+          'type' => 'int',
+          'description' => "The user's uid whose content should be fetched.",
+          'default value' => MAST_UID_CURRENT_USER,
+          'source' => array('param' => 'uid'),
+        ),
+      ),
+    ),
+    'retrieve' => array(
+      'help' => 'Retrieves a node.',
+      'file' => $resources_file,
+      'callback' => '_mast_content_by_user_retrieve',
+      'access callback' => '_mast_node_resource_access',
+      'access arguments' => array('view'),
+      'access arguments append' => TRUE,
+      'args' => array(
+        array(
+          'name' => 'nid',
+          'optional' => FALSE,
+          'source' => array('path' => 0),
+          'type' => 'int',
+          'description' => 'The nid of the node to retrieve.',
         ),
       ),
     ),
@@ -277,17 +302,41 @@ function mast_services_resources() {
       'access callback' => '_mast_node_resource_access',
       'access arguments' => array('create'),
       'access arguments append' => TRUE,
-        'args' => array(
-           array(
-             'name' => 'data',
-             'type' => 'struct',
-             'description' => 'The node object',
-             'source' => 'data',
-             'optional' => FALSE,
-           ),
-         ),
-       ),
-    );
+      'args' => array(
+        array(
+          'name' => 'data',
+          'type' => 'struct',
+          'description' => 'The node object.',
+          'source' => 'data',
+          'optional' => FALSE,
+        ),
+      ),
+    ),
+    'update' => array(
+      'help' => 'Updates a node.',
+      'file' => $resources_file,
+      'callback' => '_mast_content_by_user_update',
+      'access callback' => '_mast_node_resource_access',
+      'access arguments' => array('update'),
+      'access arguments append' => TRUE,
+      'args' => array(
+        array(
+          'name' => 'nid',
+          'optional' => FALSE,
+          'source' => array('path' => 0),
+          'type' => 'int',
+          'description' => 'The nid of the node to get.',
+        ),
+        array(
+          'name' => 'data',
+          'type' => 'struct',
+          'description' => 'The node object.',
+          'source' => 'data',
+          'optional' => FALSE,
+        ),
+      ),
+    ),
+  );
   $res['field-instance-file'] = array(
       'create' => array(
         'help' => 'Creates a file with raw data.',
@@ -425,6 +474,61 @@ function _mast_content_by_user_create($data) {
   return array('nid' => $wrapper->getIdentifier());
 }
 
+/**
+ * Updates a node using the received data and returns the nid.
+ */
+function _mast_content_by_user_update($nid, $updates) {
+  $node = node_load($nid);
+  if (!$node) {
+    return services_error(t('Node @nid not found.', array('@nid' => $nid)), 404);
+  }
+
+  $data = $updates['node'];
+
+  // The prepareValues expects the type key, so ensure that it is present
+  // properly.
+  $data['type'] = $node->type;
+
+  // Prepare the incoming change structure.
+  $mast_structure = mastFactory::createEntityStructure('node', $node->type);
+  try {
+    $node_data = $mast_structure->prepareValues($data, FALSE);
+    // Ensure that the node's author does not change.
+    unset($node_data['author']);
+  }
+  catch (MastException $e) {
+    echo $e->getMessage();
+    return services_error($e->getMessage(), 422);
+  }
+
+  // Create a wrapper object out of the node and then add the requested changes.
+  $info = entity_get_info('node');
+  try {
+    $wrapper = entity_metadata_wrapper('node', $node);
+    foreach ($node_data as $key => $value) {
+      // The title field is an entity key according to node_entity_info() and
+      // while it makes sense to protect entity keys from being changed in the
+      // case of nid / vid / type, the title needs to be editable, like one can
+      // edit it in a node edit form.
+      if (!in_array($key, $info['entity keys']) || $key == 'title') {
+        if (isset($wrapper->$key)) {
+          $wrapper->$key->set($value);
+        }
+        else {
+          $node->$key = $value;
+        }
+      }
+    }
+  }
+  catch (EntityMetadataWrapperException $e) {
+    echo $e->getMessage();
+    return services_error($e->getMessage(), 422);
+  }
+  $wrapper->save();
+
+  return array('nid' => $nid);
+}
+
 function _mast_meta_index() {
   return array(
     'last' => TRUE,
@@ -457,21 +561,30 @@ function _mast_meta_retrieve($type) {
 }
 
 /**
- * Return an array of paged nodes by the authenticated user.
+ * Returns an array of paged nodes created by either the current or any user.
  *
- * An example request might look like
+ * An example request might look like:
  *
- * http://domain/endpoint/content-by-user?start=20&count=10
+ * http://domain/endpoint/content-by-user?start=20&count=10&all=1
  *
  * @param $start
  *   The offset into the result set.
  * @param $count
  *   Integer number of items to be returned.
+ * @param $uid
+ *   The user's uid whose content needs to be returned. When set to a negative
+ *   value it will fetch the current user's nodes.
+ *
  * @return
  *   An array of node teasers.
  */
-function _mast_content_by_user_index($start, $count) {
+function _mast_content_by_user_index($start, $count, $uid) {
   global $user;
+
+  if ($uid == MAST_UID_CURRENT_USER) {
+    $uid = $user->uid;
+  }
+
   $mast_bundle_settings = variable_get('mast_bundle_settings', array('node' => array()));
 
   $bundles = array();
@@ -491,21 +604,25 @@ function _mast_content_by_user_index($start, $count) {
 
   $query = db_select('node', 'n', array('fetch' => PDO::FETCH_ASSOC));
   $query->fields('n', array('nid'));
-  $query->condition('n.status', 1);
+  if (!user_access('bypass node access') && ($user->uid != $uid || !user_access('view own unpublished content'))) {
+    $query->condition('n.status', 1);
+  }
   $query->condition('n.type', $bundles, 'IN');
 
-  // If using the Original Author module to keep track of who created each node,
-  // regardless of attributed author, add an "OR" condition that checks the node
-  // uid and the uid column of the original_author table.
-  if (module_exists('original_author')) {
-    $o_alias = $query->leftJoin('original_author', 'o', '%alias.nid = n.nid');
-    $or = db_or()
-      ->condition('n.uid', $user->uid)
-      ->condition("$o_alias.uid", $user->uid);
-    $query->condition($or);
-  }
-  else {
-    $query->condition('n.uid', $user->uid);
+  if ($uid != MAST_UID_ANY_USER) {
+    // If using the Original Author module to keep track of who created each
+    // node, regardless of attributed author, add an "OR" condition that checks
+    // the node uid and the uid column of the original_author table.
+    if (module_exists('original_author') && variable_get('mast_use_original_author', 1)) {
+      $o_alias = $query->leftJoin('original_author', 'o', '%alias.nid = n.nid');
+      $or = db_or()
+        ->condition('n.uid', $uid)
+        ->condition("$o_alias.uid", $uid);
+      $query->condition($or);
+    }
+    else {
+      $query->condition('n.uid', $uid);
+    }
   }
 
   $query->addTag('node_access');
@@ -529,13 +646,22 @@ function _mast_content_by_user_index($start, $count) {
   $values = array();
   $nodes = node_load_multiple($results);
   foreach ($nodes as $id => $node) {
+    if ($node->uid == $user->uid) {
+      $author = t('You');
+    }
+    else {
+      $node_user = user_load($node->uid);
+      $author = $node_user->name;
+    }
     $values[$id] = array(
       'type' => $node->type,
       'title' => $node->title,
       'teaser' => $mast_structure[$node->type]->getTeaser($node),
       'image' => $mast_structure[$node->type]->getImage($node),
       'timestamp' => $node->created,
+      'status' => $node->status,
       'path' => drupal_get_path_alias("node/{$id}"),
+      'author' => $author,
     );
   }
   $data = array('start' => $start);
@@ -544,6 +670,97 @@ function _mast_content_by_user_index($start, $count) {
   }
   $data['values'] = $values;
   return $data;
+}
+
+/**
+ * Retrieves a node identified by the received nid.
+ */
+function _mast_content_by_user_retrieve($nid) {
+  $node = node_load($nid);
+  if (!$node) {
+    return services_error(t('Node @nid not found.', array('@nid' => $nid)), 404);
+  }
+
+  $collected_images = array();
+  foreach (_mast_get_image_fields($node) as $image_field_name => $mast_field_class) {
+    $image_field_items = field_get_items('node', $node, $image_field_name);
+    $image_field_language = field_language('node', $node, $image_field_name);
+    $image_derivatives = array();
+    if ($image_field_items) {
+      switch ($mast_field_class) {
+        case 'mastImageField':
+          foreach ($image_field_items as $image_item) {
+            $image_derivatives[] = array(
+              'small' => image_style_url('mobile_edit_thumb_small', $image_item['uri']),
+              'large' => image_style_url('mobile_edit_thumb_large', $image_item['uri']),
+            );
+          }
+          break;
+
+        case 'mastMediaField':
+          // Load the files from the files table.
+          $fids = array();
+          foreach ($image_field_items as $image_item) {
+            if (!empty($image_item['fid'])) {
+              $fids[] = $image_item['fid'];
+            }
+          }
+          $files = $fids ? file_load_multiple($fids) : array();
+          foreach ($files as $file) {
+            // Oembed images do not get downloaded locally, so image derivatives
+            // are not really viable. It would be also risky to make a smart
+            // phone app download the original image since it could be very big.
+            if (strpos($file->filemime, 'oembed') === FALSE && strpos($file->filemime, 'image') === 0) {
+              $image_derivatives[] = array(
+                'small' => image_style_url('mobile_edit_thumb_small', $file->uri),
+                'large' => image_style_url('mobile_edit_thumb_large', $file->uri),
+              );
+            }
+          }
+          break;
+      }
+    }
+
+    if ($image_derivatives) {
+      $collected_images[$image_field_name][$image_field_language] = $image_derivatives;
+    }
+  }
+
+  // Let other modules add image derivatives if they handle custom image
+  // handling fields.
+  drupal_alter('mast_image_derivative_generation', $collected_images, $node);
+
+  if (!empty($collected_images)) {
+    $node->mast_image_files = $collected_images;
+  }
+
+  return $node;
+}
+
+/**
+ * Retrieves the image holding field names on a node.
+ *
+ * @param object $node
+ *   Fully loaded node object.
+ *
+ * @return array
+ *   An associative array keyed by the field names which may hold images holding
+ *   the mast class name that would handle them.
+ */
+function _mast_get_image_fields($node) {
+  $fields = mast_field_info_fields();
+  $instances = mast_field_info_instances('node', $node->type);
+
+  $image_fields = array();
+  foreach ($instances as $instance_info) {
+    $field_info = $fields[$instance_info['field_name']];
+    $field_class = mastFactory::getMastFieldClass($field_info, $instance_info);
+    if (in_array($field_class, array('mastImageField', 'mastMediaField'))) {
+      $image_fields[$instance_info['field_name']] = $field_class;
+    }
+  }
+
+  return $image_fields;
 }
 
 /**
@@ -608,12 +825,15 @@ function _mast_field_instance_file_create($data) {
  * Wrapper around node_access()
  */
 function _mast_node_resource_access($op = 'view', $args = array()) {
-  if (isset($args[0]['node'])) {
+  if (isset($args[0]) && is_array($args[0]) && isset($args[0]['node'])) {
     $node = json_decode($args[0]['node']);
     if (!isset($node->nid) && $op == 'create') {
       $node = $node->type;
     }
     return node_access($op, $node);
+  }
+  elseif (in_array($op, array('view', 'update')) && is_numeric($args[0])) {
+    return node_access($op, node_load($args[0]));
   }
   return FALSE;
 }
@@ -670,7 +890,7 @@ function mast_get_favicon() {
  */
 function mast_default_services_endpoint() {
   $endpoints = array();
-  $endpoint = new stdClass;
+  $endpoint = new stdClass();
   $endpoint->disabled = FALSE; /* Edit this to true to make a default endpoint disabled initially */
   $endpoint->api_version = 3;
   $endpoint->name = 'mast';
@@ -679,93 +899,186 @@ function mast_default_services_endpoint() {
   $endpoint->authentication = array(
     'services_oauth' => array(
       'oauth_context' => 'mast',
+      'oauth_type' => 'three-legged',
+      'authorization' => '',
       'credentials' => 'token',
     ),
   );
   $endpoint->server_settings = array(
     'formatters' => array(
+      'bencode' => TRUE,
       'json' => TRUE,
-      'xml' => FALSE,
-      'bencode' => FALSE,
+      'php' => TRUE,
+      'rss' => TRUE,
+      'xml' => TRUE,
       'jsonp' => FALSE,
-      'php' => FALSE,
-      'rss' => FALSE,
-      'yaml' => FALSE,
     ),
     'parsers' => array(
       'application/json' => TRUE,
+      'application/vnd.php.serialized' => TRUE,
       'application/x-www-form-urlencoded' => TRUE,
+      'application/xml' => TRUE,
       'multipart/form-data' => TRUE,
-      'application/vnd.php.serialized' => FALSE,
-      'application/x-yaml' => FALSE,
+      'text/xml' => TRUE,
     ),
   );
   $endpoint->resources = array(
     'autocomplete' => array(
       'operations' => array(
         'index' => array(
-          'enabled' => 1,
+          'enabled' => '1',
+          'settings' => array(
+            'services_oauth' => array(
+              'credentials' => '',
+              'authorization' => '',
+            ),
+          ),
         ),
       ),
     ),
     'options' => array(
       'operations' => array(
         'index' => array(
-          'enabled' => 1,
-        ),
-      ),
-    ),
-    'node' => array(
-      'alias' => 'content',
-      'operations' => array(
-        'delete' => array(
-          'enabled' => 1,
+          'enabled' => '1',
+          'settings' => array(
+            'services_oauth' => array(
+              'credentials' => '',
+              'authorization' => '',
+            ),
+          ),
         ),
       ),
     ),
     'fields' => array(
       'operations' => array(
         'index' => array(
-          'enabled' => 1,
+          'enabled' => '1',
+          'settings' => array(
+            'services_oauth' => array(
+              'credentials' => '',
+              'authorization' => '',
+            ),
+          ),
         ),
       ),
     ),
     'meta' => array(
       'operations' => array(
-        'index' => array(
-          'enabled' => 1,
-        ),
         'retrieve' => array(
-          'enabled' => 1,
+          'enabled' => '1',
+          'settings' => array(
+            'services_oauth' => array(
+              'credentials' => '',
+              'authorization' => '',
+            ),
+          ),
+        ),
+        'index' => array(
+          'enabled' => '1',
+          'settings' => array(
+            'services_oauth' => array(
+              'credentials' => '',
+              'authorization' => '',
+            ),
+          ),
         ),
       ),
     ),
     'content-by-user' => array(
       'operations' => array(
-        'index' => array(
-          'enabled' => 1,
-        ),
         'create' => array(
-          'enabled' => 1,
+          'enabled' => '1',
+          'settings' => array(
+            'services_oauth' => array(
+              'credentials' => '',
+              'authorization' => '',
+            ),
+          ),
+        ),
+        'retrieve' => array(
+          'enabled' => '1',
+          'settings' => array(
+            'services_oauth' => array(
+              'credentials' => '',
+              'authorization' => '',
+            ),
+          ),
+        ),
+        'update' => array(
+          'enabled' => '1',
+          'settings' => array(
+            'services_oauth' => array(
+              'credentials' => '',
+              'authorization' => '',
+            ),
+          ),
+        ),
+        'index' => array(
+          'enabled' => '1',
+          'settings' => array(
+            'services_oauth' => array(
+              'credentials' => '',
+              'authorization' => '',
+            ),
+          ),
         ),
       ),
     ),
     'field-instance-file' => array(
       'operations' => array(
         'create' => array(
-          'enabled' => 1,
+          'enabled' => '1',
+          'settings' => array(
+            'services_oauth' => array(
+              'credentials' => '',
+              'authorization' => '',
+            ),
+          ),
+        ),
+      ),
+    ),
+    'node' => array(
+      'alias' => 'content',
+      'operations' => array(
+        'retrieve' => array(
+          'enabled' => '1',
+          'settings' => array(
+            'services_oauth' => array(
+              'credentials' => '',
+              'authorization' => '',
+            ),
+          ),
+        ),
+        'delete' => array(
+          'enabled' => '1',
+          'settings' => array(
+            'services_oauth' => array(
+              'credentials' => '',
+              'authorization' => '',
+            ),
+          ),
         ),
       ),
     ),
     'user' => array(
       'actions' => array(
         'logout' => array(
-          'enabled' => 1,
+          'enabled' => '1',
+          'settings' => array(
+            'services' => array(
+              'resource_api_version' => '1.0',
+            ),
+            'services_oauth' => array(
+              'credentials' => '',
+              'authorization' => '',
+            ),
+          ),
         ),
       ),
     ),
   );
   $endpoint->debug = 0;
+
   $endpoints['mast_content_types_endpoint'] = $endpoint;
   return $endpoints;
 }

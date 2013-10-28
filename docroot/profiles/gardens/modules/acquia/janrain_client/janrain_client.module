@@ -118,6 +118,26 @@ function janrain_client_disable_default_network_access() {
 }
 
 /**
+ * Implements hook_hook_info().
+ *
+ * All hooks relating to services are in the janrain_client.services.inc file,
+ * to keep the module file relatively clean.
+ */
+function janrain_client_hook_info() {
+  $hooks = array();
+  $hooks['services_resources'] = array(
+    'group' => 'services',
+  );
+  $hooks['default_services_endpoint'] = array(
+    'group' => 'services',
+  );
+  $hooks['ctools_plugin_api'] = array(
+    'group' => 'services',
+  );
+  return $hooks;
+}
+
+/**
  * Implements hook_permission().
  */
 function janrain_client_permission() {

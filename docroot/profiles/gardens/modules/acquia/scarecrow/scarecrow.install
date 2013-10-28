@@ -1347,3 +1347,73 @@ function scarecrow_update_11189() {
 function scarecrow_update_11190() {
   // Removed in favor of a standalone script.
 }
+
+/**
+ * Update file path to the newer files location.
+ */
+function scarecrow_update_11191() {
+  if (!preg_match('@^sites/g/files@', variable_get('file_public_path', ''))) {
+    if ($db = gardens_client_get_gardens_db_name()) {
+      $new_path = "sites/g/files/$db/f";
+      variable_set('file_public_path', $new_path);
+    }
+  }
+}
+
+/**
+ * Replace the settings.php file with a symlimk.
+ */
+function scarecrow_update_11192() {
+  // Populate $_ENV if we are running cli.
+  if (!isset($_ENV['AH_SITE_NAME'])) {
+    if (file_exists('/var/www/site-scripts/site-info.php')) {
+      require_once '/var/www/site-scripts/site-info.php';
+      list($name, $group, $stage, $secret) = ah_site_info();
+      if (!isset($_ENV['AH_SITE_NAME'])) {
+        $_ENV['AH_SITE_NAME'] = $name;
+      }
+      if (!isset($_ENV['AH_SITE_GROUP'])) {
+        $_ENV['AH_SITE_GROUP'] = $group;
+      }
+      if (!isset($_ENV['AH_SITE_ENVIRONMENT'])) {
+        $_ENV['AH_SITE_ENVIRONMENT'] = $stage;
+      }
+    }
+    else {
+      throw new DrupalUpdateException('Unable to populate required environment variables for AH site name, group and environment: update cannot proceed.');
+    }
+  }
+  // We need to symlink the site directory's settings.php to the main
+  // settings.php. This code should only be run on the live ENV.
+  $site =  $_ENV['AH_SITE_GROUP'];
+  $env = $_ENV['AH_SITE_ENVIRONMENT'];
+  $site_docroot = sprintf('/mnt/www/html/%s.%s/docroot', $site, $env);
+  $db_role = gardens_client_get_gardens_db_name();
+  $live_env_dir = sprintf('/mnt/files/%s.%s/sites/g/files/%s', $site, $env, $db_role);
+  $settings_symlink = $live_env_dir . '/settings.php';
+  $settings_file = $site_docroot . "/sites/g/settings.php";
+
+  // Rename any existing file.
+
+  // Bail if we can't make the site directory writable, but continue if it
+  // happened to be writable anyway.
+  if (!chmod($live_env_dir, 0775) && !is_writable($live_env_dir)){
+    throw new DrupalUpdateException('Unable to make site directory writable.');
+  }
+  if (file_exists($settings_symlink)) {
+    // We can't test this chmod, because it may be trying to act on the target
+    // file if this is already a symlink, and fail. It will warn in any case,
+    // but drush updb will still return exit status 0.
+    chmod($settings_symlink, 0644);
+
+    if (!rename($settings_symlink, $settings_symlink . '.bak')) {
+      throw new DrupalUpdateException('Unable to back up existing settings file.');
+    }
+  }
+  if (!symlink($settings_file, $settings_symlink)) {
+    throw new DrupalUpdateException('Unable to create settings file symlink.');
+  }
+  // Set directory back to read-only.  Ignore errors here - drupal will do it
+  // eventually anyway.
+  chmod($live_env_dir, 0555);
+}

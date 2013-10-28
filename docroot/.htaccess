@@ -123,6 +123,18 @@ DirectoryIndex index.php index.html index.htm
     Order Deny,Allow
     Deny from All
   </Files>
+
+  ## Gardens compatibility with old files directories ##
+
+  # For example this rewrites:
+  # /sites/vanity1.acquia-test.com/files/css/css_2e.css
+  # to:
+  # /files/vanity1.acquia-test.com/css/css_2e.css
+  # Where /files/vanity1.acquia-test.com is a symlink in the site files dir
+  # to the real gardens site files directory.
+
+  RewriteCond %{REQUEST_URI} ^/sites/([^/]+\.[^/]+)/files/(.+)$ [NC]
+  RewriteRule ^ /files/%1/%2 [L]
 ##################################################GardensExcludeFromExportEnd##
   # Modify the RewriteBase if you are using Drupal in a subdirectory or in a
   # VirtualDocumentRoot and the rewrite rules are not working properly.

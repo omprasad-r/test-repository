@@ -419,67 +419,70 @@ function gardens_misc_form_metatag_config_edit_form_alter(&$form, &$form_state, 
  * - Change default comment settings to radio buttons
  */
 function gardens_misc_form_node_type_form_alter(&$form, $form_state) {
-  $form['comment']['comment_created_date_format']['#options'] = _gardens_misc_date_format_type_options();
-  $form['comment']['comment_changed_date_format']['#options'] = _gardens_misc_date_format_type_options();
+  if (module_exists('comment') && isset($form['comment'])) {
 
-  $form['comment']['comment_entry'] = array(
-    '#type' => 'fieldset',
-    '#title' => t('Comment entry'),
-    '#collapsible' => TRUE,
-  );
+    $form['comment']['comment_created_date_format']['#options'] = _gardens_misc_date_format_type_options();
+    $form['comment']['comment_changed_date_format']['#options'] = _gardens_misc_date_format_type_options();
 
-  $form['comment']['comment_display'] = array(
-    '#type' => 'fieldset',
-    '#title' => t('Comment display'),
-    '#collapsible' => TRUE,
-  );
+    $form['comment']['comment_entry'] = array(
+      '#type' => 'fieldset',
+      '#title' => t('Comment entry'),
+      '#collapsible' => TRUE,
+    );
 
-  $form_disable = array(
-    'comment_expose_fields',
-  );
+    $form['comment']['comment_display'] = array(
+      '#type' => 'fieldset',
+      '#title' => t('Comment display'),
+      '#collapsible' => TRUE,
+    );
 
-  foreach ($form_disable as $element_key) {
-    if (isset($form['comment'][$element_key])) {
-      $form['comment'][$element_key]['#access'] = FALSE;
-    }
-  }
+    $form_disable = array(
+      'comment_expose_fields',
+    );
 
-  $form_restructure = array(
-    'comment_entry' => array(
-      'comment_form_placement',
-      'comment_preview',
-      'comment_subject_field',
-      'comment_anonymous',
-    ),
-    'comment_display' => array(
-      'comment_default_per_page',
-      'comment_default_sorting',
-      'comment_default_mode',
-      'comment_section_label',
-      'comment_form_label',
-      'comment_form_location',
-      'comment_created_date_format',
-      'comment_changed_date_format',
-    ),
-  );
-
-  foreach ($form_restructure as $fieldset => $form_elment) {
-    foreach ($form_elment as $form_key) {
-      if (isset($form['comment'][$form_key])) {
-        $form['comment'][$fieldset][$form_key] = $form['comment'][$form_key];
-        unset($form['comment'][$form_key]);
+    foreach ($form_disable as $element_key) {
+      if (isset($form['comment'][$element_key])) {
+        $form['comment'][$element_key]['#access'] = FALSE;
       }
     }
+
+    $form_restructure = array(
+      'comment_entry' => array(
+        'comment_form_placement',
+        'comment_preview',
+        'comment_subject_field',
+        'comment_anonymous',
+      ),
+      'comment_display' => array(
+        'comment_default_per_page',
+        'comment_default_sorting',
+        'comment_default_mode',
+        'comment_section_label',
+        'comment_form_label',
+        'comment_form_location',
+        'comment_created_date_format',
+        'comment_changed_date_format',
+      ),
+    );
+
+    foreach ($form_restructure as $fieldset => $form_elment) {
+      foreach ($form_elment as $form_key) {
+        if (isset($form['comment'][$form_key])) {
+          $form['comment'][$fieldset][$form_key] = $form['comment'][$form_key];
+          unset($form['comment'][$form_key]);
+        }
+      }
+    }
+
+    // Change "Default comment setting for new content" to radio buttons, so the
+    // options are visible for the first glance.
+    $form['comment']['comment']['#type'] = 'radios';
+
+    // Include custom JS to fix comment settings form behavior to handle the
+    // form element type change above to radios, and Comment Goodness changes.
+    $module_path = drupal_get_path('module', 'gardens_misc');
+    $form['#attached']['js'][] = "{$module_path}/js/gardens_misc.comment.js";
   }
-
-  // Change "Default comment setting for new content" to radio buttons, so the
-  // options are visible for the first glance.
-  $form['comment']['comment']['#type'] = 'radios';
-
-  // Include custom JS to fix comment settings form behavior to handle the
-  // form element type change above to radios, and Comment Goodness changes.
-  $module_path = drupal_get_path('module', 'gardens_misc');
-  $form['#attached']['js'][] = "{$module_path}/js/gardens_misc.comment.js";
 
   // If MASt module is enabled, we need to alter the MASt part of the form to
   // remove unsupported icons.
