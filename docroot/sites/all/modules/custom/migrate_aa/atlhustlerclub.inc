@@ -78,8 +78,13 @@ class atlhustlerclubadmin_galleryMigration extends AANode6Migration {
     $this->addFieldMapping('media_gallery_media:preserve_files')
          ->defaultValue(TRUE);
     $this->addFieldMapping('media_gallery_media:title', 'titles');
+    $this->addFieldMapping('media_gallery_media:data', 'media_gallery_media_data');
     $this->addFieldMapping('media_gallery_lightbox_extras')
          ->defaultValue(TRUE);
+    $this->addFieldMapping('media_gallery_columns')
+         ->defaultValue(5);
+    $this->addFieldMapping('media_gallery_rows')
+         ->defaultValue(5);
 
     $this->addUnmigratedDestinations(array(
       'media_gallery_allow_download',
@@ -87,13 +92,11 @@ class atlhustlerclubadmin_galleryMigration extends AANode6Migration {
       'media_gallery_block_rows',
       'media_gallery_collection', 'media_gallery_collection:source_type',
         'media_gallery_collection:create_term', 'media_gallery_collection:ignore_case',
-      'media_gallery_columns',
         'media_gallery_description:format', 'media_gallery_description:language',
       'media_gallery_expose_block',
       'media_gallery_format',
       'media_gallery_image_info_where',
-        'media_gallery_media:language', 'media_gallery_media:data',
-      'media_gallery_rows',
+        'media_gallery_media:language',
     ));
 
     $this->addUnmigratedSources(array(
@@ -112,16 +115,38 @@ class atlhustlerclubadmin_galleryMigration extends AANode6Migration {
       ->select('content_type_admin_photo', 'tap')
       ->condition('tap.field_admin_gallery_nid', $row->nid);
     $query->innerJoin('content_field_admin_photo', 'fap', 'tap.vid=fap.vid');
-    $query->fields('fap', array('field_admin_photo_fid'));
+    $query->fields('fap', array('field_admin_photo_fid', 'field_admin_photo_data'));
     $query->innerJoin('node', 'n', 'tap.vid=n.vid');
-    $query->fields('n', array('title'));
     $query->orderBy('n.created', 'DESC');
     $result = $query->execute();
     foreach ($result as $photo_row) {
+      $data = unserialize($photo_row->field_admin_photo_data);
       $row->photos[] = $photo_row->field_admin_photo_fid;
-      $row->titles[] = $photo_row->title;
+      $row->titles[] = $data['title'];
     }
     return TRUE;
+  }
+
+  public function complete($node, $row) {
+    foreach ($node->media_gallery_media[LANGUAGE_NONE] as $delta => $data) {
+      $node->media_gallery_media[LANGUAGE_NONE][$delta]['title'] =
+        $row->titles[$delta];
+      $fid = $node->media_gallery_media[LANGUAGE_NONE][$delta]['fid'];
+      db_merge('field_data_media_title')
+        ->key(array(
+            'entity_type' => 'file',
+            'deleted' => 0,
+            'entity_id' => $fid,
+            'language' => LANGUAGE_NONE,
+            'delta' => 0,
+          ))
+        ->fields(array(
+            'bundle' => 'image',
+            'revision_id' => $fid,
+            'media_title_value' => $row->titles[$delta],
+          ))
+        ->execute();
+    }
   }
 }
 
