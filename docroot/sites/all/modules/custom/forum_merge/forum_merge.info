@@ -1,0 +1,6 @@
+name = Forum Merge
+description = Extend basic forum functionality to be able to merge two or more forum topics into one.
+core = 7.x
+
+dependencies[] = forum
+dependencies[] = redirect

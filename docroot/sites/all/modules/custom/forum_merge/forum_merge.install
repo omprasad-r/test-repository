@@ -1,0 +1,55 @@
+<?php
+/**
+ * @file
+ * Create database to save merged forums for a while to be able to revert it.
+ */
+
+/**
+ * Implements hook_schema().
+ */
+function forum_merge_schema() {
+  $schema['forum_merge_forums'] = array(
+    'description' => 'Forums that are merged with their comment ids.',
+    'fields' => array(
+      'mid' => array(
+        'type' => 'serial',
+        'not null' => TRUE,
+        'unsigned' => TRUE,
+        'description' => "Id of the merge.",
+      ),
+      'source_nid' => array(
+        'type' => 'int',
+        'not null' => TRUE,
+        'unsigned' => TRUE,
+        'description' => "Id of the merged forum.",
+      ),
+      'cid' => array(
+        'type' => 'int',
+        'not null' => TRUE,
+        'unsigned' => TRUE,
+        'description' => "Id of the merged comment.",
+      ),
+      'updated_nid' => array(
+        'type' => 'int',
+        'not null' => TRUE,
+        'unsigned' => TRUE,
+        'description' => "Id of the forum that is updated by the new threads.",
+      ),
+      'uid' => array(
+        'type' => 'int',
+        'not null' => TRUE,
+        'unsigned' => TRUE,
+        'description' => "Id of the user who merged the forums.",
+      ),
+      'timestamp' => array(
+        'type' => 'int',
+        'not null' => TRUE,
+        'unsigned' => TRUE,
+        'description' => "Time of the merge.",
+      ),
+    ),
+    'primary key' => array('mid'),
+  );
+
+  return $schema;
+}

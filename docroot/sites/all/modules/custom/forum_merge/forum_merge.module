@@ -1,0 +1,574 @@
+<?php
+/**
+ * @file
+ * Merge two or more forum topics into one.
+ *
+ */
+
+/**
+ * Implements hook_menu().
+ */
+function forum_merge_menu() {
+  $items = array();
+
+  $items['node/%/merge'] = array(
+    'type' => MENU_LOCAL_TASK,
+    'title' => 'Merge threads',
+    'page callback' => 'drupal_get_form',
+    'page arguments' => array('forum_merge_page_form', 1),
+    'access callback' => 'forum_merge_access',
+    'access arguments' => array(1, 'merge'),
+    'file' => 'forum_merge.admin.inc',
+  );
+
+  $items['node/%/revert'] = array(
+    'type' => MENU_LOCAL_TASK,
+    'title' => 'Revert merge',
+    'page callback' => 'drupal_get_form',
+    'page arguments' => array('forum_merge_revert_form', 1),
+    'access callback' => 'forum_merge_access',
+    'access arguments' => array(1, 'revert'),
+    'file' => 'forum_merge.admin.inc',
+  );
+
+  $items['forum_merge/autocomplete/%'] = array(
+    'type' => MENU_CALLBACK,
+    'title' => 'Forum topic autocomplete',
+    'page callback' => 'forum_merge_autocomplete_callback',
+    'access arguments' => array('merge threads'),
+  );
+
+  return $items;
+}
+
+/**
+ * Implements hook_init().
+ */
+function forum_merge_init() {
+  // If the user reverted a forum topic in the last 10 seconds.
+  if (!empty($_SESSION['forum_merge_revert']) && $_SESSION['forum_merge_revert']['timestamp'] >= strtotime('- 10 seconds')
+  && !(arg(0) === 'node' && arg(2) === 'revert')) {
+    drupal_set_message(_forum_merge_get_undo_message(), 'status', FALSE);
+  }
+}
+
+
+/**
+ * Implements hook_permission().
+ */
+function forum_merge_permission() {
+  return array(
+    'merge threads' => array(
+      'title' => t('Merge threads'),
+      'description' => t('Permission to merge threads of two or more forum topics into one.'),
+    ),
+  );
+}
+
+/**
+ * Access callback to forum merge page.
+ *
+ * @see forum_merge_menu().
+ */
+function forum_merge_access($nid, $op = 'merge', $account = NULL) {
+  if (!$account) {
+    global $user;
+    $account = $user;
+  }
+
+  $node = node_load($nid);
+  // If the displayed content is a forum topic, and the viewing user has the rights to merge and update
+  // forum topics and create redirect for it.
+  if ($node->type === 'forum' && user_access('merge threads') && node_access('update', $node) && redirect_access('create', 'redirect')
+  && _forum_merge_operation_access($nid, $op)) {
+    return TRUE;
+  }
+  return FALSE;
+}
+
+/**
+ * Check the operation access
+ *
+ * @param $nid
+ *   Node id of forum.
+ * @param $op
+ *   The operation which we want to do on the given forum.
+ */
+function _forum_merge_operation_access($nid, $op) {
+  $access = FALSE;
+  $result = forum_merge_get_merged_forums(NULL, array('source_nid' => $nid));
+
+  if ($op === 'merge' && !$result) {
+    $access = TRUE;
+  }
+  elseif ($op === 'revert' && $result) {
+    $access = TRUE;
+  }
+  return $access;
+}
+
+/**
+ * Return the the merged forums.
+ *
+ * @param $mid
+ *   Merge id.
+ *
+ * @param $conditions
+ *   Array of additional conditions.
+
+ * @return array
+ *   Array of merged forums.
+ */
+function forum_merge_get_merged_forums($mid = NULL, $conditions = array()) {
+  // Create select query.
+  $query = db_select('forum_merge_forums')
+    ->fields('forum_merge_forums');
+
+  // Set conditions.
+  if ($mid) {
+    $query->condition('mid', $mid);
+  }
+  if ($conditions) {
+    foreach ($conditions as $key => $condition) {
+      $query->condition($key, $condition);
+    }
+  }
+  return $query->execute()->fetchAllAssoc('mid');
+}
+
+/**
+ * Autocomplete callback for forum topics.
+ *
+ * @see forum_merge_menu().
+ */
+function forum_merge_autocomplete_callback($string = '') {
+  // The user enters a comma-separated list of tags. We only autocomplete the last tag.
+  $matches = array();
+  if ($string != '') {
+
+    // Get the topics that satisfy the conditions.
+    $query = db_select('node', 'n');
+    $query->addTag('node_access');
+    $query->leftJoin('forum_merge_forums', 'fmf', 'n.nid=fmf.source_nid');
+    $query->isNull('fmf.source_nid');
+
+    // Select rows that match by node name.
+    $results = $query
+      ->fields('n', array('nid', 'title'))
+      ->condition('n.title', '%' . db_like($string) . '%', 'LIKE')
+      ->range(0, 10)
+      ->execute()
+      ->fetchAll();
+
+    foreach ($results as $result) {
+      $matches["{$result->title} [id:{$result->nid}]"] = "{$result->title} [id:{$result->nid}]";
+    }
+  }
+  drupal_json_output($matches);
+}
+
+/**
+ * Parse a field value in form of "title [id:123]" and return 123
+ *
+ * @param $string
+ *   Forum name with ID in form of "title [id:123]".
+ * @return mixed
+ *   Int value of the ID or NULL if not found.
+ */
+function forum_merge_parse_id($string) {
+  preg_match('/\[id:([^\[]*)\]$/', $string, $matches);
+  if (count($matches) == 2) {
+    return $matches[1];
+  }
+  return NULL;
+}
+
+/**
+ * Batch operation to save the comments of the old forum to the updated one.
+ *
+ * @param $forum_node
+ *   The forum topic which will be deleted and the deprecated path will be redirected to the updated one.
+ * @param $base_node
+ *   The updated node object.
+ * @param $context
+ *   The context parameter for the batch process.
+ *
+ * @see forum_merge_page_form_submit().
+ */
+function forum_merge_save_merged_comments($base_node, $forum_node, &$context) {
+  global $user;
+
+  if (empty($context['sandbox'])) {
+    $context['sandbox']['progress'] = 0;
+    $context['sandbox']['current_comment'] = 0;
+    $context['sandbox']['max'] = db_query('SELECT COUNT(cid) FROM {comment} WHERE nid = :nid',
+      array(':nid' => $forum_node->nid))->fetchField();
+  }
+  // Set the limit to 5.
+  $limit = 5;
+  $result = db_select('comment')
+    ->fields('comment', array('cid'))
+    ->condition('cid', $context['sandbox']['current_comment'], '>')
+    ->condition('nid', $forum_node->nid)
+    ->orderBy('cid')
+    ->range(0, $limit)
+    ->execute();
+
+  foreach ($result as $row) {
+    $comment = forum_merge_save_comment($row->cid, $base_node->nid);
+    // Temporary save the migration into database to be able to revert it.
+    $fields = array(
+     'source_nid' => $forum_node->nid,
+     'cid' => $comment->cid,
+     'updated_nid' => $base_node->nid,
+     'uid' => $user->uid,
+     'timestamp' => time(),
+    );
+
+    db_insert('forum_merge_forums')
+     ->fields($fields)
+     ->execute();
+
+    // Update the status variables.
+    $context['sandbox']['progress']++;
+    $context['sandbox']['current_comment'] = $comment->cid;
+  }
+
+  // Progress bar.
+  if ($context['sandbox']['progress'] != $context['sandbox']['max']) {
+    $context['finished'] = $context['sandbox']['progress'] / $context['sandbox']['max'];
+  }
+  else {
+    $context['results']['base_node'] = $base_node;
+    $context['results']['forum_node'] = $forum_node;
+  }
+}
+
+/**
+ * Finished callback to the batch operation.
+ *
+ * @see forum_merge_page_form_submit().
+ */
+function forum_merge_finish_merge_callback($success, $results, $operations) {
+  // The 'success' parameter means no fatal PHP errors were detected. All
+  // other error management should be handled using 'results'.
+  if ($success) {
+    // Get affected nodes.
+    $base_node = $results['base_node'];
+    $forum_node = $results['forum_node'];
+
+    // Create redirect from the old topic to the updated one.
+    $redirect_hash = forum_merge_create_redirect($forum_node, $base_node);
+
+    // Make the deprecated forum topic unpublished.
+    $forum_node->status = 0;
+    $forum_node->path = array(
+      'alias' => 'forum-merge/merged/' . $redirect_hash,
+    );
+    node_save($forum_node);
+
+    // Last forum topic which can be reverted temporary.
+    $_SESSION['forum_merge_revert']['forum'] = $forum_node;
+    $_SESSION['forum_merge_revert']['timestamp'] = time();
+
+    // Create status message.
+    $type = 'status';
+    $message = t('@old_name forum topic has been merged into @new_name successfully.',
+      array(
+        '@old_name' => $forum_node->title,
+        '@new_name' => $base_node->title,
+      )
+    );
+  }
+  else {
+    $type = 'error';
+    $message = t('Finished with an error.');
+  }
+  drupal_set_message($message, $type);
+}
+
+/**
+ * Batch operation to save the comments of the old forum to the updated one.
+ *
+ * @param $reverted_node
+ *   The forum topic which will be reverted.
+ * @param $context
+ *   The context parameter for the batch process.
+ *
+ * @see forum_merge_page_form_submit().
+ */
+function forum_merge_save_reverted_comments($reverted_node, &$context) {
+  if (empty($context['sandbox'])) {
+    $context['sandbox']['progress'] = 0;
+    $context['sandbox']['current_comment'] = 0;
+    $context['sandbox']['max'] = db_query('SELECT COUNT(cid) FROM {forum_merge_forums} WHERE source_nid = :nid',
+      array(':nid' => $reverted_node->nid))->fetchField();
+  }
+  // Set the limit to 5.
+  $limit = 5;
+  $result = db_select('forum_merge_forums')
+    ->fields('forum_merge_forums', array('cid'))
+    ->condition('cid', $context['sandbox']['current_comment'], '>')
+    ->condition('source_nid', $reverted_node->nid)
+    ->orderBy('cid')
+    ->range(0, $limit)
+    ->execute();
+
+  foreach ($result as $row) {
+    $comment = forum_merge_save_comment($row->cid, $reverted_node->nid);
+
+    // Remove reverted comment.
+    db_delete('forum_merge_forums')
+     ->condition('cid', $comment->cid)
+     ->execute();
+
+    // Update the status variables.
+    $context['sandbox']['progress']++;
+    $context['sandbox']['current_comment'] = $comment->cid;
+  }
+
+  // Progress bar.
+  if ($context['sandbox']['progress'] != $context['sandbox']['max']) {
+    $context['finished'] = $context['sandbox']['progress'] / $context['sandbox']['max'];
+  }
+  else {
+    $context['results']['#node'] = $reverted_node;
+  }
+}
+
+/**
+ * Finished callback to the batch operation.
+ *
+ * @see forum_merge_page_form_submit().
+ */
+function forum_merge_finish_revert_callback($success, $results, $operations) {
+  // The 'success' parameter means no fatal PHP errors were detected. All
+  // other error management should be handled using 'results'.
+  if ($success) {
+    $reverted_node = $results['#node'];
+    // Create redirect from the old topic to the updated one.
+    forum_merge_revert_redirect($reverted_node->nid);
+
+    // Make the reverted node published.
+    $reverted_node->status = 1;
+    $reverted_node->path = array(
+      'pathauto' => TRUE,
+    );
+    node_save($reverted_node);
+
+    // Remove session variable about the reverted node.
+    unset($_SESSION['forum_merge_revert']);
+
+    // Create status message.
+    $type = 'status';
+    $message = t('%reverted_name forum topic has been reverted successfully.',
+      array(
+        '%reverted_name' => $reverted_node->title,
+      )
+    );
+  }
+  else {
+    $type = 'error';
+    $message = t('Finished with an error.');
+  }
+  drupal_set_message($message, $type);
+}
+
+/**
+ * Batch callback to rebuild threads on the merged or reverted forum.
+ */
+function forum_merge_rebuild_threads($node, &$context) {
+  if (empty($context['sandbox'])) {
+    $context['sandbox']['progress'] = 0;
+    $context['sandbox']['current_comment'] = 0;
+    $context['sandbox']['max'] = db_query('SELECT COUNT(cid) FROM {comment} WHERE nid = :nid',
+      array(':nid' => $node->nid))->fetchField();
+  }
+  // Set the limit to 5.
+  $limit = 5;
+  $result = db_select('comment')
+    ->fields('comment', array('cid'))
+    ->condition('cid', $context['sandbox']['current_comment'], '>')
+    ->condition('nid', $node->nid)
+    ->orderBy('cid')
+    ->range(0, $limit)
+    ->execute();
+
+  foreach ($result as $row) {
+    // Rebuild threads.
+    $comment = comment_load($row->cid);
+    _forum_merge_rebuild_comment_thread($comment);
+    comment_save($comment);
+
+    // Update the status variables.
+    $context['sandbox']['progress']++;
+    $context['sandbox']['current_comment'] = $comment->cid;
+  }
+
+  // Progress bar.
+  if ($context['sandbox']['progress'] != $context['sandbox']['max']) {
+    $context['finished'] = $context['sandbox']['progress'] / $context['sandbox']['max'];
+  }
+}
+
+/**
+ * Helper function to create a redirect from the deprecated node to the updated one.
+ *
+ * @param $redirected_node
+ *   The forum topic which will be deleted and the deprecated path will be redirected to the updated one.
+ * @param $base_node
+ *   The updated node object.
+ * @return string
+ *   Hash of the redirect.
+ *
+ * @see forum_merge_save_comments().
+ */
+function forum_merge_create_redirect($redirected_node, $base_node) {
+  $redirect = new stdClass();
+  redirect_object_prepare($redirect);
+  $redirect->source = drupal_get_path_alias('node/' . $redirected_node->nid);
+  $redirect->redirect = 'node/' . $base_node->nid;
+  $redirect->language = $base_node->language;
+  // Check if the redirect exists before saving.
+  $hash = redirect_hash($redirect);
+  if (!redirect_load_by_hash($hash)) {
+    redirect_save($redirect);
+  }
+  return $hash;
+}
+
+/**
+ * Remove redirect that created during the merge of the reverted node.
+ *
+ * @param $reverted_nid
+ *   Id of the node being reverted.
+ */
+function forum_merge_revert_redirect($reverted_nid) {
+  $reverted_alias = drupal_get_path_alias('node/' . $reverted_nid);
+  $reverted_alias = explode('/', $reverted_alias);
+  // Get the redirect hash from the temporary alias of the merged node.
+  if ($reverted_alias[0] === 'forum-merge' && $reverted_alias[1] === 'merged' && !empty($reverted_alias[2])) {
+    $redirect = redirect_load_by_hash($reverted_alias[2]);
+    // If redirect exists.
+    if (isset($redirect->rid)) {
+      redirect_delete($redirect->rid);
+    }
+  }
+}
+
+/**
+ * Helper function to rebuild comment thread based on the existing comments in the updated forum topic.
+ * This code is a re-use of the proper part of the comment_save() function.
+ *
+ * @param $comment
+ *   The moving comment object.
+ *
+ * @see forum_merge_save_comments().
+ * @see comment_save().
+ */
+function _forum_merge_rebuild_comment_thread(&$comment) {
+  if ($comment->pid == 0) {
+    // This is a comment with no parent comment (depth 0): we start
+    // by retrieving the maximum thread level.
+    $max = db_query('SELECT MAX(thread) FROM {comment} WHERE nid = :nid', array(':nid' => $comment->nid))->fetchField();
+    // Strip the "/" from the end of the thread.
+    $max = rtrim($max, '/');
+    // We need to get the value at the correct depth.
+    $parts = explode('.', $max);
+    $firstsegment = $parts[0];
+    // Finally, build the thread field for this new comment.
+    $thread = int2vancode(vancode2int($firstsegment) + 1) . '/';
+  }
+  else {
+    // This is a comment with a parent comment, so increase the part of the
+    // thread value at the proper depth.
+
+    // Get the parent comment:
+    $parent = comment_load($comment->pid);
+    // Strip the "/" from the end of the parent thread.
+    $parent->thread = (string) rtrim((string) $parent->thread, '/');
+    // Get the max value in *this* thread.
+    $max = db_query("SELECT MAX(thread) FROM {comment} WHERE thread LIKE :thread AND nid = :nid", array(
+      ':thread' => $parent->thread . '.%',
+      ':nid' => $comment->nid,
+    ))->fetchField();
+
+    if ($max == '') {
+      // First child of this parent.
+      $thread = $parent->thread . '.' . int2vancode(0) . '/';
+    }
+    else {
+      // Strip the "/" at the end of the thread.
+      $max = rtrim($max, '/');
+      // Get the value at the correct depth.
+      $parts = explode('.', $max);
+      $parent_depth = count(explode('.', $parent->thread));
+      $last = $parts[$parent_depth];
+      // Finally, build the thread field for this new comment.
+      $thread = $parent->thread . '.' . int2vancode(vancode2int($last) + 1) . '/';
+    }
+  }
+  // Set the updated thread to the comment.
+  $comment->thread = $thread;
+}
+
+/**
+ * Save the comment under the proper node.
+ *
+ * @param $cid
+ *   Comment id.
+ * @param $nid
+ *   Node id.
+ * @return stdClass
+ *   Updated comment object.
+ */
+function forum_merge_save_comment($cid, $nid) {
+  // Move the comments under the old forums to the new one.
+  $comment = comment_load($cid);
+  $comment->nid = $nid;
+  comment_save($comment);
+
+  return $comment;
+}
+
+/**
+ * Helper function to get the undo message string.
+ *
+ * @param null $node
+ *   Node can be reverted.
+ * @return null|string
+ *   Raw HTML of the message.
+ */
+function _forum_merge_get_undo_message($node = NULL) {
+  if (!$node) {
+    $node = $_SESSION['forum_merge_revert']['forum'];
+  }
+
+  // Create a message for the user.
+  $message = 'You can !UNDO the migration of %title forum threads temporary.';
+  $arguments =  array(
+    '!UNDO' => l(t('UNDO'), 'node/' . $node->nid . '/revert'),
+    '%title' => $node->title,
+  );
+
+  return t($message, $arguments);
+}
+
+/**
+ * Impements hook_cron().
+ */
+function forum_merge_cron() {
+  $merged_forums = db_select('forum_merge_forums')
+    ->fields('forum_merge_forums', array('source_nid'))
+    ->condition('timestamp', strtotime('-15 minutes'), '<=')
+    ->execute()->fetchAllAssoc('source_nid');
+
+  foreach ($merged_forums as $nid => $forum) {
+    // Delete merge information.
+    db_delete('forum_merge_forums')
+      ->condition('source_nid', $nid)
+      ->execute();
+    // Delete node.
+    node_delete($nid);
+  }
+}
