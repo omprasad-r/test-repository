@@ -264,6 +264,10 @@ function gardens_installer_custom_submit($form, &$form_state) {
   variable_set('acquia_gardens_gardener_url', trim($form_state['values']['acquia_gardens_gardener_url'], '/'));
   variable_set('gardens_service_name_long', $form_state['values']['gardens_service_name_long']);
 
+  if ($form_state['values']['gardens_service_name_long'] != 'Drupal Gardens') {
+    variable_set('gardens_features_responsive_enabled', TRUE);
+  }
+
   // At this point in the batch, gardens.install will not have been included if
   // the gardens verification profile was used.  Including it now keeps the the
   // next statement from failing.

@@ -1417,3 +1417,13 @@ function scarecrow_update_11192() {
   // eventually anyway.
   chmod($live_env_dir, 0555);
 }
+
+/**
+ * Sets the responsive libraries to be enabled for enterprise customers.
+ */
+function scarecrow_update_11193() {
+  if (!gardens_misc_is_smb()) {
+    variable_set('gardens_features_responsive_enabled', TRUE);
+  }
+}
+
