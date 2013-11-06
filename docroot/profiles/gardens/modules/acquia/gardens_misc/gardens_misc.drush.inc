@@ -77,6 +77,14 @@ function gardens_misc_drush_sql_sync_sanitize() {
   $query[] = "DELETE FROM variable WHERE name = 'gardens_misc_standard_domain';";
   $query[] = "INSERT INTO variable (name, value) VALUES ('gardens_misc_standard_domain', '" . serialize($standard_domain) . "');";
 
+  // During the staging process, we use a general SQL scrub file that also
+  // removes the file_public_path. The file path does not change during staging,
+  // so this needs to be put back here.
+  $db_role = variable_get('gardens_db_name', '');
+  if (!empty($db_role)) {
+    $query[] = "INSERT INTO variable (name, value) VALUES ('file_public_path', '" . serialize("sites/g/files/$db_role/f") . "');";
+  }
+
   drush_sql_register_post_sync_op('staging-dynamic-scrub',
     dt('Reset Gardener-related variables'),
     implode("\n", $query));

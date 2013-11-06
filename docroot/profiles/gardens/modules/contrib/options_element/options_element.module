@@ -1,5 +1,4 @@
 <?php
-// $Id: options_element.module,v 1.7 2010/09/05 02:17:22 quicksketch Exp $
 
 /**
  * @file
@@ -13,7 +12,7 @@
  *
  * The 'options' form element type is useful when collecting a series of
  * values in a list. The values within the list may optionally have unique
- * keys, such as that in a array structure. In addition, a default choice
+ * keys, such as that in an array structure. In addition, a default choice
  * (or several default choices) may be selected by the user.
  *
  * @code
@@ -65,9 +64,12 @@
  *   the "none" key type.
  * - key_type_toggled: Determine if the toggle checkbox is set or not by
  *   default.
- * - manual_default_value_allowed: Indicates whether the end user should be
- *   able to modify the default value when editing the options list. Defaults
- *   to TRUE.
+ * - default_value_allowed: Indicates whether the end user should be able to
+ *   modify the default value when editing the options list. Defaults to TRUE.
+ * - default_value_pattern: If allowing dynamic default value keys, such as a
+ *   token, specify a regular expression pattern that will also be allowed as
+ *   a default value. Include pattern delimiters. Defaults to an empty string.
+ *
  *   @code
  *   $element['options'] = array(
  *     '#type' => 'options',
@@ -87,13 +89,14 @@ function options_element_element_info() {
     '#optgroups' => TRUE,
     '#multiple' => FALSE,
     '#options' => array(),
+    '#options_readonly' => FALSE,
     '#key_type' => 'mixed',
     '#key_type_toggle' => NULL,
     '#key_type_toggled' => FALSE,
-    '#manual_default_value_allowed' => TRUE,
+    '#default_value_allowed' => TRUE,
+    '#default_value_pattern' => '',
     '#element_validate' => array('form_options_validate'),
-    '#disabled' => FALSE,
-    '#pre_render' => array('pre_render_options'),
+    '#theme_wrappers' => array('form_element'),
   );
 
   return $type;

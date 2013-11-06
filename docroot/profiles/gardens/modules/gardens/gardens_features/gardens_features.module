@@ -1951,12 +1951,12 @@ function gardens_features_domain_301_redirect_exclude() {
 /**
  * Calculates whether the responsive libraries should be enabled for this site.
  *
- * @return boolean
+ * @return bool
  *   Returns TRUE if this site should have responsive libraries enabled,
  *   otherwise FALSE.
  */
 function gardens_features_responsive_enabled() {
-  return (variable_get('gardens_service_name_long', 'Acquia Cloud Site Factory') != 'Drupal Gardens');
+  return variable_get('gardens_features_responsive_enabled', FALSE);
 }
 
 /**

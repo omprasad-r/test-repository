@@ -86,6 +86,39 @@ function gardens_limits_init() {
     }
     unset($_SESSION['gardens_limits_delayed_messages']);
   }
+
+  if (gardens_limits_crawler_block_apply()) {
+    $html_head = array(
+      '#tag' => 'meta',
+      '#attributes' => array(
+        'name' => 'robots',
+        'content' => 'noindex, nofollow',
+      ),
+    );
+    drupal_add_html_head($html_head, 'gardens_limits_block_crawler');
+  }
+}
+
+/**
+ * Decides if crawlers should be discouraged from indexing this site.
+ */
+function gardens_limits_crawler_block_apply() {
+  $crawler_blocking_info = gardens_client_data_get('sf_abuse', 'block_crawler');
+  $site_creation = variable_get('install_time', 0);
+  $killswitch = variable_get('gardens_limits_crawler_blocking_killswitch', FALSE);
+  $killswitch = $killswitch && $killswitch === gardens_limits_crawler_blocking_killswitch();
+  return !$killswitch && !empty($crawler_blocking_info) && $crawler_blocking_info['block'] && (!$site_creation || strtotime($crawler_blocking_info['initial_blocking_period'], $site_creation) >= REQUEST_TIME);
+}
+
+/**
+ * Generates a token for disabling crawler blocking.
+ *
+ * New free sites should not get crawled, but we want to be able to disable this
+ * restriction if necessary. To make it hard for a user to do that himself,
+ * we'll use a hard to guess value.
+ */
+function gardens_limits_crawler_blocking_killswitch() {
+  return hash_hmac('sha1', variable_get('install_time', 0), 'crawler_blocking:' . variable_get('gardens_db_name', ''), TRUE);
 }
 
 /**

@@ -86,6 +86,8 @@ class mastFactory {
     drupal_alter('mast_classes', $classes);
 
     self::$classes = $classes;
+
+    return self::$classes;
   }
 
   /**
@@ -110,6 +112,19 @@ class mastFactory {
    * Defines a factory to create field structures based on the registry.
    */
   public static function createFieldStructure($field_info, $instance_info) {
+    $class = self::getMastFieldClass($field_info, $instance_info);
+
+    if (class_exists($class)) {
+      return new $class($field_info, $instance_info);
+    }
+
+    throw new mastException('MASt field class "' . $class . '" not found.');
+  }
+
+  /**
+   * Determines the MASt class to be used for a field.
+   */
+  public static function getMastFieldClass($field_info, $instance_info) {
     if (!isset(self::$classes)) {
       self::registry();
     }
@@ -126,11 +141,7 @@ class mastFactory {
       $class = 'mastFieldStandard';
     }
 
-    if (class_exists($class)) {
-      return new $class($field_info, $instance_info);
-    }
-
-    throw new mastException('MASt field class "' . $class . '" not found.');
+    return $class;
   }
 }
 
@@ -430,18 +441,26 @@ class mastEntityStructureNode extends mastEntityStructure {
    *
    * @throws mastValueException
    */
-  public function prepareValues($data) {
+  public function prepareValues($data, $check_required_fields = TRUE) {
     $fields = $this->getAllFields();
     $node_data = array('type' => $data['type']);
 
-    foreach ($this->required_fields as $required) {
-      if (!isset($data[$required]) || (!count($data[$required]) || (is_string($data[$required]) && strlen(trim($data[$required])) == 0))) {
-        // We are missing data for a required field. If it's the author field,
-        // allow it to go through anyway; it's special-cased below.
-        // @todo Allow any required field with a default value to be omitted
-        // from the node data.
-        if ($required !== 'author') {
-          throw new mastValueException(t('One or more required fields are missing'));
+    if (isset($data['status'])) {
+      $node_data['status'] = $data['status'];
+    }
+
+    // When updating an entity the required fields are not necessary, those
+    // should be already present.
+    if ($check_required_fields) {
+      foreach ($this->required_fields as $required) {
+        if (!isset($data[$required]) || (!count($data[$required]) || (is_string($data[$required]) && strlen(trim($data[$required])) == 0))) {
+          // We are missing data for a required field. If it's the author field,
+          // allow it to go through anyway; it's special-cased below.
+          // @todo Allow any required field with a default value to be omitted
+          // from the node data.
+          if ($required !== 'author') {
+            throw new mastValueException(t('One or more required fields are missing'));
+          }
         }
       }
     }
@@ -766,6 +785,24 @@ class mastFieldFormattedText extends mastFieldStandard {
    * Holds the name of the column to use when setting a value for this field.
    */
   protected $value_column = 'value';
+
+  /**
+   * Adds format to the formatted text field.
+   */
+  public function prepareValue($value) {
+    $struct = parent::prepareValue($value);
+
+    if ($this->mast_field['cardinality'] == 1) {
+      $struct['format'] = filter_default_format();
+    }
+    else {
+      foreach ($struct as $delta => $item) {
+        $struct[$delta]['format'] = filter_default_format();
+      }
+    }
+
+    return $struct;
+  }
 }
 
 class mastDateField extends mastFieldStandard {
@@ -850,13 +887,34 @@ class mastListField extends mastFieldStandard {
     return (object) $found;
   }
 
+  /**
+   * Removes the empty meta-value from the list field.
+   */
+  public function prepareValue($value) {
+    $struct = parent::prepareValue($value);
+
+    if ($this->mast_field['cardinality'] == 1) {
+      if ($struct == '_none') {
+        $struct = NULL;
+      }
+    }
+    else {
+      $index = array_search('_none', $struct, TRUE);
+      if ($index !== FALSE) {
+        unset($struct[$index]);
+      }
+    }
+
+    return $struct;
+  }
+
   protected function validate($value) {
     $allowed_values = list_allowed_values($this->field_info, $this->instance_info, $this->instance_info['entity_type']);
     if (!is_array($value)) {
       $value = array($value);
     }
     foreach ($value as $val) {
-      if (!isset($allowed_values[$val])) {
+      if (!isset($allowed_values[$val]) && $val !== '_none') {
         return FALSE;
       }
     }
@@ -1155,6 +1213,16 @@ class mastTaxonomyTermReferenceField extends mastFieldStandard {
     return $return_values;
   }
 
+  /**
+   * Handles taxonomy term field when it is emptied.
+   */
+  public function prepareValue($value) {
+    $value = parent::prepareValue($value);
+    if (empty($value)) {
+      $value = NULL;
+    }
+    return $value;
+  }
 }
 
 /**

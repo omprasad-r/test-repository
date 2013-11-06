@@ -1462,6 +1462,7 @@ function scarecrow_required_modules() {
     'blog_template',
     'campaign_template',
     'ctools',
+    'comment',
     'date',
     'date_repeat',
     'date_repeat_field',
@@ -1556,6 +1557,8 @@ function scarecrow_required_modules() {
  */
 function scarecrow_visible_required_modules() {
   $visible_modules = array(
+    'comment',
+    'date',
     'taxonomy',
   );
 

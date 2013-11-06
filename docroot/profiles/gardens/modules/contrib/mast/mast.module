@@ -7,6 +7,14 @@
 define('MAST_MAX_ALLOWED_NODE_TYPES', 4);
 
 /**
+ * When listing content for a given user an argument defines the user's uid.
+ * When the request is for the current user or any user then the argument takes
+ * on a special value.
+ */
+define('MAST_UID_CURRENT_USER', -1);
+define('MAST_UID_ANY_USER', -2);
+
+/**
  * Implements hook_menu().
  */
 function mast_menu() {
@@ -234,6 +242,30 @@ function mast_image_default_styles() {
         'data' => array(
           'width' => 100,
           'height' => 100,
+        ),
+        'weight' => 0,
+      ),
+    ),
+  );
+  $styles['mobile_edit_thumb_large'] = array(
+    'effects' => array(
+      array(
+        'name' => 'image_scale_and_crop',
+        'data' => array(
+          'width' => 302,
+          'height' => 229,
+        ),
+        'weight' => 0,
+      ),
+    ),
+  );
+  $styles['mobile_edit_thumb_small'] = array(
+    'effects' => array(
+      array(
+        'name' => 'image_scale_and_crop',
+        'data' => array(
+          'width' => 35,
+          'height' => 35,
         ),
         'weight' => 0,
       ),

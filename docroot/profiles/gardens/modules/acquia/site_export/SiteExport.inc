@@ -9,7 +9,7 @@ class SiteExport {
   /**
    * Constructor for the SiteExport class.
    *
-   * @param {Boolean} $excludeSiteFiles
+   * @param bool $excludeSiteFiles
    *   If FALSE the site-specific files will be excluded from the site
    *   export.  This may be necessary if the site is very large
    *   causing the archive to be too large to be downloaded without
@@ -27,7 +27,7 @@ class SiteExport {
   /**
    * Generates a name for a file being exported.  Does not include an extension.
    *
-   * @return {String}
+   * @return string
    *   The file name.
    */
   public static function createFilename() {
@@ -119,7 +119,7 @@ class SiteExport {
    * pattern by actually having to create the tar file as well,
    * causing an order dependence that is not desirable.
    *
-   * @param {String} $tarfile
+   * @param string $tarfile
    *   The tar file that should be created.
    */
   private function createTarArchive($tarfile) {
@@ -132,8 +132,10 @@ class SiteExport {
   /**
    * Adds the Drupal files to the specified tar file.
    *
-   * @param {String} $tarfile
+   * @param string $tarfile
    *   The tar file that the drupal files will be appended to.
+   *
+   * @throws Exception
    */
   private function addDrupalFiles($tarfile) {
     // All hidden modules are in modules/acquia.
@@ -168,9 +170,9 @@ class SiteExport {
    * users, and those passwords are placed into the database and the
    * credentials file.
    *
-   * @param {String} $tarfile
+   * @param string $tarfile
    *   The tar file to which these files should be appended.
-   * @param {String} $working_dir
+   * @param string $working_dir
    *   The temporary working directory used when building the tar file.
    */
   private function addDatabaseAndCredsFiles($tarfile, $working_dir) {
@@ -222,7 +224,7 @@ class SiteExport {
   /**
    * Adds a sites directory and default settings file to the specified archive.
    *
-   * @param {String} $tarfile
+   * @param string $tarfile
    *   The path to the archive.
    */
   private function addSitesDirAndSettings($tarfile) {
@@ -414,7 +416,7 @@ class SiteExport {
    * Returns a list of directories (not associated with individual modules) that
    * should not be included in the export.
    *
-   * @return {Array}
+   * @return Array
    *   The set of directories that should be excluded from the export.
    */
   private function getDirectoriesToRemove() {
@@ -437,7 +439,7 @@ class SiteExport {
    * Return the list of files that need to have certain lines stripped out of
    * them before being included in the site export.
    *
-   * @return {Array}
+   * @return Array
    *   The list of filenames that need to be stripped.
    */
   private function getFilesToStrip() {
@@ -460,11 +462,11 @@ class SiteExport {
   /**
    * Causes the specified tar file to be compressed for download.
    *
-   * @param {String} $tarfile
+   * @param string $tarfile
    *   The path to the tar file that should be compressed.
-   * @param {String} $tarfile_uri
+   * @param string $tarfile_uri
    *   The URI to the tar file.
-   * @return {String}
+   * @return string
    *   The URI of the compressed file.
    */
   private function compressArchive($tarfile, $tarfile_uri = NULL) {
@@ -494,9 +496,9 @@ class SiteExport {
    * @param <String> &$contents
    *   The uncompressed sql contents from the sql dump.  This string
    *   will be modified as a result of the db scrub.
-   * @param {Array} $modules_to_remove
+   * @param array $modules_to_remove
    *   The set of modules that must be scrubbed.
-   * @param {Array} $updates
+   * @param array $updates
    *   Database updates that will be appended to the resulting sql.
    */
   private function sanitizeDB(&$contents, $modules_to_remove = NULL, $updates = array()) {
@@ -565,7 +567,7 @@ class SiteExport {
   }
 
   /**
-   * Creates a simple script that can be used to dowload all of the files in the .../files directory.
+   * Creates a script that can be used to download the files directory.
    *
    * This is important for large sites for which the download would be
    * interrupted.  On most browsers the download through our balancer will be
@@ -574,8 +576,10 @@ class SiteExport {
    * files after their site has been exported, making the site export archive
    * significantly smaller on sites with a large files directory.
    *
-   * @param {String} $dir
+   * @param string $dir
    *   The path to the directory in which the script should be written.
+   * @return string
+   *   The filename of the script.
    */
   private function createFileDownloadScript($dir) {
     $name = 'get_files.sh';
@@ -603,9 +607,9 @@ EOT;
    * efficiently download the site's files and place them in the
    * proper location.
    *
-   * @param {String} $dir
+   * @param string $dir
    *   The location where the site file list should be written.
-   * @return {String}
+   * @return string
    *   The filename of the site file list.
    */
   private function generateSiteFileList($dir) {
@@ -622,13 +626,13 @@ EOT;
    *
    * @global array $databases
    *
-   * @param {String} $working_dir
+   * @param string $working_dir
    *   The working directory where the sql file can be written.
-   * @param {Array} $modules_to_remove
+   * @param array $modules_to_remove
    *   The set of modules that must be scrubbed.
-   * @param {Array} $updates
+   * @param array $updates
    *   Database updates that will be appended to the resulting sql.
-   * @return {string}
+   * @return string
    *   The path of the file containing the db export
    */
   private function exportDB($working_dir, $modules_to_remove = NULL, $updates = array()) {
@@ -802,9 +806,9 @@ EOT;
   /**
    * Creates a random name for a temporary file.
    *
-   * @param {String} $ext
+   * @param string $ext
    *   An extension for the file. Defaults to "tmp" (e.g. 1234.tmp).
-   * @return {String}
+   * @return string
    *   The URI to the temporary file.
    */
   private function createRandomURI($ext = 'tmp') {
@@ -901,9 +905,9 @@ EOT;
    * connection error which will hopefully prompt the user to change the
    * settings.
    *
-   * @param {String} $dir
+   * @param string $dir
    *   The directory in which the settings.php should be written.
-   * @return {String}
+   * @return string
    *   The path to the modified settings file.
    */
   private function modifySettingsFile($dir) {
@@ -940,14 +944,14 @@ EOT;
    * This function is used to generate a file that can be used to download
    * files for a site that uses a lot of disk space.
    *
-   * @return {Array}
+   * @return array
    *   An array of URLs that if used with wget would result in the export of the
    *   site-specific files.
    */
   private function getFileDownloadLines() {
     $lines = array();
     $conf_path = conf_path();
-    $dir = DRUPAL_ROOT . "/${conf_path}/files";
+    $dir = DRUPAL_ROOT . "/${conf_path}/f";
     if (is_dir($dir)) {
       $this->getFileDownloadLinesRecursive($dir, $dir, $lines);
     }
@@ -957,14 +961,14 @@ EOT;
   /**
    * Recurses into the specified directory, appending lines to the specified array to provide a mechanism for exporting files from website that uses a lot of disk space.
    *
-   * @param {String} $dir
+   * @param string $dir
    *   The directory to inspect.  Any files within the specified directory will
    *   cause a line to be added to the $lines array.
-   * @param {String} $dir_prefix
+   * @param string $dir_prefix
    *   The directory prefix, which is used to remove the uninteresting part of
    *   the path.  This is used to make the path in the corresponding command
    *   relative to the docroot of the exported site.
-   * @param {Array} $lines
+   * @param array $lines
    *   An array to which a command string will be appended for every file in the
    *   files directory.
    */
@@ -997,14 +1001,16 @@ EOT;
    * downloading a particular file and placing it in the proper
    * location.
    *
-   * @param {String} $file
+   * @param string $file
    *   The file path relative to the conf_path/files directory.
-   * @return {String}
+   * @param array $lines
+   *   The lines of the file.
+   * @return string
    *   A string containing the URI for the specified file that can be
    *   used to download the file from the live site.
    */
   private function addDownloadLine($file, &$lines) {
-    $url = url(conf_path() . "/files/$file", array('absolute' => TRUE));
+    $url = url(conf_path() . "/f/$file", array('absolute' => TRUE));
     $lines[] = "url = \"${url}\"";
     $lines[] = "output = \"sites/default/files/${file}\"";
     $lines[] = ""; //Space between each entry
@@ -1014,20 +1020,22 @@ EOT;
   /**
    * Appends the files corresponding to the specified filenames to the specified tarfile.
    *
-   * @param {String} $tarfile
+   * @param string $tarfile
    *   The path to the tarfile to which the files should be appended.
-   * @param {Array} $filenames
+   * @param array $filenames
    *   An array containing any number of paths to files that should be
    *   added to the archive.
-   * @param {String} $from
+   * @param string $from
    *   Indicates the prefix of the filename path that should be
    *   removed when adding the file into the archive.
-   * @param {String} $to
+   * @param string $to
    *   Indicates the prefix that should be added to the filename path
    *   (after the $from prefix is removed) so the file has the correct
    *   path within the archive.
-   * @param {String} $dir
+   * @param string $dir
    *   The base directory where the files can be found.
+   *
+   * @throws Exception
    */
   private function addFilesToArchive($tarfile, $filenames, $from, $to, $dir = NULL) {
     if (empty($dir)) {
@@ -1055,7 +1063,7 @@ EOT;
   /**
    * Adds a readme file to the sites/default/files directory to let the user know how to populate their files directory.
    *
-   * @param {String} $tarfile
+   * @param string $tarfile
    *   The filename of the tar file to append the readme file onto.
    */
   private function addReadmeToArchive($tarfile) {
@@ -1067,7 +1075,7 @@ EOT;
   /**
    * Adds the site-specific files to the archive.
    *
-   * @param {String} $tarfile
+   * @param string $tarfile
    *   The filename of the tar file to append the readme file onto.
    */
   private function addSiteSpecificFiles($tarfile) {
@@ -1087,17 +1095,23 @@ EOT;
     // Do not include site-specific modules in the export.
     $tar_cmd->setOption("--exclude", "${conf_path}/modules", TRUE);
 
+    // Do not include the files symlink in the export.
+    $tar_cmd->setOption("--exclude", "${conf_path}/files", TRUE);
+
     // Do not include the mailhandler temporary directory in the export.
-    $tar_cmd->setOption("--exclude", "${conf_path}/files/gardens_temp", TRUE);
+    $tar_cmd->setOption("--exclude", "${conf_path}/f/gardens_temp", TRUE);
 
     $tar_cmd->add('docroot/' . $conf_path);
 
+    // Move the files directory into its expected sites/default/files location.
+    $tar_cmd->setOption('--transform', 's:docroot/' . $conf_path . '/f:docroot/sites/default/files:', TRUE);
+    // Move the site directory itself into sites/default.
     $tar_cmd->setOption('--transform', 's:docroot/' . $conf_path . ':docroot/sites/default:', TRUE);
 
     // Only include the site files if the site is small enough that the download
     // won't be interrupted.
     if ($this->excludeSiteFiles) {
-      $files_exclude = "docroot/${conf_path}/files/*";
+      $files_exclude = "docroot/${conf_path}/f/*";
       $tar_cmd->setOption("--exclude", $files_exclude, TRUE);
     }
 
@@ -1109,7 +1123,7 @@ EOT;
   /**
    * Indicates whether the specified file should be omitted from the file that is used to retrieve site-specific files.
    *
-   * @param {String} $fileneame
+   * @param string $fileneame
    *   The relative path to the file or directory to check.
    * @return {Boolean}
    *   TRUE if the specified file should be omitted; false otherwise.
@@ -1129,7 +1143,7 @@ EOT;
   /**
    * Creates a temporary working directory for assets that need to be generated during site export and then added to the tar file.
    *
-   * @return {String}
+   * @return string
    *   The path to the temporary working directory.
    */
   private function createWorkingDirectory() {

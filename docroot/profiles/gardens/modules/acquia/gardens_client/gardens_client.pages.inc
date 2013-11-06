@@ -228,7 +228,7 @@ function gardens_client_resend_verification_email($token) {
     else {
       // Resend the email.
       $name = $GLOBALS['user']->name;
-      $sent = gardens_client_call_gardener('resend.verification.email', array($name));
+      $sent = gardens_client_call_gardener('resend.verification.email', array($name, !empty($verifier->module) ? $verifier->module : NULL));
       if (!isset($sent)) {
         $output = '<div class="display-block">' . t('There was an error sending the email. Visit the <a href="@link">site manager</a> to try again.', array('@link' => scarecrow_get_gardener_url() . '/mysites')) . '</div>';
       }
