@@ -55,6 +55,11 @@ function _tac_redirect_403_access($node) {
   global $user;
   $access = node_access('view', $node);
 
+  // When using drush or another CLI tool, redirecting here would be fatal.
+  if (drupal_is_cli()) {
+    return $access;
+  }
+
   // We only want to intercept with a redirect if there's a taxonomy access term
   // responsible for denial.
   // - TAC doesn't manage unpublished nodes.
