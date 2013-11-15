@@ -69,7 +69,7 @@ class SchedulerTestCase extends DrupalWebTestCase {
    */
   public function testSchedulerPastDates() {
     // Log in.
-    $this->drupalLogin($this->web_user);
+    $this->drupalLogin($this->admin_user);
 
     // Create an unpublished page node.
     $node = $this->drupalCreateNode(array('type' => 'page', 'status' => FALSE));
@@ -111,4 +111,5 @@ class SchedulerTestCase extends DrupalWebTestCase {
     $node = node_load($node->nid, NULL, TRUE);
     $this->assertTrue($node->status, 'The node with publication date in the past and the "schedule" behavior has now been published by cron.');
   }
+
 }
