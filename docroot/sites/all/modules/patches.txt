@@ -10,6 +10,12 @@
 ; See DG-9394 and https://drupal.org/node/2096601
 ; projects[signature_forum][patch][] = "https://drupal.org/files/signature_forum-views-field.patch"
 
+; Contrib module: mailhandler_medialink
+; ---------------------------------------
+;
+; See DG-9692 and https://drupal.org/node/2138363
+; projects[mailhandler_medialink][patch][] = "https://drupal.org/files/issues/2138363-mailhandler_medialink-configure-parts.patch"
+
 ; Contrib module: scheduler
 ; ---------------------------------------
 ;
