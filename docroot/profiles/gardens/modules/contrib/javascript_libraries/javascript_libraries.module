@@ -183,9 +183,9 @@ function javascript_libraries_theme() {
 }
 
 /**
- * Implements hook_init().
+ * Implements hook_preprocess_html().
  */
-function javascript_libraries_init() {
+function javascript_libraries_preprocess_html() {
   if (user_access('view the administration theme') && path_is_admin(current_path())) {
     // Don't load any custom JS when administrators are viewing an admin page.
     return;

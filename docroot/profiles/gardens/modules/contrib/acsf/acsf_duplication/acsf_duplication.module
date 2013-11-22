@@ -1,0 +1,21 @@
+<?php
+
+/**
+ * @file
+ *   Helper module for duplicating Drupal Gardens sites. This is generally only
+ *   needed during initial site duplication, while the duplicated site is being
+ *   prepared to hand off to the user.
+ */
+
+function acsf_duplication_acsf_registry() {
+  return array(
+    'events' => array(
+      array(
+        'type' => 'site_duplication_scrub',
+        'class' => 'AcsfDuplicationScrubHandler',
+        'path' => drupal_get_path('module', 'acsf_duplication') . '/classes',
+      ),
+    ),
+  );
+}
+
