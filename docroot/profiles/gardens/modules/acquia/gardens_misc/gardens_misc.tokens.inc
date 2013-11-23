@@ -21,6 +21,11 @@ function gardens_misc_token_info() {
     'description' => $description,
   );
 
+  $data['tokens']['site']['file-public-path'] = array(
+    'name' => t('Public file path'),
+    'description' => t('Relative path to the uploaded public files.'),
+  );
+
   return $data;
 }
 
@@ -28,6 +33,8 @@ function gardens_misc_token_info() {
  * Implements hook_tokens().
  */
 function gardens_misc_tokens($type, $tokens, array $data = array(), array $options = array()) {
+  $replacements = array();
+
   if ($type == 'site' && isset($tokens['register-url'])) {
     if (scarecrow_force_openid()) {
       $url_options = array(
@@ -37,7 +44,7 @@ function gardens_misc_tokens($type, $tokens, array $data = array(), array $optio
       if (isset($options['language'])) {
         $url_options['language'] = $options['language'];
       }
-      return array($tokens['register-url'] => url('<front>', $url_options));
+      $replacements[$tokens['register-url']] = url('<front>', $url_options);
     }
     else {
       // @TODO - The url options might need to change when we have the registration overlay
@@ -46,7 +53,12 @@ function gardens_misc_tokens($type, $tokens, array $data = array(), array $optio
       if (isset($options['language'])) {
         $url_options['language'] = $options['language'];
       }
-      return array($tokens['register-url'] => url('user/register', $url_options));
+      $replacements[$tokens['register-url']] = url('user/register', $url_options);
     }
   }
+  if ($type == 'site' && isset($tokens['file-public-path'])) {
+    $replacements[$tokens['file-public-path']] = variable_get('file_public_path');
+  }
+
+  return $replacements;
 }
