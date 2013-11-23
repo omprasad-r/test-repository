@@ -3,7 +3,7 @@
 /**
  * Implements hook_drush_command()
  */
-function acsf_install_drush_command() {
+function acsf_init_drush_command() {
   return array(
     'acsf-init' => array(
       'bootstrap' => DRUSH_BOOTSTRAP_DRUPAL_ROOT,
@@ -11,13 +11,6 @@ function acsf_install_drush_command() {
       'description' => dt('Installs/updates the non-drupal components for this Drupal repository to be compatible with Acquia Site Factory. This command will update in place, so there is no harm in running it multiple times.'),
       'options' => array(
         'relative-path' => dt('The path from the drupal root to acsf, e.g. "sites/all/modules/acquia", defaults to "sites/all/modules"'),
-      ),
-    ),
-    'acsf-install' => array(
-      'callback' => 'drush_acsf_install',
-      'description' => dt('Installs the required Drupal modules to be compatible with the Acquia Site Factory.'),
-      'options' => array(
-        'nid' => dt('The node ID from the Site Factory site node.'),
       ),
     ),
   );
@@ -42,7 +35,7 @@ function drush_acsf_init() {
 
   $post_db_copy_path = sprintf('%s/../hooks/common/post-db-copy', DRUPAL_ROOT);
   $library_path = sprintf('%s/../library', DRUPAL_ROOT);
-  $hosting_crush_path = sprintf('%s/../library', DRUPAL_ROOT);
+  $drush_path = sprintf('%s/sites/all/drush', DRUPAL_ROOT);
 
   if (!file_exists($post_db_copy_path)) {
     mkdir($post_db_copy_path, 0755, TRUE);
@@ -50,37 +43,23 @@ function drush_acsf_init() {
   if (!file_exists($library_path)) {
     mkdir($library_path, 0755, TRUE);
   }
+  if (!file_exists($drush_path)) {
+    mkdir($drush_path, 0755, TRUE);
+  }
 
   chdir(sprintf('%s/../', DRUPAL_ROOT));
 
-  $from_root_to_lib = sprintf('docroot/%s/acsf/acsf_install/lib', $relative_path);
+  $from_root_to_lib = sprintf('docroot/%s/acsf/acsf_init/lib', $relative_path);
 
   $from_sites_to_lib = str_replace('docroot/sites/', '', $from_root_to_lib);
 
-  acsf_install_place_symlink(sprintf('%s/sites/sites.php', $from_sites_to_lib), 'docroot/sites/sites.php');
-  acsf_install_place_symlink(sprintf('%s/sites/g', $from_sites_to_lib), 'docroot/sites/g');
-  acsf_install_place_symlink(sprintf('%s/hosting-drush', $from_root_to_lib), 'hosting-drush');
-  acsf_install_place_symlink(sprintf('../../../%s/cloud_hooks/000-acquia_required_scrub.php', $from_root_to_lib), 'hooks/common/post-db-copy/000-acquia_required_scrub.php');
+  acsf_init_place_symlink(sprintf('%s/sites/sites.php', $from_sites_to_lib), 'docroot/sites/sites.php');
+  acsf_init_place_symlink(sprintf('%s/sites/g', $from_sites_to_lib), 'docroot/sites/g');
+  acsf_init_place_symlink(sprintf('%s/hosting-drush', $from_root_to_lib), 'hosting-drush');
+  acsf_init_place_symlink(sprintf('../../../%s/cloud_hooks/000-acquia_required_scrub.php', $from_root_to_lib), 'hooks/common/post-db-copy/000-acquia_required_scrub.php');
+  acsf_init_place_symlink(sprintf('../../%s/drush/drushrc.php', $from_sites_to_lib), 'docroot/sites/all/drush/drushrc.php');
 
   acsf_write_ini($conf);
-}
-
-/**
- * Callback: Installs the required ACSF modules.
- */
-function drush_acsf_install() {
-  $nid = drush_get_option('nid', variable_get('gardens_site_id', NULL));
-  $modules = array('acsf');
-  module_enable($modules, TRUE);
-  registry_rebuild();
-  acsf_build_registry();
-
-  // Initiate an event to run post-acsf-install tasks.
-  $acsf_dir = realpath(dirname(dirname(__FILE__)));
-  $type = 'acsf_install';
-  $context = array('nid' => $nid);
-  $event = AcsfEvent::create($type, $context);
-  $event->run();
 }
 
 /**
@@ -91,7 +70,7 @@ function drush_acsf_install() {
  * @param String $name
  *   The link name.
  */
-function acsf_install_place_symlink($target, $name) {
+function acsf_init_place_symlink($target, $name) {
   if (is_link($name)) {
     drush_log(dt('Removing old symlink for !name', array('!name', $name)));
     unlink($name);
