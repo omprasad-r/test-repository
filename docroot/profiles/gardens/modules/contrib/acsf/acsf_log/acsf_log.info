@@ -1,0 +1,5 @@
+name = ACSF Log
+description = Common logging for Acquia Cloud Site Factory operations
+core = 7.x
+package = Acquia Cloud Site Factory
+files[] = classes/AcsfLog.inc

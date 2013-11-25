@@ -27,17 +27,19 @@ Drupal.behaviors.gardens_media = {
         checked = (defaultType == type) ? 'checked="yes"': '';
         radios += '<input type="radio" name="node-type" ' + checked + ' value="' + type + '" class="' + type + '-radio-button" /> ' + types[type] + ' ';
       });
+
+      // Hide our links
+      $('.media-upload-ajax-link').hide();
+      // Append the radio buttons to the selector
+      $('#gardens-media-node-selector-radios').html(radios);
+
+      // If a radio button is selected click the corresponding link
+      $('input[name=node-type]:radio').change(function(){
+          $('.messages.error').hide();
+          type = $(this).val();
+          $('#' + type + '-ajax-link').trigger('click');
+      });
     }
-    // Hide our links
-    $('.media-upload-ajax-link').hide();
-    // Append the radio buttons to the selector
-    $('#gardens-media-node-selector-radios').html(radios);
-    // If a radio button is selected click the corresponding link
-    $('input[name=node-type]:radio').change(function(){
-      $('.messages.error').hide();
-      type = $(this).val();
-      $('#' + type + '-ajax-link').trigger('click');
-    });
   }
 };
   
