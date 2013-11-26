@@ -3166,7 +3166,14 @@ function themebuilder_compiler_get_semaphore() {
   // This is a relatively unique id that can be used for debugging purposes to
   // differentiate between two semaphore instances.
   $semaphore->id = rand();
-  $semaphore->strategy = function_exists('sem_get') ? 'sysvsem' : 'lock';
+
+  // Disable the sysvsem strategy.  It seems that since our hosting change to
+  // php-fpm one of our customers is seeing processes locking indefinitely on
+  // the themebuilder semaphore.  Looking at the PHP source, there is no way
+  // in a web request to apply a timeout for a sem_acquire call.  At least for
+  // now we will use the 'lock' strategy which ironically will keep it from
+  // actually locking up.
+  $semaphore->strategy = (FALSE && function_exists('sem_get')) ? 'sysvsem' : 'lock';
 
   if ($semaphore->strategy === 'sysvsem') {
     require_once DRUPAL_ROOT . '/' . drupal_get_path('module', 'themebuilder_compiler') . '/SemaphoreManager.inc';
