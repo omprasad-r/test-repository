@@ -387,16 +387,18 @@ function warner_misc_init() {
   // conveniently is already handled in site export also (is used by mailhandler).
   $GLOBALS['conf']['views_data_export_directory'] = 'public://gardens_temp';
 
-  // Force Warner to scan incoming emails for links in both the paintext and
+  // Force Warner to scan incoming emails for links in both the plaintext and
   // HTML parts. This became necessary when IFTTT added a click tracker to the
   // link in the plaintext part of their emails. It is present also in the href
   // of the link in the HTML part, but the unaltered link is the text of that
   // <a>, so we can get it from there. We have to depend on media_internet to
   // sort out usable links from there.
-  $GLOBALS['conf']['mailhandler_medialink_mail_parts'] = array(
-    'body_text' => 1,
-    'body_html' => 1,
-  );
+  if (!isset($GLOBALS['conf']['mailhandler_medialink_mail_parts'])) {
+    $GLOBALS['conf']['mailhandler_medialink_mail_parts'] = array(
+      'body_text' => 1,
+      'body_html' => 1,
+    );
+  }
 }
 
 /**
