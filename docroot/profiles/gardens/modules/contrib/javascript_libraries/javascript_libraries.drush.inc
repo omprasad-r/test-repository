@@ -66,4 +66,3 @@ function drush_javascript_libraries_jslib_switch_url($current_url = NULL, $new_u
     drush_set_error(NULL, dt('There are no existing libraries with the URL @old.', array('@old' => $current_url)));
   }
 }
-

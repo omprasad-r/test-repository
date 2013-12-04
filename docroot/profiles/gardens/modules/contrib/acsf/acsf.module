@@ -1,0 +1,64 @@
+<?php
+
+/**
+ * Implements hook_init().
+ */
+function acsf_init() {
+  module_load_include('inc', 'acsf_events', 'classes/AcsfEvent');
+  module_load_include('inc', 'acsf_events', 'classes/AcsfEventDispatcher');
+  module_load_include('inc', 'acsf_events', 'classes/AcsfEventHandler');
+  module_load_include('inc', 'acsf_log', 'classes/AcsfLog');
+}
+
+/**
+ * Implements hook_modules_enabled().
+ */
+function hook_modules_enabled($modules) {
+  acsf_build_registry();
+}
+
+/**
+ * Implements hook_menu_alter().
+ */
+function acsf_menu_alter() {
+  acsf_build_registry();
+}
+
+/**
+ * Builds the registry of ACSF compatible class files.
+ */
+function acsf_build_registry() {
+  $registry = array();
+
+  // Create a registry of ACSF compatible classes.
+  $registry = module_invoke_all('acsf_registry');
+
+  usort($registry['events'], 'acsf_registry_sort');
+
+  variable_set('acsf_registry', $registry);
+}
+
+/**
+ * Determines sort order for usort.
+ */
+function acsf_registry_sort($a, $b) {
+  if (!isset($a['weight'])) {
+    $a['weight'] = 0;
+  }
+  if (!isset($b['weight'])) {
+    $b['weight'] = 0;
+  }
+  if ($a['weight'] == $b['weight']) {
+      return 0;
+  }
+  return ($a['weight'] < $b['weight']) ? -1 : 1;
+}
+
+/**
+ * Retrieves the registry of class files.
+ *
+ * @return Array
+ */
+function acsf_get_registry() {
+  return variable_get('acsf_registry', NULL);
+}

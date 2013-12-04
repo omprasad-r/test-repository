@@ -1,0 +1,6 @@
+name = ACSF Site
+description = This module defines an Acquia Cloud Site Factory site.
+core = 7.x
+package = Acquia Cloud Site Factory
+files[] = classes/AcsfSite.inc
+files[] = classes/AcsfSiteInfoHandler.inc

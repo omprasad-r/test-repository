@@ -1,0 +1,28 @@
+<?php
+
+/**
+ * Implements hook_watchdog().
+ */
+function acsf_log_watchdog($log_entry) {
+
+  // Only escalate severe messages.
+  $severity_to_escalate = array(
+    WATCHDOG_EMERGENCY,
+    WATCHDOG_ALERT,
+    WATCHDOG_CRITICAL,
+  );
+
+  if (in_array($log_entry['severity'], $severity_to_escalate)) {
+    $message = t($log_entry['message'], $log_entry['variables']);
+    try {
+      $site = new AcsfSite();
+      $nid = $site->nid;
+    }
+    catch (Exception $e) {
+      $nid = 0;
+    }
+    $acsf_log = new AcsfLog();
+    $acsf_log->log($log_entry['severity'], $message, $nid);
+  }
+
+}

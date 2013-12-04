@@ -1,61 +1,64 @@
 <?php
 
 /**
+ * @file
+ *
  * The plugin to handle Load More pager.
  *
  * @ingroup views_pager_plugins
  */
+
 class views_plugin_pager_load_more extends views_plugin_pager_full {
+
+  /**
+   * Summary title overwrite.
+   */
   function summary_title() {
     if (!empty($this->options['offset'])) {
-      return format_plural($this->options['items_per_page'], 'Show more pager, @count item, skip @skip', 'Show more pager, @count items, skip @skip', array('@count' => $this->options['items_per_page'], '@skip' => $this->options['offset']));
+      return format_plural($this->options['items_per_page'], 'Load more pager, @count item, skip @skip', 'Load more pager, @count items, skip @skip', array('@count' => $this->options['items_per_page'], '@skip' => $this->options['offset']));
     }
-      return format_plural($this->options['items_per_page'], 'Show more pager, @count item', 'Show more pager, @count items', array('@count' => $this->options['items_per_page']));
+      return format_plural($this->options['items_per_page'], 'Load more pager, @count item', 'Load more pager, @count items', array('@count' => $this->options['items_per_page']));
   }
 
+  /**
+   * Options definition overwrite.
+   */
   function option_definition() {
     $options = parent::option_definition();
     $options['waypoint'] = array(
       'contains' => array(
         'infinite' => array('default' => FALSE),
-      )
+      ),
     );
     $options['more_button_text'] = array(
-      'default' => t('Show more'),
+      'default' => t('Load more'),
       'translateable' => TRUE,
+    );
+    $options['advance'] = array(
+      'contains' => array(
+        'row_class' => array('default' => ''),
+        'content_class' => array('default' => ''),
+      ),
     );
     return $options;
   }
 
+  /**
+   * Options form overwrite.
+   */
   function options_form(&$form, &$form_state) {
     parent::options_form($form, $form_state);
 
-    // Provide a notice to users about enabling AJAX for use with this pager
-    $form['load_more_notice'] = array(
-      '#markup' => '<p>'. t('Important: To use \'Show more pager\', select \'Use AJAX: Yes\' in the Advanced section on the Edit view page') . '</p>',
-      '#weight' => -20,
-    );
+    // Keep items per page as the first form element on the page followed by
+    // the option to change the 'load more' button text
+    $form['items_per_page']['#weight'] = -2;
 
-    // It really doesn't make much sense for this pager to allow an unlimited number
-    // of elements per page. Update description of the items to display field to reflect this
-    $form['items_per_page']['#description'] = t('The number of items to display per page.');
-    $form['items_per_page']['#weight'] = -10;
-
-    // Provide an option for users to specify the text used on the more button.
-    $form['more_button_text_enable'] = array(
-      '#type' => 'checkbox',
-      '#title' => t('Rename \'Show more\' link'),
-      '#weight' => -2,
-    );
+    // Option for users to specify the text used on the 'load more' button.
     $form['more_button_text'] = array(
       '#type' => 'textfield',
-      '#title' => t('Rename \'Show more\' link'),
-      '#title_display' => 'invisible',
-      '#description' => t('The text that will be displayed on the link used to load more elements. For example "Show me more."'),
-      '#default_value' => $this->options['more_button_text'] ? $this->options['more_button_text'] : t('Show more'),
-      '#dependency' => array(
-        'edit-pager-options-more-button-text-enable' => array(1),
-      ),
+      '#title' => t('More link text'),
+      '#description' => t('The text that will be displayed on the link that is used to load more elements. For example "Show me more"'),
+      '#default_value' => $this->options['more_button_text'] ? $this->options['more_button_text'] : t('Load more'),
       '#weight' => -1,
     );
 
@@ -72,20 +75,62 @@ class views_plugin_pager_load_more extends views_plugin_pager_full {
       $form['waypoint']['infinite'] = array(
         '#type' => 'checkbox',
         '#title' => t('Infinite scrolling'),
-        '#description' => t('Show more content when the user reaches the bottom of the page.'),
+        '#description' => t('Load more content when the user reaches the bottom of the page.'),
         '#default_value' => $this->options['waypoint']['infinite'],
       );
     }
+    $form['advance'] = array(
+      '#type' => 'fieldset',
+      '#collapsible' => TRUE,
+      '#collapsed' => TRUE,
+      '#tree' => TRUE,
+      '#title' =>  t('Advance Options'),
+      '#input' => TRUE,
+      '#description' => t('Configure advance options.'),
+    );
+    $form['advance']['content_class'] = array(
+      '#type' => 'textfield',
+      '#title' => t('Content selection selector'),
+      '#description' => t('Use for advance replace selector, extremely useful when overwriting the views tpl.'),
+      '#default_value' => $this->options['advance']['content_class'],
+    );
+    $form['effects'] = array(
+      '#type' => 'fieldset',
+      '#collapsible' => TRUE,
+      '#collapsed' => TRUE,
+      '#tree' => TRUE,
+      '#title' =>  t('JQuery Effects'),
+      '#input' => TRUE,
+    );
+    $form['effects']['type'] = array(
+      '#type' => 'select',
+      '#options' => array(
+        'none' => t('None'),
+        'fade' => t('Fade'),
+      ),
+      '#default_vaue' => 'none',
+      '#title' => t('Effect Type'),
+      '#default_value' => $this->options['effects']['type'],
+    );
+    $form['effects']['speed'] = array(
+      '#type' => 'select',
+      '#options' => array(
+        'slow' => t('Slow'),
+        'fast' => t('Fast'),
+      ),
+      '#states' => array(
+        'visible' => array(
+          '#edit-pager-options-effects-type' => array('value' => t('fade')),
+        ),
+      ),
+      '#title' => t('Effect Speed'),
+      '#default_value' => $this->options['effects']['speed'],
+    );
   }
 
-  function options_validate(&$form, &$form_state) {
-    parent::options_validate($form, $form_state);
-    $items_per_page = $form_state['values']['pager_options']['items_per_page'];
-    if($items_per_page == 0){
-      form_set_error('options][items_per_page', t('When using the \'Show more pager\', the number of items per page must be at least 1'));
-    }
-  }
-
+  /**
+   * render overwrite.
+   */
   function render($input) {
     if (module_exists('waypoints') && $this->options['waypoint']['infinite'] == 1) {
       $viewsLoadMore = array();
