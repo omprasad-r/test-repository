@@ -2,18 +2,78 @@
 
 /**
  * @file
- *   Helper module for duplicating Drupal Gardens sites. This is generally only
- *   needed during initial site duplication, while the duplicated site is being
- *   prepared to hand off to the user.
+ * Provides site duplication handlers.
+ *
+ * This is generally only needed during initial site duplication, while the
+ * duplicated site is being prepared to hand off to the user.
  */
 
+/**
+ * Implements hook_acsf_registry().
+ */
 function acsf_duplication_acsf_registry() {
+  $path = drupal_get_path('module', 'acsf_duplication') . '/classes';
   return array(
     'events' => array(
       array(
         'type' => 'site_duplication_scrub',
-        'class' => 'AcsfDuplicationScrubHandler',
-        'path' => drupal_get_path('module', 'acsf_duplication') . '/classes',
+        'class' => 'AcsfDuplicationScrubInitializeHandler',
+        'path' => $path,
+        'weight' => -100,
+      ),
+      array(
+        'type' => 'site_duplication_scrub',
+        'class' => 'AcsfDuplicationScrubConfigurationHandler',
+        'path' => $path,
+        'weight' => 0,
+      ),
+      array(
+        'type' => 'site_duplication_scrub',
+        'class' => 'AcsfDuplicationScrubModuleEnableHandler',
+        'path' => $path,
+        'weight' => 10,
+      ),
+      array(
+        'type' => 'site_duplication_scrub',
+        'class' => 'AcsfDuplicationScrubCommentHandler',
+        'path' => $path,
+        'weight' => 20,
+      ),
+      array(
+        'type' => 'site_duplication_scrub',
+        'class' => 'AcsfDuplicationScrubNodeHandler',
+        'path' => $path,
+        'weight' => 30,
+      ),
+      array(
+        'type' => 'site_duplication_scrub',
+        'class' => 'AcsfDuplicationScrubUserHandler',
+        'path' => $path,
+        'weight' => 40,
+      ),
+      array(
+        'type' => 'site_duplication_scrub',
+        'class' => 'AcsfDuplicationScrubTemporaryFilesHandler',
+        'path' => $path,
+        'weight' => 50,
+      ),
+      array(
+        'type' => 'site_duplication_scrub',
+        'class' => 'AcsfDuplicationScrubModuleDisableHandler',
+        'path' => $path,
+        'weight' => 60,
+      ),
+      array(
+        'type' => 'site_duplication_scrub',
+        'class' => 'AcsfDuplicationScrubTruncateTablesHandler',
+        'path' => $path,
+        'weight' => 70,
+      ),
+      array(
+        'type' => 'site_duplication_scrub',
+        'class' => 'AcsfDuplicationScrubFinalizeHandler',
+        'path' => $path,
+        'weight' => 100,
       ),
     ),
   );

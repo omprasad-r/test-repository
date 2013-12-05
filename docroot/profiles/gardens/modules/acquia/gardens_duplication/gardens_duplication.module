@@ -2,378 +2,77 @@
 
 /**
  * @file
- *   Helper module for duplicating Drupal Gardens sites. This is generally only
- *   needed during initial site duplication, while the duplicated site is being
- *   prepared to hand off to the user.
+ * Registers contrib-space scrub handlers with ACSF.
+ *
+ * This is generally only needed during initial site duplication, while the
+ * duplicated site is being prepared to hand off to the user.
  */
 
 /**
- * Implements hook_init().
- *
- * This module is only enabled during development and during site duplication.
- * It is disabled on live sites, so we don't have to worry about the overhead of
- * having this function.
+ * Implements hook_acsf_registry().
  */
-function gardens_duplication_init() {
-  // Uncomment when wanting to test scrub process simply by refreshing a page
-  // on the site.
-  // gardens_duplication_scrub();
-}
-
-/**
- * Removes settings, users, content, etc. inappropriate for the new site.
- *
- * Hosting-specific settings (e.g., 'file_directory_temp' and Mollom keys) are
- * handled by install_gardens.inc prior to this function being called.
- *
- * We empty the {watchdog} table at the very end of this function to start the
- * new site's log entries in a fresh state. So, anything logged during this
- * function's execution is not viewable in the new site's database, but can be
- * viewed in the syslog.
- *
- * This function makes no changes related to Gardens site owner email
- * verification. We assume the verification took place before allowing the site
- * owner to duplicate a site, and re-verification for the new site is not
- * desired.
- *
- * @todo
- *   Figure out whether we need separate options for deleting users versus
- *   deleting their content. This would make sense if we wanted to be able to
- *   retain users but delete their content, while the converse would have to
- *   involve changing the owners of the nodes (and what would we do about
- *   comments?).
- *
- * @param array $options
- *   An array of boolean options that will dictate what gets scrubbed. Possible
- *   keys are:
- *     - 'retain_users_and_content'
- *     - 'retain_janrain_settings'
- *     - 'retain_webform_submissions'
- *     - 'retain_voting_api_data'
- *
- */
-function gardens_duplication_scrub($options = array()) {
-  $options += array(
-    'retain_users_and_content' => FALSE,
-    'retain_janrain_settings' => FALSE,
-    'retain_webform_submissions' => FALSE,
-    'retain_voting_api_data' => FALSE,
+function gardens_duplication_acsf_registry() {
+  $path = drupal_get_path('module', 'gardens_duplication') . '/classes';
+  $scrub_handlers = array(
+    'GardensDuplicationScrubConfigurationHandler' => 0,
+    'GardensDuplicationScrubJanrainHandler'       => 0,
+    'GardensDuplicationScrubOauthHandler'         => 0,
+    'GardensDuplicationScrubWebformHandler'       => 0,
+    'GardensDuplicationScrubVotingApiHandler'     => 0,
   );
-  // Set install-related system variables.
-  variable_set('install_time', time());
-  variable_del('cron_last');
-  variable_del('cron_semaphore');
-
-  // Clear site-specific keys that will auto-initialize when first needed.
-  // Initialize site-specific keys that do not auto-initialize.
-  // Mollom keys are handled by install_gardens.inc instead of here, because
-  // that's the code that has access to them.
-  variable_del('drupal_private_key');
-  variable_set('cron_key', drupal_hash_base64(drupal_random_bytes(55)));
-
-  // The Google Analytics "Web Property Id" is not a private key, but it needs
-  // to be unique per website, so we delete it here. A site administrator will
-  // need to get a new Id from Google and enter it into the Google Analytics
-  // module settings page.
-  variable_del('googleanalytics_account');
-
-  // Enterprise needed a quick solution to stop including our GA code. That
-  // quick solution has been extended to be a long term solution by now, except
-  // that it happens on the gardener instead of the gardens site. To be able to
-  // preserve the previous setup we did not removed variable responsible for the
-  // quick approach, but we definitely do not want it to be copied over during
-  // site duplication.
-  variable_del('gardens_misc_include_google_analytics');
-
-  // We must disable domain 301 redirection to be able to use the new site.
-  if (variable_get('domain_301_redirect_enabled', 0)) {
-    variable_set('domain_301_redirect_enabled', 0);
-  }
-
-  // If for some reason a site had its canonical domain set, it should not carry
-  // over to the duplicated site as it could cause unwanted redirecting.
-  variable_del('gardens_misc_canonical_domain');
-
-  // Enable modules that are currently disabled, but that were once enabled, so
-  // that their data cleanup hooks (e.g., hook_user_delete()) and functions
-  // (e.g., search_reindex()) can be invoked.
-  //
-  // Note: These modules will all be uninstalled. Uninstalling them should really
-  // take care of all the cleanup these modules should be doing. But enable them
-  // here for good measure just incase there's some cleanup depending on these hooks.
-  require_once DRUPAL_ROOT . '/includes/install.inc';
-  $modules = system_rebuild_module_data();
-  $enable_for_scrub = array();
-  foreach ($modules as $module) {
-    // Disabled modules with schema_version > -1 have not been uninstalled.
-    if (empty($module->status) && $module->schema_version > SCHEMA_UNINSTALLED) {
-      $enable_for_scrub[] = $module->name;
-    }
-  }
-  // Get a list of disabled dependencies. These will get automatically enabled during
-  // module_enable(), but we want to be able to disable and uninstall them explicitly later.
-  foreach ($enable_for_scrub as $dependent) {
-    foreach (array_keys($modules[$dependent]->requires) as $dependency) {
-      // Use isset() to make sure the module is still in the filesystem before
-      // trying to enable it. (Historically there have been modules in Gardens
-      // which were disabled but then removed from the codebase without ever
-      // uninstalling them, and we don't want to try to enable those now,
-      // because it will fail.)
-      if (isset($modules[$dependency]) && empty($modules[$dependency]->status)) {
-        $enable_for_scrub[] = $dependency;
-      }
-    }
-  }
-  module_enable($enable_for_scrub);
-
-  if (!$options['retain_users_and_content']) {
-    // Delete all users who aren't OpenID-linked site administrators. Content
-    // modules are responsible for deleting the user's content in
-    // hook_user_delete().
-    $result = db_query('SELECT uid FROM {users} WHERE uid NOT IN (:uids)', array(':uids' => array(0, 1)));
-    foreach ($result as $record) {
-      $account = user_load($record->uid, TRUE);
-      if (!gardens_duplication_user_is_openid_admin($account) && !gardens_duplication_user_is_preserved($account)) {
-        // Prior to deleting the user, re-assign {file_managed}.uid to anonymous.
-        // Re-assign files only: allow nodes and comments to be deleted.
-        // It would be more proper to call file_load_multiple(), iterate each
-        // loaded file entity, set its uid property, and call file_save() (see
-        // comment_user_cancel() for a similar example for comments). It would be
-        // even more proper if file.module implemented hook_user_cancel(), so we
-        // could just call that hook. But for performance, we just update the
-        // {file_managed} table directly.
-        db_update('file_managed')
-        ->fields(array(
-          'uid' => 0,
-        ))
-        ->condition('uid', $account->uid)
-        ->execute();
-        // Now we can delete the user.
-        user_delete($account->uid);
-      }
-    }
-
-    // Delete nodes and comments authored by anonymous users.
-    $nids = db_query('SELECT nid FROM {node} WHERE uid=0')->fetchCol();
-    node_delete_multiple($nids);
-    if (module_exists('comment')) {
-      $cids = db_query('SELECT cid FROM {comment} WHERE uid=0')->fetchCol();
-      comment_delete_multiple($cids);
-    }
-
-    // Delete all remaining comments (i.e., ones authored by the administrators).
-    // Yeah, this makes the above query for anonymous comments redundant, but the
-    // separation allows for either one to be commented out.
-    if (module_exists('comment')) {
-      $cids = db_query('SELECT cid FROM {comment}')->fetchCol();
-      comment_delete_multiple($cids);
-    }
-  }
-
-  if (!$options['retain_webform_submissions']) {
-    // Scrub webform submission data, but don't delete webforms themselves
-    // (do not delete webform nodes).
-    if (module_exists('webform')) {
-      // Get all webform submissions.
-      module_load_include('inc', 'webform', 'includes/webform.submissions');
-      $submissions = webform_get_submissions();
-      // Make a list of nids from submissions.
-      $nids = array();
-      foreach ($submissions as $submission) {
-        $nids[$submission->nid] = $submission->nid;
-      }
-      $nodes = node_load_multiple($nids);
-
-      // Delete submissions.
-      foreach ($submissions as $submission) {
-        $nid = $submission->nid;
-        webform_submission_delete($nodes[$nid], $submission);
-      }
-    }
-  }
-
-  if (!$options['retain_janrain_settings']) {
-    // Scrub Janrain variables, so the new site doesn't try reusing the same app.
-    db_delete('variable')
-      ->condition('name', 'rpx_%', 'LIKE')
-      ->execute();
-  }
-
-  if (!$options['retain_voting_api_data']) {
-    // Scrub votingapi data, but preserve configuration.
-    if (module_exists('votingapi')) {
-      // Save configuration.
-      $votingapi_anonymous_window = variable_get('votingapi_anonymous_window', NULL);
-      $votingapi_calculation_schedule = variable_get('votingapi_calculation_schedule', NULL);
-      // Make sure the install API is available.
-      include_once DRUPAL_ROOT . '/includes/install.inc';
-      // Uninstall votingapi module (and any modules that depend on it) to delete variables and
-      // tables with old voting data.
-      $modules = system_rebuild_module_data();
-      $dependents = array_keys($modules['votingapi']->required_by);
-      // Add any modules enabled here to the enable_for_scrub list if they were not
-      // previously enabled.  This should ensure that they are disabled again afterward.
-      foreach ($dependents as $dependent) {
-        if (!module_exists($dependent)) {
-          $enable_for_scrub[] = $dependent;
-        }
-        foreach (array_keys($modules[$dependent]->requires) as $dependency) {
-          if (isset($modules[$dependency]) && empty($modules[$dependency]->status)) {
-            $enable_for_scrub[] = $dependency;
-          }
-        }
-      }
-
-      $voting_modules = array_merge($dependents, array('votingapi'));
-      module_disable($voting_modules);
-      drupal_uninstall_modules($voting_modules);
-      module_enable($voting_modules);
-      // Restore configuration.
-      variable_set('votingapi_anonymous_window', $votingapi_anonymous_window);
-      variable_set('votingapi_calculation_schedule', $votingapi_calculation_schedule);
-    }
-  }
-
-  // Remove all temporary files. This code is copied from system_cron() so see
-  // that function for more details. Some highlights:
-  // - It's unclear if the status field can ever be anything other than 0
-  //   (temporary) or 1 (permanenet), but system_cron() uses the bitwise &
-  //   operator, so apparently, it thinks additional status bit fields are
-  //   possible.
-  // - It's unclear why <> is used instead of != for ("not equal").
-  // - Separate placeholders are used instead of a single ":permanent" due to
-  //   a bug in some PHP versions (see system_cron() for the d.o. issue link).
-  $result = db_query('SELECT fid FROM {file_managed} WHERE status & :permanent1 <> :permanent2', array(
-    ':permanent1' => FILE_STATUS_PERMANENT,
-    ':permanent2' => FILE_STATUS_PERMANENT,
-  ));
-  foreach ($result as $record) {
-    if ($file = file_load($record->fid)) {
-      file_delete($file);
-    }
-  }
-
-  // Invalidate search indexes. If the search module has never been enabled,
-  // then it's not enabled now and this block is skipped.
-  if (module_exists('search')) {
-    // Call this function to ensure that necessary hooks get called.
-    search_reindex();
-    // search_reindex() called globally (with no parameters) invokes hooks, but
-    // does not truncate these tables, so we do so here.
-    foreach (array('search_dataset', 'search_index', 'search_node_links', 'search_total') as $table) {
-      db_delete($table)->execute();
-    }
-    // What a shame that neither search.module nor node.module provide an API
-    // function for this.
-    variable_del('node_cron_last');
-  }
-
-  // Rebuild the XML sitemap. If the xmlsitemap module has never been enabled,
-  // then it's not enabled now and this block is skipped.
-  if (module_exists('xmlsitemap')) {
-    // Some day, move gardens_rebuild_xmlsitemap() out of the install profile,
-    // since it's useful for non-install tasks too.
-    require_once DRUPAL_ROOT . '/profiles/gardens/gardens.install';
-    // Remove old base url, if it was stored in variables table.
-    variable_del('xmlsitemap_base_url');
-    gardens_rebuild_xmlsitemap();
-  }
-
-  // Empty site traffic statistics.
-  foreach (array('accesslog', 'node_counter') as $table) {
-    if (db_table_exists($table)) {
-      db_delete($table)->execute();
-    }
-  }
-
-  // Empty batch, queue, and semaphore tables.
-  foreach (array('batch', 'queue', 'semaphore') as $table) {
-    db_delete($table)->execute();
-  }
-
-  // Empty sessions.
-  db_delete('sessions')->execute();
-
-  // Flush all caches, including in-progress multistep forms that are not
-  // normally wiped during drupal_flush_all_caches().
-  drupal_flush_all_caches();
-  cache_clear_all('*', 'cache_form', TRUE);
-
-  // Remove member_api keys from oauth tables.
-  foreach (array('oauth_common_consumer', 'oauth_common_provider_consumer') as $table) {
-    if (db_table_exists($table)) {
-      db_delete($table)->execute();
-    }
-  }
-  if (module_exists('mast') && variable_get('mast_app_uid')) {
-    // Reinsert the oAuth consumer object needed for the MASt mobile app user
-    // and just got deleted above. Adding exception to the scrubbing query above
-    // would not be pretty.
-    $options = array(
-      'callback_url' => 'gardens://authorized',
-      'uid' => variable_get('mast_app_uid'),
-      'provider_consumer' => TRUE,
-      'in_database' => TRUE,
-      'context' => 'mast',
+  foreach ($scrub_handlers as $class => $weight) {
+    $events[] = array(
+      'type' => 'site_duplication_scrub',
+      'class' => $class,
+      'path' => $path,
+      'weight' => $weight,
     );
-    $consumer = new DrupalOAuthConsumer('Q29tZSBmb3IgdGhlIHNvZnR3YXJl', 'c3RheSBmb3IgdGhlIGNvbW11bml0eS4', $options);
-    $consumer->write();
   }
-
-  // Re-disable modules that were disabled prior to this function, and enabled
-  // only for scrubbing.
-  module_disable($enable_for_scrub);
-  // Uninstall these modules. Drupal will drop their tables and any orphaned
-  // data remaining in them.
-  drupal_uninstall_modules($enable_for_scrub);
-
-  // Clear themebuilder sessions, which are meaningless on the new site.
-  db_delete('themebuilder_session')->execute();
-  // Also clear the theme field so all users will use the default theme.
-  db_update('users')
-    ->fields(array(
-      'theme' => 0,
-  ))
-  ->execute();
-
-  // Begin the site without any watchdog records.
-  if (db_table_exists('watchdog')) {
-    db_delete('watchdog')->execute();
-  }
+  return array('events' => $events);
 }
 
 /**
- * Helper function to determine whether a given user is an OpenID-linked admin.
+ * Alters the counts reported by `drush acsf-duplication-scrub-progress`.
+ *
+ * @param $data
+ *   An associative array of counts representing the total number of items
+ *   remaining to scrub, keyed by [type]_count.
+ *
+ * @see drush_acsf_duplication_scrub_progress()
  */
-function gardens_duplication_user_is_openid_admin($account) {
-  static $admin_roles;
-  if (!isset($admin_roles)) {
-    $admin_roles = array_filter(array(
-      variable_get('user_admin_role'),
-      variable_get('gardens_site_owner_role'),
-    ));
-  }
-  $roles = array_intersect(array_keys($account->roles), $admin_roles);
-  $is_admin = !empty($roles);
-  $is_openid = gardens_client_registered_with_openid($account);
-  return $is_admin && $is_openid;
+function gardens_duplication_acsf_duplication_scrub_remaining_counts_alter(&$data) {
+  $data['webform_submission_count'] = GardensDuplicationScrubWebformHandler::countRemaining();
 }
 
 /**
- * Preserves certain accounts during site duplication.
+ * Alters the scrub event context of `drush acsf-duplication-scrub-batch`.
  *
- * @param object $account
- *   Fully loaded user object.
+ * Use this alter hook to add optional data to the scrub event. The data added
+ * here is available via the $this->event->context array in event handlers.
  *
- * @return bool
- *   TRUE if the user account needs to be preserved.
+ * @param $data
+ *   An associative array of context data needed in the event handlers.
+ *
+ * @see drush_acsf_duplication_scrub_batch()
  */
-function gardens_duplication_user_is_preserved($account) {
-  // MASt operates with a user created by the module, so it needs to be
-  // preserved during site duplication.
-  $mast_uid = variable_get('mast_app_uid');
-  if (module_exists('mast') && $mast_uid && $account->uid == $mast_uid) {
-    return TRUE;
+function gardens_duplication_acsf_duplication_scrub_context_alter(&$data) {
+  $options = array(
+    'retain_janrain_settings',
+    'retain_webform_submissions',
+    'retain_voting_api_data',
+  );
+  $exact_copy = drush_get_option('exact-copy');
+  foreach ($options as $option) {
+    $data['scrub_options'][$option] = drush_get_option($option, $exact_copy);
   }
-  return FALSE;
+
+  $batch = drush_get_option('batch', 1000);
+  $data['scrub_options']['batch_webform'] = drush_get_option('batch-webform', $batch);
+  $data['scrub_options']['batch_votingapi'] = drush_get_option('batch-votingapi', $batch);
+
+  $data['scrub_options']['mollom_public_key'] = drush_get_option('mollom-public-key');
+  $data['scrub_options']['mollom_private_key'] = drush_get_option('mollom-private-key');
+
+  ksort($data['scrub_options']);
 }
+

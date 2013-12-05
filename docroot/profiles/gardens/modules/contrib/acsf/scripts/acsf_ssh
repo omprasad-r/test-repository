@@ -96,6 +96,18 @@ class AcsfSshWrapper {
   private $temp_dir = '/mnt/tmp';
 
   /**
+   * The maximum length of stdout that will be returned from getResult().
+   * @var
+   */
+  private $max_stdout;
+
+  /**
+   * The maximum length of stderr that will be returned from getResult();
+   * @var
+   */
+  private $max_stderr;
+
+  /**
    * Initializes a new AcsfSshWrapper object.
    *
    * @param $options
@@ -113,6 +125,12 @@ class AcsfSshWrapper {
     }
     if (!empty($options->start_time)) {
       $this->startTime = $options->start_time;
+    }
+    if (!empty($options->max_stdout)) {
+      $this->max_stdout = $options->max_stdout;
+    }
+    if (!empty($options->max_stderr_len)) {
+      $this->max_stderr = $options->max_stderr;
     }
   }
 
@@ -173,11 +191,13 @@ class AcsfSshWrapper {
     if (!empty($stdout)) {
       $stdout = "\n" . $stdout;
     }
+    $stdout = $this->truncateOutput($stdout, $this->max_stdout);
     $stderr = '';
     $stderr_file = $this->getLogFile('err');
     if (file_exists($stderr_file)) {
       $stderr = file_get_contents($stderr_file);
     }
+    $stderr = $this->truncateOutput($stderr, $this->max_stderr);
 
     return sprintf("[{pid}:%d]\n[{stdout}:]%s\n[{stderr}:]%s", $this->pid, $stdout, $stderr);
   }
@@ -499,6 +519,31 @@ class AcsfSshWrapper {
     return $elapsed_seconds;
   }
 
+  /**
+   *  Truncates output such that it does not exceed the specified length.
+   *
+   * @param $string
+   *   The string to truncate.
+   *
+   * @param $max_length
+   *   The maximum desired string length.
+   *
+   * @return string
+   *   If the specified string is larger than the maximum length, the truncated
+   *   string will be returned.  Otherwise the original string is returned.
+   */
+  private function truncateOutput($string, $max_length) {
+    if (!empty($string) && is_string($string) && strlen($string) > $max_length) {
+      $first_half = ceil($max_length / 2);
+      $last_half = $max_length - $first_half;
+
+      $first = substr($string, 0, $first_half);
+      $last = substr($string, -$last_half);
+      $string = sprintf('%s...%s', $first, $last);
+    }
+    return $string;
+  }
+
 }
 
 /**
@@ -582,11 +627,15 @@ function _acsf_ssh_parse_command_line() {
     'site:',          // Site
     'silent',         // Redirect stdout and stderr.
     'start-time:',    // The process start time.
+    'max-output:',     // The maximum length of output (both stdout and stderr).
+    'max-stdout:',     // The maximum length of stdout.
+    'max-stderr:',     // The maximum length of stderr.
   );
   $options = getopt('', $long_options);
   $result = new stdClass();
   $result->silent = FALSE;
   $result->log = TRUE;
+  $result->max_stdout = $result->max_stderr = 512;
 
   foreach ($options as $name => $value) {
     switch ($name) {
@@ -609,6 +658,19 @@ function _acsf_ssh_parse_command_line() {
 
       case 'env':
         $result->env = $value;
+        break;
+
+      case 'max-output':
+        $result->max_stdout = intval($value);
+        $result->max_stderr = intval($value);
+        break;
+
+      case 'max-stdout':
+        $result->max_stdout = intval($value);
+        break;
+
+      case 'max-stderr':
+        $result->max_stderr = intval($value);
         break;
 
       case 'no-logs':
