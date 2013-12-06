@@ -17,21 +17,21 @@ class AcsfDuplicationScrubUserHandler extends AcsfEventHandler {
     drush_print(dt('Entered @class', array('@class' => get_class($this))));
 
     $options = $this->event->context['scrub_options'];
-    $user_batch = $options['user_batch'] ? $options['user_batch'] : 1000;
+    $limit = $options['batch_user'];
 
     if ($options['retain_users']) {
       return;
     }
 
     if ($options['avoid_oom']) {
-      if ($uids = self::getItems($user_batch)) {
+      if ($uids = self::getItems($limit)) {
         self::deleteUsers($uids);
         $this->event->dispatcher->interrupt();
       }
     }
     else {
       do {
-        $uids = self::getItems($user_batch);
+        $uids = self::getItems($limit);
         if (empty($uids)) {
           break;
         }
@@ -53,8 +53,6 @@ class AcsfDuplicationScrubUserHandler extends AcsfEventHandler {
    *
    * @param int $uid
    *   The user ID for which to reassign files.
-   *
-   * @todo Figure out if this still necessary now that the scrub is ordered.
    */
   protected function reassignFiles($uid) {
     db_update('file_managed')
@@ -74,10 +72,8 @@ class AcsfDuplicationScrubUserHandler extends AcsfEventHandler {
   protected function deleteUsers($uids = array()) {
     foreach ($uids as $uid) {
       $account = user_load($uid, TRUE);
-      if (!gardens_duplication_user_is_openid_admin($account)) {
-        self::reassignFiles($account->uid);
-        user_delete($account->uid);
-      }
+      self::reassignFiles($account->uid);
+      user_delete($account->uid);
     }
   }
 
@@ -100,9 +96,11 @@ class AcsfDuplicationScrubUserHandler extends AcsfEventHandler {
     $uids = db_query('SELECT uid FROM {authmap} WHERE module = :module', array(':module' => 'openid'))->fetchCol();
     foreach ($uids as $uid) {
       $account = user_load($uid);
-      $roles = array_intersect(array_keys($account->roles), $admin_roles);
-      if (!empty($roles)) {
-        $openid_admins[] = $uid;
+      if (!empty($account->roles)) {
+        $roles = array_intersect(array_keys($account->roles), $admin_roles);
+        if (!empty($roles)) {
+          $openid_admins[] = $uid;
+        }
       }
     }
     return $openid_admins;

@@ -15,12 +15,14 @@ class AcsfDuplicationScrubTruncateTablesHandler extends AcsfEventHandler {
    */
   public function handle() {
     drush_print(dt('Entered @class', array('@class' => get_class($this))));
+
     $tables = array();
 
     // Invalidate search indexes. If the search module has never been enabled,
     // then it's not enabled now and this block is skipped.
     if (module_exists('search')) {
-      // Call this function to ensure that necessary hooks get called.
+      // Call this function to ensure that the necessary search hooks get
+      // called.
       search_reindex();
 
       // Calling search_reindex globally (with no parameters) invokes hooks, but
@@ -29,8 +31,6 @@ class AcsfDuplicationScrubTruncateTablesHandler extends AcsfEventHandler {
       $tables[] = 'search_index';
       $tables[] = 'search_node_links';
       $tables[] = 'search_total';
-
-      variable_del('node_cron_last');
     }
 
     $tables[] = 'accesslog';
@@ -39,11 +39,12 @@ class AcsfDuplicationScrubTruncateTablesHandler extends AcsfEventHandler {
     $tables[] = 'queue';
     $tables[] = 'semaphore';
     $tables[] = 'sessions';
+    $tables[] = 'themebuilder_session';
 
     self::truncateTables($tables);
   }
 
-  protected function truncateTables($tables = array()) {
+  public function truncateTables($tables = array()) {
     foreach ($tables as $table) {
       if (db_table_exists($table)) {
         db_delete($table)->execute();

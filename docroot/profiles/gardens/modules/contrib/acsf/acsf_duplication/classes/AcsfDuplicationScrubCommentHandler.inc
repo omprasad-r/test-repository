@@ -17,7 +17,7 @@ class AcsfDuplicationScrubCommentHandler extends AcsfEventHandler {
     drush_print(dt('Entered @class', array('@class' => get_class($this))));
 
     $options = $this->event->context['scrub_options'];
-    $comment_batch = $options['comment_batch'] ? $options['comment_batch'] : 1000;
+    $limit = $options['batch_comment'];
 
     if ($options['retain_content'] || !module_exists('comment')) {
       return;
@@ -27,10 +27,10 @@ class AcsfDuplicationScrubCommentHandler extends AcsfEventHandler {
       // Orphaned comments, that is comments by an authenticated user that no
       // longer exists, cannot be deleted by comment_delete_multiple. Handle
       // these items first.
-      if ($cids = self::getOrphanedItems($comment_batch)) {
+      if ($cids = self::getOrphanedItems($limit)) {
         $orphaned = TRUE;
       }
-      elseif ($cids = self::getItems($comment_batch)) {
+      elseif ($cids = self::getItems($limit)) {
         $orphaned = FALSE;
       }
 
@@ -41,10 +41,10 @@ class AcsfDuplicationScrubCommentHandler extends AcsfEventHandler {
     }
     else {
       do {
-        if ($cids = self::getOrphanedItems($comment_batch)) {
+        if ($cids = self::getOrphanedItems($limit)) {
           $orphaned = TRUE;
         }
-        elseif ($cids = self::getItems($comment_batch)) {
+        elseif ($cids = self::getItems($limit)) {
           $orphaned = FALSE;
         }
         else {

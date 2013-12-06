@@ -17,21 +17,21 @@ class AcsfDuplicationScrubNodeHandler extends AcsfEventHandler {
     drush_print(dt('Entered @class', array('@class' => get_class($this))));
 
     $options = $this->event->context['scrub_options'];
-    $node_batch = $options['node_batch'] ? $options['node_batch'] : 1000;
+    $limit = $options['batch_node'];
 
     if ($options['retain_content']) {
       return;
     }
 
     if ($options['avoid_oom']) {
-      if ($nids = self::getItems($node_batch)) {
+      if ($nids = self::getItems($limit)) {
         node_delete_multiple($nids);
         $this->event->dispatcher->interrupt();
       }
     }
     else {
       do {
-        $nids = self::getItems($node_batch);
+        $nids = self::getItems($limit);
         if (empty($nids)) {
           break;
         }

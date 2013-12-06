@@ -18,7 +18,6 @@ class AcsfDuplicationScrubInitializeHandler extends AcsfEventHandler {
     if (!self::isComplete()) {
       variable_del('acsf_duplication_scrub_status');
       variable_set('site_name', $this->event->context['site_name']);
-      variable_set('acsf_duplicated_site', $this->event->context['site_name']);
       variable_set('install_time', time());
       self::setComplete();
     }
@@ -29,7 +28,7 @@ class AcsfDuplicationScrubInitializeHandler extends AcsfEventHandler {
   }
 
   protected function setComplete() {
-    acsf_vset('acsf_site_duplication_step_initialize_complete', TRUE);
+    acsf_vset('acsf_site_duplication_step_initialize_complete', TRUE, 'acsf_duplication_scrub');
   }
 
 }

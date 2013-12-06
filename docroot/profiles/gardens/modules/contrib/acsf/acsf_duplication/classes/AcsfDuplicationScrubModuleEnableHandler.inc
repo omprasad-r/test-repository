@@ -15,6 +15,7 @@ class AcsfDuplicationScrubModuleEnableHandler extends AcsfEventHandler {
    */
   public function handle() {
     drush_print(dt('Entered @class', array('@class' => get_class($this))));
+
     // Enable any modules that are currently disabled, but were once enabled, so
     // that their data cleanup hooks (e.g. hook_user_delete) and functions
     // (e.g. search_reindex) can be invoked.
@@ -51,7 +52,7 @@ class AcsfDuplicationScrubModuleEnableHandler extends AcsfEventHandler {
     }
 
     module_enable($enable_for_scrub);
-    acsf_vset('acsf_duplication_enable_for_scrub', $enable_for_scrub);
+    acsf_vset('acsf_duplication_enable_for_scrub', $enable_for_scrub, 'acsf_duplication_scrub');
   }
 
 }

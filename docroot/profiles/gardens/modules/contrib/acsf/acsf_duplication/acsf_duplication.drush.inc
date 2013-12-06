@@ -13,18 +13,21 @@ function acsf_duplication_drush_command() {
       'standard_domain' => dt('The standard domain of the duplicated site.'),
     ),
     'options' => array(
-      'exact-copy' => dt('Indicates whether the duplicated site is required to be an exact copy of the source site (i.e. retain all content and users).'),
+      'exact-copy' => dt('Indicates that the duplicated site is intended to be an exact copy of the source site (i.e. retain all content, users, and required configuration).'),
       'avoid-oom' => dt('The command should run just a single iteration of the batch process (the default is to loop until it runs out of memory). This is useful to keep the memory footprint low but you are expected to handle the looping externally.'),
-      'batch-comment' => dt('The number of comments to delete each iteration (defaults to 1000).'),
-      'batch-node' => dt('The number of nodes to delete each iteration (defaults to 1000).'),
-      'batch-user' => dt('The number of users to delete each iteration (defaults to 1000).'),
+      'batch' => dt('The number of items to process each iteration (defaults to 1000).'),
+      'batch-comment' => dt('The number of comments to delete each iteration (defaults to --batch).'),
+      'batch-node' => dt('The number of nodes to delete each iteration (defaults to --batch).'),
+      'batch-user' => dt('The number of users to delete each iteration (defaults to --batch).'),
+      'retain-content' => dt('Retain nodes and comments (defaults to --exact-copy).'),
+      'retain-users' => dt('Retain users (defaults to --exact-copy).'),
     ),
   );
   $items['acsf-duplication-scrub-progress'] = array(
     'description' => dt('Returns status information about the progress of the batch scrubbing process.'),
     'options' => array(
       'format' => array(
-        'description' => 'Format to output the object. Use "print_r" for print_r (default), "export" for var_export, and "json" for JSON.',
+        'description' => dt('Format to output the object. Use "print_r" for print_r (default), "export" for var_export, and "json" for JSON.'),
         'example-value' => 'json',
       ),
     ),
@@ -60,30 +63,25 @@ function drush_acsf_duplication_scrub_batch($site_name, $standard_domain) {
     return drush_set_error(dt('The ACSF module must be enabled.'));
   }
 
-  // Enable the ACSF Duplication module and rebuild the ACSF Registry so that
-  // the scrubbing classes are loaded and registered with AcsfEvent.
-  module_enable(array('acsf_duplication'), FALSE);
-  acsf_build_registry();
-
   $context = array(
     'site_name' => $site_name,
     'standard_domain' => $standard_domain,
     'scrub_options' => array(
-      'retain_users' => drush_get_option('exact-copy'),
-      'retain_content' => drush_get_option('exact-copy'),
       'avoid_oom' => drush_get_option('avoid-oom'),
-      'comment_batch' => drush_get_option('batch-comment'),
-      'node_batch' => drush_get_option('batch-node'),
-      'user_batch' => drush_get_option('batch-user'),
     ),
   );
+  drupal_alter('acsf_duplication_scrub_context', $context);
+
   // Load and execute the site duplication scrub event handlers.
   $event = AcsfEvent::create('site_duplication_scrub', $context);
   $event->run();
 
   // Return an error code if the process is incomplete.
   if (variable_get('acsf_duplication_scrub_status', NULL) !== 'complete') {
-    return drush_set_error(dt('The scrubbing of this site is incomplete.'));
+    return drush_set_error(dt('The scrubbing of this site is incomplete. Please re-run the command to resume processing.'));
+  }
+  else {
+    drush_print(dt('The scrubbing of this site is complete.'));
   }
 }
 
@@ -100,6 +98,8 @@ function drush_acsf_duplication_scrub_progress() {
     'node_count' => AcsfDuplicationScrubNodeHandler::countRemaining(),
     'user_count' => AcsfDuplicationScrubUserHandler::countRemaining(),
   );
+  drupal_alter('acsf_duplication_scrub_remaining_counts', $data);
+
   $format = drush_get_option('format', 'print_r');
   drush_print(drush_format($data, NULL, $format));
 }
