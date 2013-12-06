@@ -1,23 +1,6 @@
 <?php
 
-require_once dirname(__FILE__) . '/gardens.drush.lib.inc';
 // $Id: $
-
-/**
- * @file
- *   Example drush command.
- *
- *   Shows how to make your own drush command.
- *
- *   You can copy this file to any of the following
- *     1. A .drush folder in your HOME folder.
- *     2. Anywhere in a folder tree below an active module on your site.
- *     3. In an arbitrary folder specified with the --include option.
- */
-
-function hosting_drush_init() {
-  gardens_drush_includes();
-}
 
 /**
  * Implementation of hook_drush_command().
@@ -71,16 +54,6 @@ function hosting_drush_command() {
       'suffix' => 'A string to append after a _ to derive the staging site name.  Defaults to "up".',
     ),
     'aliases' => array('mgd'),
-  );
-  $items['go-offline'] = array(
-    'bootstrap' => DRUSH_BOOTSTRAP_DRUPAL_DATABASE,
-    'description' => 'Set a site hard offline via SQL.',
-    'aliases' => array('go-off'),
-  );
-  $items['go-online'] = array(
-    'bootstrap' => DRUSH_BOOTSTRAP_DRUPAL_DATABASE,
-    'description' => 'Set a site online via SQL.',
-    'aliases' => array('go-on'),
   );
   $items['mollom-keys-get'] = array(
     'description' => 'Get from the Gardener and save mollom keys if they are currently missing',
@@ -174,103 +147,11 @@ function hosting_drush_help($section) {
   switch ($section) {
     case 'drush:move-gsite-domains':
       return dt("Move all the domains for a gsite to this tangle.");
-    case 'drush:go-offline':
-      return dt("Set a site hard offline via SQL.");
-    case 'drush:go-online':
-      return dt("Set a site online via SQL.");
   }
 }
 
-/**
- * Helper function to build common SQL for clearing maintenance mode.
- */
-function _drush_hosting_clear_maint() {
-  $query = '';
-  $query .= "DELETE FROM variable WHERE name = 'maintenance_mode'; ";
-  $query .= "DELETE FROM variable WHERE name = 'scarecrow_maintenance_time'; ";
-  if (drush_drupal_major_version() >= 7) {
-    $query .= "DELETE FROM cache_bootstrap WHERE cid = 'variables'; ";
-  }
-  else {
-    $query .= "DELETE FROM cache WHERE cid = 'variables'; ";
-  }
-  return $query;
-}
-
-/**
- * Drush command. Run all these queries using direct SQL in case the site is WSOD.
- */
-function drush_hosting_go_offline() {
-  $query = _drush_hosting_clear_maint();
-  // For now hard-code a 10 minute expected offline time.
-  // in drush5 table prefix processing is off by default. See http://drupal.org/node/1219850.
-  // Thus table names are not wrapped with {} otherwise we get SQL errors.  This is fine
-  // since Gardens never uses table prefixing.
-  $expected = time() + 10*60;
-  $query .= "INSERT INTO variable (name, value) VALUES ('maintenance_mode', 'i:1;'); ";
-  $query .= "INSERT INTO variable (name, value) VALUES ('scarecrow_maintenance_time', '". serialize($expected) ."'); ";
-  return drush_sql_query($query);
-}
-
-/**
- * Run after a go-offline command executes. Verify maintenance_mode variable.
- */
-function drush_hosting_post_go_offline() {
-  $content = _drush_hosting_get_raw_variable('maintenance_mode');
-  if (strpos($content, 'i:1;') !== FALSE) {
-    drush_log("Site has been placed offline", 'success');
-  }
-  else {
-    drush_log("Site has not been placed offline", 'error');
-  }
-}
-
-
-/**
- * Drush command. Run all these queries using direct SQL in case the site is WSOD.
- */
-function drush_hosting_go_online() {
-  // Determine whether the user intended the site to be in maintenance mode.
-  $content = _drush_hosting_get_raw_variable('site_owner_maintenance_mode');
-  $query = _drush_hosting_clear_maint();
-  if (!empty($content)) {
-    $query .= "INSERT INTO variable (name, value) VALUES ('maintenance_mode', 'i:1;'); ";
-  }
-  return drush_sql_query($query);
-}
-
-/**
- * Get the raw mysql command-line output of a SELECT query on {variables}.
- *
- * @param string $variable_name
- * @return string
- *   The raw output of the command-line mysql query.
- */
-function _drush_hosting_get_raw_variable($variable_name) {
-  $ret = _drush_hosting_sql_query("SELECT value FROM variable WHERE name='$variable_name';");
-  if ($ret['status'] !== 0) {
-    throw new Exception('Unable to continue, mysql server is unavailable or query failed to execute. Status: ' . $ret['status'] . ' Output: ' . $ret['output']);
-  }
-  return $ret['output'];
-}
-
-/**
- * Run after a go-online command executes. Verify maintenance_mode variable.
- */
-function drush_hosting_post_go_online() {
-  $content = _drush_hosting_get_raw_variable('maintenance_mode');
-  if (empty($content)) {
-    drush_log("Site has been placed online", 'success');
-  }
-  else {
-    $content = _drush_hosting_get_raw_variable('site_owner_maintenance_mode');
-    if (empty($content)) {
-      drush_log("Site has not been placed online", 'error');
-    }
-    else {
-      drush_log("Site has been left offline as set by the site owner", 'success');
-    }
-  }
+function drush_hosting_pre_move_domains_to_staging() {
+  _drush_hosting_check_prepare();
 }
 
 function _drush_hosting_check_prepare() {
@@ -282,10 +163,6 @@ function _drush_hosting_check_prepare() {
   if (!file_exists("$files/active_domains_by_site.json.txt")) {
     return drush_set_error('HOSTING_ERROR', "You must run 'ms-drush --prepare' before running any hosting commands.");
   }
-}
-
-function drush_hosting_pre_move_domains_to_staging() {
-  _drush_hosting_check_prepare();
 }
 
 function drush_hosting_move_domains_to_staging() {
@@ -578,7 +455,7 @@ function drush_hosting_mollom_keys_get() {
 function drush_hosting_mollom_keys_replace() {
   if ($creds = drush_get_context('DRUSH_DB_CREDENTIALS')) {
     $nid = ltrim($creds['name'], 'g');
-    $mollom_keys = gardens_drush_call_gardener('get.site.mollom.keys', array($nid));
+    $mollom_keys = acquia_gardens_call('get.site.mollom.keys', array($nid));
     if ($mollom_keys) {
       variable_set('mollom_public_key', $mollom_keys['public_key']);
       variable_set('mollom_private_key', $mollom_keys['private_key']);
@@ -891,64 +768,4 @@ function drush_hosting_include_install_gardens(){
   require_once dirname(realpath(DRUPAL_ROOT)) . '/install_gardens.inc';
 }
 
-/**
- * Helper for _drush_hosting_sql_query();
- * @param string $query
- * @param array  $db_spec
- * @return string
- */
-function _drush_hosting_build_sql_query($query, $db_spec = NULL) {
-  $scheme = _drush_sql_get_scheme($db_spec);
 
-  // Inject table prefixes as needed.
-  if (drush_drupal_major_version() >= 7) {
-    $query = Database::getConnection()->prefixTables($query);
-  }
-  else {
-    $query = db_prefix_tables($query);
-  }
-
-  // Convert mysql 'show tables;' query into something pgsql understands
-  if (($scheme == 'pgsql') && ($query == 'show tables;')) {
-    $query = "select tablename from pg_tables where schemaname='public';";
-  }
-
-  // Save $query to a tmp file. We will redirect it in.
-  if ($file = drush_save_data_to_temp_file($query)) {
-    switch ($scheme) {
-      case 'mysql':
-        $exec = 'mysql' . (drush_get_context('DRUSH_VERBOSE') ? ' -v' : '');
-        $exec .= _drush_sql_get_credentials($db_spec);
-        $exec .= ' ' . drush_get_option('extra');
-        $exec .= " < $file";
-        break;
-      case 'pgsql':
-        $exec = 'psql';
-        $exec .= _drush_sql_get_credentials($db_spec);
-        $exec .= (drush_get_context('DRUSH_VERBOSE') ? '' : ' -q');
-        $exec .= ' ' . (drush_get_option('extra') ? drush_get_option('extra') : "--no-align --field-separator=$'\t' --pset footer=off");
-        $exec .= " --file $file";
-        break;
-    }
-    return $exec;
-  }
-}
-
-/**
- * Essentially a clone fo _drush_sql_query, but using exec() instead of system
- * so the return status is discoverable.
- * @param string $query
- * @param array $db_spec
- * @return array
- *  Indexed by output (the output of the query) and status (return status).
- */
-function _drush_hosting_sql_query($query, $db_spec = NULL) {
-    $exec = _drush_hosting_build_sql_query($query, $db_spec);
-    $output = array();
-    $status = NULL;
-    exec($exec, $output, $status);
-    // This doesn't work because drush_op can't pass vars by reference.
-    //drush_op('exec', $exec, $output, $status);
-    $return = array('output' => implode("\n", $output), 'status' => $status);
-    return $return;
-}

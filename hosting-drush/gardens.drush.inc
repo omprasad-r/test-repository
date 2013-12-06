@@ -5,26 +5,9 @@
  */
 
 /**
- * Includes the Gardens Drush library file.
- */
-require_once dirname(__FILE__) . '/gardens.drush.lib.inc';
-
-/**
- * Defines Gardens' default Amazon S3 bucket name.
- */
-define('GARDENS_DEFAULT_EXPORT_BUCKET_NAME', 'gardens-default.site-archives');
-
-/**
  * Creates an exception class for throwing custom exceptions.
  */
 class GardensDrushCmdExecutionException extends Exception{}
-
-/**
- * Implements hook_drush_init().
- */
-function gardens_drush_init() {
-  gardens_drush_includes();
-}
 
 /**
  * Implements hook_drush_command().
@@ -58,21 +41,6 @@ function gardens_drush_command() {
   $items['gardens-sql-dump'] = array(
     'bootstrap' => DRUSH_BOOTSTRAP_DRUPAL_DATABASE,
     'description' => "Dumps database from the slave server to stdout.",
-  );
-
-  $items['export'] = array(
-    'bootstrap' => DRUSH_BOOTSTRAP_DRUPAL_FULL,
-    'description' => "Exports a site and its database",
-    'options' => array_map('_gardens_drush_option_description', gardens_drush_options('export')),
-    'examples' => array(
-      'drush export --memory-limit=1024M' => 'Export the site using a maximum of 1024 MB of RAM',
-    ),
-  );
-
-  $items['export-s3'] = array(
-    'bootstrap' => DRUSH_BOOTSTRAP_DRUPAL_FULL,
-    'description' => "Exports a site and its database, uploads the file to S3 and notifies the gardener",
-    'options' => array_map('_gardens_drush_option_description', gardens_drush_options('export-s3')),
   );
 
   $items['gardens-pdf-regen-site'] = array(
@@ -116,21 +84,6 @@ function gardens_drush_options($command) {
         'remote-username' => array('Username of the remote server. Defaults to the tangle name.', NULL),
       );
       break;
-
-    case 'export-s3':
-      $options = array(
-        's3key' => array('Mandatory if --backup is provided.  The key to use for connecting to S3.', NULL),
-        's3secret' => array('Mandatory if --backup is provided.  The secret key to use for connecting to S3.', NULL),
-        'memory-limit' => array('The maximum memory to use.', NULL),
-      );
-    break;
-
-    case 'export':
-      $options = array(
-        'memory-limit' => array('The maximum memory to use.', NULL),
-        'exclude-files' => array('Excludes files from the archive - they will be available after running a script.  Do not use this option if the site is being destroyed after the site export!', NULL),
-      );
-    break;
 
     case 'gardens-pdf-regen-site':
       $options = array(
@@ -659,8 +612,6 @@ You can specify database parameters to the script for a user able to create data
 NOTE: This command requires Drush 4 or higher.");
     case 'drush:sql-dump-with-scrub':
       return dt("Clones, scrubs and dumps a DB.  Run on gardens web-nodes.");
-    case 'drush:export':
-      return dt("Exports a site and its database files");
   }
 }
 
@@ -698,149 +649,6 @@ function gardens_drush_exec($cmd) {
     'status' => $status,
     'stdout' => $stdout,
   );
-}
-
-/**
- * Drush command to export a gardens site.
- *
- * @return string
- *  Path to export tarball.
- */
-function drush_gardens_export() {
-  $options = drush_get_context('options') + array_map('_gardens_drush_option_default', gardens_drush_options('export'));
-  $memory_limit = drush_get_option('memory-limit', $options['memory-limit']);
-  if ($memory_limit !== NULL) {
-    if (!preg_match('/^[0-9]+M$/', $memory_limit)) {
-      drush_log(sprintf('memory-limit %s not recognized.  Should be of the form "128M".', $memory_limit), 'failed');
-      return;
-    }
-    // Set the memory limit.
-    ini_set('memory_limit', $memory_limit);
-  }
-
-  $export_files = (NULL == drush_get_option('exclude-files', $options['exclude-files']));
-
-  $uri = site_export_export_both(!$export_files);
-  $path = drupal_realpath($uri);
-  drush_log("Path to backup:" . $path, 'success');
-  drush_print_pipe($path);
-}
-
-/**
- * Drush command to export a gardens site and backup to s3
- *
- * @return string
- *  S3 URL with token for unauthenticated access.
- */
-function drush_gardens_export_s3() {
-  $options = drush_get_context('options') + array_map('_gardens_drush_option_default', gardens_drush_options('export-s3'));
-  $s3key = drush_get_option('s3key', $options['s3key']);
-  $s3secret = drush_get_option('s3secret', $options['s3secret']);
-  // load from netrc.
-  if (empty($s3key) || empty($s3secret)) {
-    if ($creds = drush_gardens_s3_get_creds()) {
-      $s3key = $creds['login'];
-      $s3secret = $creds['password'];
-    }
-    else {
-      drush_set_error('s3_keys_missing', 'To backup, you must provide --s3key and --s3secret');
-      return;
-    }
-  }
-
-  // Set the memory limit.
-  $memory_limit = drush_get_option('memory-limit', $options['memory-limit']);
-  if ($memory_limit !== NULL) {
-    if (!preg_match('/^[0-9]+M$/', $memory_limit)) {
-      drush_log(sprintf('memory-limit %s not recognized.  Should be of the form "128M".', $memory_limit), 'failed');
-      return;
-    }
-    // Set the memory limit.
-    ini_set('memory_limit', $memory_limit);
-  }
-
-  $nid = gardens_client_get_site_identifier();
-  $uri = site_export_export_both();
-  $path = drupal_realpath($uri);
-  $resource_name = 'g' . $nid . '.tar.gz';
-
-  if (defined('AH_HOSTNAME_STAGE')) {
-    $bucket = AH_HOSTNAME_STAGE . '.site-archives';
-  }
-  else {
-    $bucket = GARDENS_DEFAULT_EXPORT_BUCKET_NAME;
-  }
-  // This URL is publicly accessible.
-  $authenticated_url = drush_gardens_send_to_s3($s3key, $s3secret, $path, $resource_name, $bucket);
-  if (!$authenticated_url) {
-    drush_set_error('archive_failed', 'Unable to archive site to s3. Reporting failure to the gardener.');
-    gardens_drush_call_gardener('site.archive.failed', array($nid));
-    return;
-  }
-  // Notify the gardener that we we have exported this site and moved it to S3.
-  drush_log("Query Auth URL:" . $authenticated_url, 'success');
-  $result = gardens_drush_call_gardener('site.archived', array($nid, $authenticated_url));
-  if ($result != 1) {
-    // XML-RPC represents TRUE as 1, so check if the site returned that status.
-    drush_set_error('archive_failed', "Unable to report successful s3 upload to the gardener. Check gardens_stats errors for site $nid on the gardener.");
-    return;
-  }
-
-  drush_print_pipe($authenticated_url);
-}
-
-/**
- * Loads the netrc file and returns the aws creds.
- *
- * @return array
- *  A typical netrc array of login and password.
- */
-function drush_gardens_s3_get_creds() {
-  require_once '/usr/ah/lib/netrc.php';
-  $netrc = netrc_read();
-  if (empty($netrc['aws.gardens.archive.client'])) {
-    return false;
-  }
-  $creds = $netrc['aws.gardens.archive.client'];
-  return $creds;
-}
-
-/**
- * @param string $key
- *  AWS access key
- * @param string $secret
- *  AWS secret key
- * @param string $path
- *  The path of the file to upload
- * @param string $resource_name
- *  The name of the object to create in S3
- * @param string $bucket
- *  Bucket to upload to, defaults to  GARDENS_DEFAULT_EXPORT_BUCKET_NAME.
- *
- * @return mixed
- *  The authenticated url for accessing this content, or FALSE on failure.
- */
-function drush_gardens_send_to_s3($key, $secret, $path, $resource_name = NULL, $bucket = GARDENS_DEFAULT_EXPORT_BUCKET_NAME) {
-  require_once dirname(__FILE__) . '/../library/S3.php';
-  $resource_name = $resource_name ? $resource_name : basename($path);
-  $s3 = new S3($key, $secret);
-
-  if (!$s3->getBucket($bucket)) {
-    if (!$s3->putBucket($bucket)) {
-      drush_set_error('cannot_create_bucket', 'Unable to create site export bucket');
-      return FALSE;
-    }
-  }
-  $object = $s3->putObjectFile($path, $bucket, $resource_name);
-  if ($object) {
-    // URL will be valid for 365 days.
-    return $s3->getAuthenticatedURL($bucket, $resource_name, 3600 * 24 * 365, false, false);
-  }
-  else {
-    // The upload attempt failed.
-    return FALSE;
-  }
-
 }
 
 /**
