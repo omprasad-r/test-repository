@@ -20,12 +20,6 @@
 function hosting_drush_command() {
   $items = array();
 
-  // Cause a gardens site to call the gardener.
-  $items['et-phone-home'] = array(
-    'description' => "Cause a gardens site to call the gardener for site-specific data.",
-    'aliases' => array('phone-home'),
-  );
-
   $items['localhost-curl'] = array(
     'description' => "Makes a localhost curl request.",
     'arguments' => array(
@@ -54,18 +48,6 @@ function hosting_drush_command() {
   );
 
   return $items;
-}
-
-/**
- * drush command callback. Get the Gardens site to call the Gardener.
- */
-function drush_hosting_et_phone_home() {
-  if (function_exists('gardens_client_phone_home') && gardens_client_phone_home()) {
-    drush_log("Got data from the gardener", 'success');
-  }
-  else {
-    drush_log("Failed to phone home to the gardener", 'error');
-  }
 }
 
 /**

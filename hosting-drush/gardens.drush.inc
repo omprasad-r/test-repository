@@ -43,13 +43,6 @@ function gardens_drush_command() {
     'description' => "Dumps database from the slave server to stdout.",
   );
 
-  $items['gardens-pdf-regen-site'] = array(
-    'description' => "Force regeneration of pdf versions of all pages on a site",
-    'aliases' => array('gprs'),
-    'options' => array_map('_gardens_drush_option_description', gardens_drush_options('gardens-pdf-regen-site')),
-  );
-
-  return $items;
 }
 
 /**
@@ -85,11 +78,6 @@ function gardens_drush_options($command) {
       );
       break;
 
-    case 'gardens-pdf-regen-site':
-      $options = array(
-        'uid' => array('UID of the gardener user requesting PDF regeneration.', NULL),
-      );
-    break;
   }
   return $options;
 }
@@ -649,27 +637,5 @@ function gardens_drush_exec($cmd) {
     'status' => $status,
     'stdout' => $stdout,
   );
-}
-
-/**
- * Drush command to regenerate PDF representations of all pages on a site.
- */
-function drush_gardens_pdf_regen_site() {
-  $uid = (int) drush_get_option('uid');
-  $gardener_url = scarecrow_get_gardener_url();
-  // Attempting to get the local uid
-  $localuid = db_query('SELECT uid FROM {authmap} WHERE module = :module AND authname = :authname', array(
-    ':module' => 'openid',
-    ':authname' =>  "{$gardener_url}/user/{$uid}/identity",
-  ))->fetchField();
-
-  if (function_exists('gardens_pdf_rendition_sitemap_queue')) {
-    $account = $localuid ? user_load($localuid) : NULL;
-    gardens_pdf_rendition_sitemap_queue($account);
-    drush_print(dt('Enqueued regeneration of the entire site\'s PDF versions.'));
-  }
-  else {
-    drush_set_error('DRUSH_MODULE_ERROR', dt('Module gardens_pdf_rendition_sitemap is not enabled.'));
-  }
 }
 
