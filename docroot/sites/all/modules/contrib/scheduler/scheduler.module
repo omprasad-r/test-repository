@@ -660,17 +660,22 @@ function scheduler_node_presave($node) {
       $node->$key = 0;
     }
     elseif (!is_numeric($node->$key)) {
-      $node->$key= _scheduler_strtotime($node->$key);
+      // Convert to unix timestamp, but ensure any failure is converted to zero.
+      $node->$key = _scheduler_strtotime($node->$key) + 0;
     }
   }
   // Publish the node immediately if the publication date is in the past.
-  if (variable_get('scheduler_publish_past_date_' . $node->type, 'error') == 'publish' && is_numeric($node->publish_on) && $node->publish_on < REQUEST_TIME) {
+  if (variable_get('scheduler_publish_past_date_' . $node->type, 'error') == 'publish' && !empty($node->publish_on) && $node->publish_on <= REQUEST_TIME) {
+    // If required, set the created date to match published date.
+    if (variable_get('scheduler_publish_touch_' . $node->type, 0) == 1) {
+      $node->created = $node->publish_on;
+    }
     $node->publish_on = 0;
     $node->status = 1;
   }
-  // Otherwise, if a pubishing date has been set, make sure the node is
+  // Otherwise, if a publishing date has been set, make sure the node is
   // unpublished since it will be published by cron later.
-  elseif (is_numeric($node->publish_on) && $node->publish_on > 0) {
+  elseif ($node->publish_on > 0) {
     $node->status = 0;
     $date_format = variable_get('scheduler_date_format', SCHEDULER_DATE_FORMAT);
     drupal_set_message(t('This post is unpublished and will be published @publish_time.', array('@publish_time' => format_date($node->publish_on, 'custom', $date_format))), 'status', FALSE);

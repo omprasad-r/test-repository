@@ -13,8 +13,8 @@
 ; Contrib module: scheduler
 ; ---------------------------------------
 ;
-; See DG-9383 and https://drupal.org/node/1819074#comment-7845145
-; projects[scheduler][patch][] = "https://drupal.org/files/1819074-9-scheduler-publish_past_dates.patch"
+; See DG-9383 and https://drupal.org/comment/8181673#comment-8181673
+; projects[scheduler][patch][] = "https://drupal.org/files/issues/1819074-24-scheduler-publish_past_dates-7.x-1.1.patch"
 
 ; Contrib module: subpathauto
 ; ---------------------------------------
