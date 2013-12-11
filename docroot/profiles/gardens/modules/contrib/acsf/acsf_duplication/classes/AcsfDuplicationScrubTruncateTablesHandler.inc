@@ -41,7 +41,7 @@ class AcsfDuplicationScrubTruncateTablesHandler extends AcsfEventHandler {
     $tables[] = 'sessions';
     $tables[] = 'themebuilder_session';
 
-    self::truncateTables($tables);
+    $this->truncateTables($tables);
   }
 
   public function truncateTables($tables = array()) {

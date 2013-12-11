@@ -27,44 +27,34 @@ class AcsfDuplicationScrubCommentHandler extends AcsfEventHandler {
       // Orphaned comments, that is comments by an authenticated user that no
       // longer exists, cannot be deleted by comment_delete_multiple. Handle
       // these items first.
-      if ($cids = self::getOrphanedItems($limit)) {
+      if ($cids = $this->getOrphanedItems($limit)) {
         $orphaned = TRUE;
       }
-      elseif ($cids = self::getItems($limit)) {
+      elseif ($cids = $this->getItems($limit)) {
         $orphaned = FALSE;
       }
 
       if (!empty($cids)) {
-        self::deleteItems($cids, $orphaned);
+        $this->deleteItems($cids, $orphaned);
         $this->event->dispatcher->interrupt();
       }
     }
     else {
       do {
-        if ($cids = self::getOrphanedItems($limit)) {
+        if ($cids = $this->getOrphanedItems($limit)) {
           $orphaned = TRUE;
         }
-        elseif ($cids = self::getItems($limit)) {
+        elseif ($cids = $this->getItems($limit)) {
           $orphaned = FALSE;
         }
         else {
           break;
         }
 
-        self::deleteItems($cids, $orphaned);
+        $this->deleteItems($cids, $orphaned);
       } while (TRUE);
     }
 
-  }
-
-  /**
-   * Counts the remaining comments.
-   *
-   * @return int
-   *   The number of items remaining in the table.
-   */
-  public function countRemaining() {
-    return db_query('SELECT COUNT(*) FROM {comment}')->fetchField();
   }
 
   /**
@@ -114,6 +104,16 @@ class AcsfDuplicationScrubCommentHandler extends AcsfEventHandler {
     else {
       comment_delete_multiple($cids);
     }
+  }
+
+  /**
+   * Counts the remaining comments.
+   *
+   * @return int
+   *   The number of items remaining in the table.
+   */
+  public function countRemaining() {
+    return db_query('SELECT COUNT(*) FROM {comment}')->fetchField();
   }
 
 }

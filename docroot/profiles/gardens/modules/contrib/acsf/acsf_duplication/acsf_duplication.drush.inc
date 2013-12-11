@@ -71,6 +71,7 @@ function drush_acsf_duplication_scrub_batch($site_name, $standard_domain) {
     ),
   );
   drupal_alter('acsf_duplication_scrub_context', $context);
+  ksort($context['scrub_options']);
 
   // Load and execute the site duplication scrub event handlers.
   $event = AcsfEvent::create('site_duplication_scrub', $context);

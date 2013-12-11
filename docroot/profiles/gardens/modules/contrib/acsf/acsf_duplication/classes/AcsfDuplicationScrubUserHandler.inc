@@ -24,19 +24,46 @@ class AcsfDuplicationScrubUserHandler extends AcsfEventHandler {
     }
 
     if ($options['avoid_oom']) {
-      if ($uids = self::getItems($limit)) {
-        self::deleteUsers($uids);
+      if ($uids = $this->getItems($limit)) {
+        $this->deleteUsers($uids);
         $this->event->dispatcher->interrupt();
       }
     }
     else {
       do {
-        $uids = self::getItems($limit);
+        $uids = $this->getItems($limit);
         if (empty($uids)) {
           break;
         }
-        self::deleteUsers($uids);
+        $this->deleteUsers($uids);
       } while (TRUE);
+    }
+  }
+
+  /**
+   * Gets a range of user IDs excluding those marked as preserved.
+   *
+   * @param int $limit
+   *   The number of records to retrieve.
+   *
+   * @return array
+   *   An indexed array containing the relevant UIDs, or an empty array if there
+   *   is no result set.
+   */
+  protected function getItems($limit = 5000) {
+    return db_query_range('SELECT uid FROM {users} WHERE uid NOT IN (:uids)', 0, $limit, array(':uids' => $this->getPreservedUsers()))->fetchCol();
+  }
+
+  /**
+   * Deletes a given list of users.
+   *
+   * @param array $uids
+   *   An indexed array of user IDs to delete.
+   */
+  protected function deleteUsers($uids = array()) {
+    foreach ($uids as $uid) {
+      $this->reassignFiles($uid);
+      user_delete($uid);
     }
   }
 
@@ -64,17 +91,17 @@ class AcsfDuplicationScrubUserHandler extends AcsfEventHandler {
   }
 
   /**
-   * Deletes a given list of users.
+   * Gets a list of user IDs to preserve.
    *
-   * @param array $uids
-   *   An indexed array of user IDs to delete.
+   * @return array
+   *   An indexed array of user IDs to preserve.
    */
-  protected function deleteUsers($uids = array()) {
-    foreach ($uids as $uid) {
-      $account = user_load($uid, TRUE);
-      self::reassignFiles($account->uid);
-      user_delete($account->uid);
-    }
+  public function getPreservedUsers() {
+    $preserved = self::getOpenIdAdmins(); // Preserve Open ID admins.
+    $preserved[] = 0; // Preserve the anonymous user.
+    $preserved[] = 1; // Preserve UID 1.
+    drupal_alter('acsf_duplication_scrub_preserved_users', $preserved);
+    return $preserved;
   }
 
   /**
@@ -83,47 +110,13 @@ class AcsfDuplicationScrubUserHandler extends AcsfEventHandler {
    * @return array
    *   An indexed array of user IDs representing Open ID admins.
    */
-  protected function getOpenIdAdmins() {
-    static $admin_roles;
-    if (!isset($admin_roles)) {
-      $admin_roles = array_filter(array(
-        variable_get('user_admin_role'),
-        variable_get('gardens_site_owner_role'),
-      ));
-    }
-
-    $openid_admins = array();
-    $uids = db_query('SELECT uid FROM {authmap} WHERE module = :module', array(':module' => 'openid'))->fetchCol();
-    foreach ($uids as $uid) {
-      $account = user_load($uid);
-      if (!empty($account->roles)) {
-        $roles = array_intersect(array_keys($account->roles), $admin_roles);
-        if (!empty($roles)) {
-          $openid_admins[] = $uid;
-        }
-      }
-    }
-    return $openid_admins;
-  }
-
-  /**
-   * Gets a list of user IDs to preserve.
-   *
-   * @return array
-   *   An indexed array of user IDs to preserve.
-   */
-  public function getPreservedUsers() {
-    $preserve = self::getOpenIdAdmins(); // Preserve Open ID admins.
-    $preserve[] = 0; // Preserve the anonymous user.
-    $preserve[] = 1; // Preserve UID 1.
-
-    // @todo: Provide a way for other modules to preserve users.
-    if (module_exists('mast')) {
-      if ($mast_uid = variable_get('mast_app_uid')) {
-        $preserve[] = $mast_uid;
-      }
-    }
-    return array_unique($preserve);
+  public function getOpenIdAdmins() {
+    $admin_roles = array(
+      variable_get('user_admin_role'),
+    );
+    drupal_alter('acsf_duplication_scrub_admin_roles', $admin_roles);
+    $uids = db_query('SELECT a.uid FROM {authmap} a INNER JOIN {users_roles} r ON a.uid = r.uid WHERE a.module = :module AND r.rid IN (:admin_roles)', array(':module' => 'openid', ':admin_roles' => $admin_roles))->fetchCol();
+    return $uids;
   }
 
   /**
@@ -135,20 +128,6 @@ class AcsfDuplicationScrubUserHandler extends AcsfEventHandler {
    */
   public function countRemaining() {
     return db_query('SELECT COUNT(*) FROM {users} WHERE uid NOT IN (:uids)', array(':uids' => self::getPreservedUsers()))->fetchField();
-  }
-
-  /**
-   * Gets a range of user IDs excluding those marked as preserved.
-   *
-   * @param int $limit
-   *   The number of records to retrieve.
-   *
-   * @return array
-   *   An indexed array containing the relevant UIDs, or an empty array if there
-   *   is no result set.
-   */
-  protected function getItems($limit = 5000) {
-    return db_query_range('SELECT uid FROM {users} WHERE uid NOT IN (:uids)', 0, $limit, array(':uids' => self::getPreservedUsers()))->fetchCol();
   }
 
 }

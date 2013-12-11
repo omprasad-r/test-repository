@@ -15,11 +15,11 @@ class AcsfDuplicationScrubInitializeHandler extends AcsfEventHandler {
    */
   public function handle() {
     drush_print(dt('Entered @class', array('@class' => get_class($this))));
-    if (!self::isComplete()) {
+    if (!$this->isComplete()) {
       variable_del('acsf_duplication_scrub_status');
       variable_set('site_name', $this->event->context['site_name']);
       variable_set('install_time', time());
-      self::setComplete();
+      $this->setComplete();
     }
   }
 

@@ -276,11 +276,13 @@ function janrain_login_help($path, $arg) {
  *   uid of the user that is being deleted.
  */
 function _janrain_login_delete_user_data($uid) {
-  db_delete('rpx_mapping_provider')
-    ->condition('uid', $uid)
-    ->execute();
+  if (db_table_exists('rpx_mapping_provider')) {
+    db_delete('rpx_mapping_provider')
+      ->condition('uid', $uid)
+      ->execute();
+  }
 
-  if (variable_get('acquia_gardens_local_user_accounts', FALSE)) {
+  if (db_table_exists('rpx_authmap_username') && variable_get('acquia_gardens_local_user_accounts', FALSE)) {
     db_delete('rpx_authmap_username')
       ->condition('uid', $uid)
       ->execute();

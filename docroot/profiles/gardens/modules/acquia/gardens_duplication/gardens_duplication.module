@@ -72,7 +72,35 @@ function gardens_duplication_acsf_duplication_scrub_context_alter(&$data) {
 
   $data['scrub_options']['mollom_public_key'] = drush_get_option('mollom-public-key');
   $data['scrub_options']['mollom_private_key'] = drush_get_option('mollom-private-key');
+}
 
-  ksort($data['scrub_options']);
+/**
+ * Alters the list of admin roles of users to preserve.
+ *
+ * @param array $admin_roles
+ *   An indexed array of admin roles of users to preserve.
+ *
+ * @see AcsfDuplicationScrubUserHandler::getOpenIdAdmins()
+ */
+function gardens_duplication_acsf_duplication_scrub_admin_roles_alter(&$admin_roles) {
+  if ($gardens_site_owner_role = variable_get('gardens_site_owner_role')) {
+    $admin_roles[] = $gardens_site_owner_role;
+  }
+}
+
+/**
+ * Alters the list of user IDs to preserve.
+ *
+ * @param array $preserved_uids
+ *   An indexed array of user IDs to preserve.
+ *
+ * @see AcsfDuplicationScrubUserHandler::getPreservedUsers()
+ */
+function gardens_duplication_acsf_duplication_scrub_preserved_users_alter(&$preserved_uids) {
+  if (module_exists('mast')) {
+    if ($mast_uid = variable_get('mast_app_uid')) {
+      $preserved_uids[] = $mast_uid;
+    }
+  }
 }
 
