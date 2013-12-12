@@ -533,9 +533,9 @@ class AcsfSshWrapper {
    *   string will be returned.  Otherwise the original string is returned.
    */
   private function truncateOutput($string, $max_length) {
-    if (!empty($string) && is_string($string) && strlen($string) > $max_length) {
+    if ($max_length > 0 && !empty($string) && is_string($string) && strlen($string) > $max_length) {
       $first_half = ceil($max_length / 2);
-      $last_half = $max_length - $first_half;
+      $last_half = $max_length - strlen($first_half);
 
       $first = substr($string, 0, $first_half);
       $last = substr($string, -$last_half);
@@ -635,7 +635,7 @@ function _acsf_ssh_parse_command_line() {
   $result = new stdClass();
   $result->silent = FALSE;
   $result->log = TRUE;
-  $result->max_stdout = $result->max_stderr = 512;
+  $result->max_stdout = $result->max_stderr = 0;
 
   foreach ($options as $name => $value) {
     switch ($name) {
