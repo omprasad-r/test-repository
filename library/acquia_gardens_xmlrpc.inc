@@ -116,7 +116,14 @@ function _acquia_gardens_gardener_url() {
  * @throws AcquiaGardensRpcException
  */
 function acquia_gardens_xmlrpc_call($method, $data, $server, $username = NULL, $password = NULL, $format = 'none') {
-  require_once 'XML/RPC.php';
+  module_load_include('inc', 'content', 'includes/xmlrpc');
+
+  $xmlrpc_options = array(
+    'headers' => array(
+      'timeout' => 5,
+    ),
+  );
+
   if (!is_array($data)) {
     $data = array($data);
   }
@@ -125,15 +132,13 @@ function acquia_gardens_xmlrpc_call($method, $data, $server, $username = NULL, $
   // See http://pear.php.net/manual/en/package.webservices.xml-rpc.examples.php
   $params = $data;
   foreach ($params as &$param) {
-    $param = XML_RPC_encode($param);
+    $param = xmlrpc_base64($param);
   }
-  $message = new XML_RPC_Message($method, $params);
 
-  $client = new XML_RPC_Client("/xmlrpc.php?caller=".AH_HOSTNAME_BASE."&whoami={$_SERVER['SCRIPT_FILENAME']}&format={$format}&method={$method}", $server);
+  $xmlrpc_url = $server . "/xmlrpc.php?caller=".AH_HOSTNAME_BASE."&whoami={$_SERVER['SCRIPT_FILENAME']}&format={$format}&method={$method}";
 
-  // $client->setDebug(1);
   if ($authenticated) {
-    $client->setCredentials($username, $password);
+    $xmlrpc_options['headers']['Authorization'] = 'Basic ' . base64_encode($username . ':' . $password);
   }
 
   // Try the call up to 3 times. If a retry failure occurs, log it and
@@ -144,17 +149,20 @@ function acquia_gardens_xmlrpc_call($method, $data, $server, $username = NULL, $
     // The timeout argument to send() is a connection timeout. Once
     // the connection succeeds, we'll wait forever for a response.
     $timeout = 5;
-    $response = $client->send($message, $timeout);
+    $response = xmlrpc($xmlrpc_url, array($method => $params), $xmlrpc_options);
+
+    $errno = xmlrpc_errno();
+    $message = xmlrpc_error_msg();
     if (empty($response)) {
-      $error_message = "$method: communication error: errno: {$client->errno}; errstr: {$client->errstr}";
+      $error_message = "$method: communication error: errno: {$errno}; errstr: {$message}";
     }
-    else if (preg_match('/500 Internal Server Error/i', $response->faultString())) {
+    else if (preg_match('/500 Internal Server Error/i', $message)) {
       // Don't retry on internal server errors.
       break;
     }
-    else if ($response->faultCode() == 5) {
+    else if ($errno == 5) {
       // "Didn't receive 200 OK from remote server"
-      $error_message = "$method: Error - Fault Code: {$response->faultCode()}; Fault Reason: {$response->faultString()}";
+      $error_message = "$method: Error - Fault Code: {$errno}; Fault Reason: {$message}";
     }
     else {
       // Success or non-retry failure.
@@ -177,14 +185,14 @@ function acquia_gardens_xmlrpc_call($method, $data, $server, $username = NULL, $
 
   // We have success or a non-retry failure. $response is guaranteed
   // not to be empty.
-  if ($response->faultCode()) {
+  if ($errno) {
     // We might not have a Drupal bootstrap yet.
     if (function_exists('watchdog')) {
-      watchdog('gardens_xmlrpc', 'Response error - method: @method - code: @code - message: @message', array('@method' => $method, '@code' => $response->faultCode(), '@message' => $response->faultString()), WATCHDOG_ERROR);
+      watchdog('gardens_xmlrpc', 'Response error - method: @method - code: @code - message: @message', array('@method' => $method, '@code' => $errno, '@message' => $message), WATCHDOG_ERROR);
     }
-    throw new AcquiaGardensRpcApiException("$method: Error - Fault Code: {$response->faultCode()}; Fault Reason: {$response->faultString()}");
+    throw new AcquiaGardensRpcApiException("$method: Error - Fault Code: {$errno}; Fault Reason: {$message}");
   }
   else {
-    return XML_RPC_decode($response->value());
+    return $response;
   }
 }
