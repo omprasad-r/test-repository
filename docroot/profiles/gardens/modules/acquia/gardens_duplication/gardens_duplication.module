@@ -41,7 +41,9 @@ function gardens_duplication_acsf_registry() {
  * @see drush_acsf_duplication_scrub_progress()
  */
 function gardens_duplication_acsf_duplication_scrub_remaining_counts_alter(&$data) {
-  $data['webform_submission_count'] = GardensDuplicationScrubWebformHandler::countRemaining();
+  if (module_exists('webform')) {
+    $data['webform_submission_count'] = GardensDuplicationScrubWebformHandler::countRemaining();
+  }
 }
 
 /**
