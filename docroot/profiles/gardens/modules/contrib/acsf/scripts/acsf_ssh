@@ -533,9 +533,10 @@ class AcsfSshWrapper {
    *   string will be returned.  Otherwise the original string is returned.
    */
   private function truncateOutput($string, $max_length) {
+    $string = trim($string);
     if ($max_length > 0 && !empty($string) && is_string($string) && strlen($string) > $max_length) {
       $first_half = ceil($max_length / 2);
-      $last_half = $max_length - strlen($first_half);
+      $last_half = $max_length - $first_half;
 
       $first = substr($string, 0, $first_half);
       $last = substr($string, -$last_half);
