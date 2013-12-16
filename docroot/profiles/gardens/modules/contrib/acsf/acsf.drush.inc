@@ -12,6 +12,9 @@ function acsf_drush_command() {
         'nid' => dt('The node ID from the Site Factory site node.'),
       ),
     ),
+    'acsf-registry-rebuild' => array(
+      'description' => dt('Rebuilds the ACSF registry.'),
+    ),
   );
 }
 
@@ -28,5 +31,13 @@ function drush_acsf_install() {
   $context = array('nid' => $nid);
   $event = AcsfEvent::create($type, $context);
   $event->run();
+}
+
+/**
+ * Rebuilds the ACSF registry.
+ */
+function drush_acsf_registry_rebuild() {
+  acsf_build_registry();
+  drush_print(dt('The ACSF registry was rebuilt.'));
 }
 

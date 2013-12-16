@@ -74,32 +74,32 @@ class AcsfEvent {
     return $event;
   }
 
-   /**
-    * Produces data that can be used to debug an event and the performance of its
-    * handlers including run time and error messages.
-    */
-   public function debug() {
-     $debug = array();
- 
-     foreach (array_keys($this->handlers) as $key) {
-       foreach ($this->handlers[$key] as $handler) {
-         $debug['handlers'][$key][] = array(
-          'class' => get_class($handler),
-          'started' => $handler->started,
-          'completed' => $handler->completed,
-          'message' => $handler->message,
-         );
-       }
-     }
+  /**
+   * Produces data that can be used to debug an event and the performance of its
+   * handlers including run time and error messages.
+   */
+  public function debug() {
+    $debug = array();
 
-     return $debug;
-   }
+    foreach (array_keys($this->handlers) as $key) {
+      foreach ($this->handlers[$key] as $handler) {
+        $debug['handlers'][$key][] = array(
+         'class' => get_class($handler),
+         'started' => $handler->started,
+         'completed' => $handler->completed,
+         'message' => $handler->message,
+        );
+      }
+    }
+
+    return $debug;
+  }
 
   /**
    * Loads event handlers for the appropriate event.
    */
   protected function loadHandlers() {
-    foreach ($this->registry['events'] as $module => $info) {
+    foreach ($this->registry['events'] as $info) {
       if ($info['type'] == $this->type) {
         $path = trim($info['path'], '/');
         $class = $info['class'];
@@ -122,7 +122,7 @@ class AcsfEvent {
       return array_shift($this->handlers[$type]);
     }
     else {
-      throw new AcsfEventHandlerIncompatibleException(sprintf('The handler type "%s" is incompatible with this event.', get_class($handler)));
+      throw new AcsfEventHandlerIncompatibleException(sprintf('The handler type "%s" is incompatible with this event.', $type));
     }
   }
 

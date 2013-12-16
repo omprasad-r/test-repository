@@ -8,6 +8,7 @@ files[] = classes/AcsfMessage.inc
 files[] = classes/AcsfMessageResponse.inc
 files[] = classes/AcsfMessageResponseXmlRpc.inc
 files[] = classes/AcsfMessageXmlRpc.inc
+dependencies[] = acsf_duplication
 dependencies[] = acsf_events
 dependencies[] = acsf_log
 dependencies[] = acsf_site

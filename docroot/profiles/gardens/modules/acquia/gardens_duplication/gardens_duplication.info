@@ -1,6 +1,11 @@
-name = Drupal Gardens Site Duplication
-description = Helper module for duplicating Drupal Gardens sites.
+name = Gardens site duplication
+description = Helper module for duplicating Gardens sites.
 core = 7.x
-package = Drupal Gardens
-files[] = gardens_duplication.module
+package = Acquia Cloud Site Factory
 hidden = TRUE
+files[] = classes/GardensDuplicationScrubJanrainHandler.inc
+files[] = classes/GardensDuplicationScrubOauthHandler.inc
+files[] = classes/GardensDuplicationScrubVotingApiHandler.inc
+files[] = classes/GardensDuplicationScrubWebformHandler.inc
+files[] = classes/GardensDuplicationScrubXmlSitemapHandler.inc
+
