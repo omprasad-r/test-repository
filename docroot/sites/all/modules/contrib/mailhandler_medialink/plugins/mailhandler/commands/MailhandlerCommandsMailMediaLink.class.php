@@ -17,7 +17,14 @@ class MailhandlerCommandsMailMediaLink extends MailhandlerCommands {
     $config = $source->importer->getConfig();
 
     // Parse the body of the of the email for any links contained within.
-    $links = $this->parse_email_body_for_links($message['body_text']);
+    $links = array();
+    // Available keys for this array are currently body_text and body_html.
+    $parts = variable_get('mailhandler_medialink_mail_parts', array('body_text' => TRUE));
+    foreach (array('body_text', 'body_html') as $part) {
+      if (!empty($parts[$part])) {
+        $links = array_merge($links, $this->parse_email_body_for_links($message[$part]));
+      }
+    }
 
     $commands['mailmedia'] = $links;
     $this->commands = $commands;
