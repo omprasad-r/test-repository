@@ -103,6 +103,14 @@
       .append($('#janrainEngageEmbed'))
       .end()
       .trigger('contentupdate');
+
+      // DG-9879: silly hack to make sure the widget gets updated so that it
+      // shows when a user has previously signed in. The duplicate call, above,
+      // is required prior to shifting around the login form elements. However,
+      // the call above is too early to set up the "returnExperience" properly
+      // for users who had previously used a social login and logged out again,
+      // so we need to call it again.
+      janrain.engage.signin.widget.init();
     }
   }
 
