@@ -129,12 +129,6 @@ function acquia_gardens_xmlrpc_call($method, $data, $server, $username = NULL, $
   }
   $authenticated = isset($username) && isset($password);
 
-  // See http://pear.php.net/manual/en/package.webservices.xml-rpc.examples.php
-  $params = $data;
-  foreach ($params as &$param) {
-    $param = xmlrpc_base64($param);
-  }
-
   $xmlrpc_url = $server . "/xmlrpc.php?caller=".AH_HOSTNAME_BASE."&whoami={$_SERVER['SCRIPT_FILENAME']}&format={$format}&method={$method}";
 
   if ($authenticated) {
