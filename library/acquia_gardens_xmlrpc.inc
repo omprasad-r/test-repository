@@ -143,7 +143,7 @@ function acquia_gardens_xmlrpc_call($method, $data, $server, $username = NULL, $
     // The timeout argument to send() is a connection timeout. Once
     // the connection succeeds, we'll wait forever for a response.
     $timeout = 5;
-    $response = xmlrpc($xmlrpc_url, array($method => $params), $xmlrpc_options);
+    $response = xmlrpc($xmlrpc_url, array($method => $data), $xmlrpc_options);
 
     $errno = xmlrpc_errno();
     $message = xmlrpc_error_msg();
