@@ -36,9 +36,22 @@ if (file_exists('/var/www/site-php')) {
     // @todo setup memcache.
     $conf['cache_backends'][] = $site_settings['memcache_inc'];
   }
-  if (!empty($site_settings['flags']['slackerland'])) {
-    // @todo render site inoperative.
+
+  // Until the site installation finishes, noone should be able to visit the
+  // site, unless the site is being installed via install.php and the user has
+  // the correct token to access it.
+  if (!drupal_is_cli() && !empty($site_settings['flags']['access_restricted']['enabled'])) {
+    $token_match = !empty($site_settings['flags']['access_restricted']['token']) && !empty($_GET['site_install_token']) && $_GET['site_install_token'] == $site_settings['flags']['access_restricted']['token'];
+    $path_match = $_SERVER['SCRIPT_NAME'] == $GLOBALS['base_path'] . 'install.php';
+    if (!$token_match || !$path_match) {
+      header($_SERVER['SERVER_PROTOCOL'] .' 503 Service unavailable');
+      if (!empty($site_settings['flags']['access_restricted']['reason'])) {
+        print $site_settings['flags']['access_restricted']['reason'];
+      }
+      exit;
+    }
   }
+
   if (!empty($site_settings['conf'])) {
     foreach ((array) $site_settings['conf'] as $key => $value) {
       $conf[$key] = $value;

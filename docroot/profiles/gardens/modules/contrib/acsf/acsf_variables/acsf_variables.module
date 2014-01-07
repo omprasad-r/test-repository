@@ -8,7 +8,7 @@
 
 /**
  * Sets a named variable with an optional group.
- * 
+ *
  * @param String $name
  *   The name of the variable.
  * @param Unknown $value
@@ -96,4 +96,83 @@ function acsf_vdel($name) {
     ->execute();
 
   return $delete;
+}
+
+/**
+ * Implements hook_acsf_registry().
+ */
+function acsf_variables_acsf_registry() {
+  return array(
+    'events' => array(
+      array(
+        'type' => 'acsf_install',
+        'class' => 'AcsfVariableInitInstallHandler',
+        'path' => drupal_get_path('module', 'acsf_variables') . '/classes',
+      ),
+    ),
+  );
+}
+
+/**
+ * Fetches the URL of the factory.
+ */
+function acsf_variables_factory_url_get() {
+  return acsf_vget('factory_url');
+}
+
+/**
+ * Refreshes the cached variables.
+ */
+function acsf_variables_cache_refresh() {
+  $config = new AcsfConfigDefault();
+  acsf_vset('factory_url', $config->getURL());
+}
+
+/**
+ * Implements hook_cron().
+ */
+function acsf_variables_cron() {
+  $cron_last_run = acsf_vget('acsf_variables_cron_last_run');
+  $cron_run_interval = acsf_vget('acsf_variables_cron_run_interval', 3 * 3600);
+  if (!$cron_last_run || $cron_last_run + $cron_run_interval < REQUEST_TIME) {
+    acsf_variables_cache_refresh();
+    acsf_vset('acsf_variables_cron_last_run', REQUEST_TIME);
+  }
+}
+
+/**
+ * Returns an array of variables that have not changed from their saved defaults.
+ *
+ * For example, if an administrator has visited the settings page on which
+ * these variables are set and has saved the page without actually editing the
+ * variables themselves, this function will still treat the variables as
+ * unchanged, and therefore will return them.
+ *
+ * @param array $original_variables
+ *   An associative array of variables, where the key is the variable name, and
+ *   the value is the original content of that variable. These variables should
+ *   all have been originally stored in the database with these values (e.g.,
+ *   at install time) in order for this function to work correctly.
+ *
+ * @return array
+ *   An array of variable names, containing only those variables from the above
+ *   list that still have their original values stored in the database.
+ */
+function acsf_variables_get_unchanged_site_variables($original_variables) {
+  $unchanged_variables = array();
+
+  // Check each of these variables to see if they have been edited.
+  foreach ($original_variables as $variable => $original_content) {
+    $current_content = variable_get($variable, 0);
+
+    // Regularize line endings.
+    $original_content = str_replace("\r", "", $original_content);
+    $current_content = str_replace("\r", "", $current_content);
+
+    if (trim($current_content) == trim($original_content)) {
+      $unchanged_variables[] = $variable;
+    }
+  }
+
+  return $unchanged_variables;
 }

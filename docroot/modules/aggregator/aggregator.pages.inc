@@ -411,19 +411,7 @@ function aggregator_page_rss() {
   // Or, get the default aggregator items.
   else {
     $category = NULL;
-##GardensExcludeFromExportStart################################################
-    $result = db_query_range('SELECT STRAIGHT_JOIN i.*, f.title AS ftitle, f.link AS flink FROM {aggregator_item} i INNER JOIN {aggregator_feed} f ON i.fid = f.fid ORDER BY i.timestamp DESC, i.iid DESC', 0, variable_get('feed_default_items', 10));
-    /*
-    This is the original code. Our version above is highly MySQL specific so we
-    do not want that get exported. For this reason we are marking this tweak
-    for site_export for exclusion with some clever commenting so while we are on
-    gardens the original code is commented out, but when site_export removes our
-    code it will get uncommented.
-##################################################GardensExcludeFromExportEnd##
     $result = db_query_range('SELECT i.*, f.title AS ftitle, f.link AS flink FROM {aggregator_item} i INNER JOIN {aggregator_feed} f ON i.fid = f.fid ORDER BY i.timestamp DESC, i.iid DESC', 0, variable_get('feed_default_items', 10));
-##GardensExcludeFromExportStart################################################
-    */
-##################################################GardensExcludeFromExportEnd##
   }
 
   $feeds = $result->fetchAll();

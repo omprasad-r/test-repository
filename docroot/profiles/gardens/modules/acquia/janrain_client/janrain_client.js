@@ -228,6 +228,12 @@
  * bare from the window.
  */
 function janrainWidgetOnload() {
+  // For the widgets on the /user page, call init().  Overlays are handled
+  // within insertWidget(), above.
+  jQuery('#block-system-main .rpx-signin').once('rpx-init', function() {
+    janrain.engage.signin.widget.init();
+  });
+
   janrain.events.onProviderLoginToken.addHandler(function (tokenResponse) {
     jQuery.ajax({
       type: 'POST',

@@ -1,0 +1,47 @@
+<?php
+
+/**
+ * @file
+ * Handles the pausing and unpausing of Pingdom checks under certain conditions.
+ */
+
+/**
+ * Implements hook_modules_enabled().
+ */
+function acsf_pingdom_modules_enabled($modules) {
+  if (in_array('shield', $modules)) {
+    acsf_pingdom_xmlrpc_call('acquia.sf.pingdom.pause');
+  }
+}
+
+/**
+ * Implements hook_modules_disabled().
+ */
+function acsf_pingdom_modules_disabled($modules) {
+  if (in_array('shield', $modules)) {
+    acsf_pingdom_xmlrpc_call('acquia.sf.pingdom.unpause');
+  }
+}
+
+/**
+ * Makes an XML-RPC request to the specified method.
+ *
+ * Checks if the method is available before calling it, otherwise ugly errors
+ * get triggered.
+ */
+function acsf_pingdom_xmlrpc_call($method) {
+  $site_nid = acsf_vget('acsf_site_nid');
+  try {
+    $message = new AcsfMessageXmlRpc('GET', 'system.listMethods', array());
+    $message->send();
+    $methods = $message->getResponseBody();
+    if (in_array($method, $methods)) {
+      $message = new AcsfMessageXmlRpc('PUT', $method, array($site_nid));
+      $message->send();
+    }
+  }
+  catch (Exception $e) {
+    // Swallow the exception.
+  }
+}
+

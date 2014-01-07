@@ -1,2 +1,15 @@
 <?php
 
+/**
+ * Implements hook_install()
+ */
+function acsf_install() {
+  acsf_build_registry();
+
+  // Initiate an event to run post-acsf-install tasks.
+  $type = 'acsf_install';
+  // @todo we should really use an API to get the nid.
+  $context = array('nid' => $GLOBALS['gardens_site_settings']['conf']['gardens_site_id']);
+  $event = AcsfEvent::create($type, $context);
+  $event->run();
+}

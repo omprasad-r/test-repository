@@ -32,11 +32,8 @@ function gardens_install() {
   // on again automatically by scarecrow_allow_local_user_logins().
   variable_set('user_email_verification', 0);
 
-  // Add a site maintainer role that has all allowed permissions.
-  $role = new stdClass();
-  $role->name = 'site maintainer';
-  user_role_save($role);
-  variable_set('gardens_site_owner_role', $role->rid);
+  // Add all allowed permissions to the site maintainer role.
+  $role = user_role_load_by_name('site maintainer');
   user_role_grant_permissions($role->rid, array_keys(module_invoke_all('permission')));
   // Remove permissions that should not be assigned, but that may have been
   // assigned by the standard profile.
@@ -801,14 +798,9 @@ function gardens_copy_of_standard_install() {
   user_role_grant_permissions(DRUPAL_ANONYMOUS_RID, array('access content', 'access comments', $filtered_html_permission));
   user_role_grant_permissions(DRUPAL_AUTHENTICATED_RID, array('access content', 'access comments', 'post comments', 'skip comment approval', $filtered_html_permission));
 
-  // Create a default role for site administrators, with all available permissions assigned.
-  $admin_role = new stdClass();
-  $admin_role->name = 'administrator';
-  $admin_role->weight = 2;
-  user_role_save($admin_role);
+  // Grant all permissions to the administrator role.
+  $admin_role = user_role_load_by_name('administrator');
   user_role_grant_permissions($admin_role->rid, array_keys(module_invoke_all('permission')));
-  // Set this as the administrator role.
-  variable_set('user_admin_role', $admin_role->rid);
 
   // Assign user 1 the "administrator" role.
   db_insert('users_roles')
