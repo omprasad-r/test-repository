@@ -582,41 +582,16 @@ class DatabaseTaskException extends Exception {
 }
 
 /**
- * Writes a settings.php file with content from default.settings.php.
- *
- * Settings values are replaced by values from the passed-in settings array.
+ * Replaces values in settings.php with values in the submitted array.
  *
  * @param $settings
  *   An array of settings that need to be updated.
  */
 function drupal_rewrite_settings($settings = array(), $prefix = '') {
-  $default_settings_file = 'sites/default/default.settings.php';
+  $default_settings = 'sites/default/default.settings.php';
   drupal_static_reset('conf_path');
   $settings_file = conf_path(FALSE) . '/' . $prefix . 'settings.php';
 
-  $buffer = drupal_generate_settings_file_content($default_settings_file, $settings);
-  $fp = fopen(DRUPAL_ROOT . '/' . $settings_file, 'w');
-  if ($fp && fwrite($fp, $buffer) === FALSE) {
-    throw new Exception(st('Failed to modify %settings. Verify the file permissions.', array('%settings' => $settings_file)));
-  }
-}
-
-/**
- * Generates content for a new settings.php file.
- *
- * Base content is taken from another settings.php file and replaced by values
- * from the passed-in settings array.
- *
- * @param $base_file
- *   A path to an existing settings.php file (e.g.,
- *   'sites/default/default.settings.php').
- * @param $settings
- *   An array of settings that need to be updated.
- *
- * @return
- *   A string that can be output to a new settings.php file.
- */
-function drupal_generate_settings_file_content($base_file, $settings = array()) {
   // Build list of setting names and insert the values into the global namespace.
   $keys = array();
   foreach ($settings as $setting => $data) {
@@ -626,7 +601,7 @@ function drupal_generate_settings_file_content($base_file, $settings = array()) 
 
   $buffer = NULL;
   $first = TRUE;
-  if ($fp = fopen(DRUPAL_ROOT . '/' . $base_file, 'r')) {
+  if ($fp = fopen(DRUPAL_ROOT . '/' . $default_settings, 'r')) {
     // Step line by line through settings.php.
     while (!feof($fp)) {
       $line = fgets($fp);
@@ -673,12 +648,15 @@ function drupal_generate_settings_file_content($base_file, $settings = array()) 
         $buffer .= "\$$setting = " . var_export($data['value'], TRUE) . ";\n";
       }
     }
+
+    $fp = fopen(DRUPAL_ROOT . '/' . $settings_file, 'w');
+    if ($fp && fwrite($fp, $buffer) === FALSE) {
+      throw new Exception(st('Failed to modify %settings. Verify the file permissions.', array('%settings' => $settings_file)));
+    }
   }
   else {
-    throw new Exception(st('Failed to open %settings. Verify the file permissions.', array('%settings' => $base_file)));
+    throw new Exception(st('Failed to open %settings. Verify the file permissions.', array('%settings' => $default_settings)));
   }
-
-  return $buffer;
 }
 
 /**
@@ -763,20 +741,27 @@ function drupal_install_system() {
 }
 
 /**
- * Uninstalls a given list of modules.
+ * Uninstalls a given list of disabled modules.
  *
- * @param $module_list
- *   The modules to uninstall.
- * @param $uninstall_dependents
- *   If TRUE, the function will check that all modules which depend on the
- *   passed-in module list either are already uninstalled or contained in the
- *   list, and it will ensure that the modules are uninstalled in the correct
- *   order. This incurs a significant performance cost, so use FALSE if you
- *   know $module_list is already complete and in the correct order.
+ * @param array $module_list
+ *   The modules to uninstall. It is the caller's responsibility to ensure that
+ *   all modules in this list have already been disabled before this function
+ *   is called.
+ * @param bool $uninstall_dependents
+ *   (optional) If TRUE, the function will check that all modules which depend
+ *   on the passed-in module list either are already uninstalled or contained in
+ *   the list, and it will ensure that the modules are uninstalled in the
+ *   correct order. This incurs a significant performance cost, so use FALSE if
+ *   you know $module_list is already complete and in the correct order.
+ *   Defaults to TRUE.
  *
- * @return
- *   FALSE if one or more dependent modules are missing from the list, TRUE
- *   otherwise.
+ * @return bool
+ *   Returns TRUE if the operation succeeds or FALSE if it aborts due to an
+ *   unsafe condition, namely, $uninstall_dependents is TRUE and a module in
+ *   $module_list has dependents which are not already uninstalled and not also
+ *   included in $module_list).
+ *
+ * @see module_disable()
  */
 function drupal_uninstall_modules($module_list = array(), $uninstall_dependents = TRUE) {
   if ($uninstall_dependents) {
@@ -788,7 +773,7 @@ function drupal_uninstall_modules($module_list = array(), $uninstall_dependents 
     $profile = drupal_get_profile();
     while (list($module) = each($module_list)) {
       if (!isset($module_data[$module]) || drupal_get_installed_schema_version($module) == SCHEMA_UNINSTALLED) {
-        // This module doesn't exist or is already uninstalled, skip it.
+        // This module doesn't exist or is already uninstalled. Skip it.
         unset($module_list[$module]);
         continue;
       }
@@ -821,7 +806,7 @@ function drupal_uninstall_modules($module_list = array(), $uninstall_dependents 
   }
 
   if (!empty($module_list)) {
-    // Call hook_module_uninstall to let other modules act
+    // Let other modules react.
     module_invoke_all('modules_uninstalled', $module_list);
   }
 

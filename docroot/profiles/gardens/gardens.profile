@@ -285,14 +285,22 @@ function gardens_installer_custom_submit($form, &$form_state) {
     scarecrow_allow_local_user_logins();
   }
 
-  $owner_account->is_new = TRUE;
-  $edit = $form_state['values']['owner_account']['account'];
-  $edit['status'] = 1;
-  $edit['roles'][variable_get('user_admin_role', 0)] = 1;
-  $edit['roles'][variable_get('gardens_site_owner_role', 0)] = 1;
-  // Set login to non-zero to avoid e-mail verification needed error.
-  $edit['login'] = 1;
-  $owner_account = user_save($owner_account, $edit);
+  $account_name = $form_state['values']['owner_account']['account']['name'];
+  $account_mail = $form_state['values']['owner_account']['account']['mail'];
+  if (!user_load_by_name($account_name) && !user_load_by_mail($account_mail)) {
+    $owner_account->is_new = TRUE;
+    $edit = $form_state['values']['owner_account']['account'];
+    $edit['status'] = 1;
+    $edit['roles'][variable_get('user_admin_role', 0)] = 1;
+    $edit['roles'][variable_get('gardens_site_owner_role', 0)] = 1;
+    // Set login to non-zero to avoid e-mail verification needed error.
+    $edit['login'] = 1;
+    $owner_account = user_save($owner_account, $edit);
+  }
+  else {
+    $owner_account = user_load_by_name($account_name);
+  }
+
   if (!empty($form_state['values']['owner_account']['openid'])) {
     gardens_client_add_authmaps($owner_account, array("authname_openid" => $form_state['values']['owner_account']['openid']));
   }

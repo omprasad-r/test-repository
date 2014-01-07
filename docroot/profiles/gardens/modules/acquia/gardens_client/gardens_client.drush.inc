@@ -68,6 +68,12 @@ function gardens_client_drush_command() {
     'aliases' => array('gfpr'),
   );
 
+  // Cause a gardens site to call the gardener.
+  $items['et-phone-home'] = array(
+    'description' => "Cause a gardens site to call the gardener for site-specific data.",
+    'aliases' => array('phone-home'),
+  );
+
   return $items;
 }
 
@@ -446,3 +452,16 @@ function drush_gardens_client_gardens_flood_protection_remove($form_type) {
     drush_print(dt('Invalid input, the allowed values are: @allowed_input.', array('@allowed_input' => implode(', ', $allowed_input))));
   }
 }
+
+/**
+ * drush command callback. Get the Gardens site to call the Gardener.
+ */
+function drush_gardens_client_et_phone_home() {
+  if (function_exists('gardens_client_phone_home') && gardens_client_phone_home()) {
+    drush_log("Got data from the gardener", 'success');
+  }
+  else {
+    drush_log("Failed to phone home to the gardener", 'error');
+  }
+}
+

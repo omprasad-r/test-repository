@@ -1,11 +1,15 @@
 <?php
 
 /**
+ * @file
+ * Provides common logging for Acquia Cloud Site Factory operations.
+ */
+
+/**
  * Implements hook_watchdog().
  */
 function acsf_log_watchdog($log_entry) {
-
-  // Only escalate severe messages.
+  // Only escalate messages of certain severity levels.
   $severity_to_escalate = array(
     WATCHDOG_EMERGENCY,
     WATCHDOG_ALERT,
@@ -13,16 +17,15 @@ function acsf_log_watchdog($log_entry) {
   );
 
   if (in_array($log_entry['severity'], $severity_to_escalate)) {
-    $message = t($log_entry['message'], $log_entry['variables']);
-    try {
-      $site = new AcsfSite();
-      $nid = $site->nid;
-    }
-    catch (Exception $e) {
-      $nid = 0;
-    }
+    $record = array(
+      'type' => 'watchdog',
+      'message' => t($log_entry['message'], $log_entry['variables']),
+      'level' => $log_entry['severity'],
+      'timestamp' => REQUEST_TIME,
+      'nid' => acsf_vget('acsf_site_nid', 0),
+    );
     $acsf_log = new AcsfLog();
-    $acsf_log->log($log_entry['severity'], $message, $nid);
+    $acsf_log->log($record);
   }
-
 }
+

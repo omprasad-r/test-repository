@@ -13,3 +13,5 @@ dependencies[] = acsf_events
 dependencies[] = acsf_log
 dependencies[] = acsf_site
 dependencies[] = acsf_variables
+dependencies[] = acsf_pingdom
+; dependencies[] = acsf_openid

@@ -20,6 +20,14 @@ function gardens_misc_drush_command() {
         ),
       ),
     ),
+    'mollom-keys-get' => array(
+      'description' => 'Get from the Gardener and save mollom keys if they are currently missing',
+      'aliases' => array('mk-get'),
+    ),
+    'mollom-keys-replace' => array(
+      'description' => 'Get from the Gardener and save mollom keys even if they already exist',
+      'aliases' => array('mk-repl'),
+    ),
   );
   return $items;
 }
@@ -117,3 +125,44 @@ function drush_gardens_misc_gardens_get_gardener_creds() {
   }
   drush_print($output);
 }
+
+/**
+ * drush command callback. Get from the Gardener and save mollom keys if they are currently missing.
+ */
+function drush_hosting_mollom_keys_get() {
+  $public = variable_get('mollom_public_key');
+  $private = variable_get('mollom_private_key');
+  if (!$public || !$private) {
+    drush_hosting_mollom_keys_replace();
+  }
+  else {
+    drush_log("Mollom keys already existed - not replaced", 'warning');
+  }
+}
+
+/**
+ * drush command callback. Get from the Gardener and save mollom keys even if they already exist.
+ */
+function drush_hosting_mollom_keys_replace() {
+  if ($creds = drush_get_context('DRUSH_DB_CREDENTIALS')) {
+    $nid = ltrim($creds['name'], 'g');
+    $mollom_keys = acquia_gardens_call('get.site.mollom.keys', array($nid));
+    if ($mollom_keys) {
+      variable_set('mollom_public_key', $mollom_keys['public_key']);
+      variable_set('mollom_private_key', $mollom_keys['private_key']);
+      // Reset mollom status to force a key check.
+      if (function_exists('_mollom_status')) {
+        _mollom_status(TRUE);
+      }
+      drush_log("Set mollom keys", 'success');
+    }
+    else {
+      drush_log("Failed to set mollom keys", 'error');
+    }
+  }
+  else {
+    return drush_set_error('HOSTING_ERROR', "Error - can't get DB credentials");
+  }
+}
+
+

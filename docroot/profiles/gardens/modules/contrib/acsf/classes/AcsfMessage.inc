@@ -55,6 +55,8 @@ abstract class AcsfMessage {
   /**
    * Constructor
    *
+   * @param String $method
+   *   The request method. e.g. POST, GET, PUT, etc.
    * @param String $endpoint
    *   The endpoint to contact on the remote server.
    * @param Array $parameters
@@ -68,7 +70,7 @@ abstract class AcsfMessage {
    * @param Closure $callback
    *   (Optional) An anonymous callback function.
    */
-  public function __construct($endpoint, $parameters = NULL, AcsfConfig $config = NULL, $ah_site = NULL, $ah_env = NULL, Closure $callback = NULL) {
+  public function __construct($method, $endpoint, $parameters = NULL, AcsfConfig $config = NULL, $ah_site = NULL, $ah_env = NULL, Closure $callback = NULL) {
 
     // Use our default config if not specified.
     if (empty($config)) {
@@ -81,6 +83,7 @@ abstract class AcsfMessage {
     }
 
     $this->config = $config;
+    $this->method = $method;
     $this->endpoint = $endpoint;
     $this->parameters = $parameters;
     $this->ah_site = $ah_site;
@@ -92,7 +95,7 @@ abstract class AcsfMessage {
    * Sends the message to the remote server.
    */
   public function send() {
-    $this->response = $this->sendMessage($this->config->getUrl(), $this->endpoint, $this->parameters, $this->config->getUsername(), $this->config->getPassword());
+    $this->response = $this->sendMessage($this->config->getUrl(), $this->method, $this->endpoint, $this->parameters, $this->config->getUsername(), $this->config->getPassword());
 
     // Don't allow empty responses.
     if (empty($this->response)) {
@@ -160,6 +163,9 @@ abstract class AcsfMessage {
    *
    * @param String $url
    *   The URL of the remote service.
+   * @param String $method
+   *   The request method. e.g. POST, GET, PUT, etc.
+   * @param String $endpoint
    * @param String $endpoint
    *   The endpoint to call on the remote service.
    * @param Array $parameters
@@ -171,6 +177,6 @@ abstract class AcsfMessage {
    *
    * @return AcsfMessageResponse
    */
-  abstract protected function sendMessage($url, $endpoint, $parameters, $username, $password);
+  abstract protected function sendMessage($url, $method, $endpoint, $parameters, $username, $password);
 
 }

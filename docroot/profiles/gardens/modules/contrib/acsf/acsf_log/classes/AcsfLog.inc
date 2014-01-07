@@ -3,14 +3,29 @@
 class AcsfLog {
 
   /**
-   * Logs the specified message.
+   * Logs the specified message to the Site Factory over XML-RPC.
+   *
+   * @param array $record
+   *   The parameters to send to the Site Factory.
    */
-  public function log($severity, $message, $nid = 0) {
-    // @todo this is totally temporary, once we get the sf_message endpoint for logs
-    // we'll send it there.
-    $file = fopen(sprintf('%s/acsf.log', file_directory_temp()), 'a');
-    fwrite($file, sprintf('%s - severity: %s - nid: %s - message: %s', format_date(time()), $severity, $nid, $message));
-    fclose($file);
+  public function log($record) {
+    if (!$this->enabled()) {
+      return;
+    }
+
+    $message = new AcsfMessageXmlRpc('GET', 'acquia.sf.log.send', array($record));
+    $message->send();
+    return $message->getResponseBody();
+  }
+
+  /**
+   * Determines whether logging is enabled or blocked globally.
+   */
+  public function enabled() {
+    $site = $_ENV['AH_SITE_GROUP'];
+    $env = $_ENV['AH_SITE_ENVIRONMENT'];
+    return !file_exists(sprintf('/mnt/gfs/%s.%s/files-private/sf-log-block', $site, $env));
   }
 
 }
+

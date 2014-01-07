@@ -1427,3 +1427,14 @@ function scarecrow_update_11193() {
   }
 }
 
+/**
+ * Moves to a better named maintenance variable as it will be visible to acsf customers.
+ */
+function scarecrow_update_11194() {
+  module_enable(array('acsf'), TRUE);
+  $scarecrow_maintenance_time = variable_get('scarecrow_maintenance_time', 0);
+  if ($scarecrow_maintenance_time) {
+    variable_set('acsf_maintenance_time', $scarecrow_maintenance_time);
+    variable_del('scarecrow_maintenance_time');
+  }
+}
