@@ -308,50 +308,6 @@ function scarecrow_form_user_admin_account_alter(&$form, &$form_state) {
   }
 }
 
-/**
- * Implement hook_form_FORM_ID_alter().
- */
-function scarecrow_form_system_site_maintenance_mode_alter(&$form, &$form_state) {
-  // If we are in "hard" maintenance mode, don't let the admin
-  // uncheck the checkbox.
-  $expected = variable_get('scarecrow_maintenance_time', 0);
-  if ($expected && variable_get('maintenance_mode', 0)) {
-    $message = '<strong>' . t('!service_name_long maintenance in progress.', array('!service_name_long' => variable_get('gardens_service_name_long', 'Drupal Gardens'))) . '</strong><br />';
-    if (REQUEST_TIME > $expected) {
-      // Something went wrong.
-      $message .= t('The maintenance was expected to be done already - please be patient. Reload this page to see if maintenance is complete.');
-    }
-    else {
-      // Never show an interval less than 1 minute.
-      $remaining = format_interval(60 + $expected - REQUEST_TIME, 1);
-      $message .= t('The maintenance should be completed within !interval. Reload this page to see if maintenance is complete.', array('!interval' => $remaining));
-    }
-    $form['maintenance_mode']['#disabled'] = TRUE;
-    $ele['scarecrow_message'] = array(
-      '#type' => 'markup',
-      '#markup' => '<div class="messages warning">' . $message . '</div>',
-    );
-    $form = array_merge($ele, $form);
-  }
-  $form['#submit'][] = 'scarecrow_system_site_maintenance_mode_submit';
-}
-
-/**
- * Submit handler for the system_site_maintenance_mode form.
- */
-function scarecrow_system_site_maintenance_mode_submit(&$form, &$form_state) {
-  // Gardens can force a site into maintenance mode, so when a site admin
-  // puts their site into maintenance purposely, we need to track it.
-  $maintenance_mode = (int) $form_state['values']['maintenance_mode'];
-  if ($maintenance_mode) {
-    variable_set('site_owner_maintenance_mode', $maintenance_mode);
-  }
-  else {
-    // It's important to use variable_del() here; ms-drush can easily determine
-    // whether a variable is set at all, but retrieving its value is harder.
-    variable_del('site_owner_maintenance_mode');
-  }
-}
 
 /**
  * Implement hook_form_FORM_ID_alter().
@@ -1017,6 +973,12 @@ function scarecrow_system_info_alter(&$info, $file, $type) {
  */
 function scarecrow_simplified_modules_hidden_dependencies() {
   return array(
+     // ACSF requires the following dependencies.
+    'acsf_duplication',
+    'acsf_events',
+    'acsf_log',
+    'acsf_site',
+    'acsf_variables',
     // Actions permissions is a required dependency for VBO in Gardens.
     'actions_permissions',
   );
@@ -1264,6 +1226,7 @@ function scarecrow_get_gardener_url($base_root = NULL) {
  */
 function scarecrow_disallowed_modules() {
   $disallowed_modules = array(
+    'acsf',
     'gardens_preproduction',
     'color',
     'gardens_duplication',

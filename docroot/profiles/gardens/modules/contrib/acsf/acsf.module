@@ -62,3 +62,41 @@ function acsf_registry_sort($a, $b) {
 function acsf_get_registry() {
   return variable_get('acsf_registry', NULL);
 }
+
+/**
+ * Implement hook_form_FORM_ID_alter().
+ */
+function acsf_form_system_site_maintenance_mode_alter(&$form, &$form_state) {
+  // If we are in ACSF maintenance mode, don't let the admin uncheck the checkbox.
+  $acsf_maintenance_time = variable_get('acsf_maintenance_time', 0);
+  if ($acsf_maintenance_time && variable_get('maintenance_mode', 0)) {
+    drupal_set_message(t('ACSF site maintenance in progress.'), 'warning');
+    if (REQUEST_TIME > $acsf_maintenance_time) {
+      // The update is taking longer than expected.
+      drupal_set_message(t('The maintenance was expected to be done already - please be patient. Reload this page to see if maintenance is complete.'), 'warning');
+    }
+    else {
+      // Never show an interval less than 1 minute.
+      $remaining = format_interval(60 + $acsf_maintenance_time - REQUEST_TIME, 1);
+      drupal_set_message(t('The maintenance should be completed within !interval. Reload this page to see if maintenance is complete.', array('!interval' => $remaining)), 'warning');
+    }
+    $form['maintenance_mode']['#disabled'] = TRUE;
+  }
+  $form['#submit'][] = 'acsf_system_site_maintenance_mode_submit';
+}
+
+/**
+ * Submit handler for the system_site_maintenance_mode form.
+ */
+function acsf_system_site_maintenance_mode_submit(&$form, &$form_state) {
+  // ACSF can force a site into maintenance mode, so when a site admin
+  // puts their site into maintenance purposely, we need to track it.
+  $maintenance_mode = (int) $form_state['values']['maintenance_mode'];
+  if ($maintenance_mode) {
+    variable_set('site_owner_maintenance_mode', $maintenance_mode);
+  }
+  else {
+    variable_del('site_owner_maintenance_mode');
+  }
+}
+

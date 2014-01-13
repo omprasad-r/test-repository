@@ -79,6 +79,20 @@ function overlay_theme() {
 }
 
 /**
+ * Implements hook_form_alter().
+ */
+function overlay_form_alter(&$form, &$form_state) {
+  // Add hidden element to prevent dropping out of the overlay when a form is
+  // submitted inside an overlay using a GET method.
+  if (!empty($form['#method']) && $form['#method'] == 'get' && !empty($_REQUEST['render']) && $_REQUEST['render'] == 'overlay') {
+    $form['render'] = array(
+      '#type' => 'hidden',
+      '#value' => 'overlay'
+    );
+  }
+}
+
+/**
  * Implements hook_form_FORM_ID_alter().
  */
 function overlay_form_user_profile_form_alter(&$form, &$form_state) {
@@ -242,9 +256,6 @@ function overlay_library() {
     ),
     'css' => array(
       $module_path . '/overlay-child.css' => array(),
-    ),
-    'dependencies' => array(
-      array('system', 'jquery.form'),
     ),
   );
 

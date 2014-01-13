@@ -2,7 +2,7 @@
 
 /**
  * @file
- * This class is an implementation of our XMLRPC service.
+ * This class is an implementation of our XML-RPC service.
  */
 
 class AcsfMessageXmlRpc extends AcsfMessage {
@@ -12,8 +12,9 @@ class AcsfMessageXmlRpc extends AcsfMessage {
   /**
    * Custom constructor to look up the hostname.
    */
-  public function __construct($endpoint, $parameters = NULL, AcsfConfig $config = NULL, $ah_site = NULL, $ah_env = NULL, Closure $callback = NULL) {
-    parent::__construct($endpoint, $parameters, $config, $ah_site, $ah_env, $callback);
+  public function __construct($method, $endpoint, $parameters = NULL, AcsfConfig $config = NULL, $ah_site = NULL, $ah_env = NULL, Closure $callback = NULL) {
+    parent::__construct($method, $endpoint, $parameters, $config, $ah_site, $ah_env, $callback);
+    module_load_include('inc', 'content', 'includes/xmlrpc');
     $this->ah_hostname_full = php_uname('n');
     $this->ah_hostname_base = reset(explode('.', $this->ah_hostname_full));
   }
@@ -21,27 +22,23 @@ class AcsfMessageXmlRpc extends AcsfMessage {
   /**
    * Implements AcsfMessage::sendMessage().
    */
-  protected function sendMessage($url, $endpoint, $parameters, $username, $password) {
-    require_once 'XML/RPC.php';
+  protected function sendMessage($url, $method, $endpoint, $parameters, $username, $password) {
+    $xmlrpc_options = array(
+      'headers' => array(
+        'timeout' => 5,
+      ),
+    );
     if (!is_array($parameters)) {
       $parameters = array($parameters);
     }
     $authenticated = isset($username) && isset($password);
-  
-    // See http://pear.php.net/manual/en/package.webservices.xml-rpc.examples.php
-    foreach ($parameters as &$param) {
-      $param = XML_RPC_encode($param);
-    }
-    $message = new XML_RPC_Message($endpoint, $parameters);
 
-    // @todo $format == "none" ??
-    $client = new XML_RPC_Client("/xmlrpc.php?caller=" . $this->ah_hostname_base . "&whoami={$_SERVER['SCRIPT_FILENAME']}&format={$format}&method={$endpoint}", $url);
-  
-    // $client->setDebug(1);
+    $xmlrpc_url = "$url/xmlrpc.php?caller={$this->ah_hostname_base}&whoami={$_SERVER['SCRIPT_FILENAME']}&method={$endpoint}";
+
     if ($authenticated) {
-      $client->setCredentials($username, $password);
+      $xmlrpc_options['headers']['Authorization'] = 'Basic ' . base64_encode($username . ':' . $password);
     }
-  
+
     // Try the call up to 3 times. If a retry failure occurs, log it and
     // keep trying, except on the last try throw it. If success or a non-retry
     // failure occurs, fall out of the loop.
@@ -50,23 +47,26 @@ class AcsfMessageXmlRpc extends AcsfMessage {
       // The timeout argument to send() is a connection timeout. Once
       // the connection succeeds, we'll wait forever for a response.
       $timeout = 5;
-      $response = $client->send($message, $timeout);
+      $response = xmlrpc($xmlrpc_url, array($endpoint => $parameters), $xmlrpc_options);
+
+      $errno = xmlrpc_errno();
+      $message = xmlrpc_error_msg();
       if (empty($response)) {
-        $error_message = "$endpoint: communication error: errno: {$client->errno}; errstr: {$client->errstr}";
+        $error_message = "$endpoint: communication error: errno: {$errno}; errstr: {$message}";
       }
-      else if (preg_match('/500 Internal Server Error/i', $response->faultString())) {
+      else if (preg_match('/500 Internal Server Error/i', $message)) {
         // Don't retry on internal server errors.
         break;
       }
-      else if ($response->faultCode() == 5) {
+      else if ($errno == 5) {
         // "Didn't receive 200 OK from remote server"
-        $error_message = "$endpoint: Error - Fault Code: {$response->faultCode()}; Fault Reason: {$response->faultString()}";
+        $error_message = "$endpoint: Error - Fault Code: {$errno}; Fault Reason: {$message}";
       }
       else {
         // Success or non-retry failure.
         break;
       }
-  
+
       // We have a retry failure.
       if ($tries < $max_tries - 1) {
         // We might not have a Drupal bootstrap yet.
@@ -77,22 +77,21 @@ class AcsfMessageXmlRpc extends AcsfMessage {
       else {
         throw new AcsfMessageFailureException ($error_message);
       }
-  
+
       sleep(1);
     }
-  
+
     // We have success or a non-retry failure. $response is guaranteed
     // not to be empty.
-    if ($response->faultCode()) {
+    if ($errno) {
       // We might not have a Drupal bootstrap yet.
       if (function_exists('watchdog')) {
-        watchdog('gardens_xmlrpc', 'Response error - method: @method - code: @code - message: @message', array('@method' => $endpoint, '@code' => $response->faultCode(), '@message' => $response->faultString()), WATCHDOG_ERROR);
+        watchdog('gardens_xmlrpc', 'Response error - method: @method - code: @code - message: @message', array('@method' => $endpoint, '@code' => $errno, '@message' => $message), WATCHDOG_ERROR);
       }
-      throw new AcsfMessageFailureException ("$method: Error - Fault Code: {$response->faultCode()}; Fault Reason: {$response->faultString()}");
+      throw new AcsfMessageFailureException ("$method: Error - Fault Code: {$errno}; Fault Reason: {$message}");
     }
     else {
-      $value = XML_RPC_decode($response->value());
-      return new AcsfMessageResponseXmlRpc($endpoint, 0, $value);
+      return new AcsfMessageResponseXmlRpc($endpoint, 0, $response);
     }
   }
 }

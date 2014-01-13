@@ -1151,8 +1151,6 @@ function gardens_client_cron() {
       gardens_client_send_site_data();
     }
   }
-
-  gardens_client_check_twitter_alerts();
 }
 
 function gardens_client_send_site_data() {
@@ -1180,107 +1178,6 @@ function gardens_client_send_site_data() {
     else {
       gardens_client_gardener_unreachable_alert(TRUE);
     }
-  }
-}
-
-function gardens_client_check_twitter_alerts() {
-  // Check to see if there are any alerts in the twitter stream
-  $alerts = variable_get('gardens_alert', array());
-  // Global killswitch for the gardens alerts.
-  if (!variable_get('gardens_show_twitter_alerts', TRUE)) {
-    // Clear any existing alerts.
-    if (!empty($alerts)) {
-      variable_set('gardens_alert', array());
-    }
-    return;
-  }
-  $last_update = isset($alerts['last_update']) ? $alerts['last_update'] : 0;
-
-  // Default to displaying alerts from the production Twitter stream; only use
-  // the test account if we're sure we're in a test environment.
-  $production = (empty($_ENV['AH_SITE_ENVIRONMENT']) || $_ENV['AH_SITE_ENVIRONMENT'] === 'prod');
-  $interval = $production ? 600 : 1;
-
-  if ($last_update + $interval < time()) {
-    $screenname = $production ? 'drupalgardens' : 'GardensTester1';
-
-    module_load_include('inc', 'aggregator', 'aggregator.fetcher');
-    module_load_include('inc', 'aggregator', 'aggregator.parser');
-    $feed = new stdClass();
-    $feed->url = 'http://api.twitter.com/1/statuses/user_timeline.rss?screen_name=' . $screenname . '&count=200';
-    $feed->etag = NULL;
-    $feed->modified = $last_update;
-    $feed->link = '';
-
-    $success = aggregator_aggregator_fetch($feed);
-    $success = $success ? aggregator_aggregator_parse($feed) : FALSE;
-
-    if ($success) {
-      global $user;
-      $dismissed = isset($alerts['dismissed']) ? $alerts['dismissed'] : 0;
-      $timestamp = isset($alerts['timestamp']) ? $alerts['timestamp'] : 0;
-      $user_dismissed = isset($user->data['alert_dismissed']) ? $user->data['alert_dismissed'] : 0;
-      foreach($feed->items as $item) {
-        $time = isset($item['pubdate']) ? strtotime($item['pubdate']) : 0;
-
-        // Check to make sure the message is newer than the most recent dismissal
-        // and the most recent hashed message.
-        if ($time > $dismissed && $time > $timestamp && $time > $user_dismissed) {
-          if ($position = strpos($item['description'], '#alert')) {
-            $raw_message = check_plain(substr($item['description'], $position + 6));
-            // Turn URLs in the message into links.
-            $filters = filter_get_filters();
-            $filter = new stdClass();
-            $filter->settings = array(
-              'filter_url_length' => 140,
-            );
-            $message = $filters['filter_url']['process callback']($raw_message, $filter);
-            // Replace confusing URLs from the Twitter message (e.g., links
-            // pointing to bit.ly) with the actual URL they redirect to
-            // (usually a URL on drupalgardens.com) so that the alert message
-            // is friendlier and more professional-looking when displayed
-            // inside the Gardens site.
-            $html_dom = filter_dom_load($message);
-            $links = $html_dom->getElementsByTagName('a');
-            $replaced = FALSE;
-            foreach ($links as $link) {
-              $original_url = $link->getAttribute('href');
-              $result = drupal_http_request($original_url, array('max_redirects' => 0));
-              if (isset($result->redirect_url)) {
-                $replaced = TRUE;
-                $link->setAttribute('href', $result->redirect_url);
-                // Only replace the anchor text if it originally consisted of
-                // the URL itself.
-                if ($link->nodeValue == $original_url) {
-                  // In the special case where the link appears at the end of
-                  // the message (after the last sentence), we can assume it's
-                  // a "read more" link and use that as the anchor text.
-                  if (preg_match('/\.\s' . preg_quote($original_url, '/') . '$/', $raw_message)) {
-                    $link->nodeValue = t('Read more');
-                  }
-                  // Otherwise use the new URL as the anchor text.
-                  else {
-                    $link->nodeValue = $result->redirect_url;
-                  }
-                }
-              }
-            }
-            if ($replaced) {
-              $message = filter_dom_serialize($html_dom);
-            }
-            // Save the final alert message and its timestamp.
-            $alerts['message'] = $message;
-            $alerts['timestamp'] = $time;
-          }
-          else if (strpos($item['description'], '#clear')) {
-            $alerts['dismissed'] = $time;
-            $alerts['timestamp'] = $time;
-          }
-        }
-      }
-    }
-    $alerts['last_update'] = time();
-    variable_set('gardens_alert', $alerts);
   }
 }
 
