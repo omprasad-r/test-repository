@@ -101,6 +101,7 @@ function drush_site_export_export_s3() {
     $bucket = GARDENS_DEFAULT_EXPORT_BUCKET_NAME;
   }
   // This URL is publicly accessible.
+  include_once(sprintf('%s/../library/acquia_gardens_xmlrpc.inc', DRUPAL_ROOT));
   $authenticated_url = drush_site_export_send_to_s3($s3key, $s3secret, $path, $resource_name, $bucket);
   if (!$authenticated_url) {
     drush_set_error('archive_failed', 'Unable to archive site to s3. Reporting failure to the gardener.');
@@ -151,7 +152,7 @@ function drush_site_export_s3_get_creds() {
  *  The authenticated url for accessing this content, or FALSE on failure.
  */
 function drush_site_export_send_to_s3($key, $secret, $path, $resource_name = NULL, $bucket = GARDENS_DEFAULT_EXPORT_BUCKET_NAME) {
-  require_once dirname(__FILE__) . '/../library/S3.php';
+  require_once sprintf('%s/../library/S3.php', DRUPAL_ROOT);
   $resource_name = $resource_name ? $resource_name : basename($path);
   $s3 = new S3($key, $secret);
 
