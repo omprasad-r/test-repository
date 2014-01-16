@@ -7,7 +7,7 @@ function acsf_drush_command() {
   return array(
     'acsf-registry-rebuild' => array(
       'description' => dt('Rebuilds the ACSF registry.'),
-      'callback' => 'drush_acsf_build_registry',
+      'callback' => 'drush_acsf_registry_rebuild',
     ),
     'go-offline' => array(
       'bootstrap' => DRUSH_BOOTSTRAP_DRUPAL_DATABASE,
@@ -51,7 +51,7 @@ function acsf_drush_command() {
 /**
  * Drush command. Rebuilds the ACSF registry.
  */
-function drush_acsf_build_registry() {
+function drush_acsf_registry_rebuild() {
   acsf_build_registry();
   drush_print(dt('The ACSF registry was rebuilt.'));
 }
