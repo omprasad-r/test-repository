@@ -13,9 +13,14 @@ class AcsfLog {
       return;
     }
 
-    $message = new AcsfMessageXmlRpc('GET', 'acquia.sf.log.send', array($record));
-    $message->send();
-    return $message->getResponseBody();
+    try {
+      $message = new AcsfMessageXmlRpc('GET', 'acquia.sf.log.send', array($record));
+      $message->send();
+      return $message->getResponseBody();
+    }
+    catch (Exception $e) {
+      // Swallow exceptions.
+    }
   }
 
   /**

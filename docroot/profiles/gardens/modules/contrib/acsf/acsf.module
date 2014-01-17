@@ -13,7 +13,7 @@ function acsf_init() {
 /**
  * Implements hook_modules_enabled().
  */
-function hook_modules_enabled($modules) {
+function acsf_modules_enabled($modules) {
   acsf_build_registry();
 }
 
