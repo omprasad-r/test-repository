@@ -17,7 +17,7 @@ if ($profile_name && file_exists(DRUPAL_ROOT . "/profiles/{$profile_name}/{$prof
   variable_set('install_profile', $profile_name);
   // ... rebuild module data (making sure it's not cached).
   system_list_reset();
-  system_rebuild_module_data();
+  drupal_flush_all_caches();
   // If the profile "module" is not found, reset to the previous profile.
   if (db_query("SELECT 1 FROM {system} WHERE type = 'module' AND name = :name", array(':name' => $profile_name))->fetchField()) {
     // Pass TRUE to module_enable() so that dependent modules are also enabled.
