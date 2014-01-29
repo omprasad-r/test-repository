@@ -212,12 +212,15 @@ function warner_misc_disallowed_modules_alter(&$modules) {
     'janrain_client',
     'janrain_login',
     'mast',
+    'date_migrate',
     'migrate',
     'migrate_ui',
     'migrate_extras',
     'migrate_d2d',
     'migrate_d2d_ui',
+    'migrate_warner',
     'migrate_aa',
+    'migrate_googoo',
   ));
 
   // Modules that are not in the distro but are add-ons in this codebase and
@@ -935,4 +938,16 @@ function warner_misc_form_alter(&$form, $form_state) {
  */
 function _warner_misc_scheduler_attach_js_vertical_tabs(&$element) {
   $element['#attached']['js']['vertical-tabs'] = drupal_get_path('module', 'warner_misc') . "/js/warner_misc_scheduler_vertical_tabs.js";
+}
+
+/**
+ * Implements hook_simplified_modules_hidden_dependencies_alter().
+ */
+function warner_misc_simplified_modules_hidden_dependencies_alter(&$modules) {
+  // Modules that are hidden by default but should be allowed here.
+  $modules = array_diff($modules, array(
+    'migrate',
+    'migrate_ui',
+    'migrate_extras',
+  ));
 }
