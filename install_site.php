@@ -120,7 +120,7 @@ function install_site($domain, $db_role, $gardens_site_info = array()) {
     variable_set('gardens_client_name', $gardens_site_info['gardens_client_name']);
 
     if ($gardens_site_info['account_method'] == 'local') {
-      scarecrow_allow_local_user_logins();
+      acsf_openid_allow_local_user_logins();
     }
 
     // The site owner is the last user account created. We'll replace that
