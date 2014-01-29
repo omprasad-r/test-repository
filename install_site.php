@@ -168,11 +168,6 @@ function install_site($domain, $db_role, $gardens_site_info = array()) {
     }
     site_template_finalize_template_selection();
 
-    // Reset the OpenID record to point to the new Gardener account that owns
-    // this site.
-    user_set_authmaps($account, array('authname_openid' => ''));
-    gardens_client_add_authmaps($account, array('authname_openid' => $gardens_site_info['openid']));
-
     db_delete('semaphore')->condition('value', $lock_id)->execute();
 
   }
