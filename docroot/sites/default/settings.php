@@ -15,8 +15,9 @@ if (function_exists('drush_main') || drupal_is_cli()) {
 // custom domain or not.
 if (!class_exists('AcsfConfigDefault')) {
   // Since there is no bootstrap, we need to find our config objects.
-  exec(sprintf('find %s/. -name AcsfConfig*.inc', DRUPAL_ROOT), $output, $return);
+  exec(sprintf('find %s/. -name AcsfConfig*.inc -not -path */tests/*', DRUPAL_ROOT), $output, $return);
   if ($return === 0) {
+    sort($output);
     require_once $output[0];
     require_once $output[1];
   }
