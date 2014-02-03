@@ -50,7 +50,7 @@ abstract class AcsfConfig {
     // Require the loadConfig implementation to set required values.
     foreach (array('url', 'username', 'password') as $key) {
       if (empty($this->{$key})) {
-        throw new AcsfConfigIncompleteException(sprintf('The ACSF configuration was incomplete, no value was found for %.', $key));
+        throw new AcsfConfigIncompleteException(sprintf('The ACSF configuration was incomplete, no value was found for %s.', $key));
       }
     }
   }

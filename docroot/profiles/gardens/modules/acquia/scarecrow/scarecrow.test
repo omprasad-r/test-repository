@@ -74,7 +74,7 @@ class ScarecrowRequirementErrorsTestCase extends DrupalWebTestCase {
     // log in correctly. We need to rebuild the menu after setting this so that
     // the login-related Drupal menu items which are altered in Gardens go back
     // to their normal state.
-    variable_set('acquia_gardens_local_user_accounts', TRUE);
+    variable_set('acsf_local_user_accounts', TRUE);
     menu_rebuild();
 
     // Create a regular admin user and a Gardens admin user (the latter of
@@ -157,7 +157,7 @@ class ScarecrowMollomCommentTestCase extends MollomWebTestCase {
     // log in correctly. We need to rebuild the menu after setting this so that
     // the login-related Drupal menu items which are altered in Gardens go back
     // to their normal state.
-    variable_set('acquia_gardens_local_user_accounts', TRUE);
+    variable_set('acsf_local_user_accounts', TRUE);
     menu_rebuild();
   }
 

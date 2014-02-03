@@ -99,21 +99,6 @@ function acsf_vdel($name) {
 }
 
 /**
- * Implements hook_acsf_registry().
- */
-function acsf_variables_acsf_registry() {
-  return array(
-    'events' => array(
-      array(
-        'type' => 'acsf_install',
-        'class' => 'AcsfVariableInitInstallHandler',
-        'path' => drupal_get_path('module', 'acsf_variables') . '/classes',
-      ),
-    ),
-  );
-}
-
-/**
  * Fetches the URL of the factory.
  */
 function acsf_variables_factory_url_get() {

@@ -188,7 +188,7 @@ class AffinityServer {
     }
     ThemeBuilderLog()->gardensError('AN-23711 - Themebuilder multiple session webnodes error.', 'Multiple webnodes are specified in the themebuilder session table.  Forcibly closing the themebuilder.');
     throw new ThemeBuilderException(t("Oops.  !service_name_long was unable to process your request (internal error).  The ThemeBuilder must close now.  After closing, you can try changing your site's appearance again.  If you have seen this message multiple times, please contact !service_name_long support for assistance.", array(
-      '!service_name_long' => variable_get('gardens_service_name_long', 'Drupal Gardens'),
+      '!service_name_long' => acsf_vget('acsf_factory_name', 'Acquia Cloud Site Factory'),
     )), THEMEBUILDER_ERROR_RECOVERABLE, array(ThemeBuilderException::HANDLER_ALERT_AND_CLOSE));
   }
 

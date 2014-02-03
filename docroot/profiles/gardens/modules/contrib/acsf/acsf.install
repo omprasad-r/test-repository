@@ -13,3 +13,11 @@ function acsf_install() {
   $event = AcsfEvent::create($type, $context);
   $event->run();
 }
+
+/**
+ * Enable acsf_openid for everyone.
+ */
+function acsf_update_7001() {
+  module_enable(array('acsf_openid'));
+  variable_set('acsf_local_user_accounts', acsf_vget('acsf_local_user_accounts', FALSE));
+}

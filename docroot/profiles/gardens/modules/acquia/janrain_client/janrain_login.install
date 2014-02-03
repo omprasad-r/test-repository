@@ -42,7 +42,7 @@ function janrain_login_requirements($phase) {
       'severity' => REQUIREMENT_ERROR,
     );
   }
-  if (!variable_get('acquia_gardens_local_user_accounts', FALSE)) {
+  if (acsf_openid_force_openid()) {
     $requirements['janrain_login'] = array(
       'title' => $t('JanRain login.'),
       'value' => $t('Local user accounts are not enabled.'),

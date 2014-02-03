@@ -308,7 +308,6 @@ function scarecrow_form_user_admin_account_alter(&$form, &$form_state) {
   }
 }
 
-
 /**
  * Implement hook_form_FORM_ID_alter().
  */
@@ -480,22 +479,6 @@ function scarecrow_form_user_profile_form_alter(&$form, &$form_state) {
     $form['actions']['cancel']['#access'] = FALSE;
     $form['account']['status']['#disabled'] = TRUE;
   }
-  if (!empty($form['account']['pass']) && scarecrow_force_openid()) {
-    $form['account']['gardens_id'] = array(
-      '#title' => t('Username and e-mail address'),
-      '#type' => 'item',
-      '#markup' => check_plain($account->name) . '<br />' . check_plain($account->mail),
-      '#description' => t('Change these values, your password and your avatar on <a href="@url">the !service_name_long server</a>.', array(
-        '@url' => scarecrow_get_gardener_url() . '/user',
-        '!service_name_long' => variable_get('gardens_service_name_long', 'Drupal Gardens'),
-      )),
-      '#weight' => -20,
-    );
-    $form['account']['name']['#access'] = FALSE;
-    $form['account']['mail']['#access'] = FALSE;
-    $form['account']['pass']['#access'] = FALSE;
-    $form['account']['current_pass']['#access'] = FALSE;
-  }
 }
 
 /**
@@ -519,66 +502,6 @@ function scarecrow_form_system_themes_form_alter(&$form, &$form_state) {
         unset($form['status']['#options'][$themename]);
       }
     }
-  }
-}
-
-/**
- * Implement hook_form_FORM_ID_alter().
- */
-function scarecrow_form_block_admin_display_form_alter(&$form, $form_state) {
-  // Remove the user login block from sight. Do this even if OpenID logins
-  // aren't forced on, since this block has an ugly "Log in using OpenID" link
-  // that we don't want, and our custom gardens_client login block is used as a
-  // replacement for it anyway.
-  unset($form['blocks']['user_login']);
-}
-
-/**
- * Implement hook_form_FORM_ID_alter().
- */
-function scarecrow_form_user_login_block_alter(&$form, $form_state) {
-  // Disallow access to the regular login block. Do this even if OpenID logins
-  // aren't forced on, since this block has an ugly "Log in using OpenID" link
-  // that we don't want, and our custom gardens_client login block is used as a
-  // replacement for it anyway.
-  $form['#access'] = FALSE;
-}
-
-/**
- * Implement hook_form_FORM_ID_alter().
- */
-function scarecrow_form_user_login_alter(&$form, &$form_state) {
-  if (!scarecrow_is_enabled()) {
-    return;
-  }
-  // Do not allow direct access to OpenID login form. We use the underlying
-  // technology, but not this form.
-  $form['openid_links']['#access'] = FALSE;
-  $form['openid_identifier']['#access'] = FALSE;
-  $form['openid.return_to']['#access'] = FALSE;
-}
-
-/**
- * Implement hook_form_FORM_ID_alter().
- */
-function scarecrow_form_user_admin_settings_alter(&$form, &$form_state) {
-  if (!scarecrow_is_enabled()) {
-    return;
-  }
-
-  // Do not allow the email verification setting to be changed. (We require it
-  // to be off if the site is forcing OpenID logins and on otherwise.)
-  $form['registration_cancellation']['user_email_verification']['#access'] = FALSE;
-
-  if (scarecrow_force_openid()) {
-    // Hide certain email settings which are not applicable.
-    $form['email_password_reset']['#access'] = FALSE;
-
-    // Admins are not allowed to create accounts directly (only invite users to
-    // create them).
-    $form['email_admin_created']['#title'] = t('Welcome (new user invited by administrator)');
-    $form['email_admin_created']['#description'] = t('Edit the e-mail message sent to users invited to join the site by an administrator.');
-    $form['registration_cancellation']['user_register']['#options'][USER_REGISTER_ADMINISTRATORS_ONLY] = t('Only people invited by an administrator');
   }
 }
 
@@ -632,8 +555,6 @@ function scarecrow_menu_alter(&$items) {
     'user/%user/edit-profile' => 'scarecrow_user_edit_profile_access',
     'admin/people/permissions/roles/edit' => 'scarecrow_role_edit_access',
     'admin/people/permissions' => 'scarecrow_role_permissions_edit_access',
-    // Prevent access to the user OpenID setup page.
-    'user/%user/openid' => FALSE,
     // Don't contact user 1.
     'user/%user/contact' => 'scarecrow_contact_tab_access',
     // People shouldn't be able to change their site template
@@ -645,10 +566,6 @@ function scarecrow_menu_alter(&$items) {
     // Disallow access to date popup config page.
     'admin/config/date/date_popup' => FALSE,
     'admin/reports/fields/permissions' => FALSE,
-    // Even for enterprise sites that have the Secure Pages module on, there
-    // are too many ways to break your site with it so we don't want them to be
-    // allowed to configure it.
-    'admin/config/system/securepages' => FALSE,
     // Hide the main feeds.module menu item.  Should be all we need to hide for
     // now, as nothing else seems to work without Feeds Admin UI.
     'import' => FALSE,
@@ -676,52 +593,11 @@ function scarecrow_menu_alter(&$items) {
     $access_callbacks['admin/content/import'] = FALSE;
   }
 
-  if (scarecrow_force_openid()) {
-    // Disallow creation of local users.
-    $access_callbacks['admin/people/create'] = FALSE;
-    // Disallow access to local password reset URLs for non-user-1 requests.
-    $access_callbacks['user/reset/%/%/%'] = 'scarecrow_user_reset_access';
-  }
-  else {
-    $access_callbacks['admin/people/invite'] = FALSE;
-  }
   _scarecrow_alter_menu_tree_access_callbacks($items, $access_callbacks);
 
   // We don't want to modify all paths underneath this one, since the clean URL
   // access check is (probably?) important.
   $items['admin/config/search/clean-urls']['access callback'] = FALSE;
-
-  // Gardens OpenID based user page overrides. We have this override here, so
-  // disabling scarecrow features for development will allow local accounts.
-  if (scarecrow_force_openid()) {
-    foreach (array('user/login', 'user/password', 'user/register') as $key) {
-      // See below; user/register is handled separately.
-      if ($key != 'user/register') {
-        $items[$key]['page callback'] = 'gardens_openid_login_message';
-        unset($items[$key]['page arguments']);
-        unset($items[$key]['file']);
-      }
-
-      // Override to be callbacks instead of tabs. This way the pages will not
-      // be visible, but if links point to them, we still expose the same output
-      // on them with explanation on the centralized login system.
-      $items[$key]['type'] = MENU_CALLBACK;
-    }
-
-    // Override page callback for user page.
-    $items['user']['page callback'] = 'gardens_client_user_page';
-  }
-
-  if (!(module_exists('janrain_capture_ui') && variable_get('janrain_capture_enforce', FALSE))) {
-    // The user/register page must be overridden on all non-Capture-enabled sites
-    // (even those that don't require OpenID), since it is used inside the OpenID
-    // login flow for users who are registering that way.
-    $items['user/register']['page callback'] = 'gardens_client_user_register_page';
-    $items['user/register']['access callback'] = 'gardens_client_user_register_access';
-    $items['user/register']['theme callback'] = 'gardens_client_user_register_theme';
-    unset($items['user/register']['page arguments']);
-    unset($items['user/register']['file']);
-  }
 
   // Require mollom or moderation setup.
   $items['admin/config/content/mollom/unprotect/%mollom_form']['access callback'] = 'scarecrow_mollom_require_access';
@@ -730,19 +606,6 @@ function scarecrow_menu_alter(&$items) {
   // Remove meta tag export tab, but keep the callback active.
   if (isset($items['admin/config/search/metatags/config/%metatag_config/export'])) {
     $items['admin/config/search/metatags/config/%metatag_config/export']['type'] = MENU_VISIBLE_IN_BREADCRUMB;
-  }
-}
-
-/**
- * Implements hook_menu_local_tasks_alter().
- */
-function scarecrow_menu_local_tasks_alter(&$data, $router_item, $root_path) {
-  // Hide the tabs on the user registration form if we encounter it in the
-  // middle of an OpenID login. This is necessary for sites where OpenID logins
-  // are optional, since the code in scarecrow_menu_alter() above which sets
-  // these tabs to MENU_CALLBACKs everywhere will not run.
-  if ($root_path == 'user/register' && gardens_client_user_registration_openid_response()) {
-    $data['tabs'][0]['output']['#access'] = FALSE;
   }
 }
 
@@ -882,7 +745,7 @@ function scarecrow_form_field_ui_field_edit_form_alter(&$form, &$form_state) {
   // file system itself to be private), so disable them.
   if (!empty($form['#field']['type']) && in_array($form['#field']['type'], array('file', 'image', 'media'))) {
     $form['field']['field_permissions']['type']['#disabled'] = TRUE;
-    $form['field']['field_permissions']['type']['#description'] = t('This option is disabled for the %label field because !service_name_long does not support private files.', array('%label' => $form['#instance']['label'], '!service_name_long' => variable_get('gardens_service_name_long', 'Drupal Gardens')));
+    $form['field']['field_permissions']['type']['#description'] = t('This option is disabled for the %label field because !service_name_long does not support private files.', array('%label' => $form['#instance']['label'], '!service_name_long' => acsf_vget('acsf_factory_name', 'Acquia Cloud Site Factory')));
   }
 }
 
@@ -1128,53 +991,6 @@ function scarecrow_node_validate($node, $form) {
  */
 function scarecrow_is_enabled() {
   return !variable_get('acquia_gardens_developer_mode', FALSE);
-}
-
-/**
- * Determines if the site is required to use OpenID logins for all users.
- */
-function scarecrow_force_openid() {
-  return scarecrow_is_enabled() && !variable_get('acquia_gardens_local_user_accounts', FALSE);
-}
-
-/**
- * Configures a site to allow local user logins (i.e., makes OpenID optional).
- */
-function scarecrow_allow_local_user_logins() {
-  // Force email verification for all new user accounts, for spam protection.
-  variable_set('user_email_verification', TRUE);
-
-  // Reset any user mail texts that the administrator hasn't overridden from
-  // their Drupal Gardens defaults, so that they automatically fall back on the
-  // Drupal core defaults instead. (The Drupal Gardens defaults are specific to
-  // the OpenID login process and therefore not appropriate once the site has
-  // switched to allowing local user accounts.)
-  module_load_install('gardens');
-  $gardens_mail_variables = gardens_setup_user_mail_variables();
-  foreach (gardens_misc_get_unchanged_variables($gardens_mail_variables) as $variable) {
-    variable_del($variable);
-  }
-
-  // Delete the mail texts for admin-created user accounts no matter what (even
-  // if they were overridden). For sites with required OpenID logins, these
-  // variables were used to construct e-mails to invite users to join the site,
-  // rather than for admin-created accounts, so there is no way they can still
-  // be relevant.
-  foreach (array('user_mail_register_admin_created_subject', 'user_mail_register_admin_created_body') as $variable) {
-    $current_value = variable_get($variable);
-    if (isset($current_value)) {
-      variable_del($variable);
-    }
-  }
-
-  // Finally, enable the local user accounts setting. This affects menu paths,
-  // so we also need to rebuild the menu for it to take effect (unless we're in
-  // the middle of installing Drupal, since the menu will be rebuilt at the end
-  // of that anyway).
-  variable_set('acquia_gardens_local_user_accounts', TRUE);
-  if (!drupal_installation_attempted()) {
-    menu_rebuild();
-  }
 }
 
 /**
@@ -1880,38 +1696,6 @@ function scarecrow_help_text($path) {
 }
 
 /**
- * Implement hook_user_cancel_methods_alter()
- */
-function scarecrow_user_cancel_methods_alter(&$methods) {
-  // Say we remove the account not delete it. For now we only say this if the
-  // site requires all users to log in via OpenID. (In theory for sites where
-  // OpenID is optional we should make this change contextually, since some
-  // user accounts will still have an OpenID account on the Gardener. However,
-  // there doesn't seem to be any good way to get this contextual information;
-  // plus, we can reasonably assume that people who are using OpenID accounts
-  // on these sites are advanced users such as administrators and therefore
-  // already understand what's going on.)
-  if (scarecrow_force_openid()) {
-    $methods['user_cancel_delete']['title'] = t("Remove account and the account's content from this site.");
-    $methods['user_cancel_delete']['description'] = t('Your account will be removed from this site and all account information deleted. All of your content on this site will also be deleted. The account is not removed from @service_domain or any other !service_name_long sites.', array(
-      '!service_name_long' => variable_get('gardens_service_name_long', 'Drupal Gardens'),
-      '@service_domain' => str_replace(array('http://', 'https://'), '', variable_get('acquia_gardens_gardener_url', 'http://drupalgardens.com')),
-    ));
-    $methods['user_cancel_reassign']['title'] = t("Remove account from this site. The account's content will be owned by the <em class=\"placeholder\">Anonymous</em> user.");
-    $methods['user_cancel_reassign']['description'] = t('Your account will be removed from this site and all account information deleted. All of your content on this site will be assigned to the <em class="placeholder">Anonymous</em> user. The account is not removed from @service_domain or any other !service_name_long sites.', array(
-      '!service_name_long' => variable_get('gardens_service_name_long', 'Drupal Gardens'),
-      '@service_domain' => str_replace(array('http://', 'https://'), '', variable_get('acquia_gardens_gardener_url', 'http://drupalgardens.com')),
-    ));
-  }
-  // If the site does allow local user logins, at least change the text to say
-  // "from this site" to reduce some of the above confusion.
-  else {
-    $methods['user_cancel_delete']['title'] = t("Delete the account and its content from this site.");
-    $methods['user_cancel_reassign']['title'] = t('Delete the account from this site and make its content belong to the %anonymous-name user.', array('%anonymous-name' => variable_get('anonymous', t('Anonymous'))));
-  }
-}
-
-/**
  * Implement hook_form_FORM_ID_alter().
  */
 function scarecrow_form_user_cancel_confirm_form_alter(&$form, &$form_state) {
@@ -2020,30 +1804,8 @@ function scarecrow_gardens_features_add_dialog_user_enhancements_alter(&$add_enh
   // we don't want Dialog User behavior to interfere. This applies, for
   // example, if a site owner places a hardcoded link to a user/* path in the
   // HTML, in which case scarecrow_url_outbound_alter() won't run on it.
-  if (scarecrow_force_openid()) {
+  if (acsf_openid_force_openid()) {
     $add_enhancements = FALSE;
-  }
-}
-
-/**
- * Implement hook_url_outbound_alter().
- */
-function scarecrow_url_outbound_alter(&$path, $options, $original_path) {
-  // Alter user login, register and password links to go directly to
-  // gardener/login or gardener/register, thus eliminating an unneeded user
-  // interaction. Don't do this for user/register when a Gardens OpenID user
-  // registration is in process, though (since OpenID needs to redirect to the
-  // actual user registration page if there are profile fields that need to be
-  // filled out).
-  if (scarecrow_force_openid()) {
-    // @todo: It's not clear where user/password should actually redirect, so
-    //   for now just use gardener/login for that too.
-    if ($path == 'user/login' || $path == 'user/password') {
-      $path = 'gardener/login';
-    }
-    elseif ($path == 'user/register' && !gardens_client_user_registration_openid_response()) {
-      $path = 'gardener/register';
-    }
   }
 }
 

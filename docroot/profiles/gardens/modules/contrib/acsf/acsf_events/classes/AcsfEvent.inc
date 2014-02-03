@@ -103,7 +103,7 @@ class AcsfEvent {
       if ($info['type'] == $this->type) {
         $path = trim($info['path'], '/');
         $class = $info['class'];
-        require sprintf('%s/%s/%s.inc', DRUPAL_ROOT, $path, $class);
+        require_once sprintf('%s/%s/%s.inc', DRUPAL_ROOT, $path, $class);
         $this->pushHandler(new $class($this), 'incomplete');
       }
     }
@@ -129,7 +129,7 @@ class AcsfEvent {
   /**
    * Pushes a handler to in internal list.
    *
-   * @param AcsfHandler $handler
+   * @param AcsfEventHandler $handler
    *   The handler to add.
    * @param String $type
    *   The type of handler: incomplete, complete or failed.

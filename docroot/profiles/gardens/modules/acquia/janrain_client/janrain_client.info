@@ -2,6 +2,7 @@ name = Social Publish and API
 description = Allow users to log in using third party services like Facebook and Twitter, and push content out to these services
 core = 7.x
 dependencies[] = gardens_client
+dependencies[] = acsf_openid
 dependencies[] = dialog
 dependencies[] = dialog_user
 package = Drupal Gardens

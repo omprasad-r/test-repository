@@ -151,7 +151,7 @@ function gardens_statsd_user_insert($edit, $account, $category) {
 function gardens_statsd_form_user_register_form_alter(&$form, $form_state, $form_id) {
   // Do not do these modifications during an Open ID registration or on the
   // admin user creation form.
-  if (!gardens_client_user_registration_openid_response() && user_is_anonymous()) {
+  if (!acsf_openid_user_registration_response() && user_is_anonymous()) {
     $form['#submit'][] = 'gardens_statsd_user_register_submit';
   }
 }

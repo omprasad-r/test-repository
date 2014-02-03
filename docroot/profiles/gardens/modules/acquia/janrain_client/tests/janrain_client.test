@@ -27,7 +27,7 @@ class JanRainMastTest extends MAStTest {
     variable_set('janrain_client_class', "MockRPX");
     variable_set('rpx_publish_node_types', array('article'));
     // It causes XML-RPC errors if janrain_client is enabled without the variables being set 1st.
-    variable_set('acquia_gardens_local_user_accounts', TRUE);
+    variable_set('acsf_local_user_accounts', TRUE);
     $modules = array('janrain_client');
     $success = module_enable($modules, TRUE);
     $this->assertTrue($success, t('Enabled modules: %modules', array('%modules' => implode(', ', $modules))));

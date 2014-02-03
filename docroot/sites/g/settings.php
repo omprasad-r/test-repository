@@ -92,9 +92,10 @@ if (file_exists('/var/www/site-php')) {
   // We can't use an external cache if we are trying to invoke these hooks.
   $conf['page_cache_invoke_hooks'] = FALSE;
 
-  if (!empty($site_settings['flags']['memcache']) && !empty($site_settings['memcache_inc'])) {
-    // @todo setup memcache.
+  if (!empty($site_settings['flags']['memcache_enabled']) && !empty($site_settings['memcache_inc'])) {
     $conf['cache_backends'][] = $site_settings['memcache_inc'];
+    $conf['cache_default_class'] = 'MemCacheDrupal';
+    $conf['cache_class_cache_form'] = 'DrupalDatabaseCache';
   }
   if (!empty($site_settings['flags']['slackerland'])) {
     // @todo render site inoperative.

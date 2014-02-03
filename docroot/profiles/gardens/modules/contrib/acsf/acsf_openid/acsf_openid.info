@@ -4,5 +4,3 @@ core = 7.x
 package = Acquia Cloud Site Factory
 
 dependencies[] = openid
-
-hidden = TRUE

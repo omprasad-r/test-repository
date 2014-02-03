@@ -32,8 +32,12 @@ function gardens_install() {
   // on again automatically by scarecrow_allow_local_user_logins().
   variable_set('user_email_verification', 0);
 
-  // Add all allowed permissions to the site maintainer role.
-  $role = user_role_load_by_name('site maintainer');
+  // Create site maintainer role and add all allowed permissions to the site
+  // maintainer role.
+  $role = new stdClass();
+  $role->name = 'site maintainer';
+  user_role_save($role);
+  variable_set('gardens_site_owner_role', $role->rid);
   user_role_grant_permissions($role->rid, array_keys(module_invoke_all('permission')));
   // Remove permissions that should not be assigned, but that may have been
   // assigned by the standard profile.
@@ -70,7 +74,7 @@ function gardens_install() {
   // on the site (it's hidden by the Scarecrow module), but we place it in the
   // sidebar so it's immediately available when the site is exported.
   gardens_profile_add_block('user', 'login', $default_theme, '1', '1', 'sidebar_a');
-  gardens_profile_add_block('gardens_client', 'login', $default_theme, '1', '1', 'sidebar_a');
+  gardens_profile_add_block('acsf_openid', 'login', $default_theme, '1', '1', 'sidebar_a');
   gardens_profile_add_block('system', 'navigation', $default_theme, '1', '1', 'sidebar_a');
   gardens_profile_add_block('system', 'powered-by', $default_theme, '1', '1', 'copyright');
   gardens_profile_add_block('system', 'help', $default_theme, '1', '1', 'help');
@@ -798,8 +802,13 @@ function gardens_copy_of_standard_install() {
   user_role_grant_permissions(DRUPAL_ANONYMOUS_RID, array('access content', 'access comments', $filtered_html_permission));
   user_role_grant_permissions(DRUPAL_AUTHENTICATED_RID, array('access content', 'access comments', 'post comments', 'skip comment approval', $filtered_html_permission));
 
-  // Grant all permissions to the administrator role.
-  $admin_role = user_role_load_by_name('administrator');
+  // Create a default role for site administrators and grant all permissions to
+  // the administrator role.
+  $admin_role = new stdClass();
+  $admin_role->name = 'administrator';
+  $admin_role->weight = 2;
+  user_role_save($admin_role);
+  variable_set('user_admin_role', $admin_role->rid);
   user_role_grant_permissions($admin_role->rid, array_keys(module_invoke_all('permission')));
 
   // Assign user 1 the "administrator" role.
