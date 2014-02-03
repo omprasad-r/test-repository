@@ -203,11 +203,6 @@ function install_site($domain, $db_role, $gardens_site_info = array()) {
   $memory_used = acquia_gardens_peak_memory_usage();
   $dir = dirname(__FILE__);
   syslog(LOG_NOTICE, "Successfully installed Gardens site $gardens_site_id in $dir. ($memory_used)");
-  // For any operation except install, populate data from gardener.
-  // This should ALSO happen via task from the gardener.
-  if (!gardens_client_phone_home()) {
-    syslog(LOG_ERR, 'GardensError: Failed to retrieve Gardener data in install_gardens() for site: '. $gardens_site_id);
-  }
 }
 
 /**
