@@ -14,7 +14,8 @@ class AcsfMessageXmlRpc extends AcsfMessage {
    */
   public function __construct($method, $endpoint, $parameters = NULL, AcsfConfig $config = NULL, $ah_site = NULL, $ah_env = NULL, Closure $callback = NULL) {
     parent::__construct($method, $endpoint, $parameters, $config, $ah_site, $ah_env, $callback);
-    module_load_include('inc', 'content', 'includes/xmlrpc');
+    require_once DRUPAL_ROOT . '/includes/common.inc';
+    require_once DRUPAL_ROOT . '/includes/xmlrpc.inc';
     $this->ah_hostname_full = php_uname('n');
     $this->ah_hostname_base = reset(explode('.', $this->ah_hostname_full));
   }

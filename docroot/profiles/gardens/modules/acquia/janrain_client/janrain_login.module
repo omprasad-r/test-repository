@@ -282,7 +282,7 @@ function _janrain_login_delete_user_data($uid) {
       ->execute();
   }
 
-  if (db_table_exists('rpx_authmap_username') && variable_get('acquia_gardens_local_user_accounts', FALSE)) {
+  if (db_table_exists('rpx_authmap_username') && !acsf_openid_force_openid()) {
     db_delete('rpx_authmap_username')
       ->condition('uid', $uid)
       ->execute();
@@ -346,8 +346,7 @@ function janrain_login_cancel_get_form_info() {
  * directly from Engage).
  *
  * Show the signin widget in the user register form displayed in a popup
- * using AJAX for those Gardens sites that have
- * acquia_gardens_local_user_accounts enabled.
+ * using AJAX for those Gardens sites that allow local accounts.
  *
  * Show the signin widget on the registration form that is displayed
  * as a page (as opposed to dialog). This available to users via
@@ -356,7 +355,7 @@ function janrain_login_cancel_get_form_info() {
 function janrain_login_form_user_register_form_alter(&$form, &$form_state, $form_id) {
 
   // Is this is a local accounts signup attempt and is the user anonymous?
-  if (variable_get('acquia_gardens_local_user_accounts', FALSE) && user_is_anonymous()) {
+  if (!acsf_openid_force_openid() && user_is_anonymous()) {
     // Add the signin widget.
     $form['#pre_render'][] = '_janrain_login_rearrange_user_register_login_form';
     if (substr($form['#action'], 0, 19) != '/user/register/ajax') {
@@ -371,7 +370,7 @@ function janrain_login_form_user_register_form_alter(&$form, &$form_state, $form
     }
     // If an Engage transaction is on we alter the form.
     if (isset($_SESSION['rpx']) && $_SESSION['rpx']['stat'] == 'ok') {
-      drupal_set_title(t('The site !site-name wants to know more about you.', array('!site-name' => '<em class="placeholder">' . filter_xss_admin(gardens_client_site_name_or_domain()) . '</em>')), PASS_THROUGH);
+      drupal_set_title(t('The site !site-name wants to know more about you.', array('!site-name' => '<em class="placeholder">' . filter_xss_admin(acsf_openid_site_name_or_domain()) . '</em>')), PASS_THROUGH);
       drupal_add_js(array('rpxSuppress' => 1), 'setting');
       janrain_login_alter_user_register_form_for_local_auth($form);
       janrain_login_populate_user_fields($form);
@@ -407,8 +406,7 @@ function janrain_login_form_user_register_form_alter(&$form, &$form_state, $form
  * Implements hook_form_FORM_ID_alter().
  *
  * Show the signin widget in the user login form displayed in a popup
- * using AJAX for those Gardens sites that have
- * acquia_gardens_local_user_accounts enabled.
+ * using AJAX for those Gardens sites that allow local logins.
  *
  * Show the signin widget on the registration form that is displayed
  * as a page (as opposed to dialog). This available to users via
@@ -416,7 +414,7 @@ function janrain_login_form_user_register_form_alter(&$form, &$form_state, $form
  */
 function janrain_login_form_user_login_alter(&$form, &$form_state, $form_id) {
 
-  if (variable_get('acquia_gardens_local_user_accounts', FALSE)) {
+  if (!acsf_openid_force_openid()) {
     drupal_add_js(array('rpxSuppress' => 0), 'setting');
     $form['#pre_render'][] = '_janrain_login_rearrange_user_register_login_form';
     if (substr($form['#action'], 0, 16) != '/user/login/ajax') {
@@ -457,7 +455,7 @@ function janrain_login_form_janrain_client_admin_settings_alter(&$form, &$form_s
  */
 function janrain_login_page_build(&$page) {
   // Only add for local accounts/anonymous users.
-  if (!variable_get('acquia_gardens_local_user_accounts', FALSE) || !user_is_anonymous()) {
+  if (acsf_openid_force_openid() || !user_is_anonymous()) {
     return;
   }
 
@@ -1237,7 +1235,7 @@ function janrain_login_user_login(&$edit, $account) {
   // For local signins (and signups), we do this in
   // janrain_login_token_handler(), janrain_login_user_register_submit() and
   // hook_user_insert()
-  if (variable_get('acquia_gardens_local_user_accounts', FALSE)) {
+  if (!acsf_openid_force_openid()) {
     return;
   }
 
@@ -1271,7 +1269,7 @@ function janrain_login_user_login(&$edit, $account) {
  */
 function janrain_login_user_insert(&$edit, $account, $category) {
   // Make sure user has registered via Engage and this is a local signup.
-  if (!isset($_SESSION['rpx']) || !variable_get('acquia_gardens_local_user_accounts', FALSE)) {
+  if (!isset($_SESSION['rpx']) || acsf_openid_force_openid()) {
     return;
   }
 
@@ -1357,7 +1355,7 @@ function _janrain_login_update_engage_mapping($uid) {
   // We use the mapping API only for local accounts (since for the SSO flow
   // linked accounts are managed by Gardener and we have no way of knowing when
   // users unlink their accounts).
-  if (!variable_get('acquia_gardens_local_user_accounts', FALSE)) {
+  if (acsf_openid_force_openid()) {
     return;
   }
 
@@ -1409,7 +1407,7 @@ function _janrain_login_delete_engage_mapping($authname, $uid, $all = FALSE) {
   // We use the mapping API only for local accounts (since for the SSO flow
   // linked accounts are managed by Gardener and we have no way of knowing when
   // users unlink their accounts).
-  if (!variable_get('acquia_gardens_local_user_accounts', FALSE)) {
+  if (acsf_openid_force_openid()) {
     return;
   }
 
@@ -1484,7 +1482,7 @@ function _janrain_login_token_url($rpx_params = array()) {
 function janrain_login_admin_paths() {
   $paths = array();
 
-  if (variable_get('acquia_gardens_local_user_accounts', FALSE)) {
+  if (!acsf_openid_force_openid()) {
     $paths += array(
       'user/*/janrain-accounts' => TRUE,
       'user/*/janrain-accounts/disable/*' => TRUE,

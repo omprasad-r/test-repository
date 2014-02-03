@@ -513,7 +513,7 @@ function _janrain_client_update_engage_mapping($uid) {
   // We use the mapping API only for local accounts (since for the SSO flow
   // linked accounts are managed by Gardener and we have no way of knowing when
   // users unlink their accounts).
-  if (!variable_get('acquia_gardens_local_user_accounts', FALSE)) {
+  if (acsf_openid_force_openid()) {
     return;
   }
 
@@ -1427,5 +1427,16 @@ function janrain_client_token_result($ajax, $status = 'error', $message = '') {
   else {
     drupal_goto();
   }
+}
+
+/**
+ * Implements hook_acsf_openid_request_alter().
+ */
+function janrain_client_acsf_openid_request_alter(&$request) {
+  if (!empty($request['openid.ax.if_available'])) {
+    $request['openid.ax.if_available'] .= ',';
+  }
+  $request['openid.ax.if_available'] .= 'rpx_token';
+  $request['openid.ax.type.rpx_token'] = 'http://drupalgardens.com/axschema/rpx_token';
 }
 

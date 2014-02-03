@@ -27,7 +27,7 @@ function site_theme_settings_menu() {
  * policy.
  */
 function site_theme_settings_form_user_profile_form_alter(&$form, &$form_state) {
-  if (scarecrow_force_openid()) {
+  if (acsf_openid_force_openid()) {
     unset($form['picture']);
   }
 }

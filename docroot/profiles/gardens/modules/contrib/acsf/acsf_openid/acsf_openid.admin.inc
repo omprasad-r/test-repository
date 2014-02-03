@@ -191,3 +191,104 @@ function acsf_openid_admin_invite_people_tokens() {
     '[user:mail]',
   );
 }
+
+/**
+ * Form constructor to configure acsf_openid behaviour.
+ *
+ * @see acsf_openid_admin_settings_form_submit()
+ *
+ * @ingroup forms
+ */
+function acsf_openid_admin_settings_form($form, $form_state) {
+  $form['overlay_status'] = array(
+    '#type' => 'fieldset',
+    '#weight' => -10,
+    '#title' => t('Overlay'),
+  );
+
+  if (!module_exists('overlay')) {
+    $form['overlay_status']['#description'] = t('You cannot configure any overlay-related settings until you enable the Overlay module.');
+  }
+
+  if (acsf_openid_force_openid()) {
+    $title = t('Use the overlay for custom user fields during registration');
+    $description = t("During registration, account fields are always displayed in the overlay. If enabled, custom fields will use the overlay also, instead of the site's page.");
+  }
+  else {
+    $title = t('Use the overlay for custom user fields during !service_name_long account registration', array(
+      '!service_name_long' => acsf_vget('acsf_factory_name', 'Acquia Cloud Site Factory'),
+    ));
+    $description = t("When a user registers with a !service_name_long account, fields provided by !service_name_long are always displayed in the overlay. If enabled, custom fields will use the overlay also, instead of the site's page.", array(
+      '!service_name_long' => acsf_vget('acsf_factory_name', 'Acquia Cloud Site Factory'),
+    ));
+  }
+  $form['overlay_status']['acsf_openid_overlay_for_registration'] = array(
+    '#type' => 'checkbox',
+    '#title' => $title,
+    '#description' => $description,
+    '#default_value' => variable_get('acsf_openid_overlay_for_registration', 1),
+    '#disabled' => !module_exists('overlay'),
+  );
+
+  $form['overlay_status']['acsf_openid_overlay_for_login'] = array(
+    '#type' => 'checkbox',
+    '#title' => t('Use the overlay for OpenID sign-in pages'),
+    '#default_value' => variable_get('acsf_openid_overlay_for_login', 1),
+    '#disabled' => !module_exists('overlay'),
+  );
+
+  $form['overlay_status']['acsf_openid_overlay_for_admin'] = array(
+    '#type' => 'checkbox',
+    '#title' => t('Use the overlay for administration pages'),
+    '#default_value' => variable_get('acsf_openid_overlay_for_admin', 1),
+    '#disabled' => !module_exists('overlay'),
+  );
+
+  $form['generic'] = array(
+    '#title' => t('Advanced Settings'),
+    '#type' => 'fieldset',
+  );
+  $form['generic']['acsf_openid_global_logout'] = array(
+    '#type' => 'checkbox',
+    '#title' => t('Global sign out'),
+    '#description' => t('When users sign out from this website they will also be signed out of the Acquia Cloud Site Factory.'),
+    '#default_value' => variable_get('acsf_openid_global_logout', 1),
+  );
+  $form['generic']['acsf_openid_registration_handling'] = array(
+    '#type' => 'checkbox',
+    '#title' => t('Registration override'),
+    '#description' => t('Use OpenID for invited users, even if new account creation is not allowed.'),
+    '#default_value' => variable_get('acsf_openid_registration_handling', 1),
+  );
+
+  // Since some of these flags may require us to rebuild menu, we have to ensure
+  // that our submit function gets executed after the variable_set, this is why
+  // we are adding our submit function after system_settings_form().
+  $form = system_settings_form($form);
+  $form['#submit'][] = 'acsf_openid_admin_settings_form_submit';
+
+  return $form;
+}
+
+/**
+ * Form submit handler for acsf_openid_admin_settings_form().
+ */
+function acsf_openid_admin_settings_form_submit(&$form, &$form_state) {
+  // Some flags may have changed affecting some of the menu items.
+  menu_rebuild();
+
+  if (empty($form_state['values']['acsf_openid_overlay_for_admin'])) {
+    if (module_exists('overlay') && !empty($form['overlay_status']['acsf_openid_overlay_for_admin']['#default_value'])) {
+      // If we were in the overlay and the overlay was disabled, we need to
+      // close it down and prevent the form redirect.
+      acsf_openid_close_overlay('admin/config/user-interface/overlay');
+      $form_state['redirect'] = '';
+    }
+  }
+  elseif (empty($form['overlay_status']['acsf_openid_overlay_for_admin']['#default_value'])) {
+    // Going to the overlay from the non-overlay admin. Since the admin
+    // pages will not activate the overlay, we need to redirect out from
+    // there (to the front page).
+    $form_state['redirect'] = '';
+  }
+}

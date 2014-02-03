@@ -45,10 +45,10 @@ class GardensMiscInvitePeopleTestCase extends DrupalWebTestCase {
     // again. We need to rebuild the menu after toggling the setting so that
     // the login-related Drupal menu items which are altered in Gardens always
     // wind up in the correct state at the end.
-    variable_set('acquia_gardens_local_user_accounts', TRUE);
+    variable_set('acsf_local_user_accounts', TRUE);
     menu_rebuild();
     $this->drupalLogin($account);
-    variable_set('acquia_gardens_local_user_accounts', FALSE);
+    variable_set('acsf_local_user_accounts', FALSE);
     menu_rebuild();
   }
 
@@ -68,7 +68,7 @@ class GardensMiscInvitePeopleTestCase extends DrupalWebTestCase {
     $this->assertResponse(200, t('An administrator can visit the page for inviting people to a Gardens site.'));
 
     // Allow a maximum of three invitations to be sent in the tests below.
-    variable_set('gardens_misc_invite_people_threshold', 3);
+    variable_set('acsf_openid_invite_people_threshold', 3);
 
     // Start with a fresh set of collected e-mails.
     variable_set('drupal_test_email_collector', array());
@@ -96,7 +96,7 @@ class GardensMiscInvitePeopleTestCase extends DrupalWebTestCase {
 
     // Temporarily raise the invitation limit, and try to submit a mix of valid
     // and invalid emails; it should be rejected.
-    variable_set('gardens_misc_invite_people_threshold', 4);
+    variable_set('acsf_openid_invite_people_threshold', 4);
     $invalid = 'test2';
     $edit['email_addresses'] = 'test1@example.com,' . $invalid;
     $this->drupalPost('admin/people/invite', $edit, t('Send invitations'));
@@ -112,7 +112,7 @@ class GardensMiscInvitePeopleTestCase extends DrupalWebTestCase {
     $this->assertUrl('admin/people/invite');
     $mails = variable_get('drupal_test_email_collector', array());
     $this->assertEqual(count($mails), 2, t('No new e-mail invitations were sent when one of them is invalid.'));
-    variable_set('gardens_misc_invite_people_threshold', 3);
+    variable_set('acsf_openid_invite_people_threshold', 3);
 
     // Try to send two more invitations. This should be rejected due to flood
     // control.

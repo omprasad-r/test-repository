@@ -1254,9 +1254,15 @@ class mastImageField extends mastFieldStandard {
 
   public function validate($value) {
     global $user;
+
+    if (empty($value)) {
+      return TRUE;
+    }
+
     if (!is_array($value)) {
       $value = array($value);
     }
+
     foreach ($value as $fid) {
       if (!is_numeric($fid)) {
         return FALSE;
@@ -1269,6 +1275,19 @@ class mastImageField extends mastFieldStandard {
       }
     }
     return TRUE;
+  }
+
+  /**
+   * Handles empty image fields.
+   */
+  public function prepareValue($value) {
+    $struct = parent::prepareValue($value);
+
+    if (empty($struct['fid'])) {
+      $struct = NULL;
+    }
+
+    return $struct;
   }
 }
 

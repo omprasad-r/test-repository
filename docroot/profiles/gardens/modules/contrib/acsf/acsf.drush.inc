@@ -18,6 +18,13 @@ function acsf_drush_command() {
       'description' => 'Set a site online via SQL.',
       'aliases' => array('go-on'),
     ),
+    'report-complete-async-process' => array(
+      'bootstrap' => DRUSH_BOOTSTRAP_DRUPAL_ROOT,
+      'description' => 'Send notice back to the Factory when a process completes.',
+      'options' => array(
+        'data' => 'Serialized PHP data regarding the caller.',
+      ),
+    ),
     'localhost-curl' => array(
       'description' => "Makes a localhost curl request.",
       'arguments' => array(
@@ -64,6 +71,13 @@ function drush_acsf_go_offline() {
   $expected = time() + 10*60;
   $query .= "INSERT INTO variable (name, value) VALUES ('maintenance_mode', 'i:1;'); ";
   $query .= "INSERT INTO variable (name, value) VALUES ('acsf_maintenance_time', '". serialize($expected) ."'); ";
+
+  // Get the cron lock to prevent cron from running during an update.
+  // Use a large lock timeout because an update can take a long time.
+  // All cron processes are stopped before update begins, so the lock will
+  // be available.
+  lock_acquire('cron', 1200.0);
+
   return drush_sql_query($query);
 }
 
@@ -90,6 +104,9 @@ function drush_acsf_go_online() {
   if (!empty($content)) {
     $query .= "INSERT INTO variable (name, value) VALUES ('maintenance_mode', 'i:1;'); ";
   }
+
+  // Release cron lock.
+  lock_release('cron');
   return drush_sql_query($query);
 }
 
@@ -175,5 +192,41 @@ function _drush_acsf_clear_maint() {
 function _drush_acsf_get_raw_variable($variable_name) {
   $result = drush_db_select('variable', 'value', 'name = :name', array(':name' => $variable_name));
   return drush_db_result($result);
+}
+
+/**
+ * Drush command. Reports process completion back to the factory.
+ */
+function drush_acsf_report_complete_async_process() {
+  $data = unserialize(drush_get_option('data', NULL));
+
+  if (empty($data->callback) || empty($data->object_id) || empty($data->acsf_path)) {
+    drush_set_error('Data error', 'Requires serialized object in --data argument with $data->callback and $data->object_id populated.');
+    exit(1);
+  }
+
+  // Since this does not bootstrap drupal fully, we need to manually require the
+  // classes necessary to send a message to the Factory.
+  require_once $data->acsf_path . '/classes/AcsfConfig.inc';
+  require_once $data->acsf_path . '/classes/AcsfConfigDefault.inc';
+  require_once $data->acsf_path . '/classes/AcsfMessage.inc';
+  require_once $data->acsf_path . '/classes/AcsfMessageXmlRpc.inc';
+  require_once $data->acsf_path . '/classes/AcsfMessageResponse.inc';
+  require_once $data->acsf_path . '/classes/AcsfMessageResponseXmlRpc.inc';
+
+  $arguments = array(
+    'wid' => $data->object_id,
+    'signal' => 1,
+    'state' => isset($data->state) ? $data->state : NULL,
+    'data' => $data,
+  );
+
+  try {
+    $message = new AcsfMessageXmlRpc('GET', $data->callback, array($arguments));
+    $message->send();
+  }
+  catch (AcsfMessageFailedResponseException $e) {
+    syslog(LOG_ERR, 'Unable to contact the factory via AcsfMessage.');
+  }
 }
 

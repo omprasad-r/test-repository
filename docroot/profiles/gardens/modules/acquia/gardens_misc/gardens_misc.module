@@ -51,13 +51,6 @@ function gardens_misc_init() {
  * Implements hook_menu().
  */
 function gardens_misc_menu() {
-  $items['admin/people/invite'] = array(
-    'title' => 'Invite people',
-    'page callback' => 'gardens_misc_invite_people',
-    'access arguments' => array('administer users'),
-    'type' => MENU_LOCAL_ACTION,
-  );
-
   $items['block_everything/fix'] = array(
     'title' => 'Block everything fix',
     'page callback' => 'gardens_misc_fix_block_everything',
@@ -611,7 +604,7 @@ function gardens_misc_modules_installed($modules) {
     // log in (or log out) to either the SSL or non-SSL domain without getting
     // switched.
     if (!trim(variable_get('securepages_ignore', ''))) {
-      variable_set('securepages_ignore', "gardener/login\ngardener/register\nuser/login\nuser/register\nuser/logout");
+      variable_set('securepages_ignore', "gardener/login\ngardener/register\nuser/login\nuser/register\nuser/logout\nacsf-openid-factory/login\nacsf-openid-factory/register");
     }
   }
 
@@ -658,6 +651,12 @@ function gardens_misc_modules_enabled($modules) {
     // The site's domain may have changed since the module was last turned on,
     // so adjust SSL settings if necessary.
     gardens_misc_adjust_secure_domain_settings_if_necessary();
+
+    // Disable overlay for login / registration if securepages is enabled since
+    // overlay does not behave well when there's a need to switch between
+    // protocols.
+    variable_set('acsf_openid_overlay_for_login', 0);
+    variable_set('acsf_openid_overlay_for_registration', 0);
   }
 
   if (in_array('wordpress_migrate', $modules)) {
@@ -705,6 +704,12 @@ function gardens_misc_modules_disabled($modules) {
     if (is_array($alert_text)) {
       variable_set('extlink_alert_text', $alert_text['value']);
     }
+  }
+  if (in_array('securepages', $modules)) {
+    // Reenable overlay for login if securepages is disabled as this is a
+    // variable that is hidden on gardens_distro and should be enabled in
+    // general (except when securepages is around).
+    variable_set('acsf_openid_overlay_for_login', 1);
   }
 }
 
@@ -812,7 +817,7 @@ function gardens_misc_form_wordpress_migrate_import_form_alter(&$form, &$form_st
 
   // Don't let people create new local accounts during migration, unless local
   // accounts are allowed on their site.
-  if (!variable_get('acquia_gardens_local_user_accounts', FALSE)) {
+  if (acsf_openid_force_openid()) {
     $form['wordpress_migrate_content_mapping']['wordpress_migrate_create_new_users']['#type'] = 'value';
     $form['wordpress_migrate_content_mapping']['wordpress_migrate_create_new_users']['#default_value'] = 0;
     unset($form['wordpress_migrate_content_mapping']['wordpress_migrate_default_author_uid']['#states']);
@@ -991,7 +996,7 @@ function gardens_misc_form_field_ui_field_settings_form_alter(&$form, &$form_sta
 function gardens_misc_form_user_register_form_alter(&$form, &$form_state, $form_id) {
   // Do not do these modifications during an Open ID registration or on the
   // admin user creation form (where the notify checkbox shows up).
-  if (!gardens_client_user_registration_openid_response() && user_is_anonymous()) {
+  if (!acsf_openid_user_registration_response() && user_is_anonymous()) {
     // For sites that allow local logins, the gardener_whitelabel module should
     // have sent a TOS notice of some kind (whether custom or default).
     $tos_notice = gardens_client_data_get('gardener_whitelabel', 'tos_notice');
@@ -1279,12 +1284,6 @@ function gardens_misc_menu_alter(&$items) {
     $items['plupload-test']['access callback'] = FALSE;
   }
 
-  // Replace the final OpenID authentication page with one that allows us to
-  // modify the response.
-  if (isset($items['openid/authenticate']['page callback'])) {
-    $items['openid/authenticate']['page callback'] = 'gardens_misc_openid_authentication_page';
-  }
-
   // Don't allow access to the oEmbed configuration page; it is unnecessary
   // in Gardens.
   if (isset($items['admin/config/media/oembed'])) {
@@ -1349,390 +1348,18 @@ function gardens_misc_plupload_access() {
 }
 
 /**
- * Menu callback; custom replacement for openid_authentication_page().
- */
-function gardens_misc_openid_authentication_page() {
-  module_load_include('inc', 'openid');
-
-  // We have hard coded claimed_id in $_SESSION to http://specs.openid.net/auth/2.0/identifier_select
-  // so that gardener call tell us which OpenID to work with. So by this point
-  // open_id.claimed_id from the gardener will be something like
-  // http://drupalgardens.com/user/144381/identity.
-  //
-  // This causes openid_complete() to run openid_discover() due to:
-  // OpenID Authentication, section 11.2:
-  // If the returned Claimed Identifier is different from the one sent
-  // to the OpenID Provider, we need to do discovery on the returned
-  // identififer to make sure that the provider is authorized to
-  // respond on behalf of this.
-  //
-  // Only one provider is allowed - the gardener, so as long as the request
-  // comes from there, it is possible to bypass this check (which saves us 2
-  // HTTP requests and full page renders on the gardener).
-  if (!empty($_SESSION['openid'])) {
-    $response = _openid_response();
-    $gardener = scarecrow_get_gardener_url();
-    if (parse_url($gardener, PHP_URL_HOST) == parse_url($response['openid.claimed_id'], PHP_URL_HOST)) {
-      $_SESSION['openid']['claimed_id'] = $response['openid.claimed_id'];
-    }
-  }
-
-  $response = openid_complete();
-  if ($response['status'] == 'success') {
-    // If the site does not allow open registrations, temporarily allow them if
-    // the user who is trying to register was invited by a site owner.
-    gardens_misc_allow_open_user_registrations_if_user_was_invited($response);
-
-    // Make sure email verification is turned off for the remainder of this
-    // request. (We need it off for OpenID registrations, but the site may have
-    // it on in general if local user logins are allowed.)
-    $GLOBALS['conf']['user_email_verification'] = FALSE;
-
-    // DG-3774: merge OpenID accounts with local accounts if needed.
-    // Attempt to load the user based on the OpenID first.
-    $identity = $response['openid.claimed_id'];
-    $account_by_openid = user_external_load($identity);
-    if (!isset($account_by_openid->uid)) {
-      // If we did not find the user by OpenID, look the user up by email.
-      $sreg_values = openid_extract_namespace($response, OPENID_NS_SREG, 'sreg');
-      if (!empty($sreg_values['email'])) {
-        $account_by_email = user_load_by_mail($sreg_values['email']);
-        if ($account_by_email) {
-          // If this user was found by email but not by OpenID, make sure the
-          // account does not have another OpenID assigned (in case gardener
-          // email address changes that are not yet propagated). One account
-          // should only have at most one OpenID (gardener user) assigned in
-          // the Gardens system.
-          $user_already_has_openid = db_query("SELECT 1 FROM {authmap} WHERE module = 'openid' AND uid = :uid", array(':uid' => $account_by_email->uid))->fetchField();
-          if (!$user_already_has_openid) {
-            // If no OpenID is assigned to this user, then at this point we
-            // should add the current OpenID. This solves DG-3774.
-            user_set_authmaps($account_by_email, array('authname_openid' => $identity));
-          }
-        }
-      }
-    }
-
-    // Now perform the OpenID authentication.
-    return openid_authentication($response);
-  }
-  else {
-    drupal_set_message(t('Your login could not be completed successfully, due to an internal error. Try again later.'), 'error');
-
-    module_load_include('inc', 'openid');
-    $sreg_values = openid_extract_namespace($response, OPENID_NS_SREG, 'sreg');
-
-    // Elaborate on why session data is missing.
-    if (empty($_SESSION)) {
-      if (empty($_COOKIE[session_name()])) {
-        $message = 'Session cookie missing, no session data found.';
-      }
-      else {
-        $message = 'Session cookie found, session was empty.';
-      }
-    }
-
-    // We put this in syslog() directly since site owners don't need to see it.
-    syslog(LOG_WARNING, t('GardensWarning: AN-22459 - OpenID login failed GardensWarning: result: "@status"; user: @name (@mail); site: @url; openid: @openid; browser: @browser', array(
-      '@status' => $response['status'] . (isset($message) ? ' ' . $message : ''),
-      '@name' => $sreg_values['nickname'],
-      '@mail' => $sreg_values['email'],
-      '@url' => $GLOBALS['base_url'],
-      '@openid' => $response['openid.claimed_id'],
-      '@browser' => $_SERVER['HTTP_USER_AGENT'],
-    )));
-
-    drupal_goto();
-  }
-}
-
-/**
- * Menu callback: Returns a page for inviting users to a Gardens site.
- */
-function gardens_misc_invite_people() {
-  drupal_set_title(t('Invite people'));
-  return drupal_get_form('gardens_misc_invite_people_form');
-}
-
-/**
- * Form for inviting users to a Gardens site.
- */
-function gardens_misc_invite_people_form($form, &$form_state) {
-  $threshold = gardens_misc_invite_people_threshold();
-  $window = gardens_misc_invite_people_window();
-  if (empty($_POST)) {
-    if (!flood_is_allowed('gardens_misc_invite_people', $threshold, $window)) {
-      drupal_set_message(t('You are only allowed to send @number_per_day invitations per day and have already reached your limit. You will not be able to submit this form until later.', array('@number_per_day' => $threshold)), 'warning');
-    }
-  }
-
-  $form['email_addresses'] = array(
-    '#type' => 'textarea',
-    '#title' => t('Enter e-mail addresses for people you would like to invite'),
-    '#description' => t('Separate e-mail addresses with commas. Invitations are limited to @threshold a day.', array('@threshold' => $threshold)),
-  );
-  $form['invitation_message'] = array(
-    '#type' => 'textarea',
-    '#title' => t('Invitation message'),
-    '#description' => t('Available variables are: @tokens.', array('@tokens' => implode(', ', gardens_misc_invite_people_tokens()))),
-    '#default_value' => _user_mail_text('register_admin_created_body', NULL, array(), FALSE),
-    '#rows' => 9,
-    '#attached' => array(
-      'js' => array(drupal_get_path('module', 'gardens_misc') . '/gardens_misc.invite.js'),
-    ),
-  );
-
-  $form['actions'] = array('#type' => 'actions');
-  $form['actions']['submit'] = array(
-    '#type' => 'submit',
-    '#value' => t('Send invitations'),
-  );
-
-  return $form;
-}
-
-/**
- * Validation handler for gardens_misc_invite_people_form().
- */
-function gardens_misc_invite_people_form_validate($form, &$form_state) {
-  // There must be at least one e-mail address.
-  $address_list = trim($form_state['values']['email_addresses']);
-  if (empty($address_list)) {
-    form_set_error('email_addresses', t('You must enter at least one e-mail address.'));
-  }
-
-  // All e-mail addresses must be valid.
-  $addresses = explode(',', $address_list);
-  $invalid_addresses = array();
-  foreach ($addresses as &$raw_address) {
-    $raw_address = trim($raw_address);
-  }
-  $addresses = array_unique($addresses);
-  foreach ($addresses as $address) {
-    // We store these e-mail addresses in the database, so make sure they are
-    // also within the maximum length.
-    if (!valid_email_address($address) || drupal_strlen($address) > EMAIL_MAX_LENGTH) {
-      $invalid_addresses[] = $address;
-    }
-  }
-  $number_invalid = count($invalid_addresses);
-  if ($number_invalid) {
-    $message = format_plural($number_invalid, 'The e-mail address %addresses is invalid.', 'The following e-mail addresses are invalid: %addresses', array('%addresses' => implode(', ', $invalid_addresses)));
-    form_set_error('email_addresses', $message);
-  }
-
-  // The number of e-mail addresses must not put us over the flood control
-  // limit.
-  $number_of_addresses = count($addresses);
-  $threshold = gardens_misc_invite_people_threshold();
-  $limit = $threshold - $number_of_addresses + 1;
-  $window = gardens_misc_invite_people_window();
-  // Iterate to find out how many events we have left. (A direct database query
-  // would be more efficient, but also more fragile in terms of not using the
-  // flood API.)
-  while (!flood_is_allowed('gardens_misc_invite_people', $limit, $window) && $number_of_addresses > 0) {
-    $number_of_addresses--;
-    $limit++;
-    $flood_error = TRUE;
-  }
-  if (!empty($flood_error)) {
-    if ($number_of_addresses) {
-      form_set_error('email_addresses', format_plural($number_of_addresses, 'You are only allowed to invite 1 user at this time. (You can send a total of @number_per_day invitations per day.)', $number_of_addresses < $threshold ? 'You are only allowed to invite @count users at this time. (You can send a total of @number_per_day invitations per day.)' : 'You are only allowed to invite @count users per day.', array('@number_per_day' => $threshold)));
-    }
-    else {
-      form_set_error('email_addresses', t('You are only allowed to send @number_per_day invitations per day and have already reached your limit. Try again later.', array('@number_per_day' => $threshold)));
-    }
-  }
-}
-
-/**
- * Submit handler for gardens_misc_invite_people_form().
- */
-function gardens_misc_invite_people_form_submit($form, &$form_state) {
-  // Set the submitted invitation message to be used from now on.
-  variable_set('user_mail_register_admin_created_body', $form_state['values']['invitation_message']);
-
-  $address_list = trim($form_state['values']['email_addresses']);
-  $addresses = explode(',', $address_list);
-  $window = gardens_misc_invite_people_window();
-  $successes = array();
-  $failures = array();
-  foreach ($addresses as &$raw_address) {
-    $raw_address = trim($raw_address);
-  }
-  $original_addresses = $addresses;
-  $addresses = array_unique($addresses);
-  $has_duplicates = count($addresses) != count($original_addresses);
-  foreach ($addresses as $address) {
-    // Send mail to the address. Pass in an fake 'account' variable so we can
-    // use the [user:mail] token, but make sure it has most standard user
-    // object properties to avoid PHP notices.
-    $account = (object) array_merge((array) drupal_anonymous_user(), db_query("SELECT * FROM {users} WHERE uid = 0")->fetchAssoc());
-    $account->mail = $address;
-    $message = drupal_mail('user', 'register_admin_created', $address, language_default(), array('account' => $account));
-    if ($message['result']) {
-      $successes[] = $address;
-      // Register the event with the flood control API.
-      flood_register_event('gardens_misc_invite_people', $window);
-      // Store a record of this invitation.
-      gardens_misc_user_invite_save($address);
-    }
-    else {
-      $failures[] = $address;
-    }
-  }
-  if ($number_of_failures = count($failures)) {
-    drupal_set_message(format_plural($number_of_failures, 'Mail could not be sent to the following address: %addresses', 'Mail could not be sent to the following addresses: %addresses', array('%addresses' => implode(', ', $failures))), 'error');
-  }
-  if ($number_of_successes = count($successes)) {
-    if ($has_duplicates) {
-      drupal_set_message(format_plural($number_of_successes, '1 site registration invitation was sent (duplicate e-mails were removed). After an invitee registers, they will show up in the list below.', '@count site registration invitations were sent (duplicate e-mails were removed). After an invitee registers, they will show up in the list below.'));
-    }
-    else {
-      drupal_set_message(format_plural($number_of_successes, '1 site registration invitation was sent. After an invitee registers, they will show up in the list below.', '@count site registration invitations were sent. After an invitee registers, they will show up in the list below.'));
-    }
-  }
-  $form_state['redirect'] = 'admin/people';
-}
-
-/**
- * Returns an array of tokens for the message inviting users to a Gardens site.
- */
-function gardens_misc_invite_people_tokens() {
-  return array(
-    '[site:name]',
-    '[site:url]',
-    '[site:register-url]',
-    '[site:url-brief]',
-    '[user:mail]',
-  );
-}
-
-/**
- * Returns the number of invites that can be sent out in a certain window.
+ * Implements hook_acsf_openid_user_registration_setting_alter().
  *
- * @see gardens_misc_invite_people_window()
+ * When an admin invites a user to the site the Gardens Limits module may have
+ * determined that the site has exceeded its allowed number of unblocked users;
+ * see gardens_limits_init(). If the flag for that is set, we don't want to undo
+ * what Gardens Limits did and let the user bypass the registration limits, so
+ * we make sure to leave them blocked even though they were invited.
  */
-function gardens_misc_invite_people_threshold() {
-  return variable_get('gardens_misc_invite_people_threshold', 25);
-}
-
-/**
- * Returns the window (in seconds) over which Gardens invites are limited.
- *
- * @see gardens_misc_invite_people_threshold()
- */
-function gardens_misc_invite_people_window() {
-  // The window is equal to one day. (Note that if we ever change this, there
-  // is a lot of text in the form that would need to be changed also.)
-  return variable_get('gardens_misc_invite_people_window', 86400);
-}
-
-/**
- * Saves an invited e-mail address to the database.
- *
- * @param $address
- *   The e-mail address to save.
- *
- * @return
- *   TRUE if an invitation was created; FALSE if did not need to be created
- *   because the e-mail address was already invited.
- */
-function gardens_misc_user_invite_save($address) {
-  $status = db_merge('gardens_misc_invited_users')
-    ->key(array('mail' => $address))
-    ->execute();
-
-  return $status == MergeQuery::STATUS_INSERT;
-}
-
-/**
- * Deletes an invited e-mail address from the database.
- *
- * @param $address
- *   The e-mail address to delete.
- *
- * @return
- *   TRUE if the e-mail was deleted; FALSE if it did not need to be deleted
- *   because there was no current invitation for it.
- */
-function gardens_misc_user_invite_delete($address) {
-  return (bool) db_delete('gardens_misc_invited_users')
-    ->condition('mail', $address)
-    ->execute();
-}
-
-/**
- * Determines if an e-mail address has been invited to join the site.
- *
- * @param $address
- *   The e-mail address to check.
- *
- * @return
- *   TRUE if the e-mail address has an invitation to join the site, FALSE
- *   otherwise.
- */
-function gardens_misc_user_invite_exists($address) {
-  return (bool) db_query_range('SELECT 1 FROM {gardens_misc_invited_users} WHERE mail = :mail', 0, 1, array(':mail' => $address))->fetchField();
-}
-
-/**
- * Determines if an e-mail address has been invited to join the site, from an OpenID response array.
- *
- * @param $response
- *   The OpenID response array, e.g. as returned by e.g. openid_complete().
- *
- * @return
- *   TRUE if the e-mail address associated with the OpenID response has an
- *   invitation to join the site, FALSE otherwise.
- */
-function gardens_misc_openid_response_user_invite_exists($response) {
-  module_load_include('inc', 'openid');
-  $sreg_values = openid_extract_namespace($response, OPENID_NS_SREG, 'sreg');
-  return !empty($sreg_values['email']) && gardens_misc_user_invite_exists($sreg_values['email']);
-}
-
-/**
- * Temporarily allows open registrations during the OpenID flow for invited users.
- *
- * If the site does not allow open registrations, calling this function will
- * temporarily allow them for the remainder of the current page request if the
- * user who is trying to register was invited by a site owner.
- *
- * @param $response
- *   The OpenID response array, e.g. as returned by openid_complete().
- */
-function gardens_misc_allow_open_user_registrations_if_user_was_invited($response) {
-  $user_register_setting = variable_get('user_register', USER_REGISTER_VISITORS_ADMINISTRATIVE_APPROVAL);
-  if ($user_register_setting != USER_REGISTER_VISITORS && gardens_misc_openid_response_user_invite_exists($response)) {
-    // The Gardens Limits module may have determined that the site has exceeded
-    // its allowed number of unblocked users; see gardens_limits_init(). If
-    // the flag for that is set, we don't want to undo what Gardens Limits did
-    // and let the user bypass the registration limits, so we make sure to
-    // leave them blocked even though they were invited.
-    $block_user = variable_get('gardens_limits_do_not_allow_user_registrations', FALSE);
-    $GLOBALS['conf']['user_register'] = $block_user ? USER_REGISTER_VISITORS_ADMINISTRATIVE_APPROVAL : USER_REGISTER_VISITORS;
+function gardens_misc_acsf_openid_user_registration_setting_alter(&$user_registration_setting) {
+  if (variable_get('gardens_limits_do_not_allow_user_registrations', FALSE)) {
+    $user_registration_setting = USER_REGISTER_VISITORS_ADMINISTRATIVE_APPROVAL;
   }
-}
-
-/**
- * Implements hook_user_insert().
- */
-function gardens_misc_user_insert($edit, $account, $category) {
-  // When a user account is created, delete any invitations that exist for
-  // the associated e-mail address, since they are no longer needed.
-  gardens_misc_user_invite_delete($account->mail);
-}
-
-/**
- * Implements hook_user_delete().
- */
-function gardens_misc_user_delete($account) {
-  // When a user account is deleted, delete any outstanding invitations for
-  // the associated e-mail address. On sites that don't allow open user
-  // registrations, this prevents the user from registering again unless they
-  // are specifically invited again.
-  gardens_misc_user_invite_delete($account->mail);
 }
 
 /**
@@ -1778,7 +1405,7 @@ function gardens_misc_add_tags_field_instance($node_type) {
  * because the user registers / requests their password from the Gardener.
  */
 function gardens_misc_form_mollom_admin_configure_form_alter(&$form, &$form_state) {
-  if (scarecrow_force_openid()) {
+  if (acsf_openid_force_openid()) {
     $forbidden_forms = array('user_pass', 'user_register_form');
     $form['mollom']['form_id']['#options'] = array_diff_key($form['mollom']['form_id']['#options'], array_fill_keys($forbidden_forms, 1));
   }
@@ -2933,7 +2560,7 @@ function gardens_misc_node_export_format_handlers_alter(&$format_handlers) {
  */
 function gardens_misc_views_data_alter(&$data) {
   // Only relevant for local user accounts.
-  if (!variable_get('acquia_gardens_local_user_accounts', FALSE)) {
+  if (acsf_openid_force_openid()) {
     return;
   }
   // pass - for exporting users

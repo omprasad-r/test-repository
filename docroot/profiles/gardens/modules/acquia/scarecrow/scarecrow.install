@@ -1438,3 +1438,100 @@ function scarecrow_update_11194() {
     variable_del('scarecrow_maintenance_time');
   }
 }
+
+/**
+ * Switches out gardens_client's login block to acsf_openid's login block.
+ */
+function scarecrow_update_11195() {
+  module_enable(array('acsf_openid'));
+  if (module_exists('acsf_openid')) {
+    // Find all the gardens_client / login block entries and rewrite them to
+    // acsf_openid / login.
+    $rs = db_query('SELECT bid, theme FROM {block} WHERE module = :module AND delta = :delta', array(':module' => 'gardens_client', ':delta' => 'login'));
+    foreach ($rs as $row) {
+      // If there is already an entry for acsf_openid, login and the theme we
+      // just got, then delete that row to avoid violating the database unique
+      // key constraint.
+      db_query('DELETE FROM {block} WHERE theme = :theme AND module = :module AND delta = :delta', array(':theme' => $row->theme, ':module' => 'acsf_openid', ':delta' => 'login'));
+      db_query('UPDATE {block} SET module = :module WHERE bid = :bid', array(':module' => 'acsf_openid', ':bid' => $row->bid));
+    }
+  }
+
+  // Some sites will have securepages set up to force certain OpenID paths to
+  // https and to ignore protocol switching for other OpenID paths. With
+  // acsf_openid we are introducing some new paths that will need the same
+  // treatment.
+  $securepages_variable = variable_get('securepages_pages', '');
+  $pages = array_filter(array_map('trim', explode("\n", $securepages_variable)));
+  if ($pages && in_array('gardens-login', $pages) && !in_array('acsf-openid-login', $pages)) {
+    variable_set('securepages_pages', $securepages_variable . "\nacsf-openid-login");
+  }
+  $securepages_variable = variable_get('securepages_ignore', '');
+  $pages = array_filter(array_map('trim', explode("\n", $securepages_variable)));
+  if ($pages && in_array('gardener/login', $pages) && !in_array('acsf-openid-factory/login', $pages)) {
+    variable_set('securepages_ignore', $securepages_variable . "\nacsf-openid-factory/login\nacsf-openid-factory/register");
+  }
+
+  // Migrate data from gardens_misc_invited_users to acsf_openid_invited_users.
+  $rs = db_query('SELECT * FROM {gardens_misc_invited_users}');
+  foreach ($rs as $row) {
+    db_query('INSERT INTO {acsf_openid_invited_users} (mail) VALUES(:mail)', array(':mail' => $row->mail));
+    db_query('DELETE FROM {gardens_misc_invited_users} WHERE mail = :mail', array(':mail' => $row->mail));
+  }
+
+  // Migrate the overlay / OpenID settings.
+  $value = acsf_vget('acsf_factory_name');
+  if (!$value) {
+    acsf_vset('acsf_factory_name', variable_get('gardens_service_name_long', 'Drupal Gardens'));
+  }
+  $variables = array(
+    array(
+      'old_name' => 'gardens_misc_invite_people_threshold',
+      'new_name' => 'acsf_openid_invite_people_threshold',
+      'value' => 25,
+    ),
+    array(
+      'old_name' => 'gardens_misc_invite_people_window',
+      'new_name' => 'acsf_openid_invite_people_window',
+      'value' => 86400,
+    ),
+    array(
+      'old_name' => 'acquia_gardens_local_user_accounts',
+      'new_name' => 'acsf_local_user_accounts',
+      'value' => FALSE,
+    ),
+    array(
+      'old_name' => 'gardens_client_overlay_for_registration',
+      'new_name' => 'acsf_openid_overlay_for_registration',
+      'value' => 1,
+    ),
+    array(
+      'old_name' => 'gardens_client_overlay_status',
+      'new_name' => 'acsf_openid_overlay_for_admin',
+      'value' => 1,
+    ),
+  );
+  foreach ($variables as $variable_info) {
+    $value = variable_get($variable_info['old_name'], $variable_info['value']);
+    if ($value != $variable_info['value']) {
+      variable_set($variable_info['new_name'], $value);
+    }
+  }
+
+  // Disable overlay for login / registration if securepages is enabled since
+  // overlay does not behave well when there's a need to switch between
+  // protocols.
+  if (module_exists('securepages')) {
+    variable_set('acsf_openid_overlay_for_login', 0);
+    variable_set('acsf_openid_overlay_for_registration', 0);
+  }
+}
+
+/**
+ * Force-enables the revised gardens_duplication module.
+ */
+function scarecrow_update_11196() {
+  // Also enables acsf_duplication to cover the case where acsf was enabled but
+  // acsf_duplication was not yet in dependencies.
+  module_enable(array('gardens_duplication', 'acsf_duplication'), TRUE);
+}
