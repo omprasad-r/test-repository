@@ -1804,7 +1804,7 @@ function scarecrow_gardens_features_add_dialog_user_enhancements_alter(&$add_enh
   // we don't want Dialog User behavior to interfere. This applies, for
   // example, if a site owner places a hardcoded link to a user/* path in the
   // HTML, in which case scarecrow_url_outbound_alter() won't run on it.
-  if (acsf_openid_force_openid()) {
+  if (module_exists('acsf_openid') && acsf_openid_force_openid()) {
     $add_enhancements = FALSE;
   }
 }
