@@ -49,6 +49,7 @@ function drush_acsf_init() {
   foreach (acsf_init_get_required_files($repo_root) as $file => $location) {
     $source = sprintf('%s/%s/%s', $lib_path, $location['source'], $file);
     $dest = sprintf('%s/%s', $location['dest'], $file);
+    $mod = isset($location['mod']) ? $location['mod'] : FALSE;
     drush_print(dt('Copying !file to !dest.', array('!file' => $source, '!dest' => $dest)));
     if (file_exists($dest)) {
       $confirm = drush_confirm(dt('Destination file exists, continue?'));
@@ -56,11 +57,19 @@ function drush_acsf_init() {
         continue;
       }
     }
+    // Copy the file into the destination.
     if (copy($source, $dest)) {
-      drush_log(dt('Success'), 'success', 'success');
+      drush_log(dt('Copy Success: !file', array('!file' => $file)), 'success', 'success');
     }
     else {
-      drush_log(dt('Error'), 'error', 'error');
+      drush_log(dt('Copy Error: !file', array('!file' => $file)), 'error', 'error');
+    }
+    // Chmod the file if required.
+    if ($mod && chmod($dest, $mod)) {
+      drush_log(dt('Chmod Success: !file', array('!file' => $file)), 'success', 'success');
+    }
+    elseif ($mod) {
+      drush_log(dt('Chmod Error: !file', array('!file' => $file)), 'error', 'error');
     }
   }
 }
@@ -94,6 +103,7 @@ function drush_acsf_uninstall() {
 function acsf_init_get_required_dirs($repo_root) {
   return array(
     'cloud hooks' => sprintf('%s/hooks/common/post-db-copy', $repo_root),
+    'acquia db' => sprintf('%s/hooks/acquia', $repo_root),
     'site config logic' => sprintf('%s/sites/g', DRUPAL_ROOT),
   );
 }
@@ -106,6 +116,15 @@ function acsf_init_get_required_files($repo_root) {
     '000-acquia_required_scrub.php' => array(
       'source' => 'cloud_hooks',
       'dest' => sprintf('%s/hooks/common/post-db-copy', $repo_root),
+      'mod' => 0751,
+    ),
+    'db_connect.php' => array(
+      'source' => 'cloud_hooks',
+      'dest' => sprintf('%s/hooks/acquia', $repo_root),
+    ),
+    'uri.php' => array(
+      'source' => 'cloud_hooks',
+      'dest' => sprintf('%s/hooks/acquia', $repo_root),
     ),
     'sites.php' => array(
       'source' => 'sites',
