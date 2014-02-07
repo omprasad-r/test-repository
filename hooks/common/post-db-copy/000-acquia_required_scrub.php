@@ -1,6 +1,10 @@
 #!/usr/bin/env php
 <?php
 
+if (!drupal_is_cli()) {
+  exit(1);
+}
+
 $site = $argv[1];    // AH site group
 $env = $argv[2];     // AH site env
 $db_role = $argv[3]; // Database name
