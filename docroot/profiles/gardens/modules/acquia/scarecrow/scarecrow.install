@@ -1517,6 +1517,9 @@ function scarecrow_update_11195() {
       variable_set($variable_info['new_name'], $value);
     }
   }
+  if (variable_get('acquia_gardens_local_user_accounts', FALSE) && !variable_get('acsf_local_user_accounts', FALSE)) {
+    variable_set('acsf_local_user_accounts', TRUE);
+  }
 
   // Disable overlay for login / registration if securepages is enabled since
   // overlay does not behave well when there's a need to switch between
