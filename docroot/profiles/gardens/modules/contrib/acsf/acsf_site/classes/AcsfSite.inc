@@ -92,38 +92,4 @@ class AcsfSite {
 
   }
 
-  /**
-   * Fetches the site install information from the Site Factory.
-   *
-   * @param object $event
-   *   Optionally if an event is passed in then the site information will be
-   *   put into the event's context.
-   *
-   * @return bool
-   *   Returns TRUE if the data fetch was successful.
-   */
-  public function getSiteInstallInfo($event = NULL) {
-    try {
-      $message = new AcsfMessageXmlRpc('GET', 'acquia.gardens.get.site.install.info', array($this->info['nid'], 'install and configure'));
-      $message->send();
-      $site_install_info = $message->getResponseBody();
-    }
-    catch (AcsfMessageFailedResponseException $e) {
-      // No need to fail, we can retry the site info call.
-    }
-
-    if (empty($site_install_info)) {
-      watchdog('acsf_site', 'Could not retrieve site install information.', array(), WATCHDOG_CRITICAL);
-      return FALSE;
-    }
-    else {
-      acsf_vset('acsf_factory_name', $site_install_info['gardens_service_name_long']);
-      acsf_vset('acsf_local_user_accounts', $site_install_info['account_method'] == 'local');
-      if ($event) {
-        $event->event->context['acsf_site_install_info'] = $site_install_info;
-      }
-      return TRUE;
-    }
-
-  }
 }

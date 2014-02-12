@@ -108,13 +108,13 @@ function themebuilder_bar_js_required() {
   // Default to the standard error message.
   $message = t('<p>Navigate to the <a href="!url">front page</a> or any other non-administrative page and click the <em>Appearance</em> link in the toolbar in order to open the theme builder.</p><p>You must have javascript enabled in order to use the theme building functions in !service_name_long.</p>', array(
     '!url' => url('<front>'),
-    '!service_name_long' => variable_get('gardens_service_name_long', 'Drupal Gardens'),
+    '!service_name_long' => acsf_vget('acsf_factory_name', 'Acquia Cloud Site Factory'),
   ));
   // If the user does not have permission to access the ThemeBuilder, warn them.
   if (!themebuilder_bar_check_tab_permissions()) {
     $message = t('<p>You do not have the necessary permissions to access the theme building functions in !service_name_long.</p><p>Please ask your site maintainer for access to at least one ThemeBuilder tab.', array(
       '!url' => url('<front>'),
-      '!service_name_long' => variable_get('gardens_service_name_long', 'Drupal Gardens'),
+      '!service_name_long' => acsf_vget('acsf_factory_name', 'Acquia Cloud Site Factory'),
     ));
   }
   return $message;
@@ -583,7 +583,7 @@ function themebuilder_bar_ajax_request($function_name) {
     // the problem.  Maybe we forcefully closed their themebuilder
     // session for site maintenance?
     throw new ThemeBuilderException(t('We are sorry, but the ThemeBuilder needs to close while !service_name_long undergoes a brief maintenance period.  Click OK to close the ThemeBuilder.', array(
-      '!service_name_long' => variable_get('gardens_service_name_long', 'Drupal Gardens'),
+      '!service_name_long' => acsf_vget('acsf_factory_name', 'Acquia Cloud Site Factory'),
     )), THEMEBUILDER_ERROR_RECOVERABLE, array(ThemeBuilderException::HANDLER_ALERT_AND_CLOSE));
   }
 }
@@ -604,7 +604,7 @@ function themebuilder_bar_enter_edit_mode() {
       // No point in opening the themebuilder; unable to save a theme.
       gardens_statsd_send('themebuilder.enter.fail', 1, GARDENS_STATSD_COUNTER, 1);
       $error = t("We're doing maintenance and making !service_name_long even better. Please try to relaunch the ThemeBuilder later. Thanks!", array(
-        '!service_name_long' => variable_get('gardens_service_name_long', 'Drupal Gardens'),
+        '!service_name_long' => acsf_vget('acsf_factory_name', 'Acquia Cloud Site Factory'),
       ));
     }
     else {

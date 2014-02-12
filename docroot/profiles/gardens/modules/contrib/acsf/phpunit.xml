@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<phpunit>
+    <testsuites>
+        <testsuite name="Acsf Test Suite">
+            <directory suffix="Test.php">./tests/</directory>
+        </testsuite>
+        <testsuite name="Acsf Site Test Suite">
+            <directory suffix="Test.php">./acsf_site/tests/</directory>
+        </testsuite>
+        <testsuite name="Acsf Events Suite">
+            <directory suffix="Test.php">./acsf_events/tests/</directory>
+        </testsuite>
+    </testsuites>
+</phpunit>

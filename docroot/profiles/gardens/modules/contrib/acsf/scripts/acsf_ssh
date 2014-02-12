@@ -26,6 +26,12 @@
  *     site         - The site.
  *     no-logs      - Do not retain log data.
  *     start-time   - The process start time.
+ *     copy-stdout  - The path to which stdout will be copied.  This is useful
+ *                    in cases where you would like to redirect the output to
+ *                    a file.
+ *     data         - Serialized PHP data regarding the caller.
+ *     report       - Report back upon process completion.
+ *     encoded      - The unix command in the exec is base64 encoded.
  *
  * Examples:
  *   acsf_ssh --exec "ls -l /usr" --silent
@@ -60,7 +66,7 @@ class AcsfSshWrapper {
    * The version of the ssh wrapper.
    * @var string
    */
-  private $version = '1';
+  private $version = '2';
 
   /**
    * The hosting site.
@@ -90,6 +96,18 @@ class AcsfSshWrapper {
   private $startTime = NULL;
 
   /**
+   * The time when the command is executed.
+   * @var int
+   */
+  private $execTime = NULL;
+
+  /**
+   * The time when the command finished.
+   * @var int
+   */
+  private $completeTime = NULL;
+
+  /**
    * The temporary directory in which process information will be stored.
    * @var string
    */
@@ -106,6 +124,12 @@ class AcsfSshWrapper {
    * @var
    */
   private $max_stderr;
+
+  /**
+   * The path to which the stdout should be copied.
+   * @var string
+   */
+  private $copy_stdout = NULL;
 
   /**
    * Initializes a new AcsfSshWrapper object.
@@ -132,6 +156,9 @@ class AcsfSshWrapper {
     if (!empty($options->max_stderr_len)) {
       $this->max_stderr = $options->max_stderr;
     }
+    if (!empty($options->copy_stdout)) {
+      $this->copy_stdout = $options->copy_stdout;
+    }
   }
 
   /**
@@ -139,6 +166,10 @@ class AcsfSshWrapper {
    *
    * @param $command
    *   The Unix command to be executed.
+   *
+   * @param bool $encoded_command
+   *   Optional.  If FALSE then the $command will be taken as is. If TRUE then
+   *   the $command will be assumed to contain a base64 encoded string.
    *
    * @param bool $log
    *   Optional.  If FALSE, no log files will remain upon completion of
@@ -148,19 +179,32 @@ class AcsfSshWrapper {
    * @param bool $silent
    *   Optional.  If TRUE, no output will be sent to stdout or stderr.
    *
+   * @param bool $report
+   *   Optional.  If TRUE, a message will be sent back to the callback endpoint
+   *   specified in the $data variable.
+   *
+   * @param stdClass $data
+   *   Optional.  Data relating to the caller.
+   *
    * @return int
    *   The exit code.
    */
-  public function exec($command, $log = TRUE, $silent = FALSE) {
-    // @todo: Maybe after an asynchronous command we should signal the gardener.
+  public function exec($command, $encoded_command = FALSE, $log = TRUE, $silent = FALSE, $report = FALSE, $data = NULL) {
     $this->pid = getmypid();
+
+    if ($encoded_command) {
+      $command = base64_decode($command);
+    }
 
     // NOTE: You cannot append commands to this without breaking the exit code.
     $command = sprintf('%s > %s 2> %s', $command, $this->getLogFile('out'), $this->getLogFile('err'));
+
     $output = NULL;
     $exit_code = NULL;
+    $this->execTime = time();
     exec($command, $output, $exit_code);
     file_put_contents($this->getLogFile('ret'), (string)$exit_code);
+    $this->completeTime = time();
 
     if ($silent !== TRUE) {
       // The command was configured to provide output via stdout.  Write the
@@ -170,10 +214,47 @@ class AcsfSshWrapper {
       print($result);
     }
 
+    if (!empty($this->copy_stdout)) {
+      $this->copyStdout();
+    }
+
+    // Report back to the Factory upon completion.
+    if ($report && $data instanceof stdClass) {
+      $data->pid = $this->pid;
+      $data->start_time = $this->startTime;
+      $data->source = 'sshResult';
+      $data->result = $this->getResult();
+      $report_command = sprintf('AH_SITE_GROUP=%s AH_SITE_ENVIRONMENT=%s \drush5 --root=/var/www/html/%s.%s/docroot --include=%s report-complete-async-process --data=\'%s\' 2>&1 /dev/null',
+        $this->site,
+        $this->env,
+        $this->site,
+        $this->env,
+        $data->acsf_path,
+        serialize($data));
+
+      $report_output = NULL;
+      $report_exit_code = NULL;
+      exec($report_command, $report_output, $report_exit_code);
+    }
+
     if (!$log) {
       $this->removeLogFiles();
     }
     return $exit_code;
+  }
+
+  /**
+   * Copies the stdout to a new file.
+   *
+   * If the parent directory does not exist, it will be created before the copy.
+   */
+  private function copyStdout() {
+    $filename = $this->copy_stdout;
+    $dir = dirname($filename);
+    if (!file_exists($dir)) {
+      mkdir($dir, 0777, TRUE);
+    }
+    copy($this->getLogFile('out'), $filename);
   }
 
   /**
@@ -199,7 +280,8 @@ class AcsfSshWrapper {
     }
     $stderr = $this->truncateOutput($stderr, $this->max_stderr);
 
-    return sprintf("[{pid}:%d]\n[{stdout}:]%s\n[{stderr}:]%s", $this->pid, $stdout, $stderr);
+    return sprintf("[{pid}:%d]\n[{stdout}:]%s\n[{stderr}:]%s\n[{exit_code}:%d]\n[{time}:%d]\n",
+      $this->pid, $stdout, $stderr, $this->getExitCode(), $this->completeTime - $this->execTime);
   }
 
   /**
@@ -621,21 +703,27 @@ function _acsf_ssh_parse_command_line() {
     'version',         // Return the version string.
 
     // Options:
-    'data:',          // Any special info required by the subcommand.
     'env:',           // Environment
     'no-logs',        // Don't log stdout, stderr, or the return code.
     'pid:',           // The process id.
     'site:',          // Site
     'silent',         // Redirect stdout and stderr.
     'start-time:',    // The process start time.
-    'max-output:',     // The maximum length of output (both stdout and stderr).
-    'max-stdout:',     // The maximum length of stdout.
-    'max-stderr:',     // The maximum length of stderr.
+    'max-output:',    // The maximum length of output (both stdout and stderr).
+    'max-stdout:',    // The maximum length of stdout.
+    'max-stderr:',    // The maximum length of stderr.
+    'copy-stdout:',   // The path to which stdout will be copied.
+    'data:',          // Serialized PHP regarding the caller.
+    'report',         // Report back to the caller upon completion.
+    'encoded',        // The unix command in exec is base64 encoded.
   );
   $options = getopt('', $long_options);
   $result = new stdClass();
   $result->silent = FALSE;
   $result->log = TRUE;
+  $result->report = FALSE;
+  $result->encoded_command = FALSE;
+  $result->data = new stdClass();
   $result->max_stdout = $result->max_stderr = 0;
 
   foreach ($options as $name => $value) {
@@ -694,6 +782,22 @@ function _acsf_ssh_parse_command_line() {
         $result->start_time = $value;
         break;
 
+      case 'copy-stdout':
+        $result->copy_stdout = $value;
+        break;
+
+      case 'data':
+        $result->data = unserialize($value);
+        break;
+
+      case 'report':
+        $result->report = TRUE;
+        break;
+
+      case 'encoded':
+        $result->encoded_command = TRUE;
+        break;
+
       default:
         throw new Exception("Option $name not available");
     }
@@ -729,7 +833,7 @@ function _acsf_ssh_close($options) {
  */
 function _acsf_ssh_exec($options) {
   $wrapper = new AcsfSshWrapper($options);
-  $exit_code = $wrapper->exec($options->command, $options->log, $options->silent);
+  $exit_code = $wrapper->exec($options->command, $options->encoded_command, $options->log, $options->silent, $options->report, $options->data);
   exit($exit_code);
 }
 

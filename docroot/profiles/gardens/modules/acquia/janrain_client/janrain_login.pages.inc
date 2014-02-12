@@ -69,7 +69,7 @@ function janrain_login_token_handler() {
   $ajax = !empty($_REQUEST['ajax']);
 
   // We support only local logins to link with remote accounts.
-  if (!variable_get('acquia_gardens_local_user_accounts', FALSE)) {
+  if (acsf_openid_force_openid()) {
     return MENU_ACCESS_DENIED;
   }
   $api_key = variable_get('rpx_api_key', '');
@@ -160,6 +160,7 @@ function janrain_login_token_handler() {
   // Is this a registered user?
   if (isset($account->uid)) {
     if (!variable_get('user_email_verification', TRUE) ||
+        variable_get('rpx_bypass_email_verification', FALSE) ||
         $account->login ||
         !empty($account->data['rpx_data']['profile']['verifiedEmail']) &&
         strtolower($account->data['rpx_data']['profile']['verifiedEmail']) == strtolower($account->mail)) {

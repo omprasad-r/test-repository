@@ -206,11 +206,6 @@ function gardens_form_install_configure_form_alter(&$form, $form_state) {
  * Custom submit handler for the Gardens install form.
  */
 function gardens_installer_custom_submit($form, &$form_state) {
-  // Attach the OpenID given in the installer to the first user.
-  if (!empty($form_state['values']['openid'])) {
-    $account = user_load(1);
-    gardens_client_add_authmaps($account, array("authname_openid" => $form_state['values']['openid']));
-  }
   // Setting an empty string for the code disables addition to the page.
   if (!empty($form_state['values']['acquia_gardens_disable_ga'])) {
     variable_set('gardens_misc_ga_tracking_code', '');
@@ -282,12 +277,13 @@ function gardens_installer_custom_submit($form, &$form_state) {
   // gardens_setup_user_mail(), since it sometimes needs to delete the mail
   // variables that were set there.
   if (!empty($form_state['values']['acquia_gardens_local_user_accounts'])) {
-    scarecrow_allow_local_user_logins();
+    acsf_openid_allow_local_user_logins();
   }
 
   $account_name = $form_state['values']['owner_account']['account']['name'];
   $account_mail = $form_state['values']['owner_account']['account']['mail'];
   if (!user_load_by_name($account_name) && !user_load_by_mail($account_mail)) {
+    $owner_account = new stdClass();
     $owner_account->is_new = TRUE;
     $edit = $form_state['values']['owner_account']['account'];
     $edit['status'] = 1;
@@ -299,10 +295,6 @@ function gardens_installer_custom_submit($form, &$form_state) {
   }
   else {
     $owner_account = user_load_by_name($account_name);
-  }
-
-  if (!empty($form_state['values']['owner_account']['openid'])) {
-    gardens_client_add_authmaps($owner_account, array("authname_openid" => $form_state['values']['owner_account']['openid']));
   }
 
   // Enable the chosen site template and features, and finalize the template

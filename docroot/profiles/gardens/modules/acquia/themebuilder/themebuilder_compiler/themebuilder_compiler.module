@@ -3206,7 +3206,7 @@ function themebuilder_compiler_get_semaphore() {
     $attempts = 0;
     $failed = TRUE;
     do {
-      if (lock_acquire(THEME_BUILDER_SEMAPHORE_NAME)) {
+      if (lock_acquire(THEME_BUILDER_SEMAPHORE_NAME, 300)) {
         $failed = FALSE;
       }
       else {

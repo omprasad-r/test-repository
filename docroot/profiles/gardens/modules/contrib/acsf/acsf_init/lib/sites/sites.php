@@ -7,8 +7,21 @@ if (empty($_SERVER['HTTP_HOST'])) {
 
 require_once(dirname(__FILE__) . '/g/sites.inc');
 
-$host = rtrim($_SERVER['HTTP_HOST'], '.');
-$dir = implode('.', array_reverse(explode(':', $host)));
+// Drush site-install gets confused about the uri when we specify the
+// --sites-subdir option. The HTTP_HOST is set incorrectly and we can't
+// find it in the sites.json. By specifying the --acsf-install-uri option
+// with the value of the standard domain, we can catch that here and
+// correct the uri argument for drush site installs.
+if (drupal_is_cli() && function_exists('drush_get_option') && ($http_host = drush_get_option('acsf-install-uri', FALSE))) {
+  $host = $_SERVER['HTTP_HOST'] = $http_host;
+  // Match the expected drupal sites.php key. @see conf_path().
+  $dir = implode('.', array_reverse(explode(':', $host)));
+}
+else {
+  $host = rtrim($_SERVER['HTTP_HOST'], '.');
+  // Match the expected drupal sites.php key. @see conf_path().
+  $dir = implode('.', array_reverse(explode(':', $host)));
+}
 
 if (!GARDENS_SITE_DATA_USE_APC) {
   // gardens_site_data_refresh_one() will do a full parse if the domain is in

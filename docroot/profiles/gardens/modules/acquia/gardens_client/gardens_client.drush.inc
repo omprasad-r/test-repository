@@ -231,7 +231,7 @@ function drush_gardens_client_gardens_move_cluster($gardener_url = NULL, $userma
   db_drop_table('drupalgardens');
   db_drop_table('egardens');
 
-  scarecrow_allow_local_user_logins();
+  acsf_openid_allow_local_user_logins();
   drush_log('Enabled local logins.', 'ok');
   drush_log('Migration complete', 'success');
 }
@@ -355,7 +355,7 @@ function _gardens_client_add_authmap_entries($gardener_url, $users) {
 }
 
 function drush_gardens_enable_local_logins() {
-  scarecrow_allow_local_user_logins();
+  acsf_openid_allow_local_user_logins();
   drush_log('Enabled local logins.', 'success');
 }
 

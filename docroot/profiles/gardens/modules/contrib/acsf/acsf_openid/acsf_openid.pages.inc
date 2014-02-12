@@ -183,7 +183,16 @@ function acsf_openid_user_register_page() {
     // it on in general if local user logins are allowed.)
     $GLOBALS['conf']['user_email_verification'] = FALSE;
 
-    drupal_set_title(t('Complete your registration'));
+    // Set a custom page title. We use a different title depending on whether
+    // we are inside or outside the overlay, since inside the overlay the user
+    // is not "inside" the site yet so it makes sense to refer to it in the
+    // third person, but outside the overlay it doesn't :)
+    if (module_exists('overlay') && variable_get('acsf_openid_overlay_for_registration', 1)) {
+      drupal_set_title(t('The site !site-name wants to know more about you.', array('!site-name' => '<em class="placeholder">' . filter_xss_admin(acsf_openid_site_name_or_domain()) . '</em>')), PASS_THROUGH);
+    }
+    else {
+      drupal_set_title(t('Complete your registration'));
+    }
 
     // Remove breadcrumb.
     drupal_set_breadcrumb(array());
@@ -199,6 +208,11 @@ function acsf_openid_user_register_page() {
     // Hide user name, password and OpenID URL info.
     $form['account']['#access'] = FALSE;
     $form['openid_display']['#access'] = FALSE;
+
+    // Add CSS to make the page content look more like the pages from Factory.
+    if (module_exists('overlay') && variable_get('acsf_openid_overlay_for_registration', 1)) {
+      $form['#attached']['css'][] = drupal_get_path('module', 'acsf_openid') . '/acsf_openid.register.css';
+    }
 
     return $form;
   }
@@ -222,9 +236,28 @@ function acsf_openid_user_register_page() {
  * @see acsf_openid_menu()
  */
 function acsf_openid_factory_login_page($user_operation = 'login') {
-  // If the user has logged in an other tab, then simply just redirect.
-  if (!user_is_anonymous()) {
-    drupal_goto();
+  // Initialized variables for extra OpenID information.
+  $is_overlay = FALSE;
+
+  // Allow initiating the login process both in and outside the overlay.
+  $destination = isset($_GET['destination']) ? $_GET['destination'] : variable_get('site_frontpage', 'node');
+  if (module_exists('overlay') && overlay_get_mode() == 'child') {
+    if (!user_is_anonymous()) {
+      // User left a tab open with login, but is already logged in via another
+      // tab. Close the overlay now.
+      acsf_openid_close_overlay('<front>');
+      return '';
+    }
+    if (module_exists('overlay') && variable_get('acsf_openid_overlay_for_login', 1)) {
+      $query = array(
+        'render' => 'overlay',
+        'destination' => $destination . '?render=overlay',
+      );
+      $is_overlay = TRUE;
+    }
+  }
+  else {
+    $query = array('destination' => $destination);
   }
 
   // Simplified copy of openid_begin() to avoid spending HTTP requests on OpenID
@@ -235,7 +268,7 @@ function acsf_openid_factory_login_page($user_operation = 'login') {
   $claimed_id = $identity = 'http://specs.openid.net/auth/2.0/identifier_select';
   $options = array(
     'absolute' => TRUE,
-    'query' => array('destination' => isset($_REQUEST['destination']) ? $_REQUEST['destination'] : variable_get('site_frontpage', 'node')),
+    'query' => $query,
   );
   // Allow other modules to tweak the OpenID return url's parameters, for
   // example ensuring that the return page will be themed as an overlay, or that
@@ -270,7 +303,7 @@ function acsf_openid_factory_login_page($user_operation = 'login') {
   // Prepare our data to be sent.
   $request = openid_authentication_request($claimed_id, $identity, $return_to, $assoc_handle, $service);
   $request += array(
-    'acsf_openid.is_overlay' => isset($options['render']) && $options['render'] == 'overlay',
+    'acsf_openid.is_overlay' => isset($options['query']['render']) && $options['query']['render'] == 'overlay',
     'acsf_openid.user_operation' => $user_operation,
   );
 
@@ -287,7 +320,7 @@ function acsf_openid_factory_login_page($user_operation = 'login') {
  *
  * @see acsf_openid_menu()
  */
-function sf_openid_site_login_page() {
+function acsf_openid_site_login_page() {
   if (user_is_anonymous()) {
     if (!empty($_GET['openid'])) {
       $factory_host = parse_url(acsf_variables_factory_url_get(), PHP_URL_HOST);
@@ -365,4 +398,17 @@ function acsf_openid_login_message() {
     ),
   );
   return $build;
+}
+
+/**
+ * Page callback: handles URL redirection back to the factory user pages.
+ *
+ * Emails on password request and registration use this to open the respective
+ * pages through an overlay on the site.
+ */
+function acsf_openid_factory_redirection_page() {
+  // Get all arguments to pass on to the factory.
+  $args = func_get_args();
+  // Redirect to user URL on the factory with these arguments.
+  drupal_goto(acsf_variables_factory_url_get() . '/user/' . join('/', $args), array('query' => array('render' => 'overlay')));
 }

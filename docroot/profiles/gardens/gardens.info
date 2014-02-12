@@ -95,6 +95,7 @@ dependencies[] = gardens_broadcasting_client
 dependencies[] = gardens_broadcasting_client_notifications
 dependencies[] = gardens_client
 dependencies[] = gardens_cron
+dependencies[] = gardens_duplication
 dependencies[] = gardens_features
 dependencies[] = gardens_features_required
 dependencies[] = gardens_help
