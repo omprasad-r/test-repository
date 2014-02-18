@@ -69,16 +69,14 @@ class DrupalFile7Migration extends DrupalFileMigration {
     // Do our best to apply the appropriate file_class to the import of this
     // "file". Assume if we don't recognize a special case, we'll treat it as
     // a real file to be copied.
-    switch ($row->filemime) {
-      case 'video/oembed':
-        $this->destination->setFileClass('MigrateFileUriAsIs');
-        break;
-      case 'video/youtube':
-        $this->destination->setFileClass('MigrateExtrasFileYoutube');
-        break;
-      default:
-        $this->destination->setFileClass('MigrateFileUri');
-        break;
+    if ($row->filemime == 'video/youtube' && class_exists('MigrateExtrasFileYoutube')) {
+      $this->destination->setFileClass('MigrateExtrasFileYoutube');
+    }
+    elseif (preg_match('|/oembed$|i', $row->filemime)) {
+      $this->destination->setFileClass('MigrateFileUriAsIs');
+    }
+    else {
+      $this->destination->setFileClass('MigrateFileUri');
     }
   }
 
