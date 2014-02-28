@@ -254,6 +254,14 @@ class SiteExport {
   private function getModulesToRemove() {
     return array(
       // Actual modules.
+      'acsf',
+      'acsf_duplication',
+      'acsf_events',
+      'acsf_log',
+      'acsf_openid',
+      'acsf_pingdom',
+      'acsf_site',
+      'acsf_variables',
       'akamai',
       'antivirus',
       'audit_trail',
@@ -347,6 +355,7 @@ class SiteExport {
       'variable' => array(
         'name' => array(
           'not like' => array(
+            'acsf_%',
             'akamai_%',
             'antivirus_%',
             'audit_trail_%',
@@ -369,6 +378,9 @@ class SiteExport {
       ),
       'system' => array(
         'filename' => array(
+          'not like' => array(
+            'profiles/gardens/modules/acquia/%',
+          ),
           'not in' => array(
             'profiles/gardens/gardens.profile',
             'sites/all/modules/antivirus/antivirus.module',
@@ -432,6 +444,9 @@ class SiteExport {
       'sites',
       // Exclude the WMG theme.
       'themes/acquia/wmg',
+      // ACSF modules are there to handle tweaks and communication necessary to
+      // our infrastructure, so it should not be present in the export.
+      'profiles/gardens/modules/contrib/acsf',
     );
   }
 

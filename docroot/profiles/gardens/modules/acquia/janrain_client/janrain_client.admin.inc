@@ -237,7 +237,15 @@ function janrain_client_get_rpxnow_url() {
   if (variable_get('rpx_invite_url', '')) {
     // Call the gardener to see if the invite's been accepted since we checked
     // last.
-    $result = gardens_client_call_gardener('janrain.check.invite', gardens_client_get_gardens_db_name());
+    try {
+      $message = new AcsfMessageXmlRpc('GET', 'acquia.gardens.janrain.check.invite', gardens_client_get_gardens_db_name());
+      $message->send();
+      $result = $message->getResponseBody();
+    }
+    catch (Exception $e) {
+      watchdog('janrain_client', $e->getMessage(), array(), WATCHDOG_ERROR);
+    }
+
     if ($result) {
       return $result;
     }

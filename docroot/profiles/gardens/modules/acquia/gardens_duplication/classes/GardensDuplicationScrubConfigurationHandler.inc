@@ -31,9 +31,6 @@ class GardensDuplicationScrubConfigurationHandler extends AcsfEventHandler {
     // be copied over during site duplication.
     variable_del('gardens_misc_include_google_analytics');
 
-    // Save the site's original (standard *.drupalgardens.com) domain.
-    variable_set('gardens_misc_standard_domain', $this->event->context['standard_domain']);
-
     if (!empty($options['mollom_public_key']) && !empty($options['mollom_private_key'])) {
       gardens_misc_update_mollom_keys_if_necessary($options['mollom_public_key'], $options['mollom_private_key']);
     }

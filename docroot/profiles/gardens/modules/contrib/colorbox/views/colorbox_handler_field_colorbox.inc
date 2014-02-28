@@ -32,7 +32,7 @@ class colorbox_handler_field_colorbox extends views_handler_field {
   function options_form(&$form, &$form_state) {
     parent::options_form($form, $form_state);
 
-    // Get a list of the available fields and arguments for token replacement.
+    // Get a list of the available fields and arguments for trigger field and token replacement.
     $options = array();
     $fields = array('trigger_field' => t('- None -'));
     foreach ($this->view->display_handler->get_handlers('field') as $field => $handler) {
@@ -43,6 +43,34 @@ class colorbox_handler_field_colorbox extends views_handler_field {
       }
 
       $fields[$field] = $handler->definition['title'];
+    }
+    $count = 0; // This lets us prepare the key as we want it printed.
+    foreach ($this->view->display_handler->get_handlers('argument') as $arg => $handler) {
+      $options[t('Arguments')]['%' . ++$count] = t('@argument title', array('@argument' => $handler->ui_name()));
+      $options[t('Arguments')]['!' . $count] = t('@argument input', array('@argument' => $handler->ui_name()));
+    }
+
+    $this->document_self_tokens($options[t('Fields')]);
+
+    // Default text.
+    $patterns = t('<p>You must add some additional fields to this display before using this field. These fields may be marked as <em>Exclude from display</em> if you prefer. Note that due to rendering order, you cannot use fields that come after this field; if you need a field not listed here, rearrange your fields.</p>');
+    // We have some options, so make a list.
+    if (!empty($options)) {
+      $patterns = t('<p>The following tokens are available for this field. Note that due to rendering order, you cannot use fields that come after this field; if you need a field not listed here, rearrange your fields.
+If you would like to have the characters %5B and %5D please use the html entity codes \'%5B\' or  \'%5D\' or they will get replaced with empty space.</p>');
+      foreach (array_keys($options) as $type) {
+        if (!empty($options[$type])) {
+          $items = array();
+          foreach ($options[$type] as $key => $value) {
+            $items[] = $key . ' == ' . $value;
+          }
+          $patterns .= theme('item_list',
+            array(
+              'items' => $items,
+              'type' => $type
+            ));
+        }
+      }
     }
 
     $form['trigger_field'] = array(
@@ -81,9 +109,17 @@ class colorbox_handler_field_colorbox extends views_handler_field {
     $form['custom_gid'] = array(
       '#type' => 'textfield',
       '#title' => t('Custom Colorbox gallery'),
-      '#description' => t('Enable Colorbox gallery with a given string as gallery. Overrides the automatically generated gallery id above.'),
+      '#description' => t('Enable Colorbox gallery with a given string as gallery. Overrides the automatically generated gallery id above. You may enter data from this view as per the "Replacement patterns" below.'),
       '#default_value' => $this->options['custom_gid'],
       '#weight' => -8,
+    );
+
+    $form['width'] = array(
+      '#type' => 'textfield',
+      '#title' => t('Width'),
+      '#description' => t('Specify the width of the Colorbox popup window. Because the content is dynamic, we cannot detect this value automatically. Example: "100%", 500, "500px".'),
+      '#default_value' => $this->options['width'],
+      '#weight' => -6,
     );
 
     $form['height'] = array(
@@ -94,12 +130,12 @@ class colorbox_handler_field_colorbox extends views_handler_field {
       '#weight' => -7,
     );
 
-    $form['width'] = array(
-      '#type' => 'textfield',
-      '#title' => t('Width'),
-      '#description' => t('Specify the width of the Colorbox popup window. Because the content is dynamic, we cannot detect this value automatically. Example: "100%", 500, "500px".'),
-      '#default_value' => $this->options['width'],
-      '#weight' => -6,
+    $form['patterns'] = array(
+      '#type' => 'fieldset',
+      '#title' => t('Replacement patterns'),
+      '#collapsible' => TRUE,
+      '#collapsed' => TRUE,
+      '#value' => $patterns,
     );
   }
 
@@ -114,7 +150,7 @@ class colorbox_handler_field_colorbox extends views_handler_field {
 
     // We need to have multiple unique IDs, one for each record.
     static $i = 0;
-    $i++;
+    $i = mt_rand();
 
     // Return nothing if no trigger filed is selected.
     if (empty($this->options['trigger_field'])) {
@@ -126,12 +162,14 @@ class colorbox_handler_field_colorbox extends views_handler_field {
     $tokens = $this->get_render_tokens($this->options['alter']);
     $popup = filter_xss_admin($this->options['popup']);
     $caption = filter_xss_admin($this->options['caption']);
+    $gallery = drupal_html_class($this->options['custom_gid']);
     $popup = strtr($popup, $tokens);
     $caption = strtr($caption, $tokens);
+    $gallery = strtr($gallery, $tokens);
 
     $width = $this->options['width'] ? $this->options['width'] : '';
     $height = $this->options['height'] ? $this->options['height'] : '';
-    $gallery_id = !empty($this->options['custom_gid']) ? $this->options['custom_gid'] : ($this->options['gid'] ? 'gallery-' . $this->view->name : '');
+    $gallery_id = !empty($gallery) ? $gallery : ($this->options['gid'] ? 'gallery-' . $this->view->name : '');
     $link_text = $tokens["[{$this->options['trigger_field']}]"];
     $link_options = array(
       'html' => TRUE,
@@ -143,14 +181,17 @@ class colorbox_handler_field_colorbox extends views_handler_field {
         'inline' => 'true'
       ),
       'attributes' => array(
-        'class' => 'colorbox-inline',
+        'class' => array('colorbox-inline'),
         'rel' => $gallery_id
       )
     );
     // Remove any parameters that aren't set.
     $link_options['query'] = array_filter($link_options['query']);
 
-    $link_tag = l($link_text, '', $link_options);
+    // If the nid is present make the link degrade to the node page if
+    // JavaScript is off.
+    $link_target = isset($values->nid) ? 'node/' . $values->nid : '';
+    $link_tag = l($link_text, $link_target, $link_options);
 
     // The outside div is there to hide all of the divs because if the specific Colorbox
     // div is hidden it won't show up as a Colorbox.

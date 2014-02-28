@@ -5,7 +5,7 @@ Acquia Cloud Site Factory connector. This is the module set required to connect 
 
 Installation
 ------------
-The ACSF module needs to be available and required by your distribution. Any profile or module can require 'acsf' in their .info file and everything else will be handled during site install. The Site Factory needs to know the location of this module, which can be configured manually or the Factory will search for acsf.module to learn its location.
+The first step is to execute drush acsf-init from your local repository. This command does not require a Drupal site as it only bootstraps to DRUSH_BOOTSTRAP_DRUPAL_ROOT. This command will overly several required files to run on the ACSF hosting architecture. The ACSF module needs to be available and required by your distribution. Any profile or module can require 'acsf' in their .info file and everything else will be handled during site install. The Site Factory needs to know the location of this module, which can be configured manually or the Factory will search for acsf.module to learn its location.
 
 Events
 ------

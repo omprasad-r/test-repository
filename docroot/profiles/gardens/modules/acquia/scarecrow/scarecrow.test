@@ -31,13 +31,6 @@ class ScarecrowGetGardenerURLUnitTest extends DrupalWebTestCase {
     foreach ($urls as $url) {
       $this->assertEqual(scarecrow_get_gardener_url($url), '', t('No Gardener URL is returned when the Gardens site domain is unrecognized.'));
     }
-    // Now repeat the above, but after setting a specific URL in the database
-    // which we expect to get back.
-    $saved_url = 'https://www.example.com';
-    variable_set('acquia_gardens_gardener_url', $saved_url);
-    foreach ($urls as $url) {
-      $this->assertEqual(scarecrow_get_gardener_url($url), $saved_url);
-    }
     // Also make sure we get the saved variable back when we don't pass in a
     // URL at all but rather rely on the default.
     $this->assertEqual(scarecrow_get_gardener_url(), $saved_url);

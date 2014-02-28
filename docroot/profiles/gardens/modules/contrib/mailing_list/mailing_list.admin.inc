@@ -414,7 +414,7 @@ function mailing_list_export($list) {
 	file_transfer($full_path, $headers);
 }
 
-function mailing_list_admin_settings(&$form, &$form_state) {
+function mailing_list_admin_settings($form, &$form_state) {
   drupal_set_title('Mailing list settings');
   $form['mailing_list_subscription_message'] = array(
     '#type' => 'textfield',

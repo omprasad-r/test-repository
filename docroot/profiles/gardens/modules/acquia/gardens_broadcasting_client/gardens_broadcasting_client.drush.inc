@@ -23,7 +23,8 @@ function gardens_broadcasting_client_drush_command() {
  */
 function drush_gardens_broadcasting_client_tasks_get() {
   // When $cluster is empty then it's an SMB site.
-  $cluster = variable_get('gardens_client_name', 'smb');
+  $site = AcsfSite::load();
+  $cluster = isset($site->client_name) ? $site->client_name : 'smb';
 
   // Tangle info.
   $tangle = variable_get('acquia_hosting_site_info', '');
@@ -48,7 +49,15 @@ function drush_gardens_broadcasting_client_tasks_get() {
   }
 
   // Get new tasks.
-  $new_tasks = gardens_client_call_gardener('broadcasting.task.get', array($cluster, $timestamp, $tangle));
+  try {
+    $message = new AcsfMessageXmlRpc('GET', 'acquia.gardens.broadcasting.task.get', array($cluster, $timestamp, $tangle));
+    $message->send();
+    $new_tasks = $message->getResponseBody();
+  }
+  catch (Exception $e) {
+    watchdog('gardens_broadcasting', $e->getMessage(), array(), WATCHDOG_ERROR);
+  }
+
   // It's either an array or NULL, so have to double check to make sure an array
   // is being fed to the loop.
   if ($new_tasks) {

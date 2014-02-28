@@ -75,27 +75,6 @@ function themebuilder_marketplace_get_theme_list() {
 }
 
 /**
- * Implements hook_gardens_client_phone_home().
- *
- * Stores theme information from the gardener in our own database table, instead
- * of the crowded variables table.
- */
-function themebuilder_marketplace_gardens_client_phone_home($previous_data, &$data) {
-  // Acquire a lock, since multiple phone home requests may be running at once.
-  if (lock_acquire('themebuilder_marketplace_gardens_client_phone_home')) {
-    $featured_themes = $data['gardener_site']['featured_themes'];
-    db_delete('themebuilder_marketplace_featured')->execute();
-    $query = db_insert('themebuilder_marketplace_featured')->fields(array('nid', 'vid', 'name', 's3_key', 'base_theme', 'thumbnail_url', 'username'));
-    foreach ($featured_themes as $record) {
-      $query->values($record);
-    }
-    $query->execute();
-    unset($data['gardener_site']['featured_themes']);
-    lock_release('themebuilder_marketplace_gardens_client_phone_home');
-  }
-}
-
-/**
  * Copy an archived theme from S3 and expand it into a destination directory.
  *
  * @param string $theme_name

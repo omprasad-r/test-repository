@@ -389,7 +389,16 @@ function janrain_login_form_user_register_form_alter(&$form, &$form_state, $form
     $token = $_SESSION['openid']['response']['openid.ax.value.rpx_token'];
 
     // Request the Engage data from gardener using the token.
-    if (!$rpx_data = gardens_client_call_gardener('janrain.get.user.data', $token)) {
+    try {
+      $message = new AcsfMessageXmlRpc('GET', 'acquia.gardens.janrain.get.user.data', $token);
+      $message->send();
+      $rpx_data = $message->getResponseBody();
+    }
+    catch (Exception $e) {
+      watchdog('janrain_client', $e->getMessage(), array(), WATCHDOG_ERROR);
+    }
+
+    if (!$rpx_data) {
       return;
     }
 
@@ -1249,7 +1258,16 @@ function janrain_login_user_login(&$edit, $account) {
     }
 
     $token = $_REQUEST['openid_ax_value_rpx_token'];
-    $rpx_data = gardens_client_call_gardener('janrain.get.user.data', $token);
+
+    try {
+      $message = new AcsfMessageXmlRpc('GET', 'acquia.gardens.janrain.get.user.data', $token);
+      $message->send();
+      $rpx_data  = $message->getResponseBody();
+    }
+    catch (Exception $e) {
+      watchdog('janrain_client', $e->getMessage(), array(), WATCHDOG_ERROR);
+    }
+
     if (!$rpx_data) {
       return;
     }
