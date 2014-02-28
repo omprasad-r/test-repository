@@ -966,24 +966,26 @@ function site_template_add_basic_role($name, $permissions) {
  */
 function site_template_create_simpleview($simpleview_data) {
   // Save the simpleview and sqbs backend data.
-  $simpleview = simpleviews_item_save($simpleview_data);
-  $return_data['simpleview_id'] = $simpleview['svid'];
-  unset($simpleview['svid']);
-  $return_data['sqbs_id'] = sqbs_simpleviews_save($simpleview);
-  // Optionally add a menu link.
-  if (isset($simpleview_data['menu_link'])) {
-    $menu_link = $simpleview_data['menu_link'];
-    if (isset($simpleview_data['path'])) {
-      $menu_link += array('link_path' => $simpleview_data['path']);
+  if (module_exists('simpleviews')) {
+    $simpleview = simpleviews_item_save($simpleview_data);
+    $return_data['simpleview_id'] = $simpleview['svid'];
+    unset($simpleview['svid']);
+    $return_data['sqbs_id'] = sqbs_simpleviews_save($simpleview);
+    // Optionally add a menu link.
+    if (isset($simpleview_data['menu_link'])) {
+      $menu_link = $simpleview_data['menu_link'];
+      if (isset($simpleview_data['path'])) {
+        $menu_link += array('link_path' => $simpleview_data['path']);
+      }
+      if (isset($simpleview_data['title'])) {
+        $menu_link += array('link_title' => $simpleview_data['title']);
+      }
+      if ($mlid = site_template_menu_link_save($menu_link)) {
+        $return_data['mlid'] = $mlid;
+      }
     }
-    if (isset($simpleview_data['title'])) {
-      $menu_link += array('link_title' => $simpleview_data['title']);
-    }
-    if ($mlid = site_template_menu_link_save($menu_link)) {
-      $return_data['mlid'] = $mlid;
-    }
+    return $return_data;
   }
-  return $return_data;
 }
 
 /**

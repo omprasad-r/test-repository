@@ -11,16 +11,16 @@ if (function_exists('drush_main') || drupal_is_cli()) {
   return;
 }
 
-// Determine what gardener we are in and figure out if the user requested a
+// Determine what Factory we are in and figure out if the user requested a
 // custom domain or not.
-
-if (!function_exists('_acquia_gardens_xmlrpc_creds')) {
-  $path = DRUPAL_ROOT .'/../library';
-  @include_once("$path/acquia_gardens_xmlrpc.inc");
+if (!class_exists('AcsfConfigDefault')) {
+  // Since there is no bootstrap, we need to find our config objects.
+  require_once DRUPAL_ROOT . '/profiles/gardens/modules/contrib/acsf/classes/AcsfConfig.inc';
+  require_once DRUPAL_ROOT . '/profiles/gardens/modules/contrib/acsf/classes/AcsfConfigDefault.inc';
 }
+$config = new AcsfConfigDefault();
+$gardener_url = $config->getUrl();
 
-$creds = _acquia_gardens_xmlrpc_creds('gardener');
-$gardener_url = $creds['url'];
 // The gardener is assumed to be of the form www.CUSTOMER.DOMAIN.com, so site
 // suffix is the gardener URL without the leading 'www.'.
 $site_suffix = substr(parse_url($gardener_url, PHP_URL_HOST), 4);

@@ -414,7 +414,8 @@ function scarecrow_form_mollom_admin_configure_form_alter(&$form, &$form_state) 
 
   // Only enterprise customers may select the option "Accept the post" for "unsure"
   // responses from mollom analysis.
-  if (!variable_get('gardens_client_name', FALSE)) {
+  $site = AcsfSite::load();
+  if (!$site->client_name) {
     unset($form['mollom']['unsure']['#options']['binary']);
   }
 }
@@ -659,7 +660,8 @@ function scarecrow_mollom_require_access($mollom_form) {
   // Do not allow removing a node from's Mollom protection if anonymous users
   // may create such nodes.
   $node_form = preg_match('/^([a-z0-9_]+)_node_form$/', $mollom_form['form_id'], $matches) && !empty($matches[1]) && in_array($matches[1], node_permissions_get_configured_types());
-  if (!variable_get('gardens_client_name', '') && $node_form && user_access('create ' . $matches[1] . ' content', drupal_anonymous_user())) {
+  $site = AcsfSite::load();
+  if (!$site->client_name && $node_form && user_access('create ' . $matches[1] . ' content', drupal_anonymous_user())) {
     return FALSE;
   }
 
@@ -894,7 +896,8 @@ function scarecrow_page_alter(&$page) {
 
         // And for nodes that can be created by anonymous users.
         $node_form = preg_match('/^([a-z0-9_]+)_node_form$/', $form_id, $matches) && !empty($matches[1]) && in_array($matches[1], node_permissions_get_configured_types());
-        if (!variable_get('gardens_client_name', '') && $node_form && user_access('create ' . $matches[1] . ' content', drupal_anonymous_user())) {
+        $site = AcsfSite::load();
+        if (!$site->client_name && $node_form && user_access('create ' . $matches[1] . ' content', drupal_anonymous_user())) {
           // The following function brings sanitized strings, so we need to use
           // !permission to avoid double encoding.
           $node_permissions = module_invoke('node', 'permission');
@@ -1023,15 +1026,15 @@ function scarecrow_toolbar_add_links($toolbar) {
  *   Gardener associated with this site.
  */
 function scarecrow_get_gardener_url($base_root = NULL) {
-  // If the URL is already set in the database or settings.php, return that.
-  $gardener_url = variable_get('acquia_gardens_gardener_url');
-  if (isset($gardener_url)) {
-    return $gardener_url;
+  // If the URL is already set in the AcsfSite object, return that.
+  $site = AcsfSite::load();
+  if (isset($site->factory_url)) {
+    return $site->factory_url;
   }
-  $xmlrpc_library_path = dirname(DRUPAL_ROOT) . '/library/acquia_gardens_xmlrpc.inc';
-  require_once $xmlrpc_library_path;
 
-  return _acquia_gardens_gardener_url();
+  // Otherwise, obtain it from the cred file.
+  $config = new AcsfConfigDefault();
+  return $config->getUrl();
 }
 
 /**
@@ -1100,7 +1103,6 @@ function scarecrow_disallowed_modules() {
     'oembedfield',
     'oembedprovider',
     // These modules are included with Date but not part of Gardens.
-    'date_migrate',
     'date_migrate_example',
     'date_tools',
     'date_context',
@@ -1597,7 +1599,8 @@ function _scarecrow_permissions_validate($form, &$form_state) {
   );
   // Nodes that can be created by anonymous users need to be protected by Mollom
   // with a CAPTCHA on SMB.
-  if (!variable_get('gardens_client_name', '')) {
+  $site = AcsfSite::load();
+  if (!$site->client_name) {
     foreach (node_permissions_get_configured_types() as $node_type) {
       if (!empty($form_state['values'][DRUPAL_ANONYMOUS_RID]['create ' . $node_type . ' content']) && !_scarecrow_node_protected_by_mollom($node_type)) {
         form_set_error(DRUPAL_ANONYMOUS_RID . '][create ' . $node_type . ' content', t('To enable "!permission" for anonymous users, configure <a href="!mollom">Mollom content protection</a>.', array(
@@ -1854,7 +1857,8 @@ function theme_scarecrow_media_gallery_download_link($variables) {
  * Implements hook_form_FORM_ID_alter().
  */
 function scarecrow_form_domain_301_redirect_admin_form_alter(&$form, $form_state) {
-  if (!variable_get('gardens_client_name', '')) {
+  $site = AcsfSite::load();
+  if (!$site->client_name) {
     // On SMB do not allow disabling the domain check.
     unset($form['domain_301_redirect_check_period']['#options'][0]);
   }

@@ -103,7 +103,8 @@ function drush_acsf_uninstall() {
 function acsf_init_get_required_dirs($repo_root) {
   return array(
     'cloud hooks' => sprintf('%s/hooks/common/post-db-copy', $repo_root),
-    'acquia db' => sprintf('%s/hooks/acquia', $repo_root),
+    'acquia hook dir' => sprintf('%s/hooks/acquia', $repo_root),
+    'cloud hook samples' => sprintf('%s/hooks/samples', $repo_root),
     'site config logic' => sprintf('%s/sites/g', DRUPAL_ROOT),
   );
 }
@@ -113,18 +114,34 @@ function acsf_init_get_required_dirs($repo_root) {
  */
 function acsf_init_get_required_files($repo_root) {
   return array(
-    '000-acquia_required_scrub.php' => array(
+    'README.md' => array(
       'source' => 'cloud_hooks',
+      'dest' => sprintf('%s/hooks', $repo_root),
+    ),
+    '000-acquia_required_scrub.php' => array(
+      'source' => 'cloud_hooks/common/post-db-copy',
       'dest' => sprintf('%s/hooks/common/post-db-copy', $repo_root),
       'mod' => 0751,
     ),
     'db_connect.php' => array(
-      'source' => 'cloud_hooks',
+      'source' => 'cloud_hooks/acquia',
       'dest' => sprintf('%s/hooks/acquia', $repo_root),
     ),
     'uri.php' => array(
-      'source' => 'cloud_hooks',
+      'source' => 'cloud_hooks/acquia',
       'dest' => sprintf('%s/hooks/acquia', $repo_root),
+    ),
+    'acquia-cloud-site-factory-post-db.sh' => array(
+      'source' => 'cloud_hooks/samples',
+      'dest' => sprintf('%s/hooks/samples', $repo_root),
+    ),
+    'hello-world.sh' => array(
+      'source' => 'cloud_hooks/samples',
+      'dest' => sprintf('%s/hooks/samples', $repo_root),
+    ),
+    'post-code-deploy.tmpl' => array(
+      'source' => 'cloud_hooks/samples',
+      'dest' => sprintf('%s/hooks/samples', $repo_root),
     ),
     'sites.php' => array(
       'source' => 'sites',

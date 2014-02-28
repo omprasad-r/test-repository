@@ -167,20 +167,21 @@ function gardens_client_init() {
   // Display site blocked message instead of site page if the site is blocked.
   $verifier = new EmailVerifier();
   if (!drupal_is_cli() && $verifier->needsSiteBlock() && arg(0) != 'gardener') {
-    $gardener_url = variable_get('acquia_gardens_gardener_url');
+    $site = AcsfSite::load();
+    $factory_url = $site->factory_url;
     if ($verifier->needsDeleteReminder()) {
       $body = t('You did not verify your user account, therefore your !service_name_long website is blocked.', array('!service_name_long' => acsf_vget('acsf_factory_name', 'Acquia Cloud Site Factory'))) . '<div>' . $verifier->getReminderText('to_be_deleted') .'</div>';
     }
     elseif (user_is_anonymous()) {
       $body = t('This !service_name_long website is blocked. If you are the site owner, verify your email address by clicking the link in the verification email that was sent to you.  If you don\'t have the original email, please visit your <a href="@mysites">My sites</a> page to send it again.', array(
-        '@mysites' => url($gardener_url . '/user/login?destination=mysites'),
+        '@mysites' => url($factory_url . '/user/login?destination=mysites'),
         '!service_name_long' => acsf_vget('acsf_factory_name', 'Acquia Cloud Site Factory'),
       ));
     }
     else {
       if (scarecrow_is_site_owner()) {
         $body = t('This !service_name_long website is blocked. To access your site, verify your email address by clicking the link in the verification email that was sent to you.  If you don\'t have the original email, please visit your <a href="@mysites">My sites</a> page to send it again.', array(
-          '@mysites' => url($gardener_url . '/mysites'),
+          '@mysites' => url($factory_url . '/mysites'),
           '!service_name_long' => acsf_vget('acsf_factory_name', 'Acquia Cloud Site Factory'),
         ));
       }
@@ -511,7 +512,16 @@ function gardens_client_send_site_data() {
     $path = dirname(__FILE__);
     include_once("$path/stats.inc");
     $stats = gardens_client_generate_site_stats();
-    $rpc_result = gardens_client_call_gardener('set.site.stats', array($stats));
+
+    try {
+      $message = new AcsfMessageXmlRpc('GET', 'acquia.gardens.set.site.stats', array($stats));
+      $message->send();
+      $rpc_result = $message->getResponseBody();
+    }
+    catch (Exception $e) {
+      watchdog('gardens_client', $e->getMessage(), array(), WATCHDOG_ERROR);
+    }
+
     if ($rpc_result !== NULL) {
       variable_set('gardens_stats_time', REQUEST_TIME);
     }
@@ -543,34 +553,14 @@ function gardens_client_data_get($module, $name = NULL) {
   }
 }
 
-// == XML-RPC integration ======================================================
-
 /**
  * Make an XML-RPC request on the Gardener and record the data.
  *
  * Returns TRUE if data was retrieved, FALSE otherwise.
  */
 function gardens_client_phone_home() {
-  // This feature can be disabled for development.
-  if (variable_get('gardens_client_phone_home', TRUE)) {
-    $nid = gardens_client_get_site_identifier();
-    $rpc_result = (array) gardens_client_call_gardener('phone.home', array($nid));
-    if ($rpc_result) {
-      $data_before = variable_get('gardens_client_gardener_data', array());
-      // Store the new value.
-      variable_set('gardens_client_gardener_data', $rpc_result);
-
-      // Give modules a chance to look at data changes and act on them
-      // (such as rebuild caches of stuff that is limited).
-      foreach (module_implements('gardens_client_phone_home') as $module) {
-        $function = $module . '_gardens_client_phone_home';
-        $function($data_before, $rpc_result);
-      }
-      return TRUE;
-    }
-  }
-
-  return FALSE;
+  $site = AcsfSite::load();
+  $site->refresh();
 }
 
 /**
@@ -606,43 +596,6 @@ function gardens_client_get_site_identifier() {
     }
   }
   return $nid;
-}
-
-/**
- * Make an XML-RPC request on the Gardener.
- *
- * @param $method
- *   The method to call on the Gardener. It will be prefixed with the
- *   "acquia.gardens" namespace.
- * @param $data
- *   The data to pass to the method being called. Defaults to an empty array.
- *
- * @return
- *   The result of the XML-RPC call, if any, or NULL if no result was available.
- */
-function gardens_client_call_gardener($method, $data = array()) {
-  @include_once('acquia_gardens_xmlrpc.inc');
-  if (!function_exists('acquia_gardens_call')) {
-    $path = DRUPAL_ROOT .'/../library';
-    @include_once("$path/acquia_gardens_xmlrpc.inc");
-  }
-  if (function_exists('acquia_gardens_call')) {
-    try {
-      $result = acquia_gardens_call($method, $data, scarecrow_get_gardener_url());
-      return $result;
-    }
-    catch (AcquiaFieldsRpcException $e) {
-      syslog(LOG_INFO, "Error calling the Gardener: " . $e->getMessage());
-      return NULL;
-    }
-  }
-  else {
-    // We are probably in a local development environment. Local developers
-    // can put a file named acquia_gardens_xmlrpc.inc into their include path
-    // if they want to mock up a version that works locally.
-    syslog(LOG_ERR, "GardensError: AN-22475 - acquia_gardens_xmlrpc.inc was not included, gardens_client_call_gardener has failed for method GardensError: method: $method.");
-    return NULL;
-  }
 }
 
 /**
@@ -746,7 +699,7 @@ class EmailVerifier {
   const MUTE_FOR = 86400;
 
   public function __construct() {
-    $status = (array) gardens_client_data_get('gardens_signup', 'verification_status');
+    $status = (array) gardens_client_data_get('sf_site', 'verification_status');
     foreach ($status as $key => $value) {
       $this->$key = $value;
     }
@@ -941,3 +894,19 @@ function gardens_client_form_janrain_capture_settings_alter(&$form, $form_state)
 function gardens_client_acsf_openid_user_registration_toggler($form, $form_state) {
   variable_set('acsf_openid_registration_handling', empty($form_state['values']['janrain_capture_enforce']));
 }
+
+/**
+ * Implements hook_acsf_registry().
+ */
+function gardens_client_acsf_registry() {
+  return array(
+    'events' => array(
+      array(
+        'type' => 'acsf_site_data_receive',
+        'class' => 'GardensClientSiteDataHandler',
+        'path' => drupal_get_path('module', 'gardens_client') . '/classes',
+      ),
+    ),
+  );
+}
+

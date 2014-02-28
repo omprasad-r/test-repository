@@ -101,18 +101,30 @@ function drush_site_export_export_s3() {
     $bucket = GARDENS_DEFAULT_EXPORT_BUCKET_NAME;
   }
   // This URL is publicly accessible.
-  include_once(sprintf('%s/../library/acquia_gardens_xmlrpc.inc', DRUPAL_ROOT));
   $authenticated_url = drush_site_export_send_to_s3($s3key, $s3secret, $path, $resource_name, $bucket);
   if (!$authenticated_url) {
     drush_set_error('archive_failed', 'Unable to archive site to s3. Reporting failure to the gardener.');
-    acquia_gardens_call('site.archive.failed', array($nid));
+
+    try {
+      $message = new AcsfMessageXmlRpc('GET', 'acquia.gardens.site.archive.failed', array($nid));
+      $message->send();
+      $success = $message->getResponseBody();
+    }
+    catch (Exception $e) {
+      watchdog('gardens_misc', $e->getMessage(), array(), WATCHDOG_ERROR);
+    }
+
     return;
   }
   // Notify the gardener that we we have exported this site and moved it to S3.
   drush_log("Query Auth URL:" . $authenticated_url, 'success');
-  $result = acquia_gardens_call('site.archived', array($nid, $authenticated_url));
-  if ($result != 1) {
-    // XML-RPC represents TRUE as 1, so check if the site returned that status.
+  try {
+    $message = new AcsfMessageXmlRpc('GET', 'acquia.gardens.site.archived', array($nid, $authenticated_url));
+    $message->send();
+    $success = $message->getResponseBody();
+  }
+  catch (Exception $e) {
+    watchdog('site_export', $e->getMessage(), array(), WATCHDOG_ERROR);
     drush_set_error('archive_failed', "Unable to report successful s3 upload to the gardener. Check gardens_stats errors for site $nid on the gardener.");
     return;
   }

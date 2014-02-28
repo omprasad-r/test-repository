@@ -143,7 +143,15 @@ function site_export_call_gardener($form, &$form_state) {
   $stats->reason = $form_state['values']['reason'];
   $stats->explanation = $form_state['values']['explanation'];
 
-  $success = gardens_client_call_gardener('site.export.stats', $stats);
+  try {
+    $message = new AcsfMessageXmlRpc('GET', 'acquia.gardens.site.export.stats', $stats);
+    $message->send();
+    $success = $message->getResponseBody();
+  }
+  catch (Exception $e) {
+    watchdog('janrain_client', $e->getMessage(), array(), WATCHDOG_ERROR);
+  }
+
 }
 
 /**
