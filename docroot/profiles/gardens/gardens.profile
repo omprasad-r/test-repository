@@ -74,7 +74,6 @@ function gardens_form_install_configure_form_alter(&$form, $form_state) {
     '#title' => st('Username'),
     '#maxlength' => USERNAME_MAX_LENGTH,
     '#description' => st('Spaces are allowed; punctuation is not allowed except for periods, hyphens, and underscores.'),
-    '#required' => TRUE,
     '#weight' => -10,
     '#attributes' => array('class' => array('username')),
   );
@@ -82,13 +81,11 @@ function gardens_form_install_configure_form_alter(&$form, $form_state) {
   $form['owner_account']['account']['mail'] = array('#type' => 'textfield',
     '#title' => st('E-mail address'),
     '#maxlength' => EMAIL_MAX_LENGTH,
-    '#required' => TRUE,
     '#weight' => -5,
   );
   // Set a password.
   $form['owner_account']['account']['pass'] = array(
     '#type' => 'password_confirm',
-    '#required' => TRUE,
     '#size' => 25,
     '#weight' => 0,
   );
@@ -103,18 +100,6 @@ function gardens_form_install_configure_form_alter(&$form, $form_state) {
   $form['acquia_gardens'] = array(
     '#type' => 'fieldset',
     '#title' => t('Drupal Gardens information'),
-  );
-  $form['acquia_gardens']['acquia_gardens_gardener_url'] = array(
-    '#type' => 'textfield',
-    '#title' => t('Drupal Gardener URL'),
-    '#description' => t('The complete URL (including http://) of the Drupal Gardener host associated with this site. This is used for login and user registration, as well as linking to the user global dashboards.'),
-    '#default_value' => scarecrow_get_gardener_url(),
-  );
-  $form['acquia_gardens']['gardens_service_name_long'] = array(
-    '#type' => 'textfield',
-    '#title' => t('Service name (gardener name)'),
-    '#description' => t('The human-readable name of this service (eg. "Drupal Gardens")'),
-    '#default_value' => variable_get('gardens_service_name_long', 'Drupal Gardens'),
   );
   $form['acquia_gardens']['site_template'] = array(
     '#type' => 'textfield',
@@ -136,19 +121,6 @@ function gardens_form_install_configure_form_alter(&$form, $form_state) {
     '#type' => 'textfield',
     '#maxlength' => 128,
     '#title' => t('Private key for Mollom service'),
-  );
-  $form['acquia_gardens']['install_themebuilder_screenshot_keys'] = array(
-    '#type' => 'checkbox',
-    '#title' => t('Install themebuilder screenshot keys'),
-    '#description' => t("This allows the themebuilder screenshot service to take screenshots of this site's themes. Don't check this for local development, unless you are explicitly testing out the screenshot functionality."),
-    '#default_value' => FALSE,
-  );
-  $form['acquia_gardens']['gardens_client_name'] = array(
-    '#type' => 'textfield',
-    '#title' => t('Client name'),
-    '#description' => t('Enterprise client name associated with this gardens site.
-      If available, a profile named [client name] will be enabled.'),
-    '#default_value' => '',
   );
 
   $form['acquia_gardens_development'] = array(
@@ -255,21 +227,12 @@ function gardens_installer_custom_submit($form, &$form_state) {
     variable_set('gardens_debug_xmlrpc', TRUE);
   }
 
-  // Save gardener URL information.
-  variable_set('acquia_gardens_gardener_url', trim($form_state['values']['acquia_gardens_gardener_url'], '/'));
-  variable_set('gardens_service_name_long', $form_state['values']['gardens_service_name_long']);
-
-  if ($form_state['values']['gardens_service_name_long'] != 'Drupal Gardens') {
-    variable_set('gardens_features_responsive_enabled', TRUE);
-  }
-
   // At this point in the batch, gardens.install will not have been included if
   // the gardens verification profile was used.  Including it now keeps the the
   // next statement from failing.
   include_once DRUPAL_ROOT . '/profiles/gardens/gardens.install';
 
-  // Since the acquia_gardens_gardener_url variable has now been manually set,
-  // redefine user notification emails so that they contain links to the new
+  // Redefine user notification emails so that they contain links to the
   // gardener URL.
   gardens_setup_user_mail();
 
@@ -282,7 +245,7 @@ function gardens_installer_custom_submit($form, &$form_state) {
 
   $account_name = $form_state['values']['owner_account']['account']['name'];
   $account_mail = $form_state['values']['owner_account']['account']['mail'];
-  if (!user_load_by_name($account_name) && !user_load_by_mail($account_mail)) {
+  if (!empty($account_name) && !empty($account_mail) && !user_load_by_name($account_name) && !user_load_by_mail($account_mail)) {
     $owner_account = new stdClass();
     $owner_account->is_new = TRUE;
     $edit = $form_state['values']['owner_account']['account'];
@@ -292,9 +255,6 @@ function gardens_installer_custom_submit($form, &$form_state) {
     // Set login to non-zero to avoid e-mail verification needed error.
     $edit['login'] = 1;
     $owner_account = user_save($owner_account, $edit);
-  }
-  else {
-    $owner_account = user_load_by_name($account_name);
   }
 
   // Enable the chosen site template and features, and finalize the template
@@ -319,16 +279,6 @@ function gardens_installer_custom_submit($form, &$form_state) {
     $template_installed = TRUE;
   }
   site_template_finalize_template_selection();
-
-  // Configure mollom
-  if (!empty($form_state['values']['mollom_public_key']) && !empty($form_state['values']['mollom_private_key'])) {
-    gardens_misc_update_mollom_keys_if_necessary($form_state['values']['mollom_public_key'], $form_state['values']['mollom_private_key']);
-  }
-
-  // Install the themebuilder screenshot keys.
-  if (!empty($form_state['values']['install_themebuilder_screenshot_keys'])) {
-    gardens_misc_install_themebuilder_screenshot_keys();
-  }
 
   // Copy the default user picture into the public:// directory.
   $image_path = drupal_get_path('module', 'gardens_misc') . '/AnonymousPicture.gif';

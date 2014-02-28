@@ -10,10 +10,31 @@ class AcsfSiteTest extends PHPUnit_Framework_TestCase {
   public function setUp() {
     $files = array(
       __DIR__ . '/../classes/AcsfSite.inc',
+      __DIR__ . '/../../acsf_variables/acsf_variables_mock.php',
+      __DIR__ . '/../../acsf_log/classes/AcsfLog.inc',
+      __DIR__ . '/../../acsf_events/classes/AcsfEvent.inc',
+      __DIR__ . '/../../acsf_events/classes/AcsfEventDispatcher.inc',
+      __DIR__ . '/../../acsf_events/classes/AcsfEventHandler.inc',
     );
     foreach ($files as $file) {
       require_once $file;
     }
+  }
+
+  /**
+   * Tests that we can use the factory method to get a cached site.
+   */
+  public function testFactoryLoadCache() {
+    $nid = 12345678;
+    acsf_vset('acsf_site_nid', $nid);
+    $site = AcsfSite::load($nid);
+    $this->assertInstanceOf('AcsfSite', $site);
+
+    $cache = AcsfSite::load();
+    $this->assertSame($site, $cache); 
+    $this->assertEquals($site->nid, $cache->nid);
+
+    acsf_vdel('acsf_site_nid');
   }
 
   /**
@@ -30,7 +51,8 @@ class AcsfSiteTest extends PHPUnit_Framework_TestCase {
    */
   public function testAcsfSiteGet() {
     $site = new AcsfSite(12345678);
-    $value = $site->__get('nid');
+
+    $value = $site->nid;
     $this->assertSame($value, 12345678);
   }
 
@@ -55,12 +77,21 @@ class AcsfSiteTest extends PHPUnit_Framework_TestCase {
       $this->assertSame($site->__get($type), $value);
     }
   }
-}
 
-/**
- * Mocks acsf_vget_group for testing.
- */
-function acsf_vget_group($group, $default = array()) {
-  return $default;
+  /**
+   * Tests the save() method.
+   */
+  public function testSavedData() {
+    $nid = 12345678;
+    $string = 'test value';
+    $site = new AcsfSite($nid);
+    $site->custom = $string;
+    $site->save();
+    unset($site);
+
+    $clone = new AcsfSite($nid);
+    $this->assertEquals($clone->custom, $string);
+  }
+
 }
 

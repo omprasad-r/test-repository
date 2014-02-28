@@ -7,6 +7,8 @@
 
 class AcsfConfigIncompleteException extends Exception {}
 
+class AcsfConfigMissingCredsException extends Exception {}
+
 abstract class AcsfConfig {
 
   // The URL of the remote service.
@@ -17,6 +19,12 @@ abstract class AcsfConfig {
 
   // The password of the remote service.
   protected $password;
+
+  // The signup suffix of the Factory.
+  protected $url_suffix;
+
+  // The source URL of the Factory this was staged from.
+  protected $source_url;
 
   // An optional Acquia Hosting sitegroup.
   protected $ah_site;
@@ -78,8 +86,26 @@ abstract class AcsfConfig {
    *
    * @return String.
    */
-  public function getURL() {
+  public function getUrl() {
     return $this->url;
+  }
+
+  /**
+   * Retrieves the config URL suffix.
+   *
+   * @return String.
+   */
+  public function getUrlSuffix() {
+    return $this->url_suffix;
+  }
+
+  /**
+   * Retrieves the source URL.
+   *
+   * @return String.
+   */
+  public function getSourceUrl() {
+    return $this->source_url;
   }
 
   /**

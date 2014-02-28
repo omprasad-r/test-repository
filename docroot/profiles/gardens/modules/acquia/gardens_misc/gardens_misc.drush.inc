@@ -5,20 +5,8 @@
  */
 function gardens_misc_drush_command() {
   $items = array(
-    'gardens-get-gardener-creds' => array(
-      'description' => dt('Print credentials retrieved from the gardener.'),
-      'bootstrap' => DRUSH_BOOTSTRAP_DRUPAL_ROOT,
-    ),
     'gardens-sql-sanitize' => array(
       'description' => dt("Scrub the current site's database in place. NOT for use on production sites."),
-      'options' => array(
-        'staged-gardener' => array(
-          'description' => dt('The domain of the staged gardener.'),
-        ),
-        'standard-domain' => array(
-          'description' => dt('The domain of the staged site.'),
-        ),
-      ),
     ),
     'mollom-keys-get' => array(
       'description' => 'Get from the Gardener and save mollom keys if they are currently missing',
@@ -62,40 +50,6 @@ function gardens_misc_drush_sql_sync_sanitize() {
   drush_sql_register_post_sync_op('staging-static-scrub',
     dt('Scrub Gardens site database'),
     $static_scrub);
-
-  $query = array();
-  $staged_gardener = drush_get_option('staged-gardener');
-  $standard_domain = drush_get_option('standard-domain');
-
-  if (empty($staged_gardener) || empty($standard_domain)) {
-    $creds = drush_gardens_misc_get_gardener_info();
-    $staged_gardener = preg_replace('@^https?://@', '', $creds['url']);
-
-    $site_name = preg_replace('@^([^.]+)\..+@', '$1', variable_get('gardens_misc_standard_domain'));
-    $standard_domain = sprintf('%s.%s', $site_name, $creds['url_suffix']);
-  }
-
-  $original_gardener = variable_get('acquia_gardens_gardener_url');
-  $original_gardener = preg_replace('@^https?://@', '', $original_gardener);
-  $gardener_url = "https://$staged_gardener";
-
-  $query[] = "UPDATE authmap SET authname=REPLACE(authname, '$original_gardener', '$staged_gardener');";
-  $query[] = "DELETE FROM variable WHERE name = 'acquia_gardens_gardener_url';";
-  $query[] = "INSERT INTO variable (name, value) VALUES ('acquia_gardens_gardener_url', '" . serialize($gardener_url) . "');";
-  $query[] = "DELETE FROM variable WHERE name = 'gardens_misc_standard_domain';";
-  $query[] = "INSERT INTO variable (name, value) VALUES ('gardens_misc_standard_domain', '" . serialize($standard_domain) . "');";
-
-  // During the staging process, we use a general SQL scrub file that also
-  // removes the file_public_path. The file path does not change during staging,
-  // so this needs to be put back here.
-  $db_role = variable_get('gardens_db_name', '');
-  if (!empty($db_role)) {
-    $query[] = "INSERT INTO variable (name, value) VALUES ('file_public_path', '" . serialize("sites/g/files/$db_role/f") . "');";
-  }
-
-  drush_sql_register_post_sync_op('staging-dynamic-scrub',
-    dt('Reset Gardener-related variables'),
-    implode("\n", $query));
 }
 
 /**
@@ -105,25 +59,20 @@ function gardens_misc_drush_sql_sync_sanitize() {
  *   An array of gardener information.
  */
 function drush_gardens_misc_get_gardener_info() {
-  if (!function_exists('_acquia_gardens_xmlrpc_creds')) {
-    $path = DRUPAL_ROOT .'/../library';
-    @include_once("$path/acquia_gardens_xmlrpc.inc");
+  if (!class_exists('AcsfConfigDefault')) {
+    // Since there might not be a bootstrap, we need to find our config objects.
+    require_once DRUPAL_ROOT . '/profiles/gardens/modules/contrib/acsf/classes/AcsfConfig.inc';
+    require_once DRUPAL_ROOT . '/profiles/gardens/modules/contrib/acsf/classes/AcsfConfigDefault.inc';
   }
 
-  $creds = _acquia_gardens_xmlrpc_creds('gardener');
-  return $creds;
-}
-
-/**
- * Command callback. Prints gardener information.
- */
-function drush_gardens_misc_gardens_get_gardener_creds() {
-  $creds = drush_gardens_misc_get_gardener_info();
-  $output = drush_format($creds, NULL, 'json');
-  if (drush_get_context('DRUSH_PIPE')) {
-    drush_print_pipe($output);
-  }
-  drush_print($output);
+  $config = new AcsfConfigDefault();
+  return array(
+    'url' => $config->getUrl(),
+    'username' => $config->getUsername(),
+    'password' => $config->getPassword(),
+    'url_suffix' => $config->getUrlSuffix(),
+    'source_url' => $config->getSourceUrl(),
+  );
 }
 
 /**
@@ -144,25 +93,27 @@ function drush_hosting_mollom_keys_get() {
  * drush command callback. Get from the Gardener and save mollom keys even if they already exist.
  */
 function drush_hosting_mollom_keys_replace() {
-  if ($creds = drush_get_context('DRUSH_DB_CREDENTIALS')) {
-    $nid = ltrim($creds['name'], 'g');
-    $mollom_keys = acquia_gardens_call('get.site.mollom.keys', array($nid));
-    if ($mollom_keys) {
-      variable_set('mollom_public_key', $mollom_keys['public_key']);
-      variable_set('mollom_private_key', $mollom_keys['private_key']);
-      // Reset mollom status to force a key check.
-      if (function_exists('_mollom_status')) {
-        _mollom_status(TRUE);
-      }
-      drush_log("Set mollom keys", 'success');
+  $nid = gardens_client_get_site_identifier();
+  try {
+    $message = new AcsfMessageXmlRpc('GET', 'acquia.gardens.get.site.mollom.keys', array($nid));
+    $message->send();
+    $mollom_keys = $message->getResponseBody();
+  }
+  catch (Exception $e) {
+    watchdog('gardens_misc', $e->getMessage(), array(), WATCHDOG_ERROR);
+  }
+
+  if ($mollom_keys) {
+    variable_set('mollom_public_key', $mollom_keys['public_key']);
+    variable_set('mollom_private_key', $mollom_keys['private_key']);
+    // Reset mollom status to force a key check.
+    if (function_exists('_mollom_status')) {
+      _mollom_status(TRUE);
     }
-    else {
-      drush_log("Failed to set mollom keys", 'error');
-    }
+    drush_log("Set mollom keys", 'success');
   }
   else {
-    return drush_set_error('HOSTING_ERROR', "Error - can't get DB credentials");
+    drush_log("Failed to set mollom keys", 'error');
   }
 }
-
 

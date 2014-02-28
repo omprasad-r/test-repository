@@ -44,7 +44,7 @@ class AcsfMessageXmlRpc extends AcsfMessage {
     // keep trying, except on the last try throw it. If success or a non-retry
     // failure occurs, fall out of the loop.
     $max_tries = 3;
-    for ($tries = 0; $tries < $max_tries; ++$tries) {
+    for ($tries = 1; $tries <= $max_tries; $tries++) {
       // The timeout argument to send() is a connection timeout. Once
       // the connection succeeds, we'll wait forever for a response.
       $timeout = 5;

@@ -34,6 +34,10 @@ class AcsfDuplicationScrubFinalizeHandler extends AcsfEventHandler {
       acsf_vdel($name);
     }
 
+    // Ensure that we are not using the old site nid when duplicating. The new one
+    // will be obtained from the sites.json.
+    acsf_vdel('acsf_site_nid');
+
     // Begin the site without any watchdog records. This should happen right at
     // the end of the scubbing process to remove any log entries added by the
     // scrubbing process itself.

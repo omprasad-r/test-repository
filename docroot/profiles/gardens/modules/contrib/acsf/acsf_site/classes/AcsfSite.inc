@@ -10,24 +10,52 @@ class AcsfSiteMissingIdentifierException extends Exception {}
 
 class AcsfSite {
 
+  static $cache;
+
   protected $info = array();
+
+  /**
+   * Factory: loads the current site.
+   *
+   * This method will load from static cache if available.
+   */
+  public static function load() {
+    if (!empty(self::$cache)) {
+      return self::$cache;
+    }
+    self::$cache = new static();
+    return self::$cache;
+  }
 
   /**
    * Constructor.
    *
    * @param Int $nid
-   *   The nid from the Site Factory.
+   *   The nid from the Site Factory (Optional).
    */
   public function __construct($nid = NULL) {
-    $this->info = acsf_vget_group('site_info');
-
-    if ($nid !== NULL) {
-      $this->info['nid'] = $nid;
+    if ($nid === NULL) {
+      $nid = acsf_vget('acsf_site_nid');
+      if (empty($nid) && !empty($GLOBALS['gardens_site_settings']['conf']['gardens_site_id'])) {
+        // If we do not have the nid, we can retrieve it from the sites.json.
+        $nid = $GLOBALS['gardens_site_settings']['conf']['gardens_site_id'];
+        acsf_vset('acsf_site_nid', $nid, 'site_info');
+      }
     }
 
-    if ($nid === NULL) {
+    if (empty($nid)) {
       throw new AcsfSiteMissingIdentifierException('Cannot instantiate AcsfSite without a nid from the Site Factory. Ensure that it is passed to the constructor or set in acsf_site_nid.');
     }
+
+    // Init with the stored values.
+    $this->initStoredSiteInfo();
+
+    // Merge in any global values from the sites.json.
+    if (!empty($GLOBALS['gardens_site_settings']['conf'])) {
+      $this->mergeSiteInfo($GLOBALS['gardens_site_settings']['conf']);
+    }
+
+    $this->nid = $nid;
   }
 
   /**
@@ -59,18 +87,19 @@ class AcsfSite {
   /**
    * Refreshes the site information from the Site Factory.
    *
-   * @param object $event
-   *   Optionally if an event is passed in then the site information will be
-   *   put into the event's context.
+   * @param Array $data
+   *   (Optional) Data that should be sent to the factory.
    *
    * @return bool
    *   Returns TRUE if the data fetch was successful.
    */
-  public function refresh($event = NULL) {
-    acsf_vset('acsf_site_nid', $this->info['nid'], 'site_info');
-
+  public function refresh($data = array()) {
     try {
-      $message = new AcsfMessageXmlRpc('GET', 'acquia.gardens.phone.home', array($this->info['nid']));
+      $arguments = array(
+        'site_id' => !empty($this->nid) ? $this->nid : $GLOBALS['gardens_site_settings']['conf']['gardens_site_id'],
+        'site_data' => $data,
+      );
+      $message = new AcsfMessageXmlRpc('GET', 'sf.site.sync', array($arguments));
       $message->send();
       $site_info = $message->getResponseBody();
     }
@@ -83,13 +112,71 @@ class AcsfSite {
       return FALSE;
     }
     else {
-      acsf_vset('acsf_site_info', $site_info, 'site_info');
-      if ($event) {
-        $event->event->context['acsf_site_info'] = $site_info;
-      }
+      // Allow other modules to consume the data.
+      $context = $site_info;
+      $event = AcsfEvent::create('acsf_site_data_receive', $context);
+      $event->run();
+
+      $this->mergeSiteInfo($site_info['sf_site']);
+      $this->save();
       return TRUE;
     }
+  }
 
+  /**
+   * Removes all local information and refreshes data from the Factory.
+   *
+   * This is a destructive API function, so use sparingly - only if you can
+   * guarantee that there is no loss of required data. Since others may be using
+   * this as a storage engine, there could be additional local information saved
+   * that you are unaware of.
+   */
+  public function clean() {
+    $this->info = array();
+    return $this->refresh();
+  }
+
+  /**
+   * Saves the internal state of this site.
+   */
+  public function save() {
+    $context = $this->info;
+    $event = AcsfEvent::create('acsf_site_data_save', $context);
+    $event->run();
+    $this->info = $event->context;
+
+    acsf_vset('acsf_site_info', $this->info, 'site_info');
+  }
+
+  /**
+   * Initializes the internal state of this site.
+   */
+  private function initStoredSiteInfo() {
+    $this->info = array();
+
+    $site_info = acsf_vget_group('site_info');
+    foreach ($site_info as $key => $value) {
+      if (!is_array($value)) {
+        $this->mergeSiteInfo(array($key => $value));
+      }
+      else {
+        $this->mergeSiteInfo($value);
+      }
+    }
+  }
+
+  /**
+   * Merges new site information into the internal state.
+   *
+   * @param Array $site_info
+   *   The information to merge.
+   */
+  private function mergeSiteInfo($site_info) {
+    if (!empty($site_info)) {
+      foreach ($site_info as $key => $value) {
+        $this->info[$key] = $value;
+      }
+    }
   }
 
 }

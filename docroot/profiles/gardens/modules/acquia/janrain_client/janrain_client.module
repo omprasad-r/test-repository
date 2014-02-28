@@ -1393,7 +1393,14 @@ function janrain_client_ensure_setup() {
  * Retrieve Engage app information from the Gardener.
  */
 function janrain_client_get_rp() {
-  return gardens_client_call_gardener('janrain.get.rp', gardens_client_get_gardens_db_name());
+  try {
+    $message = new AcsfMessageXmlRpc('GET', 'acquia.gardens.janrain.get.rp', gardens_client_get_gardens_db_name());
+    $message->send();
+    $rpc_result = $message->getResponseBody();
+  }
+  catch (Exception $e) {
+    watchdog('janrain_client', $e->getMessage(), array(), WATCHDOG_ERROR);
+  }
 }
 
 /**

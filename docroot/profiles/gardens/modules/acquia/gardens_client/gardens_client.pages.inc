@@ -76,7 +76,15 @@ function gardens_client_resend_verification_email($token) {
     else {
       // Resend the email.
       $name = $GLOBALS['user']->name;
-      $sent = gardens_client_call_gardener('resend.verification.email', array($name, !empty($verifier->module) ? $verifier->module : NULL));
+      try {
+        $message = new AcsfMessageXmlRpc('GET', 'acquia.gardens.resend.verification.email', array($name, !empty($verifier->module) ? $verifier->module : NULL));
+        $message->send();
+        $sent = $message->getResponseBody();
+      }
+      catch (Exception $e) {
+        watchdog('janrain_client', $e->getMessage(), array(), WATCHDOG_ERROR);
+      }
+
       if (!isset($sent)) {
         $output = '<div class="display-block">' . t('There was an error sending the email. Visit the <a href="@link">site manager</a> to try again.', array('@link' => scarecrow_get_gardener_url() . '/mysites')) . '</div>';
       }

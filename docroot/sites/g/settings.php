@@ -96,10 +96,27 @@ if (file_exists('/var/www/site-php')) {
     $conf['cache_backends'][] = $site_settings['memcache_inc'];
     $conf['cache_default_class'] = 'MemCacheDrupal';
     $conf['cache_class_cache_form'] = 'DrupalDatabaseCache';
+    // The oembed cache in many cases should not evict data (given that data
+    // is obtained from costly API calls and is not expected to change when
+    // refreshed), so is more suited to the database than to memcache.
+    $conf['cache_class_cache_oembed'] = 'DrupalDatabaseCache';
   }
-  if (!empty($site_settings['flags']['slackerland'])) {
-    // @todo render site inoperative.
+
+  // Until the site installation finishes, noone should be able to visit the
+  // site, unless the site is being installed via install.php and the user has
+  // the correct token to access it.
+  if (!drupal_is_cli() && !empty($site_settings['flags']['access_restricted']['enabled'])) {
+    $token_match = !empty($site_settings['flags']['access_restricted']['token']) && !empty($_GET['site_install_token']) && $_GET['site_install_token'] == $site_settings['flags']['access_restricted']['token'];
+    $path_match = $_SERVER['SCRIPT_NAME'] == $GLOBALS['base_path'] . 'install.php';
+    if (!$token_match || !$path_match) {
+      header($_SERVER['SERVER_PROTOCOL'] .' 503 Service unavailable');
+      if (!empty($site_settings['flags']['access_restricted']['reason'])) {
+        print $site_settings['flags']['access_restricted']['reason'];
+      }
+      exit;
+    }
   }
+
   if (!empty($site_settings['conf'])) {
     foreach ((array) $site_settings['conf'] as $key => $value) {
       $conf[$key] = $value;

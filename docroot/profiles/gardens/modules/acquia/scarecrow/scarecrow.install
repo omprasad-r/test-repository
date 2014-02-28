@@ -1538,3 +1538,11 @@ function scarecrow_update_11196() {
   // acsf_duplication was not yet in dependencies.
   module_enable(array('gardens_duplication', 'acsf_duplication'), TRUE);
 }
+
+/**
+ * Sync site data with the Factory.
+ */
+function scarecrow_update_11197() {
+  $site = AcsfSite::load();
+  $site->clean();
+}

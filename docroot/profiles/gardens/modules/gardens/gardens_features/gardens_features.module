@@ -308,8 +308,13 @@ function gardens_features_preprocess_page(&$variables) {
  */
 function gardens_features_preprocess_html(&$variables) {
   $path = drupal_get_path('module', 'gardens_features');
-  // Add custom JS
-  drupal_add_js($path . '/gardens_features.js', array('weight' => '500'));
+
+  // Add a JavaScript file for generic Gardens' behaviors.
+  drupal_add_js($path . '/js/gardens_features.js', array('weight' => '500'));
+
+  // Add a JavaScript file for Gardens' Colorbox-specific behaviors.
+  drupal_add_js($path . '/js/gardens_features.colorbox.js', array('every_page' => TRUE));
+
   if (gardens_features_hide_front_page_title()) {
     // Fall back on the standard front page title.
     $head_title = array(check_plain(variable_get('site_name', 'Drupal')));
@@ -2082,3 +2087,19 @@ function _gardens_features_reset_opengraph_node_type_configs($instance) {
     metatag_config_cache_clear();
   }
 }
+
+/**
+ * Implements hook_acsf_registry().
+ */
+function gardens_features_acsf_registry() {
+  return array(
+    'events' => array(
+      array(
+        'type' => 'acsf_site_data_receive',
+        'class' => 'GardensFeaturesSiteDataHandler',
+        'path' => drupal_get_path('module', 'gardens_features') . '/classes',
+      ),
+    ),
+  );
+}
+

@@ -8,6 +8,19 @@ function acsf_drush_command() {
     'acsf-build-registry' => array(
       'description' => dt('Rebuilds the ACSF registry.'),
     ),
+    'acsf-site-sync' => array(
+      'description' => 'Set a site hard offline via SQL.',
+      'options' => array(
+        'data' => 'A base64 encoded php array describing the site generated from the Factory.',
+      ),
+    ),
+    'acsf-get-factory-creds' => array(
+      'description' => dt('Print credentials retrieved from the factory.'),
+      'bootstrap' => DRUSH_BOOTSTRAP_DRUPAL_ROOT,
+    ),
+    'acsf-site-scrub' => array(
+      'description' => dt('Scrubs sensitive information regarding ACSF.'),
+    ),
     'go-offline' => array(
       'bootstrap' => DRUSH_BOOTSTRAP_DRUPAL_DATABASE,
       'description' => 'Set a site hard offline via SQL.',
@@ -63,9 +76,71 @@ function drush_acsf_build_registry() {
 }
 
 /**
+ * Drush command. Scrubs the site database.
+ */
+function drush_acsf_site_scrub() {
+  $config = new AcsfConfigDefault();
+
+  $factory_url = preg_replace('@^https?://@', '', $config->getUrl());
+  $source_url = preg_replace('@^https?://@', '', $config->getSourceUrl());
+
+  // Replace the source Factory authmap URLs with the new Factor URL.
+  if ($factory_url && $source_url) {
+    $result = db_query("UPDATE authmap SET authname=REPLACE(authname, '$source_url', '$factory_url')");
+    drush_print(dt('Replacing authmap entries for !source with !dest.', array('!source' => $source_url, '!dest' => $factory_url)));
+  }
+  if (!$result) {
+    drush_print('Unable to replace any authmap entries.');
+  }
+
+  // During the staging process, we use a general SQL scrub file that also
+  // removes the file_public_path. The file path does not change during staging,
+  // so this needs to be put back here.
+  $db_role = variable_get('gardens_db_name', '');
+  if (!empty($db_role)) {
+    drush_print(dt('Setting file_public_path to !path', array('!path' => $path)));
+    variable_set('file_public_path', "sites/g/files/$db_role/f");
+  }
+
+  // Clear any cached values from ACSF variables.
+  acsf_variables_cache_refresh();
+}
+
+/**
+ * Drush command. Synchronizes data with the Factory.
+ *
+ * When executed without a --data option, this command will call the Factory to
+ * get data. When called with the --data option it will simply digest that data.
+ */
+function drush_acsf_site_sync() {
+  $site = AcsfSite::load();
+  $data = drush_get_option('data', NULL);
+
+  // Create an event to gather site stats to send to the Factory.
+  $context = array();
+  $event = AcsfEvent::create('acsf_stats', $context);
+  $event->run();
+  $stats = $event->context;
+
+  if ($data) {
+    // If data was sent, we can consume it here.
+    $site_data = json_decode(base64_decode($data));
+    if (!empty($site_data) && is_array($site_data)) {
+      $site->mergeSiteInfo($site_data);
+      $site->save();
+    }
+  }
+  else {
+    // If no data was sent, we'll request it.
+    $site->refresh($stats);
+  }
+}
+
+/**
  * Drush command. Run all these queries using direct SQL in case the site is WSOD.
  */
 function drush_acsf_go_offline() {
+  include_once './includes/lock.inc';
   $query = _drush_acsf_clear_maint();
   // For now hard-code a 10 minute expected offline time.
   $expected = time() + 10*60;
@@ -79,6 +154,32 @@ function drush_acsf_go_offline() {
   lock_acquire('cron', 1200.0);
 
   return drush_sql_query($query);
+}
+
+/**
+ * Command callback. Prints factory information.
+ */
+function drush_acsf_get_factory_creds() {
+  if (!class_exists('AcsfConfigDefault')) {
+    // Since there might not be a bootstrap, we need to find our config objects.
+    $include_path = realpath(dirname(__FILE__));
+    require_once $include_path . '/classes/AcsfConfig.inc';
+    require_once $include_path . '/classes/AcsfConfigDefault.inc';
+  }
+
+  $config = new AcsfConfigDefault();
+  $creds = array(
+    'url' => $config->getUrl(),
+    'username' => $config->getUsername(),
+    'password' => $config->getPassword(),
+    'url_suffix' => $config->getUrlSuffix(),
+  );
+
+  $output = drush_format($creds, NULL, 'json');
+  if (drush_get_context('DRUSH_PIPE')) {
+    drush_print_pipe($output);
+  }
+  drush_print($output);
 }
 
 /**
@@ -98,6 +199,7 @@ function drush_acsf_post_go_offline() {
  * Drush command. Run all these queries using direct SQL in case the site is WSOD.
  */
 function drush_acsf_go_online() {
+  include_once './includes/lock.inc';
   // Determine whether the user intended the site to be in maintenance mode.
   $content = _drush_acsf_get_raw_variable('site_owner_maintenance_mode');
   $query = _drush_acsf_clear_maint();

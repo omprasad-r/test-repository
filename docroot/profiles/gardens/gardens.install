@@ -189,6 +189,9 @@ function gardens_install() {
   // Set up audit_trail.
   variable_set('audit_trail_form_changes_path', '/^admin/');
   variable_set('audit_trail_form_submissions_path', '|.*/delete/?.*|');
+
+  // Disable the update status module.
+  module_disable(array("update"), FALSE);
 }
 
 /**
@@ -217,7 +220,9 @@ function gardens_setup_user_mail_variables() {
   $gardener_url = scarecrow_get_gardener_url();
   $gardener_account_url = ($gardener_url ? $gardener_url . '/user' : 'http://drupalgardens.com/user');
   // Make sure this contains no HTML for mail texts.
-  $service_name = trim(strip_tags(variable_get('gardens_service_name_long', 'Drupal Gardens')));
+  $site = AcsfSite::load();
+  $name = isset($site->service_name_long) ? $site->service_name_long : 'Drupal Gardens';
+  $service_name = trim(strip_tags($name));
   $variables = array(
     'user_mail_register_no_approval_required_body' => "[user:name],\n\nThank you for registering at [site:name] with your $service_name account. You can change your password or edit your profile by visiting $gardener_account_url.\n\n-- [site:name] team\n[site:url]\n",
     'user_mail_register_pending_approval_body' => "[user:name],\n\nThank you for registering at [site:name] with your $service_name account. Your application for membership on this site is currently pending approval. We will send another email to let you know when it has been approved.\n\n-- [site:name] team\n[site:url]\n",

@@ -68,12 +68,6 @@ function gardens_client_drush_command() {
     'aliases' => array('gfpr'),
   );
 
-  // Cause a gardens site to call the gardener.
-  $items['et-phone-home'] = array(
-    'description' => "Cause a gardens site to call the gardener for site-specific data.",
-    'aliases' => array('phone-home'),
-  );
-
   return $items;
 }
 
@@ -109,7 +103,16 @@ function drush_gardens_client_gardens_stats() {
     var_dump($stats);
     return;
   }
-  $rpc_result = gardens_client_call_gardener('set.site.stats', array($stats));
+
+  try {
+    $message = new AcsfMessageXmlRpc('GET', 'acquia.gardens.set.site.stats', array($stats));
+    $message->send();
+    $rpc_result = $message->getResponseBody();
+  }
+  catch (Exception $e) {
+    watchdog('gardens_client', $e->getMessage(), array(), WATCHDOG_ERROR);
+  }
+
   if ($rpc_result !== NULL) {
     variable_set('gardens_stats_time', REQUEST_TIME);
   }
@@ -172,12 +175,11 @@ function drush_gardens_client_gardens_move_cluster($gardener_url = NULL, $userma
     }
   }
 
-  $original_gardener_url = variable_get('acquia_gardens_gardener_url', NULL);
+  $site = AcsfSite::load();
+  $original_gardener_url = $site->factory_url;
   if (empty($gardener_url)) {
     $gardener_url = 'https://gardener.' . $stage . '.acquia-sites.com';
   }
-  variable_set('acquia_gardens_gardener_url', $gardener_url);
-  drush_log("Set the acquia_gardens_gardener_url to ${gardener_url}.", 'ok');
   variable_del('cron_last');
   drush_log("Cleared the cron_last variable.", 'ok');
   variable_del('gardens_stats_time');
@@ -450,18 +452,6 @@ function drush_gardens_client_gardens_flood_protection_remove($form_type) {
   }
   else {
     drush_print(dt('Invalid input, the allowed values are: @allowed_input.', array('@allowed_input' => implode(', ', $allowed_input))));
-  }
-}
-
-/**
- * drush command callback. Get the Gardens site to call the Gardener.
- */
-function drush_gardens_client_et_phone_home() {
-  if (function_exists('gardens_client_phone_home') && gardens_client_phone_home()) {
-    drush_log("Got data from the gardener", 'success');
-  }
-  else {
-    drush_log("Failed to phone home to the gardener", 'error');
   }
 }
 

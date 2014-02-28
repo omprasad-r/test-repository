@@ -675,9 +675,10 @@ function gardens_misc_modules_enabled($modules) {
       ));
     }
     // For SMB the default external link reaction will be no warning. Enterprise
-    // customers have the gardens_client_name populated.
+    // customers have the AcsfSite->client_name populated.
+    $site = AcsfSite::load();
     $alert_type = variable_get('extlink_alert_type');
-    if (!isset($alert_type) && !variable_get('gardens_client_name')) {
+    if (!isset($alert_type) && !$site->client_name) {
       variable_set('extlink_alert_type', '');
     }
   }
@@ -1507,7 +1508,8 @@ function gardens_misc_get_canonical_domain() {
 function gardens_misc_get_standard_domain() {
   // All Gardens sites have a specific variable that was saved for this during
   // e.g. the "configure" stage; see install_gardens.inc.
-  return variable_get('gardens_misc_standard_domain');
+  $site = AcsfSite::load();
+  return $site->standard_domain;
 }
 
 /**
@@ -1788,16 +1790,6 @@ function gardens_misc_update_mollom_keys_if_necessary($public_key, $private_key)
     _mollom_status(TRUE);
   }
   return $updated;
-}
-
-/**
- * Install the keys for the themebuilder screenshot service.
- */
-function gardens_misc_install_themebuilder_screenshot_keys() {
-  // Install both keys required by Acquia's account on ShrinkTheWeb. (For now,
-  // we are using the same keys on production as on gsteamer.)
-  variable_set('themebuilder_screenshot_access_key', 'aee24820de3e0c9');
-  variable_set('themebuilder_screenshot_private_key', '6fa41');
 }
 
 /**
@@ -2112,34 +2104,6 @@ function gardens_misc_field_info_alter(&$info) {
   }
   if (isset($info['datestamp'])) {
     unset($info['datestamp']);
-  }
-}
-
-/**
- * Implements hook_gardens_client_phone_home().
- *
- * Gets the master embed.ly api key from the Gardener.
- */
-function gardens_misc_gardens_client_phone_home($previous_data, $data) {
-  // Acquire a lock, since multiple phone home requests may be running at once.
-  if (lock_acquire('gardens_misc_gardens_client_phone_home')) {
-    // Save the embed.ly API key in the appropriate place.
-    $key = $data['gardener_site']['embedly_api_key'];
-    variable_set('oembedembedly_api_key', $key);
-
-    if (!empty($data['gardener_site']['standard_domain']) && $data['gardener_site']['standard_domain'] != variable_get('gardens_misc_standard_domain', '')) {
-      variable_set('gardens_misc_standard_domain', $data['gardener_site']['standard_domain']);
-    }
-
-    // The site's domain may have changed, so adjust SSL settings if necessary.
-    gardens_misc_adjust_secure_domain_settings_if_necessary();
-
-    if (isset($data['gardens_manager']['gardens_show_twitter_alerts'])) {
-      variable_set('gardens_show_twitter_alerts', $data['gardens_manager']['gardens_show_twitter_alerts']);
-    }
-
-    // Release the lock.
-    lock_release('gardens_misc_gardens_client_phone_home');
   }
 }
 
@@ -3274,3 +3238,19 @@ function gardens_misc_form_filter_admin_format_form_alter(&$form, &$form_state) 
 function gardens_misc_is_smb() {
   return (bool) gardens_client_data_get('gardens_manager', 'is_drupalgardens_dot_com');
 }
+
+/**
+ * Implements hook_acsf_registry().
+ */
+function gardens_misc_acsf_registry() {
+  return array(
+    'events' => array(
+      array(
+        'type' => 'acsf_site_data_receive',
+        'class' => 'GardensMiscAcsfSiteDataHandler',
+        'path' => drupal_get_path('module', 'gardens_misc') . '/classes',
+      ),
+    ),
+  );
+}
+
