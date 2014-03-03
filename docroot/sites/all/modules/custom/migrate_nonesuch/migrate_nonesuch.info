@@ -9,3 +9,4 @@ dependencies[] = migrate_d2d
 
 files[] = migrate_nonesuch.migrate.inc
 files[] = album.inc
+files[] = gallery.inc
