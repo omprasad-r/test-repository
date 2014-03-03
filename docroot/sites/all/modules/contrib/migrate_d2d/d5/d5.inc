@@ -162,7 +162,9 @@ class DrupalVersion5 extends DrupalVersion {
     $type_columns = array();
     if ($row) {
       foreach ($row as $column_name => $column_value) {
-        if (!strncmp($field_name, $column_name, strlen($field_name))) {
+//        if (!strncmp($field_name, $column_name, strlen($field_name))) {
+        if (!strncmp($field_name, $column_name, strlen($field_name)) &&
+            preg_match('/^[^a-zA-Z0-9]/', substr($column_name, strlen($field_name), 1))) {
           $type_columns[] = substr($column_name, strlen($field_name) + 1);
         }
       }
