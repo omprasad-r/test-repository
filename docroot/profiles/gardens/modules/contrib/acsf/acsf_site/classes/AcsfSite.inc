@@ -171,7 +171,7 @@ class AcsfSite {
    * @param Array $site_info
    *   The information to merge.
    */
-  private function mergeSiteInfo($site_info) {
+  public function mergeSiteInfo($site_info) {
     if (!empty($site_info)) {
       foreach ($site_info as $key => $value) {
         $this->info[$key] = $value;

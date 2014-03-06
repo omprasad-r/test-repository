@@ -123,9 +123,15 @@ function drush_acsf_site_sync() {
   $stats = $event->context;
 
   if ($data) {
-    // If data was sent, we can consume it here.
-    $site_data = json_decode(base64_decode($data));
+    // If data was sent, we can consume it here. Ensure that we are always
+    // passing associative arrays here, not objects.
+    $site_data = json_decode(base64_decode($data), TRUE);
     if (!empty($site_data) && is_array($site_data)) {
+      // Allow other modules to consume the data.
+      $context = $site_data;
+      $event = AcsfEvent::create('acsf_site_data_receive', $context);
+      $event->run();
+
       $site->mergeSiteInfo($site_data);
       $site->save();
     }
