@@ -88,7 +88,18 @@ class GardensDuplicationScrubWebformHandler extends AcsfEventHandler {
     // Delete submissions.
     foreach ($submissions as $submission) {
       $nid = $submission->nid;
-      webform_submission_delete($nodes[$nid], $submission);
+      if (!empty($nodes[$nid]) && isset($nodes[$nid]->webform['components'])) {
+        webform_submission_delete($nodes[$nid], $submission);
+      }
+      else {
+        db_delete('webform')->condition('nid', $nid)->execute();
+        db_delete('webform_component')->condition('nid', $nid)->execute();
+        db_delete('webform_emails')->condition('nid', $nid)->execute();
+        db_delete('webform_roles')->condition('nid', $nid)->execute();
+        db_delete('webform_submissions')->condition('nid', $nid)->execute();
+        db_delete('webform_submitted_data')->condition('nid', $nid)->execute();
+        db_delete('webform_last_download')->condition('nid', $nid)->execute();
+      }
     }
   }
 

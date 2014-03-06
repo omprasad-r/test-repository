@@ -838,12 +838,6 @@ function scarecrow_system_info_alter(&$info, $file, $type) {
  */
 function scarecrow_simplified_modules_hidden_dependencies() {
   return array(
-     // ACSF requires the following dependencies.
-    'acsf_duplication',
-    'acsf_events',
-    'acsf_log',
-    'acsf_site',
-    'acsf_variables',
     // Actions permissions is a required dependency for VBO in Gardens.
     'actions_permissions',
   );
@@ -1026,15 +1020,21 @@ function scarecrow_toolbar_add_links($toolbar) {
  *   Gardener associated with this site.
  */
 function scarecrow_get_gardener_url($base_root = NULL) {
-  // If the URL is already set in the AcsfSite object, return that.
-  $site = AcsfSite::load();
-  if (isset($site->factory_url)) {
-    return $site->factory_url;
+  if (class_exists('AcsfSite')) {
+    // If the URL is already set in the AcsfSite object, return that.
+    $site = AcsfSite::load();
+    if (isset($site->factory_url)) {
+      return $site->factory_url;
+    }
   }
 
-  // Otherwise, obtain it from the cred file.
-  $config = new AcsfConfigDefault();
-  return $config->getUrl();
+  if (class_exists('AcsfConfigDefault')) {
+    // Otherwise, obtain it from the cred file.
+    $config = new AcsfConfigDefault();
+    return $config->getUrl();
+  }
+
+  return FALSE;
 }
 
 /**
@@ -1046,6 +1046,14 @@ function scarecrow_get_gardener_url($base_root = NULL) {
 function scarecrow_disallowed_modules() {
   $disallowed_modules = array(
     'acsf',
+    'acsf_duplication',
+    'acsf_events',
+    'acsf_init',
+    'acsf_log',
+    'acsf_openid',
+    'acsf_pingdom',
+    'acsf_site',
+    'acsf_variables',
     'gardens_preproduction',
     'color',
     'gardens_duplication',

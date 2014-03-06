@@ -24,9 +24,9 @@ class AcsfDuplicationScrubCommentHandler extends AcsfEventHandler {
     }
 
     if ($options['avoid_oom']) {
-      // Orphaned comments, that is comments by an authenticated user that no
-      // longer exists, cannot be deleted by comment_delete_multiple. Handle
-      // these items first.
+      // Orphaned comments, that is comments by an authenticated user or
+      // attached to a node that no longer exists, cannot be deleted by
+      // comment_delete_multiple. Handle these items first.
       if ($cids = $this->getOrphanedItems($limit)) {
         $orphaned = TRUE;
       }
@@ -74,8 +74,8 @@ class AcsfDuplicationScrubCommentHandler extends AcsfEventHandler {
   /**
    * Gets a range of orphaned comment IDs.
    *
-   * Orphaned comments are those which were authored by an authenticated user
-   * that for some reason no longer exist on the site.
+   * Orphaned comments are those which are associated with an user and / or node
+   * that for some reason no longer exist on the site
    *
    * @param int $limit
    *   The number of records to retrieve.
@@ -85,7 +85,11 @@ class AcsfDuplicationScrubCommentHandler extends AcsfEventHandler {
    *   if there is no result set.
    */
   protected function getOrphanedItems($limit) {
-    return db_query_range('SELECT cid FROM {comment} c LEFT JOIN {users} u ON c.uid = u.uid WHERE u.uid IS NULL', 0, $limit)->fetchCol();
+    return db_query_range('
+      SELECT cid FROM {comment} c
+      LEFT JOIN {users} u ON c.uid = u.uid
+      LEFT JOIN {node} n ON c.nid = n.nid
+      WHERE u.uid IS NULL OR n.nid IS NULL', 0, $limit)->fetchCol();
   }
 
   /**

@@ -1,0 +1,3 @@
+*************************** 2.07.4-RC ***************************
+DG-10914 :AP:: Make site duplication more robust
+DG-11036 :A:: Push phone home theoretically cannot work - method access is private.

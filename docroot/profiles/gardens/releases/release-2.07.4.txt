@@ -1,0 +1,6 @@
+*************************** 2.07.4-RC ***************************
+DG-10914 :AP:: Make site duplication more robust
+DG-11015 :P:: Customers should not see any ACSF modules in their site configuration
+DG-11035 :P:: Phone home on cron always triggers GardensError messages that trigger nagios alerts
+DG-11040 :P:: Tag the acsf version 0.6.1 for 2.07.4 hotfix release
+DG-11043 :P:: Scarecrow will whitescreen a site if acsf_site is disabled.
