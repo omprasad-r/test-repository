@@ -14,10 +14,6 @@
 -- these tables do not exist.
 -- -----------------------------------------------------------------------------
 
--- Scrub user mails -- set a wacky subdomain to avoid gardener-gardens collisions of munged addresses.
--- @todo remove: testing moving to common drush scrub
--- UPDATE `users` SET mail = CONCAT('user', uid, '@', MD5(mail), '.example.com'), init = CONCAT('user', uid, '@', MD5(init), '.example.com') WHERE uid > 0;
-
 -- Scrub variables --
 DELETE FROM `variable` WHERE `name` = 'site_mail';
 INSERT INTO `variable` (name, value) VALUES ('site_mail', 's:26:\"noreply@acquia.com\";');
@@ -29,9 +25,6 @@ DELETE FROM `variable` WHERE `name` = 'antivirus_settings_clamavdaemon';
 -- We still want to send data to statsd, but marked as 'dev'
 UPDATE `variable` SET `value` = 's:11:"gardens.dev";' WHERE `name` = 'gardens_statsd_prefix';
 UPDATE `variable` SET `value` = 'i:0;' WHERE `name` = 'gardens_statsd_env_checked';
--- For image generation to work we need to both remove the set file path
--- and also force a menu rebuild.
-DELETE FROM `variable` WHERE `name` = 'file_public_path';
 
 -- Force everything to refresh
 DELETE FROM `variable` WHERE `name` = 'gardens_misc_flush_all_caches';
