@@ -80,6 +80,7 @@ TRUNCATE `cache_media_xml`;
 TRUNCATE `cache_styles`;
 TRUNCATE `mailhandler_mailbox`;
 TRUNCATE `mailhandler_singlemailbox_addresses`;
+TRUNCATE `themebuilder_session`;
 
 -- -----------------------------------------------------------------------------
 -- Close and execute the stored procedure defined above.
