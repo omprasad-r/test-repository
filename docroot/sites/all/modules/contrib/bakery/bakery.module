@@ -137,6 +137,10 @@ function bakery_user_logout($account) {
  */
 function bakery_user_presave(&$edit, $account, $category) {
   if (variable_get('bakery_is_master', 0)) {
+    // Invoke implementations of hook_bakery_transmit() for syncing arbitrary
+    // data.
+    $_SESSION['bakery']['data'] = module_invoke_all('bakery_transmit', $edit, $account, $category);
+
     // We store email/name if they changed. We want to wait with doing
     // anything else until the changes are saved locally.
     foreach (variable_get('bakery_supported_fields', array('mail' => 'mail', 'name' => 'name')) as $type => $enabled) {
@@ -363,7 +367,7 @@ function _bakery_reset_submit($form, &$form_state) {
   // against forgery.
   $account = user_load(arg(2));
   // If they have not logged in before we need to update the master site.
-  if ($account->login === 0) {
+  if ($account->login == 0) {
     $type = 'thinmint';
     $payload = array();
     $payload['name'] = $account->name;
@@ -466,6 +470,8 @@ function _bakery_login_submit($form, &$form_state) {
   $data = $form_state['values'];
   _bakery_save_destination_param($form , $data);
   unset($_GET['destination']);
+  // Save query parameters to be available when user returns from master.
+  $data['query'] = drupal_get_query_parameters();
 
   // Create cookie and redirect to master.
   bakery_bake_oatmeal_cookie($data['name'], $data);
@@ -742,6 +748,8 @@ function bakery_login() {
   $cookie = bakery_taste_oatmeal_cookie();
 
   if ($cookie) {
+    // Make sure there are query defaults.
+    $cookie['data'] += array('query' => array());
     $errors = array();
     // Remove the data pass cookie.
     _bakery_eat_cookie('OATMEAL');
@@ -794,8 +802,10 @@ function bakery_login() {
     if (isset($cookie['data']['destination'])) {
       $data['destination'] = $cookie['data']['destination'];
     }
+    // Carry other query parameters through login.
+    $data['query'] = $cookie['data']['query'];
     bakery_bake_oatmeal_cookie($name, $data);
-    drupal_goto($cookie['slave'] . '/bakery/login');
+    drupal_goto($cookie['slave'] . 'bakery/login');
   }
   drupal_access_denied();
 }
@@ -806,6 +816,8 @@ function bakery_login() {
 function bakery_login_return() {
   $cookie = bakery_taste_oatmeal_cookie();
   if ($cookie) {
+    // Make sure we always have a default query key.
+    $cookie['data'] += array('query' => array());
     // Valid cookie, now destroy it.
     _bakery_eat_cookie('OATMEAL');
 
@@ -820,12 +832,24 @@ function bakery_login_return() {
         drupal_set_message(filter_xss($errors['name']), 'error');
       }
     }
+    // Prepare the url options array to pass to drupal_goto().
+    $options = array('query' => $cookie['data']['query']);
     if (empty($cookie['data']['destination'])) {
-      drupal_goto('user');
+      drupal_goto('user', $options);
     }
     else {
-      drupal_goto($cookie['data']['destination']);
+      $destination = $cookie['data']['destination'];
+      if (($pos = strpos($cookie['data']['destination'], '?')) !== FALSE) {
+        // Destination contains query arguments that must be extracted.
+        $destination = substr($cookie['data']['destination'], 0, $pos);
+        $options['query'] += drupal_get_query_array(substr($cookie['data']['destination'], $pos + 1));
+      }
+      drupal_goto($destination, $options);
     }
+  }
+  // If user is logged in and visiting this page redirect to <front>.
+  elseif (user_is_logged_in()) {
+    drupal_goto();
   }
   drupal_access_denied();
 }
@@ -879,7 +903,9 @@ function bakery_validate_data($data, $type = NULL) {
   if ($type !== NULL && $decrypted_data['type'] !== $type) {
     return FALSE;
   }
-  if ($decrypted_data['timestamp'] + variable_get('bakery_freshness', '3600') >= $_SERVER['REQUEST_TIME']) {
+  // Allow cookies to expire when the browser closes.
+  if (variable_get('bakery_freshness', '3600') == 0
+    || $decrypted_data['timestamp'] + variable_get('bakery_freshness', '3600') >= $_SERVER['REQUEST_TIME']) {
     return $decrypted_data;
   }
   return FALSE;
@@ -896,7 +922,16 @@ function bakery_validate_data($data, $type = NULL) {
 function _bakery_cookie_name($type = 'CHOCOLATECHIP') {
   // Use different names for HTTPS and HTTP to prevent a cookie collision.
   if (ini_get('session.cookie_secure')) {
-    $type .= 'SSL';
+    if (variable_get('bakery_loose_ssl', FALSE)) {
+      // Prefer SSL cookie if loose.
+      if (isset($_COOKIE[$type . 'SSL'])) {
+        $type .= 'SSL';
+      }
+    }
+    else {
+      // Always use SSL cookie if strict.
+      $type .= 'SSL';
+    }
   }
   // Allow installation to modify the cookie name.
   $extension = variable_get('bakery_cookie_extension', '');
@@ -909,14 +944,16 @@ function _bakery_cookie_name($type = 'CHOCOLATECHIP') {
  *
  * @param $type (string) CHOCOLATECHIP or OATMEAL, default CHOCOLATECHIP
  *
- * @return the validated and decrypted cookie in an array or FALSE
+ * @return validated and decrypted cookie in an array, FALSE if invalid, or NULL
  */
 function _bakery_validate_cookie($type = 'CHOCOLATECHIP') {
   $key = variable_get('bakery_key', '');
 
   $type = _bakery_cookie_name($type);
   if (!isset($_COOKIE[$type]) || !$key || !variable_get('bakery_domain', '')) {
-    return FALSE;
+    // No cookie is set or site is misconfigured. Return NULL so existing
+    // cookie is not deleted by bakery_eat_cookie().
+    return NULL;
   }
 
   if (($data = bakery_validate_data($_COOKIE[$type], $type)) !== FALSE) {
@@ -968,7 +1005,7 @@ function _bakery_taste_chocolatechip_cookie() {
           ->countQuery()->execute()->fetchField();
         if ($count > 1) {
           // Uh oh.
-          watchdog('bakery', 'Account uniqueness problem: Multiple users found with init %init.', array('%init' => $cookie['init']), 'error');
+          watchdog('bakery', 'Account uniqueness problem: Multiple users found with init %init.', array('%init' => $cookie['init']), WATCHDOG_ERROR);
           drupal_set_message(t('Account uniqueness problem detected. <a href="@contact">Please contact the site administrator.</a>', array('@contact' => variable_get('bakery_master', 'http://drupal.org/') .'contact')), 'error');
         }
         if ($count == 1) {
@@ -1048,7 +1085,7 @@ function _bakery_taste_chocolatechip_cookie() {
         else {
           // Username and email matched, but init belonged to a DIFFERENT account.
           // Something got seriously tangled up.
-          watchdog('bakery', 'Accounts mixed up! Username %user and init %init disagree with each other!', array('%user' => $account->name, '%init' => $cookie['init']), 'critical');
+          watchdog('bakery', 'Accounts mixed up! Username %user and init %init disagree with each other!', array('%user' => $account->name, '%init' => $cookie['init']), WATCHDOG_CRITICAL);
         }
       }
 
@@ -1128,11 +1165,13 @@ function _bakery_bake_chocolatechip_cookie($name, $mail, $init) {
     $cookie['master'] = variable_get('bakery_is_master', 0);
     $cookie['calories'] = 480;
     $cookie['timestamp'] = $_SERVER['REQUEST_TIME'];
-    $cookie_secure = ini_get('session.cookie_secure');
+    $cookie_secure = !variable_get('bakery_loose_ssl', FALSE) && ini_get('session.cookie_secure');
     $type = _bakery_cookie_name('CHOCOLATECHIP');
     $cookie['type'] = $type;
     $data = bakery_bake_data($cookie);
-    setcookie($type, $data, $_SERVER['REQUEST_TIME'] + variable_get('bakery_freshness', '3600'), '/', variable_get('bakery_domain', ''), (empty($cookie_secure) ? FALSE : TRUE));
+    // Allow cookies to expire when the browser closes.
+    $expire = (variable_get('bakery_freshness', '3600') > 0) ? $_SERVER['REQUEST_TIME'] + variable_get('bakery_freshness', '3600') : '0';
+    setcookie($type, $data, $expire, '/', variable_get('bakery_domain', ''), $cookie_secure);
   }
 }
 
@@ -1153,7 +1192,6 @@ function bakery_taste_oatmeal_cookie() {
  * Create a cookie for passing information between sites for registration and login.
  */
 function bakery_bake_oatmeal_cookie($name, $data) {
-
   $key = variable_get('bakery_key', '');
   if (!empty($key)) {
     global $base_url;
@@ -1170,11 +1208,13 @@ function bakery_bake_oatmeal_cookie($name, $data) {
       $cookie['master'] = 0;
       $cookie['slave'] = $base_url . '/'; // Match the way slaves are set in Bakery settings, with ending slash.
     }
-    $cookie_secure = ini_get('session.cookie_secure');
+    $cookie_secure = !variable_get('bakery_loose_ssl', FALSE) && ini_get('session.cookie_secure');
     $type = _bakery_cookie_name('OATMEAL');
     $cookie['type'] = $type;
     $data = bakery_bake_data($cookie);
-    setcookie($type, $data, $_SERVER['REQUEST_TIME'] + variable_get('bakery_freshness', '3600'), '/', variable_get('bakery_domain', ''), (empty($cookie_secure) ? FALSE : TRUE));
+    // Allow cookies to expire when the browser closes.
+    $expire = (variable_get('bakery_freshness', '3600') > 0) ? $_SERVER['REQUEST_TIME'] + variable_get('bakery_freshness', '3600') : '0';
+    setcookie($type, $data, $expire, '/', variable_get('bakery_domain', ''), (empty($cookie_secure) ? FALSE : TRUE));
   }
 }
 
@@ -1222,6 +1262,9 @@ function bakery_eat_stroopwafel_cookie() {
       watchdog('bakery', 'user updated name %name_old to %name_new, mail %mail_old to %mail_new.', array('%name_old' => $account->name, '%name_new' => $stroopwafel['name'], '%mail_old' => $account->mail, '%mail_new' => $stroopwafel['mail']));
       $message = t('Successfully updated account on %slave.', array('%slave' => variable_get('site_name', '')));
     }
+
+    // Invoke hook_bakery_receive().
+    module_invoke_all('bakery_receive', $account, $stroopwafel);
   }
 
   module_invoke_all('exit');
@@ -1351,6 +1394,8 @@ function bakery_request_account($name, $or_email = FALSE) {
   $account = user_save($account, $new_account);
   if ($account) {
     watchdog('bakery', 'Created account for @name', array('@name' => $name));
+    // Invoke hook_bakery_receive().
+    module_invoke_all('bakery_receive', $account, $cookie);
     return $account->uid;
   }
 
@@ -1409,6 +1454,11 @@ function bakery_eat_gingerbread_cookie() {
         $payload[$type] = $account->$type;
       }
     }
+
+    // Invoke implementations of hook_bakery_transmit() for syncing arbitrary
+    // data.
+    $payload['data'] = module_invoke_all('bakery_transmit', NULL, $account);
+
     $payload['timestamp'] = $_SERVER['REQUEST_TIME'];
     // Respond with encrypted and signed account information.
     $message = bakery_bake_data($payload);
