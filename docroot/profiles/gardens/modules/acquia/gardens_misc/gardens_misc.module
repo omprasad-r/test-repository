@@ -2177,7 +2177,8 @@ function gardens_misc_get_site_statistics_token() {
   // The token consists of a hash of the site's Gardener site node id,
   // plus a salt.
   $salt = '05';
-  $site_nid = gardens_client_get_site_identifier();
+  $site = AcsfSite::load();
+  $site_nid = $site->nid;
   $expected_md5 = md5($site_nid . $salt);
   return $expected_md5;
 }

@@ -576,29 +576,6 @@ function gardens_client_get_gardens_db_name() {
 }
 
 /**
- * Get the nid of the Gardener site node corresponding to this site.
- */
-function gardens_client_get_site_identifier() {
-  global $databases;
-
-  // The site identifier should be in the settings file.
-  $nid = variable_get('gardens_site_id', NULL);
-  if (empty($nid)) {
-    // For production and staging sites with no site id in the settings file,
-    // the site identifier is the same as the DB name.
-    if (scarecrow_is_enabled()) {
-      $gsite = $databases['default']['default']['database'];
-      $nid = ltrim($gsite, 'g');
-    }
-    // Allow developers testing locally to specify their site nid.
-    else {
-      $nid =  variable_get('acquia_gardens_site_identifier', FALSE);
-    }
-  }
-  return $nid;
-}
-
-/**
  * Tells the caller if an alert should be sent for gardener unreachability.
  *
  * Keeps a count of how many times the error has occurred and can reset the
