@@ -221,6 +221,7 @@ function warner_misc_disallowed_modules_alter(&$modules) {
     'migrate_warner',
     'migrate_aa',
     'migrate_googoo',
+    'migrate_nonesuch',
   ));
 
   // Modules that are not in the distro but are add-ons in this codebase and
