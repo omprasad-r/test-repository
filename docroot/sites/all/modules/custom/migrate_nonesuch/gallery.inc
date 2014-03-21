@@ -200,7 +200,6 @@ class MigrateNonesuchGallery extends DrupalNode5Migration {
           ->fields('n', array('nid'))
           ->condition('type', 'artist')
           ->condition('title', $title);
-    drush_print((string)$query);
     $row->artist_node = $query->execute()->fetchField();
     // Pull the image nodes in this subqueue, and get the associated file IDs.
     $query = Database::getConnection('default', $this->sourceConnection)
