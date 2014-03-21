@@ -64,6 +64,13 @@ function acsf_drush_command() {
       'aliases' => array('curl'),
       'bootstrap' => DRUSH_BOOTSTRAP_DRUSH, // No bootstrap at all.
     ),
+    'acsf-version-get' => array(
+      'description' => 'Fetches the version of the acsf moduleset.',
+      'arguments' => array(
+        'path' => 'The path to the acsf moduleset.',
+      ),
+      'bootstrap' => DRUSH_BOOTSTRAP_DRUSH, // No bootstrap at all.
+    ),
   );
 }
 
@@ -81,21 +88,59 @@ function drush_acsf_build_registry() {
 function drush_acsf_site_scrub() {
   $config = new AcsfConfigDefault();
 
+  // Ensure that we are testing the scrub cleanly.
+  variable_del('acsf_site_scrubbed');
+
+  // Avoid collisions between the Factory and site users when scubbing.
+  db_query("UPDATE {users} SET mail = CONCAT('user', uid, '@', MD5(mail), '.example.com'), init = CONCAT('user', uid, '@', MD5(init), '.example.com') WHERE uid > 0");
+
   $factory_url = preg_replace('@^https?://@', '', $config->getUrl());
   $source_url = preg_replace('@^https?://@', '', $config->getSourceUrl());
 
-  // Replace the source Factory authmap URLs with the new Factor URL.
+  // Replace the source Factory authmap URLs with the new Factory URL.
   if ($factory_url && $source_url) {
-    $result = db_query("UPDATE authmap SET authname=REPLACE(authname, '$source_url', '$factory_url')");
+    $result = db_query("UPDATE {authmap} SET authname=REPLACE(authname, '$source_url', '$factory_url')");
     drush_print(dt('Replacing authmap entries for !source with !dest.', array('!source' => $source_url, '!dest' => $factory_url)));
   }
   if (!$result) {
     drush_print('Unable to replace any authmap entries.');
   }
 
-  // During the staging process, we use a general SQL scrub file that also
-  // removes the file_public_path. The file path does not change during staging,
-  // so this needs to be put back here.
+  // Remove openid associations.
+  db_query('DELETE FROM {openid_association}');
+
+  // Reset the cron key.
+  variable_set('cron_key', md5(mt_rand()));
+
+  // Reset the drupal private key.
+  variable_del('drupal_private_key');
+
+  // Trigger a menu rebuild.
+  variable_set('menu_rebuild_needed', TRUE);
+
+  // Clear sessions and cache tables that might have stale data.
+  $truncate_tables = array(
+    'sessions',
+    'cache',
+    'cache_bootstrap',
+    'cache_field',
+    'cache_filter',
+    'cache_form',
+    'cache_menu',
+    'cache_page',
+    'cache_path',
+    'cache_block',
+    'cache_image',
+    'watchdog',
+  );
+
+  foreach ($truncate_tables as $table) {
+    if (db_table_exists($table)) {
+      db_query(sprintf('TRUNCATE {%s}', $table));
+    }
+  }
+
+  // Ensure that the file_public_path uses the correct convention.
   $db_role = variable_get('gardens_db_name', '');
   if (!empty($db_role)) {
     drush_print(dt('Setting file_public_path to !path', array('!path' => $path)));
@@ -104,6 +149,17 @@ function drush_acsf_site_scrub() {
 
   // Clear any cached values from ACSF variables.
   acsf_variables_cache_refresh();
+
+  // We will handle email addresses and passwords ourselves.
+  drush_set_option('sanitize-email', 'no');
+  drush_set_option('sanitize-password', 'no');
+
+  // Run the sanitization which allows customers to use hook_drush_sql_sanitize()
+  // to provide custom scrubbing.
+  drush_sql_sanitize();
+
+  // Mark this database as scrubbed.
+  variable_set('acsf_site_scrubbed', 'scrubbed');
 }
 
 /**
@@ -338,3 +394,15 @@ function drush_acsf_report_complete_async_process() {
   }
 }
 
+/**
+ * Drush command. Fetches the version of the acsf moduleset.
+ */
+function drush_acsf_version_get($path) {
+  $version = '0.0';
+  $acsf_file_path = rtrim($path, '/') . '/acsf.info';
+  if (file_exists($acsf_file_path)) {
+    $info = drush_drupal_parse_info_file($acsf_file_path);
+    $version = isset($info['acsf_version']) ? $info['acsf_version'] : '0.1';
+  }
+  print $version;
+}

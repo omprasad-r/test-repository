@@ -5,9 +5,6 @@
  */
 function gardens_misc_drush_command() {
   $items = array(
-    'gardens-sql-sanitize' => array(
-      'description' => dt("Scrub the current site's database in place. NOT for use on production sites."),
-    ),
     'mollom-keys-get' => array(
       'description' => 'Get from the Gardener and save mollom keys if they are currently missing',
       'aliases' => array('mk-get'),
@@ -21,31 +18,9 @@ function gardens_misc_drush_command() {
 }
 
 /**
- * Command callback. Runs drush's sql-sanitize command with some extra data.
- *
- * This command requires the staged-gardener and standard-domain options to
- * be passed in. They are used in gardens_misc_drush_sql_sync_sanitize.
- */
-function drush_gardens_misc_gardens_sql_sanitize() {
-  // Allow modules enabled in the site to add sanitization operations via the
-  // sql-sync hook functions.
-  drush_bootstrap_max(DRUSH_BOOTSTRAP_DRUPAL_SITE);
-
-  // Skip the built-in email and password sanitizing (we have our own).
-  drush_set_option('sanitize-email', 'no');
-  drush_set_option('sanitize-password', 'no');
-
-  // Run the sanitization.
-  drush_sql_sanitize();
-}
-
-/**
  * Implements hook_drush_sql_sync_sanitize().
  */
 function gardens_misc_drush_sql_sync_sanitize() {
-  // TODO: Make sure the staged-gardener and standard-domain options exist,
-  // and error out if they don't.
-
   $static_scrub = file_get_contents(DRUPAL_ROOT . '/../gsite-scrub.sql');
   drush_sql_register_post_sync_op('staging-static-scrub',
     dt('Scrub Gardens site database'),
@@ -93,7 +68,8 @@ function drush_hosting_mollom_keys_get() {
  * drush command callback. Get from the Gardener and save mollom keys even if they already exist.
  */
 function drush_hosting_mollom_keys_replace() {
-  $nid = gardens_client_get_site_identifier();
+  $site = AcsfSite::load();
+  $nid = $site->nid;
   try {
     $message = new AcsfMessageXmlRpc('GET', 'acquia.gardens.get.site.mollom.keys', array($nid));
     $message->send();

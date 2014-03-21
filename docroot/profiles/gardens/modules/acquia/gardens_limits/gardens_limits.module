@@ -309,7 +309,8 @@ function gardens_limits_user_message_add() {
  */
 function gardens_limits_user_limit_text($type = 'basic', $data = 0) {
   $limit = gardens_limits_user_limit();
-  $feedback = array('@upgrade' => scarecrow_get_gardener_url() . '/mysites', '@limit' => $limit);
+  $site = AcsfSite::load();
+  $feedback = array('@upgrade' => scarecrow_get_gardener_url() . '/purchase/' . $site->nid, '@limit' => $limit);
   switch ($type) {
     case 'basic':
       return t('You have reached your limit of @limit site members. <a href="@upgrade">To add more, upgrade your subscription.</a>', $feedback);

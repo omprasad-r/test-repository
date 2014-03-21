@@ -14,34 +14,17 @@
 -- these tables do not exist.
 -- -----------------------------------------------------------------------------
 
--- Scrub user mails -- set a wacky subdomain to avoid gardener-gardens collisions of munged addresses.
-UPDATE `users` SET mail = CONCAT('user', uid, '@', MD5(mail), '.example.com'), init = CONCAT('user', uid, '@', MD5(init), '.example.com') WHERE uid > 0;
-
--- Remove any existing OpenID associations. --
-DELETE FROM openid_association;
-
 -- Scrub variables --
 DELETE FROM `variable` WHERE `name` = 'site_mail';
-INSERT INTO `variable` (name, value) VALUES ('site_mail', 's:26:\"steamer-gardens@acquia.com\";');
+INSERT INTO `variable` (name, value) VALUES ('site_mail', 's:26:\"noreply@acquia.com\";');
 DELETE FROM `variable` WHERE `name` = 'gardens_misc_ga_tracking_code';
 INSERT INTO `variable` (name, value) VALUES ('gardens_misc_ga_tracking_code', 's:0:\"\";');
-DELETE FROM `variable` WHERE `name` = 'cron_key';
-INSERT INTO `variable` (name, value) VALUES ('cron_key', CONCAT('s:32:\"', MD5(RAND()), '\";'));
-DELETE FROM `variable` WHERE `name` = 'drupal_private_key';
 DELETE FROM `variable` WHERE `name` = 'gardens_client_gardener_data';
 DELETE FROM `variable` WHERE `name` = 'gardens_misc_standard_domain';
 DELETE FROM `variable` WHERE `name` = 'antivirus_settings_clamavdaemon';
 -- We still want to send data to statsd, but marked as 'dev'
 UPDATE `variable` SET `value` = 's:11:"gardens.dev";' WHERE `name` = 'gardens_statsd_prefix';
 UPDATE `variable` SET `value` = 'i:0;' WHERE `name` = 'gardens_statsd_env_checked';
--- For image generation to work we need to both remove the set file path
--- and also force a menu rebuild.
-DELETE FROM `variable` WHERE `name` = 'file_public_path';
-DELETE FROM `variable` WHERE `name` = 'menu_rebuild_needed';
-INSERT INTO `variable` (name, value) VALUES ('menu_rebuild_needed', 'b:1;');
--- We don't have to regenerate this if we don't want since Drupal will
--- auto-regenerate it if it's empty, but it doesn't hurt to either.
-INSERT INTO `variable` (name, value) VALUES ('drupal_private_key', CONCAT('s:32:\"', MD5(RAND()), '\";'));
 
 -- Force everything to refresh
 DELETE FROM `variable` WHERE `name` = 'gardens_misc_flush_all_caches';
@@ -62,18 +45,6 @@ DELETE FROM `variable` WHERE `name` LIKE 'akamai_%';
 
 -- Scrub domain_301_redirect settings --
 DELETE FROM `variable` WHERE `name` LIKE 'domain_301_redirect_%';
-
--- Clear sessions and required cache tables that might have stale data.
-TRUNCATE `sessions`;
-TRUNCATE `themebuilder_session`;
-TRUNCATE `cache`;
-TRUNCATE `cache_bootstrap`;
-TRUNCATE `cache_field`;
-TRUNCATE `cache_filter`;
-TRUNCATE `cache_form`;
-TRUNCATE `cache_menu`;
-TRUNCATE `cache_page`;
-TRUNCATE `cache_path`;
 
 -- -----------------------------------------------------------------------------
 -- Define a stored procedure that ignores any "table does not exist" errors
@@ -104,14 +75,12 @@ UPDATE mailing_list_emails SET mail = CONCAT('mailing-list-email-', eid, '@examp
 UPDATE poll_vote SET hostname = MD5(hostname);
 
 -- Clear cache tables from optional modules.
-TRUNCATE `cache_block`;
 TRUNCATE `cache_file_styles`;
-TRUNCATE `cache_image`;
 TRUNCATE `cache_media_xml`;
 TRUNCATE `cache_styles`;
-TRUNCATE `watchdog`;
 TRUNCATE `mailhandler_mailbox`;
 TRUNCATE `mailhandler_singlemailbox_addresses`;
+TRUNCATE `themebuilder_session`;
 
 -- -----------------------------------------------------------------------------
 -- Close and execute the stored procedure defined above.
@@ -121,6 +90,3 @@ END;
 DELIMITER ;
 CALL gardensscruboptionalmodules();
 
--- Mark this database as having been scrubbed.
-DELETE FROM `variable` WHERE `name` = 'gsite_database_scrubbed';
-INSERT INTO `variable` (name, value) VALUES ('gsite_database_scrubbed', 's:8:\"scrubbed\";');

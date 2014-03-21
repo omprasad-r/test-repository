@@ -41,12 +41,6 @@ if (empty($url_suffix)) {
 // Create a new standard domain name.
 $new_domain = "$site_name.$url_suffix";
 
-// Scrub the gardens modules.
-$command = sprintf("drush5 @%s.%s -r /var/www/html/%s.%s/docroot -l %s -y gardens-sql-sanitize", escapeshellarg($site), escapeshellarg($env), escapeshellarg($site), escapeshellarg($env), escapeshellarg($new_domain));
-print "Executing $command";
-$result = shell_exec($command);
-print $result;
-
 // Scrub the ACSF modules.
 $command = sprintf("drush5 @%s.%s -r /var/www/html/%s.%s/docroot -l %s -y acsf-site-scrub", escapeshellarg($site), escapeshellarg($env), escapeshellarg($site), escapeshellarg($env), escapeshellarg($new_domain));
 print "Executing $command";
