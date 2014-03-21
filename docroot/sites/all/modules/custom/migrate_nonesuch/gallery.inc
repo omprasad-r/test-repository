@@ -13,10 +13,12 @@ class MigrateNonesuchGallery extends DrupalNode5Migration {
     $this->sourceFields += array(
       'images' => 'List of referenced image nodes in queue',
       'timestamp' => 'Timestamp of first image in queue',
+      'artist_node' => 'Node ID of the corresponding artist',
     );
 
     parent::__construct($arguments);
     $this->dependencies[] = 'NonesuchRecordsNodeimage';
+    $this->dependencies[] = 'NonesuchRecordsNodeartist';
 
     $this->map = new MigrateSQLMap($this->machineName,
       array(
@@ -43,9 +45,7 @@ class MigrateNonesuchGallery extends DrupalNode5Migration {
          ->defaultValue('MigrateFileFid');
     $this->addFieldMapping('media_gallery_media:preserve_files')
          ->defaultValue(TRUE);
-    // @todo: field_artist_node needs to be an entity reference to an artist
-    // node. All we have to go on is the subqueue title, will that match directly to
-    // artist names?
+    $this->addFieldMapping('field_artist_name', 'artist_node');
 
     $this->removeFieldMapping('comment');
     $this->removeFieldMapping('daycount');
@@ -194,19 +194,27 @@ class MigrateNonesuchGallery extends DrupalNode5Migration {
       return FALSE;
     }
 
-    // Pull the nodes in this subqueue.
-    // @todo: Actually, we need to get the fids of the images referenced by
-    // these nodes...
+    // Attempt to map to an artist node by title.
+    $title = trim(str_ireplace('[Artist Gallery]', '', $row->title));
+    $query = db_select('node', 'n')
+          ->fields('n', array('nid'))
+          ->condition('type', 'artist')
+          ->condition('title', $title);
+    drush_print((string)$query);
+    $row->artist_node = $query->execute()->fetchField();
+    // Pull the image nodes in this subqueue, and get the associated file IDs.
     $query = Database::getConnection('default', $this->sourceConnection)
       ->select('nodequeue_nodes', 'n')
       ->fields('n', array('nid', 'timestamp'))
       ->condition('sqid', $row->sqid)
-      ->orderBy('position')
-      ->execute();
+      ->orderBy('position');
+    $query->innerJoin('content_field_image_file', 'fif', 'n.nid=fif.nid');
+    $query->fields('fif', array('field_image_file_fid'));
+    $result = $query->execute();
     $row->images = array();
     $first = TRUE;
-    foreach ($query as $queue_row) {
-      $row->images[] = $queue_row->nid;
+    foreach ($result as $queue_row) {
+      $row->images[] = $queue_row->field_image_file_fid;
       if ($first) {
         $first = FALSE;
         $row->timestamp = $queue_row->timestamp;
