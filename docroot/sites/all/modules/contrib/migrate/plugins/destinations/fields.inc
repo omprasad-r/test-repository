@@ -203,8 +203,17 @@ class MigrateDefaultFieldHandler extends MigrateFieldHandler {
     // Setup the standard Field API array for saving.
     $delta = 0;
     foreach ($values as $value) {
-      $return[$language][$delta] = array($primary_column => $value) +
-        array_intersect_key($arguments, $field_info['columns']);
+      $subfields = array();
+      foreach ($arguments as $subfield_name => $subfield_value) {
+        if (is_array($subfield_value)) {
+          $subfields[$subfield_name] = $subfield_value[$delta];
+        }
+        else {
+          $subfields[$subfield_name] = $subfield_value;
+        }
+      }
+      $subfields = array_intersect_key($subfields, $field_info['columns']);
+      $return[$language][$delta] = array($primary_column => $value) + $subfields;
       $delta++;
     }
 
