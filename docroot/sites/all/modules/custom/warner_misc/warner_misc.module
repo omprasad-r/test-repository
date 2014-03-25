@@ -932,6 +932,73 @@ function warner_misc_form_alter(&$form, $form_state) {
 }
 
 /**
+ * Implements hook_form_FORM_ID_alter().
+ */
+function warner_misc_form_migrate_ui_configure_form_alter(&$form, $form_state, $form_id) {
+  // Provide Warner the option of setting all
+  $form['metatag_dnm'] = array(
+    '#type' => 'fieldset',
+    '#title' => t('Metatag fields'),
+    '#description' => t('Sets the DNM flag on all metatag fields in all migrations'),
+  );
+
+  $form['metatag_dnm']['submit'] = array(
+    '#type' => 'submit',
+    '#value' => t('Set all metatag fields DNM'),
+    '#submit' => array('warner_misc_metatag_dnm_submit'),
+  );
+}
+
+/**
+ * Submit callback for the metatag field mappings.
+ */
+function warner_misc_metatag_dnm_submit($form, &$form_state) {
+  // Set all migration source and destination fields for the metatag module
+  // to DNM (unmapped).
+  /**
+   * @var Migration $migration
+   */
+  foreach (migrate_migrations() as $machine_name => $migration) {
+    $destination = $migration->getDestination();
+    foreach ($destination->fields($migration) as $field_name => $description) {
+      if (!strncmp('metatag', $field_name, 7)) {
+        $mapping = new MigrateFieldMapping($field_name, NULL, FALSE);
+        $mapping->issueGroup(t('DNM'));
+        db_merge('migrate_field_mapping')
+          ->key(array(
+              'machine_name' => $machine_name,
+              'destination_field' => $field_name,
+            ))
+          ->fields(array(
+              'source_field' => '',
+              'options' => serialize($mapping),
+            ))
+          ->execute();
+      }
+    }
+    $source = $migration->getSource();
+    foreach ($source->fields($migration) as $field_name => $description) {
+      if (!strncmp('metatag', $field_name, 7)) {
+        $mapping = new MigrateFieldMapping(NULL, $field_name, FALSE);
+        $mapping->issueGroup(t('DNM'));
+        db_merge('migrate_field_mapping')
+          ->key(array(
+              'machine_name' => $machine_name,
+              'source_field' => $field_name,
+            ))
+          ->fields(array(
+              'destination_field' => '',
+              'options' => serialize($mapping),
+            ))
+          ->execute();
+      }
+    }
+  }
+  drupal_set_message(t('Metatag fields set to DNM'));
+  $form_state['redirect'] = 'admin/content/migrate';
+}
+
+/**
  * Attach the overridden scheduler vertical tabs javascript.
  *
  * @param $element
