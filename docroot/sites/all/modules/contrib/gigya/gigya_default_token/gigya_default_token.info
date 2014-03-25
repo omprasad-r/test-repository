@@ -7,3 +7,10 @@ files[] = gigya_default_token.install
 dependencies[] = field_ui
 dependencies[] = gigya
 dependencies[] = token
+
+; Information added by Drupal.org packaging script on 2014-03-20
+version = "7.x-4.4+5-dev"
+core = "7.x"
+project = "gigya"
+datestamp = "1395302959"
+

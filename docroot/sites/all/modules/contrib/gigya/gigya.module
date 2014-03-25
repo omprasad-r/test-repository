@@ -373,38 +373,38 @@ function gigya_block_info() {
   $blocks = array();
   $blocks['gigya-login'] = array(
     'info' => t('Gigya login'),
-    'cache' => DRUPAL_NO_CACHE,
+    'cache' => DRUPAL_CACHE_PER_PAGE,
   );
   $blocks['gigya-rass'] = array(
     'info' => t('Gigya RaaS links'),
-    'cache' => DRUPAL_NO_CACHE,
+    'cache' => DRUPAL_CACHE_PER_PAGE,
   );
   $blocks['gigya_raas_login'] = array(
     'info' => t('Gigya RaaS Login'),
-    'cache' => DRUPAL_NO_CACHE,
+    'cache' => DRUPAL_CACHE_PER_PAGE,
   );
   $blocks['gigya_raas_register'] = array(
     'info' => t('Gigya RaaS Register'),
-    'cache' => DRUPAL_NO_CACHE,
+    'cache' => DRUPAL_CACHE_PER_PAGE,
   );
   $blocks['gigya_raas_profile'] = array(
     'info' => t('Gigya RaaS Profile'),
-    'cache' => DRUPAL_NO_CACHE,
+    'cache' => DRUPAL_CACHE_PER_PAGE,
   );
   $blocks['gigya-connect'] = array(
     'info' => t('Gigya connectUI'),
-    'cache' => DRUPAL_NO_CACHE,
+    'cache' => DRUPAL_CACHE_PER_PAGE,
   );
   $blocks['gigya_activity_feed'] = array(
     'info' => t('Gigya Activity Feed'),
-    'cache' => DRUPAL_NO_CACHE,
+    'cache' => DRUPAL_CACHE_PER_PAGE,
   );
   $gm_blocks = variable_get('gigya_gm_blobks', array());
   if (!empty($gm_blocks)) {
     foreach ($gm_blocks as $block_id => $gm_block) {
       $blocks[$block_id] = array(
         'info' => $gm_block['block_name'],
-        'cache' => DRUPAL_NO_CACHE,
+        'cache' => DRUPAL_CACHE_PER_PAGE,
       );
     }
   }

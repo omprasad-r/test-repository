@@ -34,7 +34,7 @@ function gigya_login_ajax() {
   require_once drupal_get_path('module', 'gigya') . '/GSSDK.php';
   ctools_include('ajax');
   ctools_include('modal');
-  $parms = $_POST;
+  $parms = $_POST; // check for XSS line 54.
   /* If the admin set a post login redirect send
   the user to it if no just reload the page. */
   $dest = variable_get('gigya_login_uiconfig_urlredirect', '');
@@ -51,19 +51,23 @@ function gigya_login_ajax() {
     module_load_include('inc', 'gigya');
     $secretkey = variable_get('gigya_SecretKey', '');
     if (SigUtils::validateUserSignature($parms['UID'], $parms['timestamp'], $secretkey, $parms['signature'])) {
+      // Check for XSS inside object;
+      array_walk_recursive($parms, filter_xss);
       $gigya_user = $parms['user'];
 
-      // Check to see if the Gigya user is a Drupal user.
-      if (is_numeric($gigya_user['UID']) && $parms['isSiteUID'] === 'true' && $user = user_load($gigya_user['UID'])) {
+      /* Check to see if the Gigya user is a Drupal user.
+      if the uid isn't a Drupal uid then the user_load will return false. */
+      if (is_numeric($gigya_user['UID']) && $parms['isSiteUID'] === 'true' && $usr = user_load($gigya_user['UID'])) {
         if (!variable_get('user_email_verification', TRUE)) {
           /* We can suppress the notify login JS because the user is clearly
           already logged into gigya.
           $_SESSION['gigya_suppress_notifylogin_js'] = TRUE;
           Log the user in. */
-          global $user;
-          $user = user_load($parms['UID']);
-          user_login_finalize();
-          $commands[] = $sucess_command;
+          $form_state =array('uid' => $usr->uid);
+          $form = array();
+          // A small hack because on variables can be passed by reference
+          user_login_submit($form, $form_state);
+          $sucess_command[] = $sucess_command;
         }
         else {
           $commands[] = ajax_command_alert(t('You must validate your email address for this account before logging in.'));
@@ -141,7 +145,8 @@ function gigya_raas_login_ajax() {
     ctools_include('modal');
     $sucess_command = ctools_ajax_command_reload();
     require_once drupal_get_path('module', 'gigya') . '/GSSDK.php';
-    $parms = $_POST;
+    $parms = $_POST; // Post is not displayed on screen no need to filter_xss
+    // noting is used except the UID to validate that the call is from Gigya or not
     if (!user_is_logged_in()) {
       $commands = array();
       $_SESSION['gigya_suppress_notifylogin_js'] = TRUE;
@@ -155,12 +160,13 @@ function gigya_raas_login_ajax() {
           'include' => 'loginIDs,profile',
         );
         $gigya_account = _gigya_api("accounts.getAccountInfo", $req_params);
+        // Check for XSS inside object;
+        array_walk_recursive($gigya_account, filter_xss);
         $email = $gigya_account['profile']['email'];
         if (empty($email)) {
           $commands[] = ajax_command_alert(t('Email address is required by Drupal and is missing, please contact the site administrator.'));
           return array('#type' => 'ajax', '#commands' => $commands);
         }
-        global $user;
         // Check if users exists on the system.
         $user_exist = gigya_dose_user_exist($email);
         if ($user_exist) {
@@ -171,7 +177,10 @@ function gigya_raas_login_ajax() {
             global $_gigya_raas_login;
             $_gigya_raas_login = TRUE;
             $_SESSION['gigya_raas_uid'] = $parms['UID'];
-            user_login_finalize();
+            // A small hack because on variables can be passed by reference
+            $form_state =array('uid' => $user->uid);
+            $form = array();
+            user_login_submit($form, $form_state);
           }
           else {
             /* If this user is not the primary user account in gigya we
@@ -206,7 +215,7 @@ function gigya_raas_login_ajax() {
           );
           /* Allow other modules to modify the data before user
           is created in drupal database. */
-          drupal_alter('gigya_raas_create_user', $new_user, $parms);
+          drupal_alter('gigya_raas_create_user', $new_user, $gigya_account);
           $user = user_save(NULL, $new_user);
           $_SESSION['gigya_raas_uid'] = $parms['UID'];
           user_login_finalize();

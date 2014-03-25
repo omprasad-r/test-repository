@@ -561,6 +561,8 @@ function gigya_field_formatter_view($entity_type, $entity, $field, $instance, $l
     $element[0] = array('#markup' => '<div id="' . $settings['gigya_sharebar_container_id'] . '"></div>');
   }
   if ($field['type'] == 'gigya_reactions') {
+    $reactions = (string) str_replace(array("\r", "\r\n", "\n"), '', $settings['gigya_reactions_buttons']);
+    $reactions = (string) preg_replace('/\s+/', ' ', $reactions);
     $defaults = _gigya_field_info_formatter_default_settings($display['type']);
     if (!empty($settings['gigya_reactions_override_default'])) {
       $defaults = array_filter($defaults);
@@ -569,8 +571,6 @@ function gigya_field_formatter_view($entity_type, $entity, $field, $instance, $l
     else {
       $settings = $defaults;
     }
-    $reactions = (string) str_replace(array("\r", "\r\n", "\n"), '', $settings['gigya_reactions_buttons']);
-    $reactions = (string) preg_replace('/\s+/', ' ', $reactions);
     $reactions_settings = array(
       'gigyaReactions' => array(
         'reactions' => $reactions,

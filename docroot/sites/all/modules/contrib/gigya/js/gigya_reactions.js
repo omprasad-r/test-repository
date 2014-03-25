@@ -9,7 +9,8 @@
     Drupal.gigya = Drupal.gigya || {};
     Drupal.gigya.showReactionbar = function (settings) {
       //build a media object
-      eval('var reactions = [' + settings.gigyaReactions.reactions + ']');
+      var reactions_str = '[' + settings.gigyaReactions.reactions + ']';
+      var reactions =  JSON.parse(reactions_str);
       delete settings.gigyaReactions.reactions;
       var mediaObj = {type: 'image', href: settings.gigyaReactions.ua.linkBack};
       if ((settings.gigyaReactions.ua.imageBhev === 'url') && (settings.gigyaReactions.ua.imageUrl !== '')) {
