@@ -1,5 +1,4 @@
 <?php
-// $Id: votingapi_views_handler_relationship.inc,v 1.1.2.5.2.3 2010/10/09 21:03:33 eaton Exp $
 
 /**
  * @file
@@ -54,7 +53,7 @@ class votingapi_views_handler_relationship extends views_handler_relationship {
     $options['value_types'][''] = t('No filtering');
     $options['tags'][''] = t('No filtering');
     $options['functions'][''] = t('No filtering');
-    foreach(votingapi_metadata() as $bin => $bin_data) {
+    foreach (votingapi_metadata() as $bin => $bin_data) {
       foreach ($bin_data as $key => $data) {
         $options[$bin][$key] = $data['name'];
       }
@@ -132,7 +131,7 @@ class votingapi_views_handler_relationship extends views_handler_relationship {
             'value' => $value,
             'numeric' => FALSE
           );
-          $alias .= '_'. str_replace(array(' ','-','.'), '_', $value);
+          $alias .= '_' . str_replace(array(' ', '-', '.'), '_', $value);
         }
       }
     }

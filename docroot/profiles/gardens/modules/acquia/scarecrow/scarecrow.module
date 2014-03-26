@@ -1077,6 +1077,7 @@ function scarecrow_disallowed_modules() {
     'ctools_plugin_example',
     'ctools_custom_content',
     'page_manager',
+    'term_depth',
     'views_content',
     'ctools_access_ruleset',
     // These are part of Form Builder, which we are using for Webform, but are

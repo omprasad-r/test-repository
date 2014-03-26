@@ -158,7 +158,7 @@ function gardens_help_page_alter(&$page) {
   // Build support links based on available permissions.
   // Parature related links go to local gardener, not SMB.
   if (user_access('use parature support')) {
-    $support .= '<li>' . l(t('Tickets'), $current_gardener .'/gardener-help/history', $blank) . '</li>';
+    $support .= '<li>' . l(t('Tickets'), $current_gardener .'/site-factory-help/history', $blank) . '</li>';
   }
 
   $page['page_top']['toolbar_help'] = array(

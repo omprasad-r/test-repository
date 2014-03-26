@@ -231,6 +231,7 @@
         // Instantiate a new NestedThemeSettingModification and set the prior state.
         var modification = new ThemeBuilder.NestedThemeSettingModification('viewport');
         modification.setPriorState([setting], viewport[setting]);
+        modification.setNewState([setting], viewport[setting]);
         this.modifications['viewport-' + setting] = modification;
       }
     }

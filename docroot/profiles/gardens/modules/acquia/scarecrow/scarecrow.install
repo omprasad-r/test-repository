@@ -1546,3 +1546,22 @@ function scarecrow_update_11197() {
   $site = AcsfSite::load();
   $site->clean();
 }
+
+/**
+ * Ensure that the acsf modules are enabled.
+ *
+ * There was a period of time when the acsf modules were not hidden from the
+ * customers and they may have disabled them.
+ */
+function scarecrow_update_11198() {
+  module_enable(array(
+    'acsf',
+    'acsf_duplication',
+    'acsf_events',
+    'acsf_log',
+    'acsf_openid',
+    'acsf_site',
+    'acsf_variables',
+    'acsf_pingdom',
+  ));
+}

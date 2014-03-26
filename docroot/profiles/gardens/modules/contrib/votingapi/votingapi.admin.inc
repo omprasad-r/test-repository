@@ -1,5 +1,4 @@
 <?php
-// $Id: votingapi.admin.inc,v 1.1.2.3.2.3 2010/01/27 01:30:52 eaton Exp $
 
 /**
  * @file
@@ -17,6 +16,14 @@ function votingapi_settings_form($form_state) {
     '#title' => t('Anonymous vote rollover'),
     '#description' => t('The amount of time that must pass before two anonymous votes from the same computer are considered unique. Setting this to \'never\' will eliminate most double-voting, but will make it impossible for multiple anonymous on the same computer (like internet cafe customers) from casting votes.'),
     '#default_value' => variable_get('votingapi_anonymous_window', 86400),
+    '#options' => $period
+  );
+
+  $form['votingapi_user_window'] = array(
+    '#type' => 'select',
+    '#title' => t('Registered user vote rollover'),
+    '#description' => t('The amount of time that must pass before two registered user votes from the same user ID are considered unique. Setting this to \'never\' will eliminate most double-voting for registered users.'),
+    '#default_value' => variable_get('votingapi_user_window', -1),
     '#options' => $period
   );
 
