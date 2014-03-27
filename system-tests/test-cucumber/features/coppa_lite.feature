@@ -1,7 +1,7 @@
 Feature: Coppa lite
 
   Background:
-    Given a fresh gardens installation
+    Given a fresh warner installation
     And I am logged in as our testuser
 
   Scenario: As a user, I can enable coppa lite
