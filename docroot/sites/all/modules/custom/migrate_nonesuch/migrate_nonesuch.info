@@ -1,0 +1,12 @@
+name = "Nonesuch migration"
+description = "Custom support for migrating Nonesuch.com to Site Factory"
+package = "Development"
+core = 7.x
+hidden = TRUE
+
+dependencies[] = migrate
+dependencies[] = migrate_d2d
+
+files[] = migrate_nonesuch.migrate.inc
+files[] = album.inc
+files[] = gallery.inc
