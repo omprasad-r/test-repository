@@ -158,11 +158,13 @@ function gigya_raas_login_ajax() {
         $req_params = array(
           'UID' => $parms['UID'],
           'include' => 'loginIDs,profile',
+          'extraProfileFields' => 'username',
         );
         $gigya_account = _gigya_api("accounts.getAccountInfo", $req_params);
         // Check for XSS inside object;
         array_walk_recursive($gigya_account, filter_xss);
         $email = $gigya_account['profile']['email'];
+        $user_name = !empty($gigya_account['profile']['username']) ? $gigya_account['profile']['username'] : $gigya_account['profile']['email'];
         if (empty($email)) {
           $commands[] = ajax_command_alert(t('Email address is required by Drupal and is missing, please contact the site administrator.'));
           return array('#type' => 'ajax', '#commands' => $commands);
@@ -207,7 +209,7 @@ function gigya_raas_login_ajax() {
         // If the user does not exist register him/her.
         else {
           $new_user = array(
-            'name' => $email,
+            'name' => $user_name,
             'pass' => user_password(),
             'mail' => $email,
             'status' => 1,
@@ -216,6 +218,7 @@ function gigya_raas_login_ajax() {
           /* Allow other modules to modify the data before user
           is created in drupal database. */
           drupal_alter('gigya_raas_create_user', $new_user, $gigya_account);
+          global $user;
           $user = user_save(NULL, $new_user);
           $_SESSION['gigya_raas_uid'] = $parms['UID'];
           user_login_finalize();
