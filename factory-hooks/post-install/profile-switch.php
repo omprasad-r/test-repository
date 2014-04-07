@@ -5,11 +5,12 @@
  * Post-install hook to allow the use of a custom profile.
  *
  * The default behavior is to use a profile called "gardens". This post-install
- * hook allows a profile matching the name of the gardens_client_name variable
+ * hook allows a profile matching the name of the AcsfSite->client_name variable
  * to be used instead.
  */
 
-$profile_name = variable_get('gardens_client_name', '');
+$site = AcsfSite::load();
+$profile_name = $site->client_name;
 if ($profile_name && file_exists(DRUPAL_ROOT . "/profiles/{$profile_name}/{$profile_name}.info")) {
   // Save the value for future use.
   $previous_profile = variable_get('install_profile', 'gardens');
