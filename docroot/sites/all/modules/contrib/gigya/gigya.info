@@ -1,0 +1,21 @@
+name = "Gigya - Social optimization"
+description = "Allows sites to utilize the Gigya API for authentication and social network updates."
+package = Gigya
+core = 7.x
+php = 5.2
+configure = admin/config/services/gigya
+
+dependencies[] = token
+dependencies[] = entity
+dependencies[] = ctools
+files[] = GSSDK.php
+files[] = gigya.admin.inc
+files[] = gigya.inc
+files[] = gigya.install
+files[] = gigya.module
+files[] = gigya.pages.inc
+files[] = GigyaUser.inc
+files[] = includes/gigya.field.inc
+files[] = includes/gigya.rules.inc
+files[] = includes/GigyaAccount.inc
+
