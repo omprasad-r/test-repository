@@ -19,3 +19,25 @@ function acsf_update_7001() {
   module_enable(array('acsf_openid'));
   variable_set('acsf_local_user_accounts', acsf_vget('acsf_local_user_accounts', FALSE));
 }
+
+/**
+ * Enable acsf_theme for everyone.
+ */
+function acsf_update_7002() {
+  module_enable(array('acsf_theme'));
+}
+
+/**
+ * Get fresh site info from the Factory.
+ */
+function acsf_update_7003() {
+  $site = AcsfSite::load();
+  $site->clean();
+  // Stagger the next refresh so that they are not all calling home at once.
+  // We'll set them to be some random time in the past week so that the next
+  // refresh happens soon.
+  $rand = 86400 * mt_rand(0, 7);
+  $site->last_sf_refresh = time() - $rand;
+  $site->save();
+  watchdog('acsf', t('The next acsf-site-sync will be %date.', array('%date' => format_date($site->last_sf_refresh))));
+}

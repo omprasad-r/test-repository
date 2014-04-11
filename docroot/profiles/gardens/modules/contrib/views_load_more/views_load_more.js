@@ -56,26 +56,58 @@
       new_content.find(content_query).children().hide();
     }
 
-    // Add the new content to the page.
+    // Remove old pager link, then add the new one. If there are attachments
+    // with enabled pager inheritance, insert pager only once.
     wrapper.find('.pager a').remove();
-    wrapper.find('.pager').parent('.item-list').html(new_content.find('.pager'));
-    wrapper.find(content_query)[method](new_content.find(content_query).children());
+    if (!response.attachment_inherit_pager) {
+      wrapper.find('.pager').parent('.item-list').html(new_content.find('.pager'));
+    }
+    else {
+      wrapper.find('.pager').parent('.item-list').html(new_content.find('.pager').last());
+    }
 
-    // Re-class the loaded content.
-    wrapper.find(content_query).children()
-      .removeClass('views-row-first views-row-last views-row-odd views-row-even')
-      .filter(':first')
-        .addClass('views-row-first')
-        .end()
-      .filter(':last')
-        .addClass('views-row-last')
-        .end()
-      .filter(':even')
-        .addClass('views-row-odd')
-        .end()
-      .filter(':odd')
-        .addClass('views-row-even')
-        .end();
+    // Add new content with paying attention to attachments.
+    var new_content_result = new_content.find(content_query);
+    wrapper.find(content_query).each(function(i, settings) {
+      // If this is an attachment, append new elements only if it has pager
+      // inheritance enabled.
+      if ($(new_content_result[i]).parents('div.attachment').length == 1) {
+        var this_wrapper = this;
+        if (response.attachment_inherit_pager) {
+          $.each(response.attachment_inherit_pager, function(index, item) {
+            if (new_content_result[i].parentElement.classList.contains(item)) {
+              $(this_wrapper)[method](new_content_result[i].children);
+            }
+          });
+        }
+      }
+      else {
+        // Add new content.
+        $(this)[method](new_content_result[i].children);
+      }
+
+      // Re-class new content.
+      var row = 1;
+      $(this).children()
+        .removeClass('views-row-first views-row-last views-row-odd views-row-even')
+        .filter(':first')
+          .addClass('views-row-first')
+          .end()
+        .filter(':last')
+          .addClass('views-row-last')
+          .end()
+        .filter(':even')
+          .addClass('views-row-odd')
+          .end()
+        .filter(':odd')
+          .addClass('views-row-even')
+          .end()
+        .each(function() {
+          var classes = $(this).attr('class');
+          var indexClass = classes.match(/views-row-[0-9]+/);
+          $(this).removeClass(indexClass[0]).addClass('views-row-' + row++);
+      });
+    });
 
     if (effect.showEffect != 'show') {
       wrapper.find(content_query).children(':not(:visible)')[effect.showEffect](effect.showSpeed);

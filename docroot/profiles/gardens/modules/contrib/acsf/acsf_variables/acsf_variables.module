@@ -111,6 +111,15 @@ function acsf_variables_factory_url_get() {
 function acsf_variables_cache_refresh() {
   $config = new AcsfConfigDefault();
   acsf_vset('factory_url', $config->getURL());
+
+  $site = AcsfSite::load();
+  acsf_vset('acsf_factory_name', $site->service_name_long);
+
+  if (!empty($GLOBALS['gardens_site_settings']['conf']['gardens_site_id'])) {
+    // If we do not have the nid, we can retrieve it from the sites.json.
+    $nid = $GLOBALS['gardens_site_settings']['conf']['gardens_site_id'];
+    acsf_vset('acsf_site_nid', $nid, 'site_info');
+  }
 }
 
 /**

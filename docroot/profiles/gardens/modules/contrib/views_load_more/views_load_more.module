@@ -67,6 +67,21 @@ function views_load_more_views_ajax_data_alter(&$commands, $view) {
         $commands[$key]['options'] = array(
           'content' => $view->query->pager->options['advance']['content_class'],
         );
+
+        // Handle pager inheritance on attachments.
+        $attachment_inherit_pager = array();
+        if (!empty($view->attachment_before) || !empty($view->attachment_after)) {
+          foreach ($view->display as $display) {
+            if ($display->display_plugin == 'attachment') {
+              if ($display->display_options['inherit_pager'] == 1) {
+                $attachment_inherit_pager[] = "view-display-id-{$display->id}";
+              }
+            }
+          }
+        }
+        if (!empty($attachment_inherit_pager)) {
+          $commands[$key]['attachment_inherit_pager'] = $attachment_inherit_pager;
+        }
       }
     }
   }

@@ -2,5 +2,7 @@ name = Themebuilder advanced
 description = Themebuilder advanced tab module
 core = 7.x
 package = Themebuilder
+
 files[] = themebuilder_advanced.module
+
 hidden = TRUE

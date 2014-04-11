@@ -105,7 +105,7 @@ function themebuilder_themes_themebuilder_init_data() {
   $result = array();
 
   $themes = themebuilder_compiler_get_theme_list();
-  $themes += themebuilder_marketplace_get_theme_list();
+  $themes += themebuilder_compiler_get_base_theme_list();
   $selected = themebuilder_compiler_get_current_theme()->lastSavedName;
   if (!$selected) {
     $selected = $theme_key;

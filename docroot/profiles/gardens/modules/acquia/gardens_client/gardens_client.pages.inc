@@ -77,9 +77,11 @@ function gardens_client_resend_verification_email($token) {
       // Resend the email.
       $name = $GLOBALS['user']->name;
       try {
-        $message = new AcsfMessageXmlRpc('GET', 'acquia.gardens.resend.verification.email', array($name, !empty($verifier->module) ? $verifier->module : NULL));
+        $verifier = !empty($verifier->module) ? $verifier->module : NULL;
+        $message = new AcsfMessageRest('POST', 'site-api/v1/verification/resend', array('name' => $name, 'verifier' => $verifier));
         $message->send();
-        $sent = $message->getResponseBody();
+        $response = $message->getResponseBody();
+        $sent = $response['sent'];
       }
       catch (Exception $e) {
         watchdog('janrain_client', $e->getMessage(), array(), WATCHDOG_ERROR);

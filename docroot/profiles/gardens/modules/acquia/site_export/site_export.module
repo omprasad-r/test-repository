@@ -137,19 +137,20 @@ function site_export_call_gardener($form, &$form_state) {
     return;
   }
 
-  $stats = new stdClass();
-
-  $stats->dbname = gardens_client_get_gardens_db_name();
-  $stats->reason = $form_state['values']['reason'];
-  $stats->explanation = $form_state['values']['explanation'];
+  $stats = array(
+    'dbname' => gardens_client_get_gardens_db_name(),
+    'reason' => $form_state['values']['reason'],
+    'explanation' => $form_state['values']['explanation'],
+  );
 
   try {
-    $message = new AcsfMessageXmlRpc('GET', 'acquia.gardens.site.export.stats', $stats);
+    $message = new AcsfMessageRest('POST', 'site-api/v1/export-stats', $stats);
     $message->send();
-    $success = $message->getResponseBody();
+    $response = $message->getResponseBody();
+    $success = $response['saved'];
   }
   catch (Exception $e) {
-    watchdog('janrain_client', $e->getMessage(), array(), WATCHDOG_ERROR);
+    watchdog('site_export', $e->getMessage(), array(), WATCHDOG_ERROR);
   }
 
 }

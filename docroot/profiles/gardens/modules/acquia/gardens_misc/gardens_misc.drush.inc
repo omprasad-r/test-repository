@@ -53,11 +53,11 @@ function drush_gardens_misc_get_gardener_info() {
 /**
  * drush command callback. Get from the Gardener and save mollom keys if they are currently missing.
  */
-function drush_hosting_mollom_keys_get() {
+function drush_gardens_misc_mollom_keys_get() {
   $public = variable_get('mollom_public_key');
   $private = variable_get('mollom_private_key');
   if (!$public || !$private) {
-    drush_hosting_mollom_keys_replace();
+    drush_gardens_misc_mollom_keys_replace();
   }
   else {
     drush_log("Mollom keys already existed - not replaced", 'warning');
@@ -67,13 +67,14 @@ function drush_hosting_mollom_keys_get() {
 /**
  * drush command callback. Get from the Gardener and save mollom keys even if they already exist.
  */
-function drush_hosting_mollom_keys_replace() {
+function drush_gardens_misc_mollom_keys_replace() {
   $site = AcsfSite::load();
   $nid = $site->nid;
   try {
-    $message = new AcsfMessageXmlRpc('GET', 'acquia.gardens.get.site.mollom.keys', array($nid));
+    $message = new AcsfMessageRest('GET', 'site-api/v1/mollom/keys/' . $nid);
     $message->send();
-    $mollom_keys = $message->getResponseBody();
+    $response = $message->getResponseBody();
+    $mollom_keys = $response['keys'];
   }
   catch (Exception $e) {
     watchdog('gardens_misc', $e->getMessage(), array(), WATCHDOG_ERROR);

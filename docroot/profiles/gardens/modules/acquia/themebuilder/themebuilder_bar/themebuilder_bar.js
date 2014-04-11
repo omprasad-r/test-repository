@@ -777,6 +777,7 @@ ThemeBuilder.Bar.prototype.save = function () {
   ThemeBuilder.postBack('themebuilder-save', {},
     ThemeBuilder.bind(this, this._themeSaved),
     ThemeBuilder.bind(this, this._themeSaveFailed));
+  this.themeChangeNotification();
 };
 
 /**
@@ -903,6 +904,7 @@ ThemeBuilder.Bar.prototype.publish = function () {
     var publish = appData.selectedTheme !== appData.published_theme;
     ThemeBuilder.postBack('themebuilder-save', {publish: publish},
       ThemeBuilder.bind(this, this._publishCallback));
+    this.themeChangeNotification();
   }
 };
 
@@ -935,6 +937,7 @@ ThemeBuilder.Bar.prototype._saveDialogCallback = function (data, status, publish
       this.disableThemebuilder();
       ThemeBuilder.postBack('themebuilder-save', saveArguments,
         ThemeBuilder.bind(this, this._saveDialogCallback, publish), ThemeBuilder.bind(this, this._themeSaveFailed));
+      this.themeChangeNotification();
     }
     else {
       this.enableThemebuilder();
@@ -952,6 +955,7 @@ ThemeBuilder.Bar.prototype._saveDialogCallback = function (data, status, publish
     }
     else {
       this._themeSaved(data);
+      this.themeChangeNotification();
     }
   }
 };
@@ -1615,6 +1619,17 @@ ThemeBuilder.Bar.prototype.enableButtons = function () {
 ThemeBuilder.Bar.prototype.disableButtons = function () {
   var $ = jQuery;
   $('#themebuilder-control-veil').addClass('on');
+};
+
+/**
+ * Make an asynchronous request to the site about a theme change.
+ *
+ * When a theme is saved or published then the factory needs notification so it
+ * can pick up the changes. To avoid doing this 3rd party request during the
+ * user pageload, this asyncronous Javascript call will start it.
+ */
+ThemeBuilder.Bar.prototype.themeChangeNotification = function () {
+  ThemeBuilder.getBack('themebuilder-change-notification');
 };
 
 /**

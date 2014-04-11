@@ -1,0 +1,68 @@
+<?php
+
+/**
+ * @file
+ * Acquia Cloud Site Factory vcs based theme managing module.
+ */
+
+/**
+ * Implements hook_cron().
+ */
+function acsf_theme_cron() {
+  // When there is an issue contacting the factory about theme change then it's
+  // the cron's responsibility to keep trying without hammering the factory.
+  $theme_change_notification = acsf_vget('acsf_theme_change_notification', array('success' => FALSE, 'timestamp' => 0));
+  if (!acsf_vget('acsf_theme_killswitch', TRUE) && $theme_change_notification['timestamp'] && !$theme_change_notification['success'] && $theme_change_notification['timestamp'] < REQUEST_TIME - 3600) {
+    _acsf_theme_change_notification();
+  }
+}
+
+/**
+ * Notifies factory that one of the site's theme has changed.
+ *
+ * This is going to contact the factory, so it qualifies as a third party call
+ * therefore calling it during a normal page load is not advised. A possible
+ * safer solution could be executing this via a menu callback called through an
+ * asynchronous JavaScript call.
+ *
+ * The function will try to reach the factory with the notification. If it fails
+ * then cron will pick it up and try again.
+ */
+function acsf_theme_change_notification() {
+  // Not using variable_set to avoid flushing the entire variable cache, this
+  // flag is only needed when signaling the factory.
+  acsf_vset('acsf_theme_change_flag', time());
+  return _acsf_theme_change_notification();
+}
+
+/**
+ * Notifies factory that one of the site's theme has changed.
+ *
+ * This function does the actual notification and set's a flag when successful
+ * to ensure that cron knows when it needs to pick up a failed notification.
+ */
+function _acsf_theme_change_notification() {
+  if (acsf_vget('acsf_theme_killswitch', TRUE)) {
+    return array(
+      'data' => array('message' => t('This feature is not enabled yet.')),
+      'code' => 500,
+    );
+  }
+  try {
+    $message = new AcsfMessageRest('POST', 'site-api/v1/theme/notification', array('timestamp' => acsf_vget('theme_change_flag', 0)));
+    $message->send();
+    $return = array(
+      'data' => $message->getResponseBody(),
+      'code' => $message->getResponseCode(),
+    );
+  }
+  catch (AcsfMessageFailedResponseException $e) {
+    syslog(LOG_ERR, 'Unable to notify the factory about the theme change.');
+    $return = array(
+      'data' => array('message' => t('Unable to notify the factory about the theme change.')),
+      'code' => 500,
+    );
+  }
+  acsf_vset('acsf_theme_change_notification', array('success' => $return['code'] == 200, 'timestamp' => time()));
+  return $return;
+}

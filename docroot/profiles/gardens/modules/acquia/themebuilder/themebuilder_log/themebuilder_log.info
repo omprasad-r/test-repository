@@ -1,8 +1,9 @@
-; $Id:$
-
 name = Themebuilder logging
 description = Reports performance information for each request.
 core = 7.x
 package = Themebuilder
+
 files[] = themebuilder_log.module
 files[] = log.inc
+
+hidden = TRUE

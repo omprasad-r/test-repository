@@ -1,10 +1,10 @@
-; $Id:$
-
 name = Themebuilder test
 description = Upgrade tests
 core = 7.x
 package = Themebuilder
+
 files[] = themebuilder_test.module
 files[] = themebuilder_test.install
 scripts[] = js/UpgradeTest.js
+
 hidden = TRUE

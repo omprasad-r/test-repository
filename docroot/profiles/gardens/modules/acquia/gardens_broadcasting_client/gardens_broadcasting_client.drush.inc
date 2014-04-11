@@ -50,9 +50,10 @@ function drush_gardens_broadcasting_client_tasks_get() {
 
   // Get new tasks.
   try {
-    $message = new AcsfMessageXmlRpc('GET', 'acquia.gardens.broadcasting.task.get', array($cluster, $timestamp, $tangle));
+    $message = new AcsfMessageRest('GET', 'site-api/v1/broadcasting/task', array('cluster' => $cluster, 'timestamp' => $timestamp, 'tangle' => $tangle));
     $message->send();
-    $new_tasks = $message->getResponseBody();
+    $response = $message->getResponseBody();
+    $new_tasks = $response['tasks'];
   }
   catch (Exception $e) {
     watchdog('gardens_broadcasting', $e->getMessage(), array(), WATCHDOG_ERROR);
