@@ -6,17 +6,6 @@ Background:
   And anonymous voting is enabled
   And I am logged in as our testuser
 
-Scenario: As a user, I can create a content type with enabled voting
-    Given this hasn't been implemented yet
-
-Scenario: As a user, I can add voting to an existing content type
-    Given this hasn't been implemented yet
-
-Scenario: As a user, I can disable voting for an existing content type with votes
-    Given this hasn't been implemented yet
-
-Scenario: As a user, I can re-enable voting for an existing content type with votes
-    Given this hasn't been implemented yet
 
 @poltergeist
 Scenario: As a user, I want fivestar to have correct initial and editing vote ratings
@@ -26,6 +15,13 @@ Scenario: As a user, I want fivestar to have correct initial and editing vote ra
   And I create a fivestar-01 with the title "Fivestar test" and the description "herp derp"
   When I vote twice on "Fivestar test"
   Then I should see correct fivestar voting results
+
+Scenario: As a user, I can add voting to an existing content type
+  When I have a site with an existing content type
+  And I have content of that type
+  And I add a fivestar field to that type
+  Then My users can vote on the existing content type
+
 
 @poltergeist
 Scenario Outline: As a user, I want to be able to set a custom star count
