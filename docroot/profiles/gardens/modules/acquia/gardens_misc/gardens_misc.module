@@ -1239,10 +1239,12 @@ function _gardens_misc_string_ends_with($str1, $str2) {
  */
 function gardens_misc_menu_alter(&$items) {
   // Remove the session themes from the blocks page.
-  foreach (themebuilder_compiler_list_session_themes() as $key => $theme) {
-    unset($items['admin/structure/block/list/' . $key]);
-    unset($items['admin/structure/block/list/' . $key . '/add']);
-    unset($items['admin/structure/block/demo/' . $key]);
+  if (module_exists('themebuilder_compiler')) {
+    foreach (themebuilder_compiler_list_session_themes() as $key => $theme) {
+      unset($items['admin/structure/block/list/' . $key]);
+      unset($items['admin/structure/block/list/' . $key . '/add']);
+      unset($items['admin/structure/block/demo/' . $key]);
+    }
   }
 
   // Rename seven or blossom on the blocks page.
@@ -1261,7 +1263,10 @@ function gardens_misc_menu_alter(&$items) {
   // reintroducing a bug, but it is also possible that people are depending on
   // the current approach so we'll adjust the access hook to allow block
   // configuration for the disabled Themebuilder themes.
-  $themes = themebuilder_compiler_get_theme_list();
+  $themes = array();
+  if (module_exists('themebuilder_compiler')) {
+    $themes = themebuilder_compiler_get_theme_list();
+  }
   if (!empty($themes['mythemes'])) {
     foreach ($themes['mythemes'] as $key => $theme) {
       unset($items['admin/structure/block/list/' . $key]['access callback']);

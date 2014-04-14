@@ -1,8 +1,9 @@
-; $Id$
 name = Themebuilder screenshot
 description = Generates screenshots of themebuilder themes.
 core = 7.x
 package = Themebuilder
+
 files[] = themebuilder_screenshot.module
 files[] = themebuilder_screenshot.queue.inc
+
 hidden = TRUE

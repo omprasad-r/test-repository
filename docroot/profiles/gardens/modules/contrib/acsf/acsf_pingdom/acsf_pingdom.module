@@ -10,7 +10,7 @@
  */
 function acsf_pingdom_modules_enabled($modules) {
   if (in_array('shield', $modules)) {
-    acsf_pingdom_xmlrpc_call('acquia.sf.pingdom.pause');
+    acsf_pingdom_pause();
   }
 }
 
@@ -19,26 +19,23 @@ function acsf_pingdom_modules_enabled($modules) {
  */
 function acsf_pingdom_modules_disabled($modules) {
   if (in_array('shield', $modules)) {
-    acsf_pingdom_xmlrpc_call('acquia.sf.pingdom.unpause');
+    acsf_pingdom_pause(FALSE);
   }
 }
 
 /**
- * Makes an XML-RPC request to the specified method.
+ * Makes a Factory request to pause/unpause pingdom.
  *
- * Checks if the method is available before calling it, otherwise ugly errors
- * get triggered.
+ * @param bool $pause_method
+ *   Either TRUE for pause or FALSE for unpause (Optional).
  */
-function acsf_pingdom_xmlrpc_call($method) {
-  $site_nid = acsf_vget('acsf_site_nid');
+function acsf_pingdom_pause($pause_method = TRUE) {
+  $http_method = $pause_method ? 'POST' : 'DELETE';
   try {
-    $message = new AcsfMessageXmlRpc('GET', 'system.listMethods', array());
+    $site_nid = acsf_vget('acsf_site_nid');
+    $endpoint = sprintf('site-api/v1/pingdom-pause/%s', $site_nid);
+    $message = new AcsfMessageRest($http_method , $endpoint);
     $message->send();
-    $methods = $message->getResponseBody();
-    if (in_array($method, $methods)) {
-      $message = new AcsfMessageXmlRpc('PUT', $method, array($site_nid));
-      $message->send();
-    }
   }
   catch (Exception $e) {
     // Swallow the exception.

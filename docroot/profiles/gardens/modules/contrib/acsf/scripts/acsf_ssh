@@ -223,7 +223,7 @@ class AcsfSshWrapper {
       $data->pid = $this->pid;
       $data->start_time = $this->startTime;
       $data->source = 'sshResult';
-      $data->result = $this->getResult();
+      $data->result = addslashes(str_replace('\'', '"', $this->getResult()));
       $report_command = sprintf('AH_SITE_GROUP=%s AH_SITE_ENVIRONMENT=%s \drush5 --root=/var/www/html/%s.%s/docroot --include=%s report-complete-async-process --data=\'%s\' 2>&1 /dev/null',
         $this->site,
         $this->env,

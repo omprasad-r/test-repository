@@ -292,9 +292,7 @@ class SiteExport {
       'themebuilder_bar',
       'themebuilder_blocks',
       'themebuilder_compiler',
-      'themebuilder_development_ui',
       'themebuilder_layout',
-      'themebuilder_marketplace',
       'themebuilder_monotype',
       'themebuilder_resources',
       'themebuilder_screenshot',
@@ -384,32 +382,6 @@ class SiteExport {
           'not in' => array(
             'profiles/gardens/gardens.profile',
             'sites/all/modules/antivirus/antivirus.module',
-            'themes/acquia/wmg/wmg.info',
-          ),
-        ),
-      ),
-      'menu_links' => array(
-        'router_path' => array(
-          'not in' => array(
-            'admin/structure/block/list/wmg',
-            'admin/structure/block/list/wmg/add',
-          ),
-        ),
-      ),
-      'menu_router' => array(
-        'path' => array(
-          'not in' => array(
-            'admin/structure/block/demo/wmg',
-            'admin/structure/block/list/wmg',
-            'admin/structure/block/list/wmg/add',
-          ),
-        ),
-      ),
-      'xmlsitemap' => array(
-        'loc' => array(
-          'not in' => array(
-            'admin/structure/block/list/wmg',
-            'admin/structure/block/list/wmg/add',
           ),
         ),
       ),
@@ -442,8 +414,6 @@ class SiteExport {
       // We don't want to copy everyone's site.  We'll come back for sites/all
       // and sites/whatevermysiteis later.
       'sites',
-      // Exclude the WMG theme.
-      'themes/acquia/wmg',
       // ACSF modules are there to handle tweaks and communication necessary to
       // our infrastructure, so it should not be present in the export.
       'profiles/gardens/modules/contrib/acsf',

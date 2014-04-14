@@ -9,7 +9,7 @@ function acsf_drush_command() {
       'description' => dt('Rebuilds the ACSF registry.'),
     ),
     'acsf-site-sync' => array(
-      'description' => 'Set a site hard offline via SQL.',
+      'description' => 'Synchronize data with the Factory.',
       'options' => array(
         'data' => 'A base64 encoded php array describing the site generated from the Factory.',
       ),
@@ -141,6 +141,7 @@ function drush_acsf_site_scrub() {
   }
 
   // Ensure that the file_public_path uses the correct convention.
+  // @todo this should be removed with DG-11343.
   $db_role = variable_get('gardens_db_name', '');
   if (!empty($db_role)) {
     drush_print(dt('Setting file_public_path to !path', array('!path' => $path)));
@@ -181,15 +182,17 @@ function drush_acsf_site_sync() {
   if ($data) {
     // If data was sent, we can consume it here. Ensure that we are always
     // passing associative arrays here, not objects.
-    $site_data = json_decode(base64_decode($data), TRUE);
-    if (!empty($site_data) && is_array($site_data)) {
+    $site_info = json_decode(base64_decode($data), TRUE);
+    if (!empty($site_info) && is_array($site_info)) {
       // Allow other modules to consume the data.
-      $context = $site_data;
+      $context = $site_info;
       $event = AcsfEvent::create('acsf_site_data_receive', $context);
       $event->run();
 
-      $site->mergeSiteInfo($site_data);
-      $site->save();
+      // For debugging purpose to be able to tell if the data has been pulled
+      // or pushed.
+      $site->last_sf_push = time();
+      $site->saveSiteInfo($site_info['sf_site']);
     }
   }
   else {
@@ -374,9 +377,9 @@ function drush_acsf_report_complete_async_process() {
   require_once $data->acsf_path . '/classes/AcsfConfig.inc';
   require_once $data->acsf_path . '/classes/AcsfConfigDefault.inc';
   require_once $data->acsf_path . '/classes/AcsfMessage.inc';
-  require_once $data->acsf_path . '/classes/AcsfMessageXmlRpc.inc';
+  require_once $data->acsf_path . '/classes/AcsfMessageRest.inc';
   require_once $data->acsf_path . '/classes/AcsfMessageResponse.inc';
-  require_once $data->acsf_path . '/classes/AcsfMessageResponseXmlRpc.inc';
+  require_once $data->acsf_path . '/classes/AcsfMessageResponseRest.inc';
 
   $arguments = array(
     'wid' => $data->object_id,
@@ -386,7 +389,10 @@ function drush_acsf_report_complete_async_process() {
   );
 
   try {
-    $message = new AcsfMessageXmlRpc('GET', $data->callback, array($arguments));
+    // We do not have a Drupal bootstrap at this point, so we need to use
+    // AcsfConfigDefault to obtain the shared credentials.
+    $config = new AcsfConfigDefault();
+    $message = new AcsfMessageRest('POST', $data->callback, $arguments, $config);
     $message->send();
   }
   catch (AcsfMessageFailedResponseException $e) {

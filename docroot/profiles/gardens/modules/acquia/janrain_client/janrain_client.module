@@ -1394,9 +1394,10 @@ function janrain_client_ensure_setup() {
  */
 function janrain_client_get_rp() {
   try {
-    $message = new AcsfMessageXmlRpc('GET', 'acquia.gardens.janrain.get.rp', gardens_client_get_gardens_db_name());
+    $message = new AcsfMessageRest('GET', 'site-api/v1/janrain/rp', array('id' => gardens_client_get_gardens_db_name()));
     $message->send();
-    $rpc_result = $message->getResponseBody();
+    $result = $message->getResponseBody();
+    return $result['data'];
   }
   catch (Exception $e) {
     watchdog('janrain_client', $e->getMessage(), array(), WATCHDOG_ERROR);

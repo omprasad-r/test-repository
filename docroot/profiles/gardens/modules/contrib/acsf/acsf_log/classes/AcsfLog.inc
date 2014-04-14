@@ -14,7 +14,7 @@ class AcsfLog {
     }
 
     try {
-      $message = new AcsfMessageXmlRpc('GET', 'acquia.sf.log.send', array($record));
+      $message = new AcsfMessageRest('POST', 'site-api/v1/sf-log', $record);
       $message->send();
       return $message->getResponseBody();
     }

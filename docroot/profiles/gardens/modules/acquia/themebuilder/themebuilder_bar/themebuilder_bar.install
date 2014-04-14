@@ -6,6 +6,54 @@
  */
 
 /**
+ * Implements hook_disable().
+ *
+ * Disables all themebuilder modules when the main themebuilder module gets
+ * disabled.
+ */
+function themebuilder_bar_disable() {
+  module_disable(array(
+    'themebuilder_advanced',
+    'themebuilder_blocks',
+    'themebuilder_brand',
+    'themebuilder_compiler',
+    'themebuilder_layout',
+    'themebuilder_log',
+    'themebuilder_metatag',
+    'themebuilder_monotype',
+    'themebuilder_resources',
+    'themebuilder_screenshot',
+    'themebuilder_styleedit',
+    'themebuilder_themes',
+    'themebuilder_typekit',
+  ), FALSE);
+}
+
+/**
+ * Implements hook_uninstall().
+ *
+ * Uninstall all themebuilder modules when the main themebuilder module gets
+ * uninstalled.
+ */
+function themebuilder_bar_uninstall() {
+  drupal_uninstall_modules(array(
+    'themebuilder_advanced',
+    'themebuilder_blocks',
+    'themebuilder_brand',
+    'themebuilder_compiler',
+    'themebuilder_layout',
+    'themebuilder_log',
+    'themebuilder_metatag',
+    'themebuilder_monotype',
+    'themebuilder_resources',
+    'themebuilder_screenshot',
+    'themebuilder_styleedit',
+    'themebuilder_themes',
+    'themebuilder_typekit',
+  ), FALSE);
+}
+
+/**
  * Updates after the 1.19 release start at 11190.
  */
 

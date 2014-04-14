@@ -10,6 +10,37 @@ function acsf_init_drush_command() {
       'callback' => 'drush_acsf_init',
       'description' => dt('Installs/updates the non-standard Drupal components for this repository to be compatible with Acquia Site Factory. This command will update in place, so there is no harm in running it multiple times.'),
     ),
+    'acsf-connect-factory' => array(
+      'bootstrap' => DRUSH_BOOTSTRAP_DRUPAL_FULL,
+      'callback' => 'drush_acsf_connect_factory',
+      'description' => dt('Connect a site to a factory by setting up the right variables in the database.'),
+      'aliases' => array('acsf-cf'),
+      'options' => array(
+        'site-admin-mail' => array(
+          'description' => dt('The email address of the Site Factory admin / Gardens admin user. This is typically the "Gardens admin" user on the factory. These email addresses have to match in order for the initial OpenID connection to bind these accounts.'),
+          'required' => TRUE,
+          'example-value' => 'user3@example.com',
+        ),
+        'site-owner-name' => array(
+          'description' => dt('The name of the site owner.'),
+          'required' => TRUE,
+          'example-value' => 'John Smith',
+        ),
+        'site-owner-mail' => array(
+          'description' => dt('The email address of the site owner.'),
+          'required' => TRUE,
+          'example-value' => 'john.smith@example.com',
+        ),
+        'site-owner-roles' => array(
+          'description' => dt('A list of comma-separated roles that should be granted to the site owner (optional)'),
+          'example-value' => 'editor, site manager',
+        ),
+      ),
+      'examples' => array(
+        'drush acsf-connect-factory --site-admin-mail="user3@example.com" --site-owner-name="John Smith" --site-owner-mail="john.smith@example.com"' =>
+          'Connect the site to the factory and sets the owner to John Smith.',
+      ),
+    ),
     'acsf-uninstall' => array(
       'bootstrap' => DRUSH_BOOTSTRAP_DRUPAL_ROOT,
       'callback' => 'drush_acsf_uninstall',
@@ -72,6 +103,134 @@ function drush_acsf_init() {
       drush_log(dt('Chmod Error: !file', array('!file' => $file)), 'error', 'error');
     }
   }
+}
+
+/**
+ * Callback: Connect a site to a factory.
+ */
+function drush_acsf_connect_factory() {
+  // Preliminary validation before starting to modify the database.
+  $site_admin_mail = trim(drush_get_option('site-admin-mail'));
+  $site_owner_name = trim(drush_get_option('site-owner-name'));
+  $site_owner_mail = trim(drush_get_option('site-owner-mail'));
+  $site_owner_roles = drush_get_option_list('site-owner-roles');
+
+  $site_owner_account = user_load_by_mail($site_owner_mail);
+  // Validate email addresses.
+  if (!valid_email_address($site_admin_mail)) {
+    return drush_set_error(dt('The site-admin-mail value is not a valid email address.'));
+  }
+  if (!valid_email_address($site_owner_mail)) {
+    return drush_set_error(dt('The site-owner-mail value is not a valid email address.'));
+  }
+  // Make sure there is no regular user account with the admin email address.
+  $site_admin_mail_account = user_load_by_mail($site_admin_mail);
+  if ($site_admin_mail_account && $site_admin_mail_account->uid > 1) {
+    return drush_set_error(dt('Unable to sync the admin account, the email address @mail is already used by the user account @uid.', array('@mail' => $site_admin_mail, '@uid' => $site_admin_mail_account->uid)));
+  }
+  // Make sure there is no user with the same name before creating a new user.
+  if (empty($site_owner_account) && user_load_by_name($site_owner_name)) {
+    return drush_set_error(dt('Unable to create the site owner account, there is already a user account with the name @site-owner-name but with a different email address.', array('@site-owner-name' => $site_owner_name)));
+  }
+  // Make sure the name isn't used by another user with a different email.
+  $conflicting_account = user_load_by_name($site_owner_name);
+  if ($conflicting_account && $site_owner_account->uid !== $conflicting_account->uid) {
+    return drush_set_error(dt('Unable to update the site owner account, uid @uid is already using the name @site-owner-name but with a different email address.', array('@uid' => $conflicting_account->uid, '@site-owner-name' => $site_owner_name)));
+  }
+  // If a list of roles was specified, make sure they all exist.
+  foreach ($site_owner_roles as $role) {
+    if (!user_role_load_by_name($role)) {
+      return drush_set_error(dt('The role @role does not exist.', array('@role' => $role)));
+    }
+  }
+
+  // Clear all caches ahead of time so Drupal has a chance to rebuild
+  // registries.
+  drupal_flush_all_caches();
+  acsf_build_registry();
+  drush_log(dt('Cleared all caches.'), 'ok');
+
+  // Set default settings for user accounts.
+  $default_account_edit = array();
+  $default_account_edit['status'] = 1;
+  // Set login to non-zero to avoid e-mail verification needed error.
+  $default_account_edit['login'] = 1;
+
+  // Take over uid 1 with our Gardens admin user.
+  $admin_account = user_load(1);
+  // Create a new user if uid 1 doesn't exist.
+  if (empty($admin_account)) {
+    $admin_account = new stdClass();
+    $admin_account->uid = 1;
+    $admin_account->is_new = TRUE;
+  }
+  $admin_account_edit = $default_account_edit;
+  if (variable_get('user_admin_role', 0)) {
+    $admin_account_edit['roles'][variable_get('user_admin_role', 0)] = 1;
+  }
+  user_save($admin_account, array(
+    'name' => 'Gardens admin',
+    'pass' => user_password(),
+    'mail' => $site_admin_mail,
+  ) + $admin_account_edit);
+
+  // Create or update site owner account.
+  // Prepare roles for site owner.
+  $site_owner_account_edit = $default_account_edit;
+  foreach ($site_owner_roles as $role) {
+    $rid = user_role_load_by_name($role)->rid;
+    $site_owner_account_edit['roles'][$rid] = 1;
+  }
+  // Site owners also get the administrator role.
+  if (variable_get('user_admin_role', 0)) {
+    $site_owner_account_edit['roles'][variable_get('user_admin_role', 0)] = 1;
+  }
+  user_save($site_owner_account, array(
+    'name' => $site_owner_name,
+    'pass' => user_password(),
+    'mail' => $site_owner_mail,
+  ) + $site_owner_account_edit);
+  drush_log(dt('Synched Gardens admin and site owner accounts.'), 'ok');
+
+  // Remove all traces of openid.
+  if (module_exists('openid')) {
+    db_truncate('authmap')->execute();
+    db_truncate('openid_association')->execute();
+    db_truncate('openid_nonce')->execute();
+    drush_log(dt('Removed all openid associations and endpoints.'), 'ok');
+  }
+
+  // Remove acsf variables so that they can be repopulated with the right values
+  // on the next acsf-site-sync. We don't truncate the entire table in case a
+  // custom module has stored custom variables in acsf_variables.
+  acsf_vdel('acsf_factory_name');
+  acsf_vdel('acsf_site_info');
+  acsf_vdel('acsf_site_nid');
+  acsf_vdel('acsf_variables_cron_last_run');
+  acsf_vdel('factory_url');
+
+  // Reset the local site data and run acsf-site-sync to fetch factory data
+  // about the site.
+  $site = AcsfSite::load();
+  $site->clean();
+  drush_acsf_site_sync();
+  acsf_variables_cache_refresh();
+  drush_log(dt('Executed acsf-site-sync to gather site data from factory and reset all acsf variables.'), 'ok');
+
+  // Ensure that the file_public_path uses the correct convention.
+  // @todo this should be removed with DG-11343.
+  $db_role = variable_get('gardens_db_name', '');
+  if (!empty($db_role)) {
+    variable_set('file_public_path', "sites/g/files/$db_role/f");
+    drush_log(dt('Set file_public_path to !path.', array('!path' => variable_get('file_public_path'))), 'ok');
+  }
+  else {
+    drush_set_error(dt('Unable to set file_public_path because gardens_db_name is not populated.'));
+  }
+
+  // Clear all caches.
+  drupal_flush_all_caches();
+  drush_log(dt('Cleared all caches.'), 'ok');
 }
 
 /**

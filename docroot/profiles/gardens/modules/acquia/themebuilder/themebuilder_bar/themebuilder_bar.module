@@ -44,6 +44,13 @@ function themebuilder_bar_menu() {
     'page arguments' => array('themebuilder_bar_save'),
     'type' => MENU_CALLBACK,
   );
+  // Used to notify the factory when a theme change gets saved.
+  $items['themebuilder-change-notification'] = array(
+    'title' => t('Themebuilder change notification'),
+    'page callback' => 'themebuilder_bar_ajax_request',
+    'page arguments' => array('themebuilder_bar_change_notification'),
+    'type' => MENU_CALLBACK,
+  );
   // Used to export the theme into a tarball.
   $items['themebuilder-export'] = array(
     'title' => t('Export Themebuilder Theme'),
@@ -716,6 +723,13 @@ function themebuilder_bar_save() {
   }
 
   themebuilder_compiler_json_output($info);
+}
+
+/**
+ * Notifies the factory that a theme has changed on the site.
+ */
+function themebuilder_bar_change_notification() {
+  acsf_theme_change_notification();
 }
 
 function themebuilder_bar_export() {

@@ -234,7 +234,7 @@ function gardens_client_preprocess_page(&$variables) {
         $alert = array(
           'message' => check_plain($notification),
           'type' => 'broadcasted-alert-' . $tid,
-          'close_path' => 'gardens_broadcasting_client/notifications/dismiss/' . $tid,
+          'close_path' => "gardens_broadcasting_client/notifications/dismiss/{$tid}/" . drupal_get_token('gardens_broadcasting_client_notifications'),
         );
         $alerts[] = $alert;
       }
@@ -514,9 +514,10 @@ function gardens_client_send_site_data() {
     $stats = gardens_client_generate_site_stats();
 
     try {
-      $message = new AcsfMessageXmlRpc('GET', 'acquia.gardens.set.site.stats', array($stats));
+      $message = new AcsfMessageRest('POST', 'site-api/v1/site-stats', array('stats' => $stats));
       $message->send();
-      $rpc_result = $message->getResponseBody();
+      $response = $message->getResponseBody();
+      $rpc_result = $response['saved'];
     }
     catch (Exception $e) {
       watchdog('gardens_client', $e->getMessage(), array(), WATCHDOG_ERROR);
@@ -527,15 +528,6 @@ function gardens_client_send_site_data() {
     }
     else {
       syslog(LOG_ERR, 'GardensError: AN-22473 - Failed to send site stats for site GardensError:' .$_SERVER['HTTP_HOST']);
-    }
-    // Also get data from the gardener.
-    if (!gardens_client_phone_home()) {
-      if (gardens_client_gardener_unreachable_alert()) {
-        syslog(LOG_ERR, 'GardensError: Failed to retrieve Gardener data for site GardensError:' .$_SERVER['HTTP_HOST']);
-      }
-    }
-    else {
-      gardens_client_gardener_unreachable_alert(TRUE);
     }
   }
 }

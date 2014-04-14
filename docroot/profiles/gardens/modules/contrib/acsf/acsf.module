@@ -64,7 +64,7 @@ function acsf_get_registry() {
 }
 
 /**
- * Implement hook_form_FORM_ID_alter().
+ * Implements hook_form_FORM_ID_alter().
  */
 function acsf_form_system_site_maintenance_mode_alter(&$form, &$form_state) {
   // If we are in ACSF maintenance mode, don't let the admin uncheck the checkbox.
@@ -97,6 +97,18 @@ function acsf_system_site_maintenance_mode_submit(&$form, &$form_state) {
   }
   else {
     variable_del('site_owner_maintenance_mode');
+  }
+}
+
+/**
+ * Implements hook_cron().
+ */
+function acsf_cron() {
+  // Periodically refresh the site data.
+  $site = AcsfSite::load();
+  $refresh_age = time() - 86400 * 7;
+  if ($site->last_sf_refresh < $refresh_age) {
+    $site->refresh();
   }
 }
 

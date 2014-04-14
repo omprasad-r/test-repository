@@ -105,9 +105,10 @@ function drush_gardens_client_gardens_stats() {
   }
 
   try {
-    $message = new AcsfMessageXmlRpc('GET', 'acquia.gardens.set.site.stats', array($stats));
+    $message = new AcsfMessageRest('POST', 'site-api/v1/site-stats', array('stats' => $stats));
     $message->send();
-    $rpc_result = $message->getResponseBody();
+    $response = $message->getResponseBody();
+    $rpc_result = $response['saved'];
   }
   catch (Exception $e) {
     watchdog('gardens_client', $e->getMessage(), array(), WATCHDOG_ERROR);
@@ -150,7 +151,9 @@ function drush_gardens_client_gardens_move_cluster($gardener_url = NULL, $userma
   variable_set('gardens_misc_flush_all_caches', TRUE);
 
   db_query('TRUNCATE {sessions}');
-  db_query('TRUNCATE {themebuilder_session}');
+  if (db_table_exists('themebuilder_session')) {
+    db_query('TRUNCATE {themebuilder_session}');
+  }
 
   db_query('UPDATE {users} SET theme = 0 where theme != 0');
 

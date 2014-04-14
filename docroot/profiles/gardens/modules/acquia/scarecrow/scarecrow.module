@@ -486,6 +486,9 @@ function scarecrow_form_user_profile_form_alter(&$form, &$form_state) {
  * Implements hook_form_FORM_ID_alter().
  *
  * Remove non-gardens themes from the theme selection page.
+ *
+ * @todo remove this function. this form was renamed in
+ * https://drupal.org/node/491214 and this code is likely no longer executed.
  */
 function scarecrow_form_system_themes_form_alter(&$form, &$form_state) {
   if (!scarecrow_is_enabled()) {
@@ -496,7 +499,7 @@ function scarecrow_form_system_themes_form_alter(&$form, &$form_state) {
     if (is_array($value) && !empty($value['screenshot'])) {
       $themename = $name;
       if (in_array($themename, $remove_themes) ||
-          themebuilder_compiler_theme_is_draft($themename)) {
+          module_exists('themebuilder_compiler') && themebuilder_compiler_theme_is_draft($themename)) {
         // Remove the theme from the form.
         unset($form[$themename]);
         unset($form['theme_default']['#options'][$themename]);
@@ -1053,6 +1056,7 @@ function scarecrow_disallowed_modules() {
     'acsf_openid',
     'acsf_pingdom',
     'acsf_site',
+    'acsf_theme',
     'acsf_variables',
     'gardens_preproduction',
     'color',
@@ -1060,6 +1064,7 @@ function scarecrow_disallowed_modules() {
     'jsunit',
     'jsunit_example',
     'themebuilder_development_ui',
+    'themebuilder_marketplace',
     'themebuilder_test',
     'php',
     'simpletest',
@@ -1311,26 +1316,36 @@ function scarecrow_required_modules() {
     'statsd',
     'user_reference',
     'taxonomy',
-    'themebuilder_log',
-    'themebuilder_advanced',
-    'themebuilder_bar',
-    'themebuilder_blocks',
-    'themebuilder_brand',
-    'themebuilder_compiler',
-    'themebuilder_layout',
-    'themebuilder_marketplace',
-    'themebuilder_metatag',
-    'themebuilder_monotype',
-    'themebuilder_resources',
-    'themebuilder_screenshot',
-    'themebuilder_styleedit',
-    'themebuilder_themes',
-    'themebuilder_typekit',
     'timeago',
     'token',
     'token_filter',
     'toolbar',
   );
+
+  // PaaS customers should be able to see and disable the themebuilder modules.
+  // The default service_type is 'paas' unless a specific service_type is set.
+  $service_type = 'paas';
+  if (function_exists('gardens_client_data_get') && gardens_client_data_get('gardens_signup', 'service_type')) {
+    $service_type = gardens_client_data_get('gardens_signup', 'service_type');
+  }
+  if ($service_type !== 'paas') {
+    $required_modules = array_merge($required_modules, array(
+      'themebuilder_log',
+      'themebuilder_advanced',
+      'themebuilder_bar',
+      'themebuilder_blocks',
+      'themebuilder_brand',
+      'themebuilder_compiler',
+      'themebuilder_layout',
+      'themebuilder_metatag',
+      'themebuilder_monotype',
+      'themebuilder_resources',
+      'themebuilder_screenshot',
+      'themebuilder_styleedit',
+      'themebuilder_themes',
+      'themebuilder_typekit',
+    ));
+  }
 
   drupal_alter('required_modules', $required_modules);
 

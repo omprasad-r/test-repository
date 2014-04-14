@@ -1,9 +1,8 @@
-; $Id:$
-
 name = Themebuilder compiler
 description = Compiles a theme configuration into a theme.
 core = 7.x
 package = Themebuilder
+
 files[] = asset.inc
 files[] = editable.inc
 files[] = files.php

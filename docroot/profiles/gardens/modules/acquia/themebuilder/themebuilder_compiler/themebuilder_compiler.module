@@ -771,7 +771,11 @@ function themebuilder_compiler_create_edit_session_directory($session_name) {
   if (mkdir($dir, 0755, true)) {
     $link_path = DRUPAL_ROOT . '/' . themebuilder_compiler_get_custom_theme_folder() . '/' . $session_name;
     @unlink($link_path);
-    if (symlink($dir, $link_path)) {
+    // PHP's symlink seems to be unreliable, it sometimes returns FALSE and not
+    // create the symlink even though all looks to be fine, so we will have to
+    // go with ln for the time being.
+    @exec('ln -s ' . escapeshellarg($dir) . ' ' . escapeshellarg($link_path));
+    if (is_link($link_path)) {
       $local_link_status = true;
     }
     else {
@@ -2360,7 +2364,8 @@ function themebuilder_compiler_get_theme_list() {
         if (themebuilder_compiler_theme_is_draft($theme->name)) {
           continue;
         }
-        $result['mythemes'][$theme->name] = array('name' => $theme->info['name'], 'meta' => t('@author', array('@author' => $theme->info['author']['name'])));
+        $author = !empty($theme->info['author']['name']) ? $theme->info['author']['name'] : '';
+        $result['mythemes'][$theme->name] = array('name' => $theme->info['name'], 'meta' => t('@author', array('@author' => $author)));
         continue;
       }
     }
@@ -2371,11 +2376,61 @@ function themebuilder_compiler_get_theme_list() {
 }
 
 /**
+ * Returns an array that contains a list of available base themes.
+ *
+ * @return array
+ *   An array containing the base theme list.
+ *   Each theme array contains the following metadata:
+ *   - name: The human-readable name of the theme.
+ *   - meta: A short string describing the theme.
+ */
+function themebuilder_compiler_get_base_theme_list() {
+  themebuilder_log_trace_enter(__FUNCTION__);
+  $cache_id = 'themebuilder_base_theme_list';
+  $result = cache_get($cache_id);
+  if (isset($result->data)) {
+    $result = $result->data;
+  }
+  else {
+    $themes = system_rebuild_theme_data();
+    $result = array('featured' => array());
+    foreach ($themes as $theme) {
+      if (strpos($theme->filename, conf_path() . '/themes') !== 0 && themebuilder_compiler_theme_is_themebuilder_compatible($theme)) {
+        $result['featured'][$theme->name] = array(
+          'name' => $theme->info['name'],
+          'meta' => t('@name base theme', array('@name' => $theme->info['name'])),
+        );
+      }
+    }
+    cache_set($cache_id, $result);
+  }
+  themebuilder_log_trace_exit(__FUNCTION__);
+  return $result;
+}
+
+/**
+ * Decides if a theme is compatible with Themebuilder.
+ *
+ * We are storing some settings in the Themebuilder theme info files which are
+ * usually not set in other themes, so for the time being we will look for those
+ * entries to make the decision.
+ *
+ * @param object $theme
+ *   The theme's registry object coming from Drupal core.
+ *
+ * @return bool
+ *   TRUE if the theme is compatible with Themebuilder.
+ */
+function themebuilder_compiler_theme_is_themebuilder_compatible($theme) {
+  return !empty($theme->info['configurations']) && !empty($theme->info['layout']) && !empty($theme->info['palette']) && !empty($theme->info['settings']);
+}
+
+/**
  * Clears the list of themes from the cache so the information will be regenerated.
  */
 function themebuilder_compiler_clear_theme_list() {
- $cache_id = 'themebuilder_theme_list';
- cache_clear_all($cache_id, 'cache');
+  cache_clear_all('themebuilder_theme_list', 'cache');
+  cache_clear_all('themebuilder_base_theme_list', 'cache');
 }
 
 /**

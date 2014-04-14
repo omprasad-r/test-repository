@@ -30,7 +30,7 @@ class AcsfSite {
   /**
    * Constructor.
    *
-   * @param Int $nid
+   * @param int $nid
    *   The nid from the Site Factory (Optional).
    */
   public function __construct($nid = NULL) {
@@ -61,10 +61,10 @@ class AcsfSite {
   /**
    * Setter.
    *
-   * @param String $key
+   * @param string $key
    *   The key of the internal storage to look up.
-   * @param Unknown $value
-   *   The value to stor internally.
+   * @param mixed $value
+   *   The value to store internally.
    */
   public function __set($key, $value) {
      $this->info[$key] = $value;
@@ -73,10 +73,10 @@ class AcsfSite {
   /**
    * Getter.
    *
-   * @param String $key
+   * @param string $key
    *   The key of the internal storage to look up.
    *
-   * @return Unknown
+   * @return mixed
    */
   public function __get($key) {
     if (isset($this->info[$key])) {
@@ -87,7 +87,7 @@ class AcsfSite {
   /**
    * Refreshes the site information from the Site Factory.
    *
-   * @param Array $data
+   * @param array $data
    *   (Optional) Data that should be sent to the factory.
    *
    * @return bool
@@ -95,11 +95,12 @@ class AcsfSite {
    */
   public function refresh($data = array()) {
     try {
+      $site_id = !empty($this->nid) ? $this->nid : $GLOBALS['gardens_site_settings']['conf']['gardens_site_id'];
       $arguments = array(
-        'site_id' => !empty($this->nid) ? $this->nid : $GLOBALS['gardens_site_settings']['conf']['gardens_site_id'],
+        'site_id' => $site_id,
         'site_data' => $data,
       );
-      $message = new AcsfMessageXmlRpc('GET', 'sf.site.sync', array($arguments));
+      $message = new AcsfMessageRest('GET', 'site-api/v1/sync/' . $site_id, $arguments);
       $message->send();
       $site_info = $message->getResponseBody();
     }
@@ -117,8 +118,7 @@ class AcsfSite {
       $event = AcsfEvent::create('acsf_site_data_receive', $context);
       $event->run();
 
-      $this->mergeSiteInfo($site_info['sf_site']);
-      $this->save();
+      $this->saveSiteInfo($site_info['sf_site']);
       return TRUE;
     }
   }
@@ -168,7 +168,7 @@ class AcsfSite {
   /**
    * Merges new site information into the internal state.
    *
-   * @param Array $site_info
+   * @param array $site_info
    *   The information to merge.
    */
   public function mergeSiteInfo($site_info) {
@@ -177,6 +177,18 @@ class AcsfSite {
         $this->info[$key] = $value;
       }
     }
+  }
+
+  /**
+   * Saves new site information.
+   *
+   * @param array $site_info
+   *   The information to merge.
+   */
+  public function saveSiteInfo($site_info) {
+    $this->mergeSiteInfo($site_info);
+    $this->last_sf_refresh = time();
+    $this->save();
   }
 
 }

@@ -2,5 +2,7 @@ name = Themebuilder brand
 description = Themebuilder brand tab module
 core = 7.x
 package = Themebuilder
+
 files[] = themebuilder_brand.module
+
 hidden = TRUE
