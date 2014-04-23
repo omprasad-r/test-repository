@@ -1,8 +1,21 @@
 name = Themebuilder
-description = Themebuilder toolbar
+description = Replaces Drupal's built-in theme building and management with a point-and-click interface.
 core = 7.x
 package = Themebuilder
+
+dependencies[] = themebuilder_advanced
+dependencies[] = themebuilder_blocks
+dependencies[] = themebuilder_brand
 dependencies[] = themebuilder_compiler
+dependencies[] = themebuilder_layout
+dependencies[] = themebuilder_log
+dependencies[] = themebuilder_metatag
+dependencies[] = themebuilder_monotype
+dependencies[] = themebuilder_resources
+dependencies[] = themebuilder_screenshot
+dependencies[] = themebuilder_styleedit
+dependencies[] = themebuilder_themes
+dependencies[] = themebuilder_typekit
+
 files[] = themebuilder_bar.module
 files[] = AffinityServer.inc
-hidden = TRUE

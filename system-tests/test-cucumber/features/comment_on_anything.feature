@@ -1,7 +1,7 @@
 Feature: Comment on anything
 
   Background:
-    Given a fresh gardens installation
+    Given a fresh warner installation
     Given I am logged in as our testuser
 
   Scenario: As a user, I can configure comment on anything

@@ -2,4 +2,5 @@ name = Themebuilder development UI
 description = Provides a temporary user interface for testing themebuilder features that are still under development.
 core = 7.x
 package = Themebuilder
+
 hidden = TRUE

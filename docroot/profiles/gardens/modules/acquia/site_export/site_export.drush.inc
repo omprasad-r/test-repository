@@ -120,9 +120,10 @@ function drush_site_export_export_s3() {
   // Notify the gardener that we we have exported this site and moved it to S3.
   drush_log("Query Auth URL:" . $authenticated_url, 'success');
   try {
-    $message = new AcsfMessageXmlRpc('GET', 'acquia.gardens.site.archived', array($nid, $authenticated_url));
+    $message = new AcsfMessageRest('POST', 'site-api/v1/archive-site/' . $nid, array('url' => $authenticated_url));
     $message->send();
-    $success = $message->getResponseBody();
+    $response = $message->getResponseBody();
+    $success = $response['archived'];
   }
   catch (Exception $e) {
     watchdog('site_export', $e->getMessage(), array(), WATCHDOG_ERROR);

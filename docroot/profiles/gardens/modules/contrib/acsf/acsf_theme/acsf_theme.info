@@ -1,0 +1,4 @@
+name = ACSF Theme
+description = This is the module that handles vcs based themes on Acquia Cloud Site Factory.
+core = 7.x
+package = Acquia Cloud Site Factory

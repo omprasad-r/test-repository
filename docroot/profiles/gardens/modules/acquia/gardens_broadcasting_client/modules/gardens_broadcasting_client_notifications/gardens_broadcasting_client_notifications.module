@@ -11,10 +11,10 @@
 function gardens_broadcasting_client_notifications_menu() {
   $items = array();
 
-  $items['gardens_broadcasting_client/notifications/dismiss/%gardens_broadcasting_client_notifications'] = array(
+  $items['gardens_broadcasting_client/notifications/dismiss/%gardens_broadcasting_client_notifications/%'] = array(
     'title' => 'Dismiss broadcasted notification',
     'page callback' => 'gardens_broadcasting_client_notifications_dismiss',
-    'page arguments' => array(3),
+    'page arguments' => array(3, 4),
     'delivery callback' => 'ajax_deliver',
     'access arguments' => array('receive gardens broadcasted notifications'),
     'type' => MENU_LOCAL_TASK,
@@ -76,7 +76,11 @@ function gardens_broadcasting_client_notifications_get($uid) {
 /**
  * Dismiss broadcasted notification.
  */
-function gardens_broadcasting_client_notifications_dismiss($notification) {
+function gardens_broadcasting_client_notifications_dismiss($notification, $token) {
+  if (!drupal_valid_token($token, 'gardens_broadcasting_client_notifications')) {
+    drupal_access_denied();
+  }
+
   db_merge('gardens_broadcasting_client_read_notifications')
     ->key(array(
       'uid' => $GLOBALS['user']->uid,

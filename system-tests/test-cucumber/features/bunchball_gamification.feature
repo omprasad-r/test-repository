@@ -1,7 +1,7 @@
 Feature: BunchBall Gamification
 
   Background:
-    Given a fresh gardens installation
+    Given a fresh warner installation
     And I am logged in as our testuser
 
   Scenario: As an administrator, I can configure BunchBall

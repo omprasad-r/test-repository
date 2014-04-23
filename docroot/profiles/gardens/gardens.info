@@ -117,7 +117,6 @@ dependencies[] = themebuilder_brand
 dependencies[] = themebuilder_compiler
 dependencies[] = themebuilder_layout
 dependencies[] = themebuilder_log
-dependencies[] = themebuilder_marketplace
 dependencies[] = themebuilder_metatag
 dependencies[] = themebuilder_monotype
 dependencies[] = themebuilder_resources

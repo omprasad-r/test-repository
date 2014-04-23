@@ -21,7 +21,7 @@ function gardens_client_generate_site_stats() {
 
   $stats->dbname = gardens_client_get_gardens_db_name();
   $stats->dbmaster = gardens_client_get_db_master();
-  $stats->tangle = themebuilder_compiler_get_tangle_name();
+  $stats->tangle = isset($_ENV['AH_SITE_GROUP']) ? $_ENV['AH_SITE_GROUP'] : '';
   _gardens_client_get_site_stats($stats);
   _gardens_client_get_theme_stats($stats);
   $stats->stats_cost = intval((microtime(TRUE) - $start) * 1000);
@@ -127,10 +127,20 @@ function _gardens_client_get_site_stats($stats) {
  */
 function _gardens_client_get_theme_stats($stats) {
   // # of rows in themebuilder_css
-  $stats->themebuilder_css_table_rows = intval(db_query('SELECT COUNT(*) FROM {themebuilder_css}')->fetchField());
+  if (db_table_exists('themebuilder_css')) {
+    $stats->themebuilder_css_table_rows = intval(db_query('SELECT COUNT(*) FROM {themebuilder_css}')->fetchField());
+  }
+  else {
+    $stats->themebuilder_css_table_rows = 0;
+  }
 
   // # of custom themes
-  $stats->custom_theme_count = intval(db_query('SELECT COUNT(DISTINCT theme_name) FROM {themebuilder_themes}')->fetchField());
+  if (db_table_exists('themebuilder_themes')) {
+    $stats->custom_theme_count = intval(db_query('SELECT COUNT(DISTINCT theme_name) FROM {themebuilder_themes}')->fetchField());
+  }
+  else {
+    $stats->custom_theme_count = 0;
+  }
 
   // Information about the currently published theme.
   $current_theme = variable_get('theme_default', '');

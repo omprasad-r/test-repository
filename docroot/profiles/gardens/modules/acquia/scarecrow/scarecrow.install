@@ -1565,3 +1565,26 @@ function scarecrow_update_11198() {
     'acsf_pingdom',
   ));
 }
+
+/**
+ * Disable 'Themebuilder Marketplace' and 'Themebuilder development UI' modules.
+ */
+function scarecrow_update_11199() {
+  module_disable(array('themebuilder_development_ui', 'themebuilder_marketplace'), FALSE);
+  db_query("DELETE FROM {variable} WHERE name LIKE 'themebuilder_marketplace%'");
+  db_query("DELETE FROM {variable} WHERE name LIKE 'themebuilder_development_ui%'");
+  drupal_uninstall_modules(array('themebuilder_development_ui', 'themebuilder_marketplace'), FALSE);
+}
+
+/**
+ * Add user cancellation process to audit trail form submission tracking setup.
+ */
+function scarecrow_update_11200() {
+  if (module_exists('audit_trail')) {
+    $patterns = array_map('trim', explode("\n", variable_get('audit_trail_form_submissions_path', '')));
+    if (!in_array('|.*/cancel|', $patterns)) {
+      $patterns[] = '|.*/cancel|';
+      variable_set('audit_trail_form_submissions_path', implode("\n", $patterns));
+    }
+  }
+}
