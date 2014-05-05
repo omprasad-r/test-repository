@@ -44,7 +44,25 @@ function media_oembed_file_formatter_info() {
  * Implements hook_element_info_alter().
  */
 function media_oembed_element_info_alter(&$types) {
+  $types['oembed']['#pre_render'][] = 'media_oembed_pre_render_content';
   $types['oembed_thumbnail']['#pre_render'][] = 'media_oembed_pre_render_thumbnail';
+}
+
+/**
+ * Pre render callback for 'oembed' elements.
+ *
+ * Current solution to make embeded media responsive is to include the
+ * media_embed library's JavaScript. Have to do it in an #attached to keep the
+ * functionality even when the element is being render cached.
+ */
+function media_oembed_pre_render_content($element) {
+  if (module_exists('media')) {
+    if (empty($element['#attached']['library'])) {
+      $element['#attached']['library'] = array();
+    }
+    $element['#attached']['library'][] = array('media', 'media_embed');
+  }
+  return $element;
 }
 
 /**
@@ -141,7 +159,6 @@ function media_oembed_file_formatter_media_oembed_view($file, $display, $langcod
 
     // Not a WYSIWYG editor instance.
     if (empty($file->override['wysiwyg'])) {
-      drupal_add_library('media', 'media_embed');
       $element = oembedcore_render_cache('oembed', $url, $options);
     }
 

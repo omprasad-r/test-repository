@@ -1588,3 +1588,53 @@ function scarecrow_update_11200() {
     }
   }
 }
+
+/**
+ * Fix attempt for colorbox.
+ *
+ * Set colorbox_style to 'none' on SMB as they seem to be ugly and they can
+ * collide with media_gallery's colorbox related styles. Enterprise customers
+ * will be notified separately and they can decide how to handle it.
+ *
+ * The responsive enhancement for colorbox is only meaningful for Enterprise so
+ * that will be removed from SMB and Enterprise can decide if they want it
+ * enabled or not - we know Warner uses it, so preenable it for them.
+ */
+function scarecrow_update_11201() {
+  // Deliberately using NULL as default value instead of 'default' to be able to
+  // tell if it was set at all. This is a one time fix attempt, so won't have a
+  // hook_modules_enabled to keep it set this way all the time.
+  $colorbox_style = variable_get('colorbox_style', NULL);
+  if (gardens_misc_is_smb() && (module_exists('colorbox') || isset($colorbox_style)) && $colorbox_style !== 'none') {
+    variable_set('colorbox_style', 'none');
+  }
+
+  // Enable responsive enhancement for colorbox for Warner.
+  $site = AcsfSite::load();
+  $client_name = isset($site->client_name) ? $site->client_name : 'smb';
+  if ($client_name == 'warner') {
+    variable_set('gardens_features_colorbox_enhancing', 1);
+  }
+}
+
+/**
+ * Fix SMB sites installed with a base theme.
+ *
+ * For a while new SMB sites were installed with a base theme instead of a
+ * Themebuilder theme.
+ */
+function scarecrow_update_11202() {
+  if (gardens_misc_is_smb()) {
+    $base_themes = themebuilder_compiler_get_base_theme_list();
+    $base_themes = array_keys($base_themes['featured']);
+    $registered_themes = system_rebuild_theme_data();
+    foreach ($base_themes as $base_theme) {
+      if (!empty($registered_themes[$base_theme]->status)) {
+        $default_theme_name = themebuilder_compiler_copy_theme(variable_get('theme_default', 'bartik'), 'My theme');
+        gardens_misc_replace_default_theme($default_theme_name);
+        db_query('TRUNCATE {themebuilder_session}');
+        break;
+      }
+    }
+  }
+}
