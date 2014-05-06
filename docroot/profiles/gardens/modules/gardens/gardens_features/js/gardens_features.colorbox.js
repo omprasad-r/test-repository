@@ -42,7 +42,7 @@ Drupal.behaviors.GardensFeaturesColorboxResize = {
       resizeHandlerClass.update(img, loadedImage, colorbox);
 
       // If the orientation changes, resize Colorbox.
-      if (window.orientation != undefined) {
+      if (window.orientation !== undefined) {
         window.onorientationchange = resizeHandler;
       }
 
@@ -78,7 +78,7 @@ Drupal.gardensFeaturesColorbox = function(img, loadedImage, colorbox) {
  * proper dimensions.
  */
 Drupal.gardensFeaturesColorbox.prototype.update = function() {
-  if (this.$image == undefined) {
+  if (this.$image === undefined) {
     return;
   }
 
@@ -131,6 +131,6 @@ Drupal.gardensFeaturesColorbox.prototype.update = function() {
 Drupal.gardensFeaturesColorbox.prototype.delayUpdate = function() {
   clearTimeout(this.timer);
   this.timer = setTimeout($.proxy(this.update, this), 150);
-}
+};
 
 })(jQuery);

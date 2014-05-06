@@ -1924,3 +1924,12 @@ function scarecrow_modules_enabled($modules) {
     }
   }
 }
+
+/**
+ * Implements hook_form_FORM_ID_alter().
+ */
+function scarecrow_form_gardens_features_theme_config_alter(&$form, $form_state) {
+  if (gardens_misc_is_smb()) {
+    $form['gardens_features_colorbox_enhancing']['#access'] = FALSE;
+  }
+}
