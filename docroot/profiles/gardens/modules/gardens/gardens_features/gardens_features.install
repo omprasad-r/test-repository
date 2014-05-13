@@ -290,4 +290,3 @@ function gardens_features_update_11125() {
 
   gardens_features_javascript_libraries_disable($libraries);
 }
-

@@ -159,6 +159,13 @@ function gardens_features_theme_config($form, $form_state) {
     '#default_value' => $ghi['timeout'],
   );
 
+  $form['gardens_features_colorbox_enhancing'] = array(
+    '#type' => 'checkbox',
+    '#title' => t('Colorbox enhancements for responsive themes'),
+    '#description' => t('Resizes images in Colorboxes to fit based on the display dimensions, which is useful with responsive themes. Do not enable this feature if your Colorboxes contain more than a single image.'),
+    '#default_value' => variable_get('gardens_features_colorbox_enhancing', 0),
+  );
+
   return system_settings_form($form);
 }
 
@@ -313,7 +320,9 @@ function gardens_features_preprocess_html(&$variables) {
   drupal_add_js($path . '/js/gardens_features.js', array('weight' => '500'));
 
   // Add a JavaScript file for Gardens' Colorbox-specific behaviors.
-  drupal_add_js($path . '/js/gardens_features.colorbox.js', array('every_page' => TRUE));
+  if (variable_get('gardens_features_colorbox_enhancing', 0)) {
+    drupal_add_js($path . '/js/gardens_features.colorbox.js', array('every_page' => TRUE));
+  }
 
   if (gardens_features_hide_front_page_title()) {
     // Fall back on the standard front page title.

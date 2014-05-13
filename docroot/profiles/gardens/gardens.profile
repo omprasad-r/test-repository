@@ -299,20 +299,6 @@ function gardens_installer_custom_submit($form, &$form_state) {
   include_once DRUPAL_ROOT . '/profiles/gardens/modules/acquia/gardens_misc/gardens_misc.install';
   gardens_misc_update_7001();
 
-  // For normal installs, we're done here, so the site's final theme is set and
-  // we can copy it to the 'mythemes' directory and configure it so that the
-  // themebuilder can use it.
-  //
-  // For preinstalled sites on Hosting, though, if we haven't installed a site
-  // template here then we know we will do so later (when the site is claimed
-  // by a real user), and since that process can result in the theme changing
-  // again, we'll wait until then to copy the theme and not do it here. See
-  // install_gardens().
-  if (!isset($GLOBALS['gardens_install_op']) || !defined('GARDENS_SIGNUP_SITE_OPERATION_INSTALL') || $GLOBALS['gardens_install_op'] != GARDENS_SIGNUP_SITE_OPERATION_INSTALL || $template_installed) {
-    $default_theme_name = themebuilder_compiler_copy_theme(variable_get('theme_default', 'bartik'), 'My theme');
-    gardens_misc_replace_default_theme($default_theme_name);
-  }
-
   // Store any client name set in the form.
   $profile_name = empty($form_state['values']['gardens_client_name']) ? '' : $form_state['values']['gardens_client_name'];
   variable_set('gardens_client_name', $profile_name);
