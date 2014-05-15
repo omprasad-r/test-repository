@@ -1019,3 +1019,84 @@ function warner_misc_simplified_modules_hidden_dependencies_alter(&$modules) {
     'migrate_extras',
   ));
 }
+
+/**
+ * Implements hook_form_FORM_ID_alter().
+ *
+ * Extend the Bakery module settings form with options for additional fields
+ * to transfer to slave sites.
+ */
+function warner_misc_form_bakery_settings_alter(&$form, $form_state) {
+  $profile_fields = field_info_instances('user');
+  $options = array();
+
+  foreach ($profile_fields['user'] as $field_name => $field) {
+    $options[$field_name] = check_plain($field['label']);
+  }
+
+  $form['bakery_transfer_uid'] = array(
+    '#type' => 'checkbox',
+    '#title' => 'Transfer user ID?',
+    '#default_value' => variable_get('bakery_transfer_uid', FALSE),
+    '#description' => t('Include UID in the response when a slave site requests account data from the master site.'),
+  );
+
+  $form['bakery_transfer_roles'] = array(
+    '#type' => 'checkbox',
+    '#title' => 'Transfer user roles?',
+    '#default_value' => variable_get('bakery_transfer_roles', FALSE),
+    '#description' => t('Include user roles in the response when a slave site requests account data from the master site.'),
+  );
+
+  $form['bakery_extra_supported_fields'] = array(
+    '#type' => 'checkboxes',
+    '#title' => 'Additional profile fields',
+    '#default_value' => variable_get('bakery_extra_supported_fields', array()),
+    '#options' => $options,
+    '#description' => t('Include these fields in the response when a slave site requests account data from the master site.'),
+  );
+}
+
+/**
+ * Get an array of fields to transmit via Bakery.
+ */
+function _warner_misc_bakery_get_fields_to_transmit() {
+  $user_fields = variable_get('bakery_extra_supported_fields');
+  $user_fields = array_filter($user_fields);
+  return $user_fields;
+}
+
+/**
+ * Implements hook_bakery_transmit().
+ *
+ * Add uid, roles and additional profile fields data.
+ */
+function warner_misc_bakery_transmit($edit, $account, $category) {
+  // Execute only if account data is requested, but not when saving profile.
+  if (!empty($edit)) {
+    return array();
+  }
+
+  $data = array();
+  $fields_to_transmit = _warner_misc_bakery_get_fields_to_transmit();
+  $wrapper = entity_metadata_wrapper('user', $account);
+
+  // Add fields, metadata wrapper will handle multiple values.
+  foreach ($fields_to_transmit as $field) {
+    $data['fields'][$field] = $wrapper->{$field}->raw();
+  }
+
+  // Add uid if needed.
+  $transfer_uid = variable_get('bakery_transfer_uid', FALSE);
+  if (!empty($transfer_uid)) {
+    $data['uid'] = $account->uid;
+  }
+
+  // Add roles if needed.
+  $transfer_roles = variable_get('bakery_transfer_roles', FALSE);
+  if (!empty($transfer_roles)) {
+    $data['roles'] = $account->roles;
+  }
+
+  return $data;
+}
