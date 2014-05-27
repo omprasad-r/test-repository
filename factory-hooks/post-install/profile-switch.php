@@ -9,7 +9,14 @@
  * to be used instead.
  */
 
-$site = AcsfSite::load();
+if (function_exists('acsf_register_autoloader')) {
+  acsf_register_autoloader();
+  $site = Acquia\Acsf\AcsfSite::load();
+}
+else {
+  $site = AcsfSite::load();
+}
+
 $profile_name = $site->client_name;
 if ($profile_name && file_exists(DRUPAL_ROOT . "/profiles/{$profile_name}/{$profile_name}.info")) {
   // Save the value for future use.
