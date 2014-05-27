@@ -32,11 +32,22 @@ function warner_misc_menu() {
     'description' => 'Customize wysiwyg settings.',
     'page callback' => 'drupal_get_form',
     'page arguments' => array('warner_misc_wysiwyg_settings_form'),
-    'access arguments' => array('administer filters'),
+    'access callback' => 'warner_misc_wysiwyg_customization_access',
     'type' => MENU_NORMAL_ITEM,
   );
 
   return $items;
+}
+
+/**
+ * Access callback for WYSIWYG customization form.
+ */
+function warner_misc_wysiwyg_customization_access() {
+  if (user_access('administer filters') && module_exists('wysiwyg')) {
+    return TRUE;
+  }
+
+  return FALSE;
 }
 
 /**
@@ -46,7 +57,7 @@ function warner_misc_wysiwyg_settings_form() {
   $form['warner_misc_wysiwyg_comment_form_buttons']= array(
     '#type' => 'fieldset',
     '#title' => t('Wysiwyg comment form button settings'),
-    '#description' => t(''),
+    '#description' => t('Here you can manage WYSIWYG buttons that are applied for comment forms only. All buttons enabled on the wysiwyg profile are fetched and listed in groups. Select the ones you would like to use on comment forms.'),
     '#collapsible' => FALSE,
     '#collapsed' => FALSE,
     '#tree' => TRUE,
@@ -98,7 +109,7 @@ function warner_misc_wysiwyg_settings_form() {
 }
 
 /**
- * Custom submit handler for the Wysiwyg customization form.
+ * Wysiwyg customization form submit handler.
  */
 function warner_misc_wysiwyg_settings_form_submit($form, &$form_state) {
   $values = $form_state['values'];
@@ -1099,4 +1110,53 @@ function warner_misc_bakery_transmit($edit, $account, $category) {
   }
 
   return $data;
+}
+
+/**
+ * Implements hook_element_info_alter().
+ */
+function warner_misc_element_info_alter(&$types) {
+  $types['text_format']['#pre_render'][] = 'warner_misc_pre_render_text_format';
+}
+
+/**
+ * This function alters WYSIWYG text inputs to improve UX.
+ */
+function warner_misc_pre_render_text_format($element) {
+  global $wysiwyg_comment;
+
+  // Make sure this is a comment form. Check again and do not exclude
+  // comment forms on forums. See gardens_misc_pre_render_text_format().
+  if (isset($element['#entity_type']) && isset($element['#bundle']) && $element['#entity_type'] == 'comment') {
+    $wysiwyg_comment = TRUE;
+  }
+
+  return $element;
+}
+
+/**
+ * Implements hook_wysiwyg_editor_settings_alter().
+ *
+ * Update toolbar with the allowed buttons.
+ */
+function warner_misc_wysiwyg_editor_settings_alter(&$settings, &$context) {
+  // Check to see if we're creating an instance of the WYSIWYG
+  // for a comment form.
+  global $wysiwyg_comment;
+  // If this is a comment form.
+  if ($wysiwyg_comment) {
+    // Setup our new toolbar.
+    $new_toolbar =  array();
+    // Get allowed buttons for selected input format.
+    $comment_allowed_buttons = variable_get('warner_misc_comment_form_buttons_for_' . $context['profile']->format, array());
+
+    // Add them to the toolbar.
+    if (!empty($comment_allowed_buttons)) {
+      foreach ($comment_allowed_buttons as $button => $value) {
+        $new_toolbar[0][] = $button;
+      }
+    }
+
+    $settings['toolbar'] = $new_toolbar;
+  }
 }

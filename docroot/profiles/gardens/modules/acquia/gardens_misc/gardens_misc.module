@@ -509,7 +509,7 @@ function gardens_misc_pre_render_text_format($element) {
   $wysiwyg_comment = FALSE;
 
   // Check to make sure this is a comment form and is not on a forum post
-  if (isset($element['#entity_type']) && isset($element['#bundle']) && $element['#entity_type'] == 'comment') {
+  if (isset($element['#entity_type']) && isset($element['#bundle']) && $element['#entity_type'] == 'comment' && $element['#bundle'] != 'comment_node_forum') {
     $wysiwyg_comment = TRUE;
   }
 
