@@ -39,8 +39,9 @@ function acsf_openid_authentication_page() {
   // requests and full page renders on the factory).
   if (!empty($_SESSION['openid'])) {
     $response = _openid_response();
+    $factory_url = acsf_factory_url();
     if (isset($response['openid.claimed_id'])) {
-      $factory_domain = parse_url(acsf_variables_factory_url_get(), PHP_URL_HOST);
+      $factory_domain = parse_url($factory_url, PHP_URL_HOST);
       $openid_domain = parse_url($response['openid.claimed_id'], PHP_URL_HOST);
       if ($factory_domain && $openid_domain && $factory_domain == $openid_domain) {
         $_SESSION['openid']['claimed_id'] = $response['openid.claimed_id'];
@@ -146,7 +147,7 @@ function acsf_openid_custom_user_logout() {
 
   // Customized code starts here. If the current user is registered with OpenID
   // then redirect to the factory logout path.
-  $factory_url = acsf_variables_factory_url_get();
+  $factory_url = acsf_factory_url();
   if (!empty($factory_url) && acsf_openid_registered_with_openid($account)) {
     $url_fragments = parse_url($GLOBALS['base_url']);
     $site_host = $url_fragments['host'];
@@ -274,11 +275,12 @@ function acsf_openid_factory_login_page($user_operation = 'login') {
   // example ensuring that the return page will be themed as an overlay, or that
   // the return page will be served on https.
   $current_page = $_GET['q'];
+  $factory_url = acsf_factory_url();
   drupal_alter('acsf_openid_factory_return_page_options', $options, $current_page);
   $return_to = url('openid/authenticate', $options);
   $service = array(
     'types' => array('http://specs.openid.net/auth/2.0/server', 'http://openid.net/srv/ax/1.0'),
-    'uri' => acsf_variables_factory_url_get() . '/openid/provider',
+    'uri' => $factory_url . '/openid/provider',
     // Pretend we got anonymous info from the server.
     'identity' => FALSE,
     'version' => 2,
@@ -323,7 +325,8 @@ function acsf_openid_factory_login_page($user_operation = 'login') {
 function acsf_openid_site_login_page() {
   if (user_is_anonymous()) {
     if (!empty($_GET['openid'])) {
-      $factory_host = parse_url(acsf_variables_factory_url_get(), PHP_URL_HOST);
+      $factory_url = acsf_factory_url();
+      $factory_host = parse_url($factory_url, PHP_URL_HOST);
       $openid_host = parse_url($_GET['openid'], PHP_URL_HOST);
       if (!$factory_host || !$openid_host || $factory_host !== $openid_host) {
         drupal_set_message(t('Invalid OpenID used for login. Only internal OpenIDs are supported.'), 'error');
@@ -383,6 +386,9 @@ function acsf_openid_user_page() {
 function acsf_openid_login_message() {
   // This function may be called when an anonymous visitor loads the /user path,
   // and in that case we have to override the page title.
+  $site = \Acquia\Acsf\AcsfSite::load();
+  $factory_name = acsf_factory_name();
+
   drupal_set_title(t('Log in or sign up'));
   $links = acsf_openid_block_view('login');
   $build = array(
@@ -390,7 +396,7 @@ function acsf_openid_login_message() {
       '#type' => 'container',
       '#attributes' => array(),
       'title' => array(
-        '#markup' => t('This site is hosted on the !service_name_long service.', array('!service_name_long' => acsf_vget('acsf_factory_name', 'Acquia Cloud Site Factory'))),
+        '#markup' => t('This site is hosted on the !service_name_long service.', array('!service_name_long' => $factory_name)),
       ),
       'links' => array(
         '#markup' => ' ' . $links['content'],
@@ -409,6 +415,7 @@ function acsf_openid_login_message() {
 function acsf_openid_factory_redirection_page() {
   // Get all arguments to pass on to the factory.
   $args = func_get_args();
+  $factory_url = acsf_factory_url();
   // Redirect to user URL on the factory with these arguments.
-  drupal_goto(acsf_variables_factory_url_get() . '/user/' . join('/', $args), array('query' => array('render' => 'overlay')));
+  drupal_goto($factory_url . '/user/' . join('/', $args), array('query' => array('render' => 'overlay')));
 }

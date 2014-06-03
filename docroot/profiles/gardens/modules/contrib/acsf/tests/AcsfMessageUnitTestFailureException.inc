@@ -1,12 +1,14 @@
 <?php
 
-class AcsfMessageUnitTestFailureException extends AcsfMessage {
+require_once __DIR__ . '/../vendor/autoload.php';
+
+class AcsfMessageUnitTestFailureException extends \Acquia\Acsf\AcsfMessage {
 
   /**
    * Implements AcsfMessage::sendMessage().
    */
   protected function sendMessage($url, $method, $endpoint, $parameters, $username, $password) {
-    throw new AcsfMessageFailureException('error message');
+    throw new \Acquia\Acsf\AcsfMessageFailureException('error message');
   }
 
 }

@@ -41,6 +41,11 @@ function acsf_init_drush_command() {
           'Connect the site to the factory and sets the owner to John Smith.',
       ),
     ),
+    'acsf-init-verify' => array(
+      'bootstrap' => DRUSH_BOOTSTRAP_DRUPAL_ROOT,
+      'callback' => 'drush_acsf_init_verify',
+      'description' => dt('Verifies that acsf-init was successfully run in the current version.'),
+    ),
     'acsf-uninstall' => array(
       'bootstrap' => DRUSH_BOOTSTRAP_DRUPAL_ROOT,
       'callback' => 'drush_acsf_uninstall',
@@ -53,6 +58,7 @@ function acsf_init_drush_command() {
  * Callback: executes the required changes to this repository.
  */
 function drush_acsf_init() {
+  // Retrieve the path to the acsf module relative to this file.
   $path = dirname(dirname(dirname(__FILE__)));
   $relative_path = str_replace(DRUPAL_ROOT . '/', '', $path);
   $repo_root = str_replace('/docroot', '', DRUPAL_ROOT);
@@ -103,6 +109,9 @@ function drush_acsf_init() {
       drush_log(dt('Chmod Error: !file', array('!file' => $file)), 'error', 'error');
     }
   }
+
+  // Verify that the files are in sync.
+  drush_acsf_init_verify();
 }
 
 /**
@@ -203,38 +212,59 @@ function drush_acsf_connect_factory() {
   // Remove acsf variables so that they can be repopulated with the right values
   // on the next acsf-site-sync. We don't truncate the entire table in case a
   // custom module has stored custom variables in acsf_variables.
-  acsf_vdel('acsf_factory_name');
   acsf_vdel('acsf_site_info');
-  acsf_vdel('acsf_site_nid');
-  acsf_vdel('acsf_variables_cron_last_run');
-  acsf_vdel('factory_url');
 
   // Reset the local site data and run acsf-site-sync to fetch factory data
   // about the site.
-  $site = AcsfSite::load();
+  $site = \Acquia\Acsf\AcsfSite::load();
   $site->clean();
   drush_acsf_site_sync();
-  acsf_variables_cache_refresh();
   drush_log(dt('Executed acsf-site-sync to gather site data from factory and reset all acsf variables.'), 'ok');
-
-  // Ensure that the file_public_path uses the correct convention.
-  // @todo this should be removed with DG-11343.
-  $db_role = variable_get('gardens_db_name', '');
-  if (!empty($db_role)) {
-    variable_set('file_public_path', "sites/g/files/$db_role/f");
-    drush_log(dt('Set file_public_path to !path.', array('!path' => variable_get('file_public_path'))), 'ok');
-  }
-  else {
-    drush_set_error(dt('Unable to set file_public_path because gardens_db_name is not populated.'));
-  }
 
   // Clear all caches.
   drupal_flush_all_caches();
   drush_log(dt('Cleared all caches.'), 'ok');
+
+  // Send a theme event notification to the Factory.
+  $notify = acsf_theme_notification();
+  $notify->sendNotification('create');
 }
 
 /**
- * Uninstalls ACSF files from the code base.
+ * Callback: Verify that acsf-init was run against the current version.
+ */
+function drush_acsf_init_verify() {
+  $drupal_root = rtrim(DRUPAL_ROOT, '/.');
+  // Retrieve the path to the acsf module relative to this file.
+  $path = dirname(dirname(dirname(__FILE__)));
+  $relative_path = str_replace($drupal_root . '/', '', $path);
+  $repo_root = str_replace('/docroot', '', $drupal_root);
+  $lib_path = sprintf('%s/%s/acsf/acsf_init/lib', $drupal_root, $relative_path);
+
+  $error = FALSE;
+  foreach (acsf_init_get_required_files($repo_root) as $file => $location) {
+    $source = sprintf('%s/%s/%s', $lib_path, $location['source'], $file);
+    $dest = sprintf('%s/%s', $location['dest'], $file);
+    if (!file_exists($dest)) {
+      $error = TRUE;
+      drush_set_error('FILE MISSING', sprintf('The file %s is missing.', $file));
+    }
+    elseif (md5_file($source) != md5_file($dest)) {
+      $error = TRUE;
+      drush_set_error('FILE OUT OF DATE', sprintf('The file %s is out of date.', $file));
+    }
+  }
+
+  if ($error) {
+    drush_print(dt('Please run drush acsf-init to correct these problems and commit the resulting code changes.'));
+  }
+  else {
+    drush_log(dt('acsf-init required files ok'), 'success');
+  }
+}
+
+/**
+ * Callback: Uninstalls ACSF files from the code base.
  */
 function drush_acsf_uninstall() {
   drush_print('Removing ACSF requirements.');
@@ -262,6 +292,7 @@ function drush_acsf_uninstall() {
 function acsf_init_get_required_dirs($repo_root) {
   return array(
     'cloud hooks' => sprintf('%s/hooks/common/post-db-copy', $repo_root),
+    'cloud hook deploy' => sprintf('%s/hooks/common/site-initial-deployment', $repo_root),
     'acquia hook dir' => sprintf('%s/hooks/acquia', $repo_root),
     'cloud hook samples' => sprintf('%s/hooks/samples', $repo_root),
     'site config logic' => sprintf('%s/sites/g', DRUPAL_ROOT),
@@ -280,6 +311,11 @@ function acsf_init_get_required_files($repo_root) {
     '000-acquia_required_scrub.php' => array(
       'source' => 'cloud_hooks/common/post-db-copy',
       'dest' => sprintf('%s/hooks/common/post-db-copy', $repo_root),
+      'mod' => 0751,
+    ),
+    '000-acquia-deployment.php' => array(
+      'source' => 'cloud_hooks/common/site-initial-deployment',
+      'dest' => sprintf('%s/hooks/common/site-initial-deployment', $repo_root),
       'mod' => 0751,
     ),
     'db_connect.php' => array(

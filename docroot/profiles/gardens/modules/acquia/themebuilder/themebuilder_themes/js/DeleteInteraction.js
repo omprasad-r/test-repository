@@ -104,6 +104,7 @@ ThemeBuilder.themes.DeleteInteraction.prototype.showSuccess = function (data) {
   bar.hideWaitIndicator();
   bar.setStatus(Drupal.t('%theme has been deleted', {'%theme': this.theme.getName()}));
   this.event(data, 'interactionDone');
+  bar.themeChangeNotification('delete', this.theme.getSystemName());
 };
 
 /**

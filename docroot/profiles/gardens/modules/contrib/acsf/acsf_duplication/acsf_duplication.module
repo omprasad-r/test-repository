@@ -12,24 +12,22 @@
  * Implements hook_acsf_registry().
  */
 function acsf_duplication_acsf_registry() {
-  $path = drupal_get_path('module', 'acsf_duplication') . '/classes';
   $scrub_handlers = array(
-    'AcsfDuplicationScrubInitializeHandler'     => -100,
-    'AcsfDuplicationScrubModuleEnableHandler'   => -90,
-    'AcsfDuplicationScrubConfigurationHandler'  => 10,
-    'AcsfDuplicationScrubCommentHandler'        => 20,
-    'AcsfDuplicationScrubNodeHandler'           => 30,
-    'AcsfDuplicationScrubUserHandler'           => 40,
-    'AcsfDuplicationScrubTemporaryFilesHandler' => 50,
-    'AcsfDuplicationScrubModuleDisableHandler'  => 60,
-    'AcsfDuplicationScrubTruncateTablesHandler' => 70,
-    'AcsfDuplicationScrubFinalizeHandler'       => 100,
+    '\Acquia\Acsf\AcsfDuplicationScrubInitializeHandler'     => -100,
+    '\Acquia\Acsf\AcsfDuplicationScrubModuleEnableHandler'   => -90,
+    '\Acquia\Acsf\AcsfDuplicationScrubConfigurationHandler'  => 10,
+    '\Acquia\Acsf\AcsfDuplicationScrubCommentHandler'        => 20,
+    '\Acquia\Acsf\AcsfDuplicationScrubNodeHandler'           => 30,
+    '\Acquia\Acsf\AcsfDuplicationScrubUserHandler'           => 40,
+    '\Acquia\Acsf\AcsfDuplicationScrubTemporaryFilesHandler' => 50,
+    '\Acquia\Acsf\AcsfDuplicationScrubModuleDisableHandler'  => 60,
+    '\Acquia\Acsf\AcsfDuplicationScrubTruncateTablesHandler' => 70,
+    '\Acquia\Acsf\AcsfDuplicationScrubFinalizeHandler'       => 100,
   );
   foreach ($scrub_handlers as $class => $weight) {
     $events[] = array(
       'type' => 'site_duplication_scrub',
       'class' => $class,
-      'path' => $path,
       'weight' => $weight,
     );
   }

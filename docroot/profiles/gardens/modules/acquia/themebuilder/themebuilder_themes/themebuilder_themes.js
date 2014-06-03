@@ -414,6 +414,7 @@ ThemeBuilder.themeSelector = {
   themePublished: function (theme) {
     var $ = jQuery;
     var bar = ThemeBuilder.Bar.getInstance();
+    bar.themeChangeNotification('modify', theme.getSystemName());
     bar.hideWaitIndicator();
     bar.setStatus(Drupal.t('%theme is now the live theme.', {'%theme': theme.getName()}));
     //Mark the right tile as being live and having the delete function disabled.
@@ -674,6 +675,9 @@ ThemeBuilder.themeSelector = {
     // but don't create an infinite loop of requests.  If this fails,
     // give up.
     ThemeBuilder.postBack('themebuilder-start', {'theme_name': this._newThemeName}, ThemeBuilder.bind(this, this.themeChangeSuccess), ThemeBuilder.bind(this, this.recoveryFailed));
+    // Send a theme notification.
+    var bar = ThemeBuilder.Bar.getInstance();
+    bar.themeChangeNotification('modify', this._newThemeName);
   },
 
   /**

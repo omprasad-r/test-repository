@@ -13,12 +13,12 @@ if (function_exists('drush_main') || drupal_is_cli()) {
 
 // Determine what Factory we are in and figure out if the user requested a
 // custom domain or not.
-if (!class_exists('AcsfConfigDefault')) {
+if (!class_exists('\Acquia\Acsf\AcsfConfigDefault')) {
   // Since there is no bootstrap, we need to find our config objects.
-  require_once DRUPAL_ROOT . '/profiles/gardens/modules/contrib/acsf/classes/AcsfConfig.inc';
-  require_once DRUPAL_ROOT . '/profiles/gardens/modules/contrib/acsf/classes/AcsfConfigDefault.inc';
+  require_once DRUPAL_ROOT . '/profiles/gardens/modules/contrib/acsf/src/Acquia/Acsf/AcsfConfig.php';
+  require_once DRUPAL_ROOT . '/profiles/gardens/modules/contrib/acsf/src/Acquia/Acsf/AcsfConfigDefault.php';
 }
-$config = new AcsfConfigDefault();
+$config = new \Acquia\Acsf\AcsfConfigDefault();
 $gardener_url = $config->getUrl();
 
 // The gardener is assumed to be of the form www.CUSTOMER.DOMAIN.com, so site

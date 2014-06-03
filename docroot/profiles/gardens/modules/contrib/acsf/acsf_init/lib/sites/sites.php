@@ -1,7 +1,20 @@
 <?php
 
-if (empty($_SERVER['HTTP_HOST'])) {
-  // This only happens during early drush bootstrap.
+if (!function_exists('is_acquia_host')) {
+  /**
+   * Checks whether the site is on Acquia Hosting.
+   *
+   * @return bool
+   *   TRUE if the site is on Acquia Hosting, otherwise FALSE.
+   */
+  function is_acquia_host() {
+    return file_exists('/var/acquia');
+  }
+}
+
+// HTTP_HOST can be empty during early drush bootstrap. Also, check that we're
+// on an Acquia server so we don't run this code for local development.
+if (empty($_SERVER['HTTP_HOST']) || !is_acquia_host()) {
   return;
 }
 

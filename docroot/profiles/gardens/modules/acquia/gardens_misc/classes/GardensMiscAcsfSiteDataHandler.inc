@@ -4,10 +4,10 @@
  * Handle an AcsfSite data save event.
  */
 
-class GardensMiscAcsfSiteDataHandler extends AcsfEventHandler {
+class GardensMiscAcsfSiteDataHandler extends \Acquia\Acsf\AcsfEventHandler {
 
   /**
-   * Implements AcsfEventHandler::handle().
+   * Implements \Acquia\Acsf\AcsfEventHandler::handle().
    */
   public function handle() {
     // Acquire a lock, since multiple phone home requests may be running at once.

@@ -3,4 +3,5 @@ description = Provides OpenID support for Acquia Cloud Site Factory.
 core = 7.x
 package = Acquia Cloud Site Factory
 
+dependencies[] = acsf
 dependencies[] = openid

@@ -11,10 +11,10 @@
  * Scrub the Janrain-related variables, so the new site doesn't try reusing the
  * same Janrain app.
  */
-class GardensDuplicationScrubJanrainHandler extends AcsfEventHandler {
+class GardensDuplicationScrubJanrainHandler extends \Acquia\Acsf\AcsfEventHandler {
 
   /**
-   * Implements AcsfEventHandler::handle().
+   * Implements \Acquia\Acsf\AcsfEventHandler::handle().
    */
   public function handle() {
     drush_print(dt('Entered @class', array('@class' => get_class($this))));

@@ -1,5 +1,10 @@
 <?php
 
+// Bail out if we're not on an Acquia server.
+if (function_exists('is_acquia_host') && !is_acquia_host()) {
+  return;
+}
+
 // Make sure to use require_once() so this file is never loaded more than
 // once per page.
 define('GARDENS_SITE_DATA_USE_APC', (get_cfg_var('gardens.disable_apc_for_sites_php') != 1));
@@ -78,6 +83,10 @@ function gardens_site_data_refresh_all() {
  *   A data structure containing information about a single site.
  */
 function gardens_site_data_build_data($site, $map) {
+  // All sites use a conventional public file path.
+  $db_name = $site['conf']['acsf_db_name'];
+  $site['conf']['file_public_path'] = 'sites/g/files/' . $db_name . '/f';
+
   return array(
     'dir' => "g/files/{$site['name']}",
     // Put some settings into a global used in settings.php.

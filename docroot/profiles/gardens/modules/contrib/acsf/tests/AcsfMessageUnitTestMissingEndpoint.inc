@@ -1,6 +1,8 @@
 <?php
 
-class AcsfMessageUnitTestMissingEndpoint extends AcsfMessage {
+require_once __DIR__ . '/../vendor/autoload.php';
+
+class AcsfMessageUnitTestMissingEndpoint extends \Acquia\Acsf\AcsfMessage {
 
   /**
    * Implements AcsfMessage::sendMessage().

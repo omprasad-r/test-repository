@@ -34,13 +34,13 @@ function gardens_misc_drush_sql_sync_sanitize() {
  *   An array of gardener information.
  */
 function drush_gardens_misc_get_gardener_info() {
-  if (!class_exists('AcsfConfigDefault')) {
+  if (!class_exists('\Acquia\Acsf\AcsfConfigDefault')) {
     // Since there might not be a bootstrap, we need to find our config objects.
-    require_once DRUPAL_ROOT . '/profiles/gardens/modules/contrib/acsf/classes/AcsfConfig.inc';
-    require_once DRUPAL_ROOT . '/profiles/gardens/modules/contrib/acsf/classes/AcsfConfigDefault.inc';
+    require_once DRUPAL_ROOT . '/profiles/gardens/modules/contrib/acsf/src/Acquia/Acsf/AcsfConfig.php';
+    require_once DRUPAL_ROOT . '/profiles/gardens/modules/contrib/acsf/src/Acquia/Acsf/AcsfConfigDefault.php';
   }
 
-  $config = new AcsfConfigDefault();
+  $config = new \Acquia\Acsf\AcsfConfigDefault();
   return array(
     'url' => $config->getUrl(),
     'username' => $config->getUsername(),
@@ -68,10 +68,10 @@ function drush_gardens_misc_mollom_keys_get() {
  * drush command callback. Get from the Gardener and save mollom keys even if they already exist.
  */
 function drush_gardens_misc_mollom_keys_replace() {
-  $site = AcsfSite::load();
-  $nid = $site->nid;
+  $site = \Acquia\Acsf\AcsfSite::load();
+  $nid = $site->site_id;
   try {
-    $message = new AcsfMessageRest('GET', 'site-api/v1/mollom/keys/' . $nid);
+    $message = new \Acquia\Acsf\AcsfMessageRest('GET', 'site-api/v1/mollom/keys/' . $nid);
     $message->send();
     $response = $message->getResponseBody();
     $mollom_keys = $response['keys'];

@@ -78,7 +78,7 @@ function gardens_client_resend_verification_email($token) {
       $name = $GLOBALS['user']->name;
       try {
         $verifier = !empty($verifier->module) ? $verifier->module : NULL;
-        $message = new AcsfMessageRest('POST', 'site-api/v1/verification/resend', array('name' => $name, 'verifier' => $verifier));
+        $message = new \Acquia\Acsf\AcsfMessageRest('POST', 'site-api/v1/verification/resend', array('name' => $name, 'verifier' => $verifier));
         $message->send();
         $response = $message->getResponseBody();
         $sent = $response['sent'];

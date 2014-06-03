@@ -44,7 +44,7 @@ function themebuilder_bar_menu() {
     'page arguments' => array('themebuilder_bar_save'),
     'type' => MENU_CALLBACK,
   );
-  // Used to notify the factory when a theme change gets saved.
+  // Used to notify the Factory when a theme change event occurs.
   $items['themebuilder-change-notification'] = array(
     'title' => t('Themebuilder change notification'),
     'page callback' => 'themebuilder_bar_ajax_request',
@@ -115,13 +115,13 @@ function themebuilder_bar_js_required() {
   // Default to the standard error message.
   $message = t('<p>Navigate to the <a href="!url">front page</a> or any other non-administrative page and click the <em>Appearance</em> link in the toolbar in order to open the theme builder.</p><p>You must have javascript enabled in order to use the theme building functions in !service_name_long.</p>', array(
     '!url' => url('<front>'),
-    '!service_name_long' => acsf_vget('acsf_factory_name', 'Acquia Cloud Site Factory'),
+    '!service_name_long' => acsf_factory_name(),
   ));
   // If the user does not have permission to access the ThemeBuilder, warn them.
   if (!themebuilder_bar_check_tab_permissions()) {
     $message = t('<p>You do not have the necessary permissions to access the theme building functions in !service_name_long.</p><p>Please ask your site maintainer for access to at least one ThemeBuilder tab.', array(
       '!url' => url('<front>'),
-      '!service_name_long' => acsf_vget('acsf_factory_name', 'Acquia Cloud Site Factory'),
+      '!service_name_long' => acsf_factory_name(),
     ));
   }
   return $message;
@@ -590,7 +590,7 @@ function themebuilder_bar_ajax_request($function_name) {
     // the problem.  Maybe we forcefully closed their themebuilder
     // session for site maintenance?
     throw new ThemeBuilderException(t('We are sorry, but the ThemeBuilder needs to close while !service_name_long undergoes a brief maintenance period.  Click OK to close the ThemeBuilder.', array(
-      '!service_name_long' => acsf_vget('acsf_factory_name', 'Acquia Cloud Site Factory'),
+      '!service_name_long' => acsf_factory_name(),
     )), THEMEBUILDER_ERROR_RECOVERABLE, array(ThemeBuilderException::HANDLER_ALERT_AND_CLOSE));
   }
 }
@@ -611,7 +611,7 @@ function themebuilder_bar_enter_edit_mode() {
       // No point in opening the themebuilder; unable to save a theme.
       gardens_statsd_send('themebuilder.enter.fail', 1, GARDENS_STATSD_COUNTER, 1);
       $error = t("We're doing maintenance and making !service_name_long even better. Please try to relaunch the ThemeBuilder later. Thanks!", array(
-        '!service_name_long' => acsf_vget('acsf_factory_name', 'Acquia Cloud Site Factory'),
+        '!service_name_long' => acsf_factory_name(),
       ));
     }
     else {
@@ -692,7 +692,6 @@ function themebuilder_bar_save() {
   $system_name_requested = empty($_POST['system_name']) ? FALSE : $_POST['system_name'];
   $overwrite_requested = !empty($_POST['overwrite']);
 
-
   $overwriting_current = (themebuilder_compiler_get_current_theme()->getOrigin() == themebuilder_compiler_get_published_theme_name() && !($name_requested || $system_name_requested));
   if ($publish || $overwriting_current) {
     // This is a publish request. Make sure the user has permission.
@@ -726,10 +725,13 @@ function themebuilder_bar_save() {
 }
 
 /**
- * Notifies the factory that a theme has changed on the site.
+ * Notifies the Factory that a theme change has occurred on the site.
  */
 function themebuilder_bar_change_notification() {
-  acsf_theme_change_notification();
+  if (!empty($_POST['event']) && !empty($_POST['theme'])) {
+    $notify = acsf_theme_notification();
+    return $notify->sendNotification($_POST['event'], $_POST['theme']);
+  }
 }
 
 function themebuilder_bar_export() {
