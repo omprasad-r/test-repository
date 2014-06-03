@@ -299,6 +299,7 @@ ThemeBuilder.themes.DuplicateInteraction.prototype.showSuccess = function (data)
   bar.hideWaitIndicator();
   bar.setStatus(Drupal.t('%theme has been duplicated.', {'%theme': data.originalTheme.getName()}));
   this.event(data, 'interactionDone');
+  bar.themeChangeNotification('create', data.newTheme.getSystemName());
 };
 
 /**

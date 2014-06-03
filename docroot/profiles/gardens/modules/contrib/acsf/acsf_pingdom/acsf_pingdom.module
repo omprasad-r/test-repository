@@ -32,8 +32,8 @@ function acsf_pingdom_modules_disabled($modules) {
 function acsf_pingdom_pause($pause_method = TRUE) {
   $http_method = $pause_method ? 'POST' : 'DELETE';
   try {
-    $site_nid = acsf_vget('acsf_site_nid');
-    $endpoint = sprintf('site-api/v1/pingdom-pause/%s', $site_nid);
+    $site = \Acquia\Acsf\AcsfSite::load();
+    $endpoint = sprintf('site-api/v1/pingdom-pause/%s', $site->site_id);
     $message = new AcsfMessageRest($http_method , $endpoint);
     $message->send();
   }

@@ -2,3 +2,6 @@ name = ACSF Variables
 description = Stores sensitive variables in a single place for easy scrubbing.
 core = 7.x
 package = Acquia Cloud Site Factory
+hidden = TRUE
+
+dependencies[] = acsf

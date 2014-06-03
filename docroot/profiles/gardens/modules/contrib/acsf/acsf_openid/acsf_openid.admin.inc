@@ -200,6 +200,8 @@ function acsf_openid_admin_invite_people_tokens() {
  * @ingroup forms
  */
 function acsf_openid_admin_settings_form($form, $form_state) {
+  $factory_name = acsf_factory_name();
+
   $form['overlay_status'] = array(
     '#type' => 'fieldset',
     '#weight' => -10,
@@ -216,10 +218,10 @@ function acsf_openid_admin_settings_form($form, $form_state) {
   }
   else {
     $title = t('Use the overlay for custom user fields during !service_name_long account registration', array(
-      '!service_name_long' => acsf_vget('acsf_factory_name', 'Acquia Cloud Site Factory'),
+      '!service_name_long' => $factory_name,
     ));
     $description = t("When a user registers with a !service_name_long account, fields provided by !service_name_long are always displayed in the overlay. If enabled, custom fields will use the overlay also, instead of the site's page.", array(
-      '!service_name_long' => acsf_vget('acsf_factory_name', 'Acquia Cloud Site Factory'),
+      '!service_name_long' => $factory_name,
     ));
   }
   $form['overlay_status']['acsf_openid_overlay_for_registration'] = array(

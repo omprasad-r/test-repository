@@ -727,6 +727,8 @@ function acsf_openid_force_openid() {
  * Implements hook_form_FORM_ID_alter().
  */
 function acsf_openid_form_user_profile_form_alter(&$form, &$form_state) {
+  $factory_name = acsf_factory_name();
+  $factory_url = acsf_factory_url();
   $account = $form['#user'];
   if (!empty($form['account']['pass']) && acsf_openid_force_openid()) {
     $form['account']['gardens_id'] = array(
@@ -734,8 +736,8 @@ function acsf_openid_form_user_profile_form_alter(&$form, &$form_state) {
       '#type' => 'item',
       '#markup' => check_plain($account->name) . '<br />' . check_plain($account->mail),
       '#description' => t('Change these values, your password and your avatar on <a href="@url">the !service_name_long server</a>.', array(
-        '@url' => acsf_variables_factory_url_get() . '/user',
-        '!service_name_long' => acsf_vget('acsf_factory_name', 'Acquia Cloud Site Factory'),
+        '@url' => $factory_url . '/user',
+        '!service_name_long' => $factory_name,
       )),
       '#weight' => -20,
     );
@@ -802,9 +804,11 @@ function acsf_openid_form_user_login_block_alter(&$form, $form_state) {
  * Implements hook_block_info().
  */
 function acsf_openid_block_info() {
+  $factory_name = acsf_factory_name();
+
   return array(
     'login' => array(
-      'info' => acsf_openid_force_openid() ? t('!service_name_long login', array('!service_name_long' => acsf_vget('acsf_factory_name', 'Acquia Cloud Site Factory'))) : t('User login'),
+      'info' => acsf_openid_force_openid() ? t('!service_name_long login', array('!service_name_long' => $factory_name)) : t('User login'),
     ),
   );
 }
@@ -892,6 +896,8 @@ function acsf_openid_form_user_admin_settings_alter(&$form, &$form_state) {
  * Implements hook_user_cancel_methods_alter()
  */
 function acsf_openid_user_cancel_methods_alter(&$methods) {
+  $factory_name = acsf_factory_name();
+  $factory_url = acsf_factory_url();
   // If the site requires all users to log in via OpenID then instead of
   // deleting the user accounts rather remove them. (In theory for sites where
   // OpenID is optional we should make this change contextually, since some
@@ -903,13 +909,13 @@ function acsf_openid_user_cancel_methods_alter(&$methods) {
   if (acsf_openid_force_openid()) {
     $methods['user_cancel_delete']['title'] = t("Remove account and the account's content from this site.");
     $methods['user_cancel_delete']['description'] = t('Your account will be removed from this site and all account information deleted. All of your content on this site will also be deleted. The account is not removed from @service_domain or any other !service_name_long sites.', array(
-      '!service_name_long' => acsf_vget('acsf_factory_name', 'Acquia Cloud Site Factory'),
-      '@service_domain' => str_replace(array('http://', 'https://'), '', acsf_variables_factory_url_get()),
+      '!service_name_long' => $factory_name,
+      '@service_domain' => str_replace(array('http://', 'https://'), '', $factory_url),
     ));
     $methods['user_cancel_reassign']['title'] = t("Remove account from this site. The account's content will be owned by the <em class=\"placeholder\">Anonymous</em> user.");
     $methods['user_cancel_reassign']['description'] = t('Your account will be removed from this site and all account information deleted. All of your content on this site will be assigned to the <em class="placeholder">Anonymous</em> user. The account is not removed from @service_domain or any other !service_name_long sites.', array(
-      '!service_name_long' => acsf_vget('acsf_factory_name', 'Acquia Cloud Site Factory'),
-      '@service_domain' => str_replace(array('http://', 'https://'), '', acsf_variables_factory_url_get()),
+      '!service_name_long' => $factory_name,
+      '@service_domain' => str_replace(array('http://', 'https://'), '', $factory_url),
     ));
   }
   // If the site does allow local user logins, at least change the text to say
@@ -926,8 +932,10 @@ function acsf_openid_user_cancel_methods_alter(&$methods) {
 function acsf_openid_token_info() {
   $token_info = array();
 
+  $factory_name = acsf_factory_name();
+
   if (acsf_openid_force_openid()) {
-    $description = t('The URL of a @service_name_long registration overlay window appearing above the front page of the site.', array('@service_name_long' => acsf_vget('acsf_factory_name', 'Acquia Cloud Site Factory')));
+    $description = t('The URL of a @service_name_long registration overlay window appearing above the front page of the site.', array('@service_name_long' => $factory_name));
   }
   else {
     $description = t("The URL of the site's registration page.");
@@ -978,10 +986,11 @@ function acsf_openid_tokens($type, $tokens, array $data = array(), array $option
  * which notification emails we wish to override.
  */
 function acsf_openid_setup_user_mail_variables() {
-  $factory_url = acsf_variables_factory_url_get();
+  $factory_name = acsf_factory_name();
+  $factory_url = acsf_factory_url();
   $factory_account_url = $factory_url . '/user';
   // Make sure this contains no HTML for mail texts.
-  $service_name = trim(strip_tags(acsf_vget('acsf_factory_name', 'Acquia Cloud Site Factory')));
+  $service_name = trim(strip_tags($factory_name));
   $variables = array(
     'user_mail_register_no_approval_required_body' => "[user:name],\n\nThank you for registering at [site:name] with your $service_name account. You can change your password or edit your profile by visiting $factory_account_url.\n\n-- [site:name] team\n[site:url]\n",
     'user_mail_register_pending_approval_body' => "[user:name],\n\nThank you for registering at [site:name] with your $service_name account. Your application for membership on this site is currently pending approval. We will send another email to let you know when it has been approved.\n\n-- [site:name] team\n[site:url]\n",

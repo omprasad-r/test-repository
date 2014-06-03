@@ -113,7 +113,7 @@ function gardens_statsd_env_check() {
     variable_set('gardens_statsd_host_ip', NULL);
   }
 
-  $site = AcsfSite::load();
+  $site = \Acquia\Acsf\AcsfSite::load();
   $stage = isset($site->client_name) ? trim($site->client_name) : 'gardens';
   variable_set('gardens_statsd_suffix', "$stage.$tangle");
   variable_set('gardens_statsd_env_checked', time());
@@ -131,7 +131,7 @@ function gardens_statsd_env_check() {
  */
 function gardens_statsd_exit() {
   if (variable_get('gardens_statsd_track_user', NULL) && user_is_logged_in()) {
-    $site = AcsfSite::load();
+    $site = \Acquia\Acsf\AcsfSite::load();
     $active_sessions = db_query("SELECT count(sid) as num FROM {sessions} WHERE timestamp > UNIX_TIMESTAMP() - 180")->fetchField();
     gardens_statsd_send('sessions.' . $site->site_name, $active_sessions, GARDENS_STATSD_GAUGE, 1);
   }

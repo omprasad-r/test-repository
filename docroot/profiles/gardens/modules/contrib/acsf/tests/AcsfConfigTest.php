@@ -9,14 +9,12 @@ class AcsfConfigTest extends PHPUnit_Framework_TestCase {
 
   public function setUp() {
     $files = array(
-      __DIR__ . '/../classes/AcsfConfig.inc',
+      __DIR__ . '/../vendor/autoload.php',
       __DIR__ . '/AcsfConfigUnitTest.inc',
       __DIR__ . '/AcsfConfigUnitTestMissingPassword.inc',
       __DIR__ . '/AcsfConfigUnitTestMissingUrl.inc',
       __DIR__ . '/AcsfConfigUnitTestMissingUsername.inc',
       __DIR__ . '/AcsfConfigUnitTestIncompatible.inc',
-      __DIR__ . '/../classes/AcsfMessage.inc',
-      __DIR__ . '/../classes/AcsfMessageResponse.inc',
       __DIR__ . '/AcsfMessageUnitTestSuccess.inc',
       __DIR__ . '/AcsfMessageUnitTestFailure.inc',
       __DIR__ . '/AcsfMessageUnitTestFailureException.inc',
@@ -80,7 +78,7 @@ class AcsfConfigTest extends PHPUnit_Framework_TestCase {
   /**
    * Tests that a missing password triggers an exception.
    *
-   * @expectedException AcsfConfigIncompleteException
+   * @expectedException \Acquia\Acsf\AcsfConfigIncompleteException
    */
   public function testAcsfConfigMissingPassword() {
     new AcsfConfigUnitTestMissingPassword('unit_test_site', 'unit_test_env');
@@ -89,7 +87,7 @@ class AcsfConfigTest extends PHPUnit_Framework_TestCase {
   /**
    * Tests that a missing username triggers an exception.
    *
-   * @expectedException AcsfConfigIncompleteException
+   * @expectedException \Acquia\Acsf\AcsfConfigIncompleteException
    */
   public function testAcsfConfigMissingUsername() {
     new AcsfConfigUnitTestMissingUsername('unit_test_site', 'unit_test_env');
@@ -98,7 +96,7 @@ class AcsfConfigTest extends PHPUnit_Framework_TestCase {
   /**
    * Tests that a missing URL triggers an exception.
    *
-   * @expectedException AcsfConfigIncompleteException
+   * @expectedException \Acquia\Acsf\AcsfConfigIncompleteException
    */
   public function testAcsfConfigMissingUrl() {
     new AcsfConfigUnitTestMissingUrl('unit_test_site', 'unit_test_env');
@@ -128,5 +126,12 @@ class AcsfConfigTest extends PHPUnit_Framework_TestCase {
     $this->assertSame($config->getUsername(), 'gardener_unit_test');
   }
 
+}
+
+/**
+ * Fake version of variable_get to make the tests pass.
+ */
+function variable_get($name, $default = NULL) {
+  return FALSE;
 }
 

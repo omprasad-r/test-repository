@@ -167,26 +167,25 @@ function gardens_client_init() {
   // Display site blocked message instead of site page if the site is blocked.
   $verifier = new EmailVerifier();
   if (!drupal_is_cli() && $verifier->needsSiteBlock() && arg(0) != 'gardener') {
-    $site = AcsfSite::load();
-    $factory_url = $site->factory_url;
+    $factory_url = acsf_factory_url();
     if ($verifier->needsDeleteReminder()) {
-      $body = t('You did not verify your user account, therefore your !service_name_long website is blocked.', array('!service_name_long' => acsf_vget('acsf_factory_name', 'Acquia Cloud Site Factory'))) . '<div>' . $verifier->getReminderText('to_be_deleted') .'</div>';
+      $body = t('You did not verify your user account, therefore your !service_name_long website is blocked.', array('!service_name_long' => acsf_factory_name())) . '<div>' . $verifier->getReminderText('to_be_deleted') .'</div>';
     }
     elseif (user_is_anonymous()) {
       $body = t('This !service_name_long website is blocked. If you are the site owner, verify your email address by clicking the link in the verification email that was sent to you.  If you don\'t have the original email, please visit your <a href="@mysites">My sites</a> page to send it again.', array(
         '@mysites' => url($factory_url . '/user/login?destination=mysites'),
-        '!service_name_long' => acsf_vget('acsf_factory_name', 'Acquia Cloud Site Factory'),
+        '!service_name_long' => acsf_factory_name(),
       ));
     }
     else {
       if (scarecrow_is_site_owner()) {
         $body = t('This !service_name_long website is blocked. To access your site, verify your email address by clicking the link in the verification email that was sent to you.  If you don\'t have the original email, please visit your <a href="@mysites">My sites</a> page to send it again.', array(
           '@mysites' => url($factory_url . '/mysites'),
-          '!service_name_long' => acsf_vget('acsf_factory_name', 'Acquia Cloud Site Factory'),
+          '!service_name_long' => acsf_factory_name(),
         ));
       }
       else {
-        $body = t('This !service_name_long website is blocked.', array('!service_name_long' => acsf_vget('acsf_factory_name', 'Acquia Cloud Site Factory')));
+        $body = t('This !service_name_long website is blocked.', array('!service_name_long' => acsf_factory_name()));
 
       }
     }
@@ -514,7 +513,7 @@ function gardens_client_send_site_data() {
     $stats = gardens_client_generate_site_stats();
 
     try {
-      $message = new AcsfMessageRest('POST', 'site-api/v1/site-stats', array('stats' => $stats));
+      $message = new \Acquia\Acsf\AcsfMessageRest('POST', 'site-api/v1/site-stats', array('stats' => $stats));
       $message->send();
       $response = $message->getResponseBody();
       $rpc_result = $response['saved'];
@@ -533,25 +532,12 @@ function gardens_client_send_site_data() {
 }
 
 /**
- * Helper function to retrieve stored data from the Gardener.
- */
-function gardens_client_data_get($module, $name = NULL) {
-  $data = variable_get('gardens_client_gardener_data', array());
-  if ($name) {
-    return (isset($data[$module]) && isset($data[$module][$name]) ? $data[$module][$name] : NULL);
-  }
-  else {
-    return (isset($data[$module]) ? $data[$module] : array());
-  }
-}
-
-/**
  * Make an XML-RPC request on the Gardener and record the data.
  *
  * Returns TRUE if data was retrieved, FALSE otherwise.
  */
 function gardens_client_phone_home() {
-  $site = AcsfSite::load();
+  $site = \Acquia\Acsf\AcsfSite::load();
   return $site->refresh();
 }
 
@@ -564,7 +550,7 @@ function gardens_client_phone_home() {
  */
 function gardens_client_get_gardens_db_name() {
   global $databases;
-  return variable_get('gardens_db_name', $databases['default']['default']['database']);
+  return variable_get('acsf_db_name', $databases['default']['default']['database']);
 }
 
 /**
@@ -602,7 +588,8 @@ function gardens_client_gardener_unreachable_alert($reset = FALSE) {
  * Whether the subscription used by the site allows local user accounts.
  */
 function gardens_client_subscription_forced_openid() {
-  return (bool) gardens_client_data_get('acquia_zuora', 'force_openid');
+  $site = \Acquia\Acsf\AcsfSite::load();
+  return (bool) $site->acquia_zuora['force_openid'];
 }
 
 /**
@@ -615,13 +602,13 @@ function gardens_client_form_user_admin_settings_alter(&$form, &$form_state) {
 
   $message = '';
   if ($using_openid) {
-    $message = t('User accounts are registered with and shared within !service_name_long.', array('!service_name_long' => acsf_vget('acsf_factory_name', 'Acquia Cloud Site Factory')));
+    $message = t('User accounts are registered with and shared within !service_name_long.', array('!service_name_long' => acsf_factory_name()));
     if (!$forced_openid) {
       $message .= '<br />' . t() . t('You can optionally <a href="@enable-local">enable the use of local user accounts</a>.', array('@enable-local' => url('admin/config/people/accounts/local-accounts')));
     }
   }
   else {
-    $message = t('User accounts for administrators are registered with and shared within !service_name_long. Other user accounts are local to this website only.', array('!service_name_long' => acsf_vget('acsf_factory_name', 'Acquia Cloud Site Factory')));
+    $message = t('User accounts for administrators are registered with and shared within !service_name_long. Other user accounts are local to this website only.', array('!service_name_long' => acsf_factory_name()));
   }
   $form['registration_cancellation']['force_openid'] = array(
     '#type' => 'item',
@@ -636,7 +623,7 @@ function gardens_client_form_user_admin_settings_alter(&$form, &$form_state) {
  */
 function gardens_client_allow_local_user_logins_form($form, &$form_state) {
   $question = t('Are you sure you want to turn on local user accounts?');
-  $description = t('Currently, user accounts are registered with and shared within !service_name_long. Allowing local user accounts means users will be individually managed on this site and no cross-site relations are maintained. <strong>This change is irreversible.</strong>', array('!service_name_long' => acsf_vget('acsf_factory_name', 'Acquia Cloud Site Factory')));
+  $description = t('Currently, user accounts are registered with and shared within !service_name_long. Allowing local user accounts means users will be individually managed on this site and no cross-site relations are maintained. <strong>This change is irreversible.</strong>', array('!service_name_long' => acsf_factory_name()));
   return confirm_form($form, $question, 'admin/config/people/accounts', $description);
 }
 
@@ -668,7 +655,8 @@ class EmailVerifier {
   const MUTE_FOR = 86400;
 
   public function __construct() {
-    $status = (array) gardens_client_data_get('sf_site', 'verification_status');
+    $site = \Acquia\Acsf\AcsfSite::load();
+    $status = (array) $site->verification_status;
     foreach ($status as $key => $value) {
       $this->$key = $value;
     }
@@ -862,20 +850,5 @@ function gardens_client_form_janrain_capture_settings_alter(&$form, $form_state)
  */
 function gardens_client_acsf_openid_user_registration_toggler($form, $form_state) {
   variable_set('acsf_openid_registration_handling', empty($form_state['values']['janrain_capture_enforce']));
-}
-
-/**
- * Implements hook_acsf_registry().
- */
-function gardens_client_acsf_registry() {
-  return array(
-    'events' => array(
-      array(
-        'type' => 'acsf_site_data_receive',
-        'class' => 'GardensClientSiteDataHandler',
-        'path' => drupal_get_path('module', 'gardens_client') . '/classes',
-      ),
-    ),
-  );
 }
 

@@ -238,7 +238,7 @@ function janrain_client_get_rpxnow_url() {
     // Call the gardener to see if the invite's been accepted since we checked
     // last.
     try {
-      $message = new AcsfMessageRest('GET', 'site-api/v1/janrain/invite', array('id' => gardens_client_get_gardens_db_name()));
+      $message = new \Acquia\Acsf\AcsfMessageRest('GET', 'site-api/v1/janrain/invite', array('id' => gardens_client_get_gardens_db_name()));
       $message->send();
       $result = $message->getResponseBody();
     }

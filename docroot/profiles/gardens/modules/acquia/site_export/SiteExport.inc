@@ -256,11 +256,8 @@ class SiteExport {
       // Actual modules.
       'acsf',
       'acsf_duplication',
-      'acsf_events',
-      'acsf_log',
       'acsf_openid',
       'acsf_pingdom',
-      'acsf_site',
       'acsf_variables',
       'akamai',
       'antivirus',

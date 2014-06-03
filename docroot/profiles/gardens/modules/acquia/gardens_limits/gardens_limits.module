@@ -103,7 +103,8 @@ function gardens_limits_init() {
  * Decides if crawlers should be discouraged from indexing this site.
  */
 function gardens_limits_crawler_block_apply() {
-  $crawler_blocking_info = gardens_client_data_get('sf_abuse', 'block_crawler');
+  $site = \Acquia\Acsf\AcsfSite::load();
+  $crawler_blocking_info = $site->sf_abuse['block_crawler'];
   $site_creation = variable_get('install_time', 0);
   $killswitch = variable_get('gardens_limits_crawler_blocking_killswitch', FALSE);
   $killswitch = $killswitch && $killswitch === gardens_limits_crawler_blocking_killswitch();
@@ -118,7 +119,7 @@ function gardens_limits_crawler_block_apply() {
  * we'll use a hard to guess value.
  */
 function gardens_limits_crawler_blocking_killswitch() {
-  return hash_hmac('sha1', variable_get('install_time', 0), 'crawler_blocking:' . variable_get('gardens_db_name', ''), TRUE);
+  return hash_hmac('sha1', variable_get('install_time', 0), 'crawler_blocking:' . variable_get('acsf_db_name', ''), TRUE);
 }
 
 /**
@@ -279,7 +280,8 @@ function gardens_limits_user_presave(&$edit, $account, $category) {
  * The number of users allowed in the current tier.
  */
 function gardens_limits_user_limit() {
-  return (int) gardens_client_data_get('acquia_zuora', 'member_limit');
+  $site = \Acquia\Acsf\AcsfSite::load();
+  return (int) $site->acquia_zuora['member_limit'];
 }
 
 /**
@@ -309,8 +311,8 @@ function gardens_limits_user_message_add() {
  */
 function gardens_limits_user_limit_text($type = 'basic', $data = 0) {
   $limit = gardens_limits_user_limit();
-  $site = AcsfSite::load();
-  $feedback = array('@upgrade' => scarecrow_get_gardener_url() . '/purchase/' . $site->nid, '@limit' => $limit);
+  $site = \Acquia\Acsf\AcsfSite::load();
+  $feedback = array('@upgrade' => scarecrow_get_gardener_url() . '/purchase/' . $site->site_id, '@limit' => $limit);
   switch ($type) {
     case 'basic':
       return t('You have reached your limit of @limit site members. <a href="@upgrade">To add more, upgrade your subscription.</a>', $feedback);
@@ -399,7 +401,8 @@ function theme_gardens_limits_system_powered_by($variables) {
  * Determines whether the powered by drupal gardens block should be forced.
  */
 function gardens_limits_powered_by_forced() {
-  return (bool) gardens_client_data_get('acquia_zuora', 'force_powered_by');
+  $site = \Acquia\Acsf\AcsfSite::load();
+  return (bool) $site->acquia_zuora['force_powered_by'];
 }
 
 // == Filesize limit =========================================================
@@ -587,7 +590,8 @@ function gardens_limits_storage_is_limited() {
  * Return the limit of file storage space. 0 is unlimited.
  */
 function gardens_limits_storage_limit() {
-  return (int) gardens_client_data_get('acquia_zuora', 'storage_limit');
+  $site = \Acquia\Acsf\AcsfSite::load();
+  return (int) $site->acquia_zuora['storage_limit'];
 }
 
 /**
@@ -808,7 +812,8 @@ function gardens_limits_webform_is_limited($nid) {
  * Return the limit of webform submissions per form. 0 is unlimited.
  */
 function gardens_limits_webform_limit() {
-  return (int) gardens_client_data_get('acquia_zuora', 'webform_responses_form');
+  $site = \Acquia\Acsf\AcsfSite::load();
+  return (int) $site->acquia_zuora['webform_responses_form'];
 }
 
 /**

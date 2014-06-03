@@ -8,10 +8,10 @@
 /**
  * Scrubs the Voting API data, but preserves its configuration.
  */
-class GardensDuplicationScrubVotingApiHandler extends AcsfEventHandler {
+class GardensDuplicationScrubVotingApiHandler extends \Acquia\Acsf\AcsfEventHandler {
 
   /**
-   * Implements AcsfEventHandler::handle().
+   * Implements \Acquia\Acsf\AcsfEventHandler::handle().
    */
   public function handle() {
     drush_print(dt('Entered @class', array('@class' => get_class($this))));

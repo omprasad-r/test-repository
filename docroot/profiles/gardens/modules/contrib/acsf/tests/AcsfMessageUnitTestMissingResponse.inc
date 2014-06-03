@@ -1,6 +1,8 @@
 <?php
 
-class AcsfMessageUnitTestMissingResponse extends AcsfMessage {
+require_once __DIR__ . '/../vendor/autoload.php';
+
+class AcsfMessageUnitTestMissingResponse extends \Acquia\Acsf\AcsfMessage {
 
   /**
    * Implements AcsfMessage::sendMessage().

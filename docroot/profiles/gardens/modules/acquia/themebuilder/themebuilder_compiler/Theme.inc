@@ -1248,6 +1248,12 @@ class Theme {
       }
       $src = $full_src;
     }
+    if (file_exists($dest) && is_link($dest)) {
+      // Do not copy to the symbolic link.  This is likely a link that points
+      // to the theme repository, which is only available on a single webnode.
+      // Instead, remove the link and force a complete copy of the theme.
+      unlink($dest);
+    }
     // Use a simple cp, for speed, if we don't need to exclude any files.
     if (empty($exclude_patterns)) {
       // Note that cp does not care whether you use a trailing slash or not.

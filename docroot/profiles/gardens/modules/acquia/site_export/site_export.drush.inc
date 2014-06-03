@@ -89,8 +89,8 @@ function drush_site_export_export_s3() {
     ini_set('memory_limit', $memory_limit);
   }
 
-  $site = AcsfSite::load();
-  $nid = $site->nid;
+  $site = \Acquia\Acsf\AcsfSite::load();
+  $nid = $site->site_id;
   $uri = site_export_export_both();
   $path = drupal_realpath($uri);
   $resource_name = 'g' . $nid . '.tar.gz';
@@ -107,7 +107,7 @@ function drush_site_export_export_s3() {
     drush_set_error('archive_failed', 'Unable to archive site to s3. Reporting failure to the gardener.');
 
     try {
-      $message = new AcsfMessageXmlRpc('GET', 'acquia.gardens.site.archive.failed', array($nid));
+      $message = new \Acquia\Acsf\AcsfMessageXmlRpc('GET', 'acquia.gardens.site.archive.failed', array($nid));
       $message->send();
       $success = $message->getResponseBody();
     }
@@ -120,7 +120,7 @@ function drush_site_export_export_s3() {
   // Notify the gardener that we we have exported this site and moved it to S3.
   drush_log("Query Auth URL:" . $authenticated_url, 'success');
   try {
-    $message = new AcsfMessageRest('POST', 'site-api/v1/archive-site/' . $nid, array('url' => $authenticated_url));
+    $message = new \Acquia\Acsf\AcsfMessageRest('POST', 'site-api/v1/archive-site/' . $nid, array('url' => $authenticated_url));
     $message->send();
     $response = $message->getResponseBody();
     $success = $response['archived'];

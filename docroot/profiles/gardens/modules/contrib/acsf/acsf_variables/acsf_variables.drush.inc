@@ -20,6 +20,7 @@ function acsf_variables_drush_command() {
           'description' => dt('Format to output the object. Use "print_r" for print_r (default), "export" for var_export, and "json" for JSON.'),
           'example-value' => 'json',
         ),
+        'exact' => dt('Only retrieve the exact variable name specified.'),
       )
     ),
     'acsf-vset' => array(
@@ -50,11 +51,14 @@ function acsf_variables_drush_command() {
         'name' => dt('The name of the variable to delete.'),
       ),
     ),
+    'acsf-info' => array(
+      'description' => dt('Retrieves info about a site.'),
+    ),
   );
 }
 
 /**
- * Retrieves a named ACSF variable.
+ * Command callback. Retrieves a named ACSF variable.
  */
 function drush_acsf_variables_acsf_vget($name) {
   if (!module_exists('acsf_variables')) {
@@ -66,15 +70,35 @@ function drush_acsf_variables_acsf_vget($name) {
   }
 
   $format = drush_get_option('format', 'print_r');
+  $exact = drush_get_option('exact');
+  $variables = array();
 
-  if ($variable = acsf_vget($name)) {
-    if ($format == 'json') {
-      $value = drush_format($variable, NULL, $format);
+  if ($exact) {
+    $variables[] = $name;
+  }
+  else {
+    $select = db_select('acsf_variables', 'v')
+      ->fields('v', array('name'))
+      ->condition('name', '%' . $name . '%', 'LIKE')
+      ->execute();
+
+    while ($value = $select->fetchField()) {
+      $variables[] = $value;
     }
-    else {
-      $value = dt('@name: !value', array('@name' => $name, '!value' => drush_format($variable, NULL, $format)));
+  }
+
+  if (!empty($variables)) {
+    foreach ($variables as $name) {
+      if ($variable = acsf_vget($name)) {
+        if ($format == 'json') {
+          $value = drush_format($variable, NULL, $format);
+        }
+        else {
+          $value = dt('@name: !value', array('@name' => $name, '!value' => drush_format($variable, NULL, $format)));
+        }
+        drush_print($value);
+      }
     }
-    drush_print($value);
   }
   else {
     return drush_set_error(dt('@name not found.', array('@name' => $name)));
@@ -82,7 +106,7 @@ function drush_acsf_variables_acsf_vget($name) {
 }
 
 /**
- * Sets a named variable with an optional group.
+ * Command callback. Sets a named variable with an optional group.
  */
 function drush_acsf_variables_acsf_vset($name, $value) {
   if (!module_exists('acsf_variables')) {
@@ -105,7 +129,7 @@ function drush_acsf_variables_acsf_vset($name, $value) {
 }
 
 /**
- * Retrieves a group of variables.
+ * Command callback. Retrieves a group of variables.
  */
 function drush_acsf_variables_acsf_vget_group($group) {
   if (!module_exists('acsf_variables')) {
@@ -133,7 +157,7 @@ function drush_acsf_variables_acsf_vget_group($group) {
 }
 
 /**
- * Deletes a named variable.
+ * Command callback. Deletes a named variable.
  */
 function drush_acsf_variables_acsf_vdel($name) {
   if (!module_exists('acsf_variables')) {
@@ -155,5 +179,12 @@ function drush_acsf_variables_acsf_vdel($name) {
   else {
     return drush_set_error(dt('@name not found.', array('@name' => $name)));
   }
+}
+
+/**
+ * Command callback. Prints information about the site.
+ */
+function drush_acsf_variables_acsf_info() {
+  drush_print(drush_format(acsf_vget('acsf_site_info'), NULL, 'print_r'));
 }
 

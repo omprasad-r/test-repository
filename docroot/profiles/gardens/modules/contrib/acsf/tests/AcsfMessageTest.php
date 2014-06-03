@@ -9,14 +9,12 @@ class AcsfMessageTest extends PHPUnit_Framework_TestCase {
 
   public function setUp() {
     $files = array(
-      __DIR__ . '/../classes/AcsfConfig.inc',
+      __DIR__ . '/../vendor/autoload.php',
       __DIR__ . '/AcsfConfigUnitTest.inc',
       __DIR__ . '/AcsfConfigUnitTestMissingPassword.inc',
       __DIR__ . '/AcsfConfigUnitTestMissingUrl.inc',
       __DIR__ . '/AcsfConfigUnitTestMissingUsername.inc',
       __DIR__ . '/AcsfConfigUnitTestIncompatible.inc',
-      __DIR__ . '/../classes/AcsfMessage.inc',
-      __DIR__ . '/../classes/AcsfMessageResponse.inc',
       __DIR__ . '/AcsfMessageUnitTestSuccess.inc',
       __DIR__ . '/AcsfMessageUnitTestFailure.inc',
       __DIR__ . '/AcsfMessageUnitTestFailureException.inc',
@@ -42,7 +40,7 @@ class AcsfMessageTest extends PHPUnit_Framework_TestCase {
    * Tests that the config object must be an instance of AcsfConfig.
    *
    * @expectedException PHPUnit_Framework_Error
-   * @expectedExceptionMessage must be an instance of AcsfConfig
+   * @expectedExceptionMessage must be an instance of Acquia\Acsf\AcsfConfig
    */
   public function testAcsfMessageConfigIncompatible() {
     // Provide an incompatible config object (which is a subclass of stdClass
@@ -58,7 +56,7 @@ class AcsfMessageTest extends PHPUnit_Framework_TestCase {
     // Provide a compatible config object to check that no error is generated.
     // This isn't very precise since any error would make this test fail.
     $config = new AcsfConfigUnitTest('unit_test_site', 'unit_test_env');
-    $this->assertTrue(is_subclass_of($config, 'AcsfConfig'));
+    $this->assertTrue(is_subclass_of($config, '\Acquia\Acsf\AcsfConfig'));
     $message = new AcsfMessageUnitTestSuccess('TEST', 'unit_test_endpoint', array(), $config);
   }
 
@@ -84,7 +82,7 @@ class AcsfMessageTest extends PHPUnit_Framework_TestCase {
   /**
    * Tests that an exception is throw when endpoint is missing.
    *
-   * @expectedException AcsfMessageMalformedResponseException
+   * @expectedException \Acquia\Acsf\AcsfMessageMalformedResponseException
    */
   public function testAcsfMessageResponseMissingEndpoint() {
     $config = new AcsfConfigUnitTest('unit_test_site', 'unit_test_env');
@@ -95,7 +93,7 @@ class AcsfMessageTest extends PHPUnit_Framework_TestCase {
   /**
    * Tests that an exception is throw when response is missing.
    *
-   * @expectedException AcsfMessageMalformedResponseException
+   * @expectedException \Acquia\Acsf\AcsfMessageMalformedResponseException
    */
   public function testAcsfMessageResponseMissingResponse() {
     $config = new AcsfConfigUnitTest('unit_test_site', 'unit_test_env');
@@ -113,7 +111,7 @@ class AcsfMessageTest extends PHPUnit_Framework_TestCase {
       $caught = FALSE;
       $message->send();
     }
-    catch (AcsfMessageFailedResponseException $e) {
+    catch (\Acquia\Acsf\AcsfMessageFailedResponseException $e) {
       $caught = TRUE;
     }
     $this->assertTrue($caught);
@@ -123,7 +121,7 @@ class AcsfMessageTest extends PHPUnit_Framework_TestCase {
   /**
    * Tests that the AcsfMessageFailureException exception is thrown.
    *
-   * @expectedException AcsfMessageFailureException
+   * @expectedException \Acquia\Acsf\AcsfMessageFailureException
    */
   public function testAcsfMessageResponseFailureException() {
     $config = new AcsfConfigUnitTest('unit_test_site', 'unit_test_env');

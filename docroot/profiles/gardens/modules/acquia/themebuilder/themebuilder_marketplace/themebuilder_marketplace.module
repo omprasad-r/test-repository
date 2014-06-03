@@ -59,7 +59,7 @@ function themebuilder_marketplace_get_theme_list() {
     $system_name = themebuilder_marketplace_get_base_name($result->s3_key);
     if ($result->username == 'Gardens admin') {
       $meta = t("!service_name_long base theme", array(
-        '!service_name_long' => acsf_vget('acsf_factory_name', 'Acquia Cloud Site Factory'),
+        '!service_name_long' => acsf_factory_name(),
       ));
     }
     else {

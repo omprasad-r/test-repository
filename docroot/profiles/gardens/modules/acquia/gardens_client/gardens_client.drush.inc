@@ -105,7 +105,7 @@ function drush_gardens_client_gardens_stats() {
   }
 
   try {
-    $message = new AcsfMessageRest('POST', 'site-api/v1/site-stats', array('stats' => $stats));
+    $message = new \Acquia\Acsf\AcsfMessageRest('POST', 'site-api/v1/site-stats', array('stats' => $stats));
     $message->send();
     $response = $message->getResponseBody();
     $rpc_result = $response['saved'];
@@ -178,8 +178,7 @@ function drush_gardens_client_gardens_move_cluster($gardener_url = NULL, $userma
     }
   }
 
-  $site = AcsfSite::load();
-  $original_gardener_url = $site->factory_url;
+  $original_gardener_url = acsf_factory_url();
   if (empty($gardener_url)) {
     $gardener_url = 'https://gardener.' . $stage . '.acquia-sites.com';
   }

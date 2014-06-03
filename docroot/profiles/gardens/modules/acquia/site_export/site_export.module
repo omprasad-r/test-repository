@@ -144,7 +144,7 @@ function site_export_call_gardener($form, &$form_state) {
   );
 
   try {
-    $message = new AcsfMessageRest('POST', 'site-api/v1/export-stats', $stats);
+    $message = new \Acquia\Acsf\AcsfMessageRest('POST', 'site-api/v1/export-stats', $stats);
     $message->send();
     $response = $message->getResponseBody();
     $success = $response['saved'];

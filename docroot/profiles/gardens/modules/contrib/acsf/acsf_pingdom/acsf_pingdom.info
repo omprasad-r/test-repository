@@ -2,3 +2,6 @@ name = ACSF Pingdom
 description = Handles the pausing and unpausing of Pingdom checks under certain conditions.
 core = 7.x
 package = Acquia Cloud Site Factory
+hidden = TRUE
+
+dependencies[] = acsf

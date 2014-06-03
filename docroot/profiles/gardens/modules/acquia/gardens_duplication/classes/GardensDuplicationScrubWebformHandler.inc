@@ -12,10 +12,10 @@
  * webform nodes themselves. The assumption is that the duplicated site should
  * have the same webforms as the source site.
  */
-class GardensDuplicationScrubWebformHandler extends AcsfEventHandler {
+class GardensDuplicationScrubWebformHandler extends \Acquia\Acsf\AcsfEventHandler {
 
   /**
-   * Implements AcsfEventHandler::handle().
+   * Implements \Acquia\Acsf\AcsfEventHandler::handle().
    */
   public function handle() {
     drush_print(dt('Entered @class', array('@class' => get_class($this))));

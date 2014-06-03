@@ -5,10 +5,10 @@
  * Handle the Factory sync so that we can capture the responsive enabled variable.
  */
 
-class GardensFeaturesSiteDataHandler extends AcsfEventHandler {
+class GardensFeaturesSiteDataHandler extends \Acquia\Acsf\AcsfEventHandler {
 
   /**
-   * Implements AcsfEventHandler::handle().
+   * Implements \Acquia\Acsf\AcsfEventHandler::handle().
    */
   public function handle() {
     $data = $this->event->context;

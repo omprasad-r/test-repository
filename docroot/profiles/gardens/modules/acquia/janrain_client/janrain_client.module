@@ -1394,7 +1394,7 @@ function janrain_client_ensure_setup() {
  */
 function janrain_client_get_rp() {
   try {
-    $message = new AcsfMessageRest('GET', 'site-api/v1/janrain/rp', array('id' => gardens_client_get_gardens_db_name()));
+    $message = new \Acquia\Acsf\AcsfMessageRest('GET', 'site-api/v1/janrain/rp', array('id' => gardens_client_get_gardens_db_name()));
     $message->send();
     $result = $message->getResponseBody();
     return $result['data'];
