@@ -1,9 +1,11 @@
 <?php
 
 /**
- * Implements hook_init().
+ * Implements hook_boot().
+ *
+ * We need to ensure that our autoloader is available as early as possible.
  */
-function acsf_init() {
+function acsf_boot() {
   try {
     acsf_register_autoloader();
   }
