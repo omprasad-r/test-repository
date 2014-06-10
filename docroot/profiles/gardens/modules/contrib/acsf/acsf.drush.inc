@@ -86,7 +86,7 @@ function drush_acsf_build_registry() {
  * Drush command. Scrubs the site database.
  */
 function drush_acsf_site_scrub() {
-  $config = new AcsfConfigDefault();
+  $config = new \Acquia\Acsf\AcsfConfigDefault();
 
   // Ensure that we are testing the scrub cleanly.
   variable_del('acsf_site_scrubbed');
@@ -132,6 +132,7 @@ function drush_acsf_site_scrub() {
     'cache_block',
     'cache_image',
     'watchdog',
+    'acsf_theme_notifications',
   );
 
   foreach ($truncate_tables as $table) {
@@ -139,17 +140,6 @@ function drush_acsf_site_scrub() {
       db_query(sprintf('TRUNCATE {%s}', $table));
     }
   }
-
-  // Ensure that the file_public_path uses the correct convention.
-  // @todo this should be removed with DG-11343.
-  $db_role = variable_get('gardens_db_name', '');
-  if (!empty($db_role)) {
-    drush_print(dt('Setting file_public_path to !path', array('!path' => $path)));
-    variable_set('file_public_path', "sites/g/files/$db_role/f");
-  }
-
-  // Clear any cached values from ACSF variables.
-  acsf_variables_cache_refresh();
 
   // We will handle email addresses and passwords ourselves.
   drush_set_option('sanitize-email', 'no');
@@ -170,12 +160,12 @@ function drush_acsf_site_scrub() {
  * get data. When called with the --data option it will simply digest that data.
  */
 function drush_acsf_site_sync() {
-  $site = AcsfSite::load();
+  $site = \Acquia\Acsf\AcsfSite::load();
   $data = drush_get_option('data', NULL);
 
   // Create an event to gather site stats to send to the Factory.
   $context = array();
-  $event = AcsfEvent::create('acsf_stats', $context);
+  $event = \Acquia\Acsf\AcsfEvent::create('acsf_stats', $context);
   $event->run();
   $stats = $event->context;
 
@@ -186,7 +176,7 @@ function drush_acsf_site_sync() {
     if (!empty($site_info) && is_array($site_info)) {
       // Allow other modules to consume the data.
       $context = $site_info;
-      $event = AcsfEvent::create('acsf_site_data_receive', $context);
+      $event = \Acquia\Acsf\AcsfEvent::create('acsf_site_data_receive', $context);
       $event->run();
 
       // For debugging purpose to be able to tell if the data has been pulled
@@ -225,14 +215,14 @@ function drush_acsf_go_offline() {
  * Command callback. Prints factory information.
  */
 function drush_acsf_get_factory_creds() {
-  if (!class_exists('AcsfConfigDefault')) {
+  if (!class_exists('\Acquia\Acsf\AcsfConfigDefault')) {
     // Since there might not be a bootstrap, we need to find our config objects.
     $include_path = realpath(dirname(__FILE__));
-    require_once $include_path . '/classes/AcsfConfig.inc';
-    require_once $include_path . '/classes/AcsfConfigDefault.inc';
+    require_once $include_path . '/src/Acquia/Acsf/AcsfConfig.php';
+    require_once $include_path . '/src/Acquia/Acsf/AcsfConfigDefault.php';
   }
 
-  $config = new AcsfConfigDefault();
+  $config = new \Acquia\Acsf\AcsfConfigDefault();
   $creds = array(
     'url' => $config->getUrl(),
     'username' => $config->getUsername(),
@@ -374,12 +364,12 @@ function drush_acsf_report_complete_async_process() {
 
   // Since this does not bootstrap drupal fully, we need to manually require the
   // classes necessary to send a message to the Factory.
-  require_once $data->acsf_path . '/classes/AcsfConfig.inc';
-  require_once $data->acsf_path . '/classes/AcsfConfigDefault.inc';
-  require_once $data->acsf_path . '/classes/AcsfMessage.inc';
-  require_once $data->acsf_path . '/classes/AcsfMessageRest.inc';
-  require_once $data->acsf_path . '/classes/AcsfMessageResponse.inc';
-  require_once $data->acsf_path . '/classes/AcsfMessageResponseRest.inc';
+  require_once $data->acsf_path . '/src/Acquia/Acsf/AcsfConfig.php';
+  require_once $data->acsf_path . '/src/Acquia/Acsf/AcsfConfigDefault.php';
+  require_once $data->acsf_path . '/src/Acquia/Acsf/AcsfMessage.php';
+  require_once $data->acsf_path . '/src/Acquia/Acsf/AcsfMessageRest.php';
+  require_once $data->acsf_path . '/src/Acquia/Acsf/AcsfMessageResponse.php';
+  require_once $data->acsf_path . '/src/Acquia/Acsf/AcsfMessageResponseRest.php';
 
   $arguments = array(
     'wid' => $data->object_id,
@@ -391,11 +381,11 @@ function drush_acsf_report_complete_async_process() {
   try {
     // We do not have a Drupal bootstrap at this point, so we need to use
     // AcsfConfigDefault to obtain the shared credentials.
-    $config = new AcsfConfigDefault();
-    $message = new AcsfMessageRest('POST', $data->callback, $arguments, $config);
+    $config = new \Acquia\Acsf\AcsfConfigDefault();
+    $message = new \Acquia\Acsf\AcsfMessageRest('POST', $data->callback, $arguments, $config);
     $message->send();
   }
-  catch (AcsfMessageFailedResponseException $e) {
+  catch (\Acquia\Acsf\AcsfMessageFailedResponseException $e) {
     syslog(LOG_ERR, 'Unable to contact the factory via AcsfMessage.');
   }
 }

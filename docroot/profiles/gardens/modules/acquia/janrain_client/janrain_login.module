@@ -390,7 +390,7 @@ function janrain_login_form_user_register_form_alter(&$form, &$form_state, $form
 
     // Request the Engage data from gardener using the token.
     try {
-      $message = new AcsfMessageRest('GET', 'site-api/v1/janrain/user-data', array('id' => $token));
+      $message = new \Acquia\Acsf\AcsfMessageRest('GET', 'site-api/v1/janrain/user-data', array('id' => $token));
       $message->send();
       $rpx_result = $message->getResponseBody();
       $rpx_data = $rpx_result['data'];
@@ -1261,7 +1261,7 @@ function janrain_login_user_login(&$edit, $account) {
     $token = $_REQUEST['openid_ax_value_rpx_token'];
 
     try {
-      $message = new AcsfMessageRest('GET', 'site-api/v1/janrain/user-data', array('id' => $token));
+      $message = new \Acquia\Acsf\AcsfMessageRest('GET', 'site-api/v1/janrain/user-data', array('id' => $token));
       $message->send();
       $rpx_result = $message->getResponseBody();
       $rpx_data = $rpx_result['data'];

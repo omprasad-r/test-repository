@@ -666,7 +666,7 @@ ThemeBuilder.Bar.prototype.userMaySave = function (themeName) {
   var theme = (themeName ? ThemeBuilder.Theme.getTheme(themeName) : theme = ThemeBuilder.Theme.getSelectedTheme());
 
   // Determine whether the active theme is the published theme.
-  if (theme.isPublished()) {
+  if (theme && theme.isPublished()) {
     // If so, saving would affect the published theme. Make sure the user has
     // publish theme permissions.
     return this.userMayPublish();
@@ -777,7 +777,6 @@ ThemeBuilder.Bar.prototype.save = function () {
   ThemeBuilder.postBack('themebuilder-save', {},
     ThemeBuilder.bind(this, this._themeSaved),
     ThemeBuilder.bind(this, this._themeSaveFailed));
-  this.themeChangeNotification();
 };
 
 /**
@@ -800,6 +799,7 @@ ThemeBuilder.Bar.prototype._themeSaved = function (data) {
     app.updateData({
       bar_saved_theme: ThemeBuilder.Theme.getTheme(data.system_name)
     });
+    this.themeChangeNotification('modify', data.system_name);
   }
   catch (e) {
   }
@@ -904,7 +904,6 @@ ThemeBuilder.Bar.prototype.publish = function () {
     var publish = appData.selectedTheme !== appData.published_theme;
     ThemeBuilder.postBack('themebuilder-save', {publish: publish},
       ThemeBuilder.bind(this, this._publishCallback));
-    this.themeChangeNotification();
   }
 };
 
@@ -937,7 +936,6 @@ ThemeBuilder.Bar.prototype._saveDialogCallback = function (data, status, publish
       this.disableThemebuilder();
       ThemeBuilder.postBack('themebuilder-save', saveArguments,
         ThemeBuilder.bind(this, this._saveDialogCallback, publish), ThemeBuilder.bind(this, this._themeSaveFailed));
-      this.themeChangeNotification();
     }
     else {
       this.enableThemebuilder();
@@ -955,7 +953,6 @@ ThemeBuilder.Bar.prototype._saveDialogCallback = function (data, status, publish
     }
     else {
       this._themeSaved(data);
-      this.themeChangeNotification();
     }
   }
 };
@@ -971,6 +968,7 @@ ThemeBuilder.Bar.prototype._saveDialogCallback = function (data, status, publish
  *   The data that is passed from the server upon publishing the theme.
  */
 ThemeBuilder.Bar.prototype._publishCallback = function (data) {
+  this.themeChangeNotification('modify', data.system_name);
   this.setChanged(false);
   this.setStatus(Drupal.t('%theme_name is now live.', {'%theme_name': data.name}));
   this.setInfo(data.name, data.time);
@@ -1624,12 +1622,18 @@ ThemeBuilder.Bar.prototype.disableButtons = function () {
 /**
  * Make an asynchronous request to the site about a theme change.
  *
- * When a theme is saved or published then the factory needs notification so it
- * can pick up the changes. To avoid doing this 3rd party request during the
- * user pageload, this asyncronous Javascript call will start it.
+ * When a theme event occurs on a site, the Factory must be notified. To avoid
+ * doing a third-party request during a pageload, this asyncronous Javascript
+ * call will initiate it.
  */
-ThemeBuilder.Bar.prototype.themeChangeNotification = function () {
-  ThemeBuilder.getBack('themebuilder-change-notification');
+ThemeBuilder.Bar.prototype.themeChangeNotification = function (eventType, themeName) {
+  if (themeName === undefined) {
+    themeName = ThemeBuilder.getApplicationInstance().getData().selectedTheme;
+  }
+  ThemeBuilder.postBack('themebuilder-change-notification', {
+    'event': eventType,
+    'theme': themeName
+  });
 };
 
 /**

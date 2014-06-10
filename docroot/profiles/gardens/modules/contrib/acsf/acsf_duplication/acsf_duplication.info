@@ -2,15 +2,6 @@ name = ACSF Duplication
 description = Helper module for duplicating Acquia Cloud Site Factory sites.
 core = 7.x
 package = Acquia Cloud Site Factory
+hidden = TRUE
 
-files[] = classes/AcsfDuplicationScrubCommentHandler.inc
-files[] = classes/AcsfDuplicationScrubConfigurationHandler.inc
-files[] = classes/AcsfDuplicationScrubFinalizeHandler.inc
-files[] = classes/AcsfDuplicationScrubInitializeHandler.inc
-files[] = classes/AcsfDuplicationScrubModuleDisableHandler.inc
-files[] = classes/AcsfDuplicationScrubModuleEnableHandler.inc
-files[] = classes/AcsfDuplicationScrubNodeHandler.inc
-files[] = classes/AcsfDuplicationScrubTemporaryFilesHandler.inc
-files[] = classes/AcsfDuplicationScrubTruncateTablesHandler.inc
-files[] = classes/AcsfDuplicationScrubUserHandler.inc
-
+dependencies[] = acsf

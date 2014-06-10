@@ -191,3 +191,10 @@ function gardens_client_update_12000() {
   module_disable(array('profile'), FALSE);
   drupal_uninstall_modules(array('profile'), FALSE);
 }
+
+/**
+ * Remove the gardens_client_gardener_data variable.
+ */
+function gardens_client_update_12001() {
+  variable_del('gardens_client_gardener_data');
+}

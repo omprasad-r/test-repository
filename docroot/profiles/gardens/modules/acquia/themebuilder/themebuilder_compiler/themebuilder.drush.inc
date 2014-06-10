@@ -144,9 +144,24 @@ function drush_themebuilder_check_diff($name) {
   if (strlen($advanced) > 0) {
     return drush_set_error('THEME_IS_MODIFIED', 'advanced.css has content');
   }
+  // The UserEditable::CUSTOM section of palette properties are user-altered
+  // sections of the page that have been assigned built-in palette colours.
+  if (!empty($theme->getPaletteAsset()->properties[UserEditable::CUSTOM])) {
+    return drush_set_error('THEME_IS_MODIFIED', 'Palette changes detected.');
+  }
 
   $info = $theme->assets_new['info']->getContents();
   $base_info = $base->assets_new['info']->getContents();
+
+  // Remove empty "name" members from palette colours - these are not explicitly
+  // present on the base theme, but get created when copying to the custom
+  // theme.  Leaving these in place results in a false positive on the theme's
+  // "modified" status.
+  foreach ($info['palette'] as $key => &$value) {
+    if (is_array($value) && isset($value['name']) && empty($value['name'])) {
+      unset($value['name']);
+    }
+  }
 
   // Remove some properties from consideration that just create noise (name is
   // more or less always unique, and base_palette is added to every subtheme as
@@ -188,6 +203,13 @@ function drush_themebuilder_revert_theme($name) {
     variable_set('theme_default', $base_name);
   }
 
+
+  // Soft-delete themebuilder theme by performing the backup procedure and then
+  // deleting the theme.
+  if (!$theme->moveToBackup()) {
+    return drush_set_error('BACKUP_FAIL', dt('Failed to back up the custom theme (@theme) - aborting without attempting to delete this theme.', array('@theme' => $name)));
+  }
+
   $blocks_modified = db_query('SELECT 1 FROM {block} WHERE theme = :theme', array(
     ':theme' => $base_name,
   ))->fetchField(0);
@@ -206,15 +228,7 @@ function drush_themebuilder_revert_theme($name) {
     ));
   }
 
-  // Delete the themebuilder custom theme ... for now, we will soft-delete
-  // themes, meaning they will cease to show in the themebuilder's list, but
-  // a full delete would only require uncommenting this line:
-  // themebuilder_compiler_delete_theme($theme, $name);
-
-  // Soft-delete themebuilder theme:
-  $soft_deleted = variable_get('themebuilder_soft_deleted_themes', array());
-  $soft_deleted[] = $name;
-  variable_set('themebuilder_soft_deleted_themes', $soft_deleted);
+  themebuilder_compiler_delete_theme($theme, $name, FALSE);
   cache_clear_all('themebuilder_theme_list', 'cache');
 }
 

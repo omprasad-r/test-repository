@@ -2352,14 +2352,8 @@ function themebuilder_compiler_get_theme_list() {
   }
   else {
     $themes = system_rebuild_theme_data();
-    $soft_deleted = variable_get('themebuilder_soft_deleted_themes', array());
     $result = array('gardens' => array(), 'mythemes' => array());
     foreach ($themes as $theme) {
-      // Don't show any themes that were 'soft-deleted'.
-      if (in_array($theme->name, $soft_deleted)) {
-        continue;
-      }
-
       if (strpos($theme->filename, 'themes/acquia') === 0) {
         // Do not return base themes.
         continue;
@@ -2924,11 +2918,13 @@ function themebuilder_compiler_delete_theme_ajax() {
  *   the system sname of the theme to be deleted.
  * @throws ThemeBuilderException
  */
-function themebuilder_compiler_delete_theme($theme, $theme_name) {
+function themebuilder_compiler_delete_theme($theme, $theme_name, $delete_backups = TRUE) {
   $semaphore = themebuilder_compiler_get_semaphore();
   try {
     $theme->deleteTheme();
-    $theme->deleteAllBackups();
+    if ($delete_backups) {
+      $theme->deleteAllBackups();
+    }
     db_delete('block')
       ->condition('theme', $theme_name)
       ->execute();

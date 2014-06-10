@@ -5,10 +5,11 @@
  */
 function acsf_install() {
   acsf_build_registry();
+  acsf_register_autoloader();
 
   // Initiate an event to run post-acsf-install tasks.
   $type = 'acsf_install';
-  $event = AcsfEvent::create($type, $context);
+  $event = \Acquia\Acsf\AcsfEvent::create($type);
   $event->run();
 }
 
@@ -31,7 +32,8 @@ function acsf_update_7002() {
  * Get fresh site info from the Factory.
  */
 function acsf_update_7003() {
-  $site = AcsfSite::load();
+  acsf_register_autoloader();
+  $site = \Acquia\Acsf\AcsfSite::load();
   $site->clean();
   // Stagger the next refresh so that they are not all calling home at once.
   // We'll set them to be some random time in the past week so that the next
@@ -40,4 +42,34 @@ function acsf_update_7003() {
   $site->last_sf_refresh = time() - $rand;
   $site->save();
   watchdog('acsf', t('The next acsf-site-sync will be %date.', array('%date' => format_date($site->last_sf_refresh))));
+}
+
+/**
+ * De-dupe ACSF variables.
+ */
+function acsf_update_7004() {
+  acsf_register_autoloader();
+  $site = \Acquia\Acsf\AcsfSite::load();
+  $site->clean();
+  // Stagger the next refresh so that they are not all calling home at once.
+  // We'll set them to be some random time in the past week so that the next
+  // refresh happens soon.
+  $rand = 86400 * mt_rand(0, 7);
+  $site->last_sf_refresh = time() - $rand;
+  $site->save();
+  watchdog('acsf', t('The next acsf-site-sync will be %date.', array('%date' => format_date($site->last_sf_refresh))));
+
+  // Remove unused acsf variables.
+  acsf_vdel('acsf_site_nid');
+  acsf_vdel('factory_url');
+  acsf_vdel('acsf_factory_name');
+  acsf_vdel('acsf_variables_cron_last_run');
+  acsf_vdel('acsf_variables_cron_run_interval');
+
+  // The file_public_path is now set via sites.inc.
+  variable_del('file_public_path');
+
+  // Move the registry to an acsf variable.
+  $registry = variable_get('acsf_registry', NULL);
+  acsf_vset('acsf_registry', $registry);
 }

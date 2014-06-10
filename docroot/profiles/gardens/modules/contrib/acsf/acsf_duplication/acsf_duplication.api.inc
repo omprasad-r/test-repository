@@ -15,7 +15,7 @@
  * @see drush_acsf_duplication_scrub_progress()
  */
 function hook_acsf_duplication_scrub_remaining_counts_alter(&$data) {
-  $data['node_count'] = AcsfDuplicationScrubNodeHandler::countRemaining();
+  $data['node_count'] = \Acquia\Acsf\AcsfDuplicationScrubNodeHandler::countRemaining();
 }
 
 /**
@@ -40,7 +40,7 @@ function hook_acsf_duplication_scrub_context_alter(&$context) {
  * @param array $admin_roles
  *   An indexed array of admin roles of users to preserve.
  *
- * @see AcsfDuplicationScrubUserHandler::getOpenIdAdmins()
+ * @see \Acquia\Acsf\AcsfDuplicationScrubUserHandler::getOpenIdAdmins()
  */
 function hook_acsf_duplication_scrub_admin_roles_alter(&$admin_roles) {
   if ($role = variable_get('my_module_admin_role')) {
@@ -54,7 +54,7 @@ function hook_acsf_duplication_scrub_admin_roles_alter(&$admin_roles) {
  * @param array $preserved_uids
  *   An indexed array of user IDs to preserve.
  *
- * @see AcsfDuplicationScrubUserHandler::getPreservedUsers()
+ * @see \Acquia\Acsf\AcsfDuplicationScrubUserHandler::getPreservedUsers()
  */
 function hook_duplication_acsf_duplication_scrub_preserved_users_alter(&$preserved_uids) {
   if ($uids = variable_get('my_module_preserved_uids', array())) {

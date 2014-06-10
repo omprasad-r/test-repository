@@ -1,7 +1,0 @@
-name = ACSF Events
-description = This module defines Acquia Cloud Site Factory events.
-core = 7.x
-package = Acquia Cloud Site Factory
-files[] = classes/AcsfEvent.inc
-files[] = classes/AcsfEventDispatcher.inc
-files[] = classes/AcsfEventHandler.inc

@@ -8,10 +8,10 @@
 /**
  * Scrubs non-core configuration.
  */
-class GardensDuplicationScrubConfigurationHandler extends AcsfEventHandler {
+class GardensDuplicationScrubConfigurationHandler extends \Acquia\Acsf\AcsfEventHandler {
 
   /**
-   * Implements AcsfEventHandler::handle().
+   * Implements \Acquia\Acsf\AcsfEventHandler::handle().
    */
   public function handle() {
     drush_print(dt('Entered @class', array('@class' => get_class($this))));

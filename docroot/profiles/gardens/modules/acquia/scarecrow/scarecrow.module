@@ -414,7 +414,7 @@ function scarecrow_form_mollom_admin_configure_form_alter(&$form, &$form_state) 
 
   // Only enterprise customers may select the option "Accept the post" for "unsure"
   // responses from mollom analysis.
-  $site = AcsfSite::load();
+  $site = \Acquia\Acsf\AcsfSite::load();
   if (!$site->client_name) {
     unset($form['mollom']['unsure']['#options']['binary']);
   }
@@ -663,7 +663,7 @@ function scarecrow_mollom_require_access($mollom_form) {
   // Do not allow removing a node from's Mollom protection if anonymous users
   // may create such nodes.
   $node_form = preg_match('/^([a-z0-9_]+)_node_form$/', $mollom_form['form_id'], $matches) && !empty($matches[1]) && in_array($matches[1], node_permissions_get_configured_types());
-  $site = AcsfSite::load();
+  $site = \Acquia\Acsf\AcsfSite::load();
   if (!$site->client_name && $node_form && user_access('create ' . $matches[1] . ' content', drupal_anonymous_user())) {
     return FALSE;
   }
@@ -750,7 +750,7 @@ function scarecrow_form_field_ui_field_edit_form_alter(&$form, &$form_state) {
   // file system itself to be private), so disable them.
   if (!empty($form['#field']['type']) && in_array($form['#field']['type'], array('file', 'image', 'media'))) {
     $form['field']['field_permissions']['type']['#disabled'] = TRUE;
-    $form['field']['field_permissions']['type']['#description'] = t('This option is disabled for the %label field because !service_name_long does not support private files.', array('%label' => $form['#instance']['label'], '!service_name_long' => acsf_vget('acsf_factory_name', 'Acquia Cloud Site Factory')));
+    $form['field']['field_permissions']['type']['#description'] = t('This option is disabled for the %label field because !service_name_long does not support private files.', array('%label' => $form['#instance']['label'], '!service_name_long' => acsf_factory_name()));
   }
 }
 
@@ -893,7 +893,7 @@ function scarecrow_page_alter(&$page) {
 
         // And for nodes that can be created by anonymous users.
         $node_form = preg_match('/^([a-z0-9_]+)_node_form$/', $form_id, $matches) && !empty($matches[1]) && in_array($matches[1], node_permissions_get_configured_types());
-        $site = AcsfSite::load();
+        $site = \Acquia\Acsf\AcsfSite::load();
         if (!$site->client_name && $node_form && user_access('create ' . $matches[1] . ' content', drupal_anonymous_user())) {
           // The following function brings sanitized strings, so we need to use
           // !permission to avoid double encoding.
@@ -1012,32 +1012,13 @@ function scarecrow_toolbar_add_links($toolbar) {
 }
 
 /**
- * Returns our best guess at the URL of the Gardener corresponding to this
- * Gardens site.
+ * Returns the URL of this site's Factory.
  *
- * @param $base_root
- *   (Optional) The base root of the URL of the Gardens site. Defaults to the
- *   global $base_root variable populated by Drupal.
  * @return
- *   Either the full URL of the Gardener, or an empty string if there is no
- *   Gardener associated with this site.
+ *   The full URL of the Gardener.
  */
 function scarecrow_get_gardener_url($base_root = NULL) {
-  if (class_exists('AcsfSite')) {
-    // If the URL is already set in the AcsfSite object, return that.
-    $site = AcsfSite::load();
-    if (isset($site->factory_url)) {
-      return $site->factory_url;
-    }
-  }
-
-  if (class_exists('AcsfConfigDefault')) {
-    // Otherwise, obtain it from the cred file.
-    $config = new AcsfConfigDefault();
-    return $config->getUrl();
-  }
-
-  return FALSE;
+  return acsf_factory_url();
 }
 
 /**
@@ -1050,12 +1031,9 @@ function scarecrow_disallowed_modules() {
   $disallowed_modules = array(
     'acsf',
     'acsf_duplication',
-    'acsf_events',
     'acsf_init',
-    'acsf_log',
     'acsf_openid',
     'acsf_pingdom',
-    'acsf_site',
     'acsf_theme',
     'acsf_variables',
     'gardens_preproduction',
@@ -1089,10 +1067,6 @@ function scarecrow_disallowed_modules() {
     // not meant to be available in Gardens at this time.
     'form_builder_examples',
     'form_builder_node',
-    // These are included as a good-bye present for now when exporting the site.
-    'acquia_agent',
-    'acquia_spi',
-    'acquia_search',
     // No i18n so far for Drupal 7.
     'xmlsitemap_i18n',
     'xmlsitemap_custom',
@@ -1250,6 +1224,7 @@ function scarecrow_disallowed_modules() {
  * @see scarecrow_visible_required_modules()
  */
 function scarecrow_required_modules() {
+  $site = \Acquia\Acsf\AcsfSite::load();
   $required_modules = array(
     'backports',
     'block',
@@ -1325,8 +1300,8 @@ function scarecrow_required_modules() {
   // PaaS customers should be able to see and disable the themebuilder modules.
   // The default service_type is 'paas' unless a specific service_type is set.
   $service_type = 'paas';
-  if (function_exists('gardens_client_data_get') && gardens_client_data_get('gardens_signup', 'service_type')) {
-    $service_type = gardens_client_data_get('gardens_signup', 'service_type');
+  if (isset($site->gardens_signup['service_type'])) {
+    $service_type = $site->gardens_signup['service_type'];
   }
   if ($service_type !== 'paas') {
     $required_modules = array_merge($required_modules, array(
@@ -1382,11 +1357,20 @@ function scarecrow_visible_required_modules() {
  *   The default list of disallowed modules.
  */
 function scarecrow_disallowed_modules_alter(&$modules) {
-  if (variable_get('gardens_subscriber_modules_enable', TRUE) && function_exists('gardens_client_data_get')) {
-    $gardener_data = gardens_client_data_get('acquia_zuora', 'subscription_disallowed_modules');
+  $site = \Acquia\Acsf\AcsfSite::load();
+  if (variable_get('gardens_subscriber_modules_enable', TRUE) && $site) {
+    $gardener_data = $site->acquia_zuora['subscription_disallowed_modules'];
     if (!empty($gardener_data) && is_array($gardener_data)) {
       $modules = array_merge($modules, $gardener_data);
     }
+  }
+  // The acquia connector modules are for our enterprise customers, not for SMB.
+  // While gardens_misc is expected to be enabled all the time, during install
+  // this function may be called without that module being available.
+  if (module_exists('gardens_misc') && gardens_misc_is_smb()) {
+    $modules[] = 'acquia_agent';
+    $modules[] = 'acquia_spi';
+    $modules[] = 'acquia_search';
   }
 }
 
@@ -1397,8 +1381,9 @@ function scarecrow_disallowed_modules_alter(&$modules) {
  * once on the next page load.
  */
 function _scarecrow_disable_unsubscribed_modules() {
-  if (variable_get('gardens_subscriber_modules_enable', TRUE) && function_exists('gardens_client_data_get')) {
-    $gardener_data = gardens_client_data_get('acquia_zuora', 'subscription_disallowed_modules');
+  $site = \Acquia\Acsf\AcsfSite::load();
+  if (variable_get('gardens_subscriber_modules_enable', TRUE) && $site) {
+    $gardener_data = $site->acquia_zuora['subscription_disallowed_modules'];
     if(!empty($gardener_data) && is_array($gardener_data)) {
       $to_disable = array();
       foreach ($gardener_data as $module) {
@@ -1419,6 +1404,7 @@ function _scarecrow_disable_unsubscribed_modules() {
  * Uninstall disabled modules, as they may break updates if not.
  */
 function scarecrow_cron() {
+  $site = \Acquia\Acsf\AcsfSite::load();
   // Default interval set to 1 day.
   $interval = variable_get('scarecrow_cron_interval', 60*60*24);
 
@@ -1438,8 +1424,8 @@ function scarecrow_cron() {
 
     // Get a list of disallowed modules based on subscription plan, and compare
     // with disabled modules.
-    if (variable_get('gardens_subscriber_modules_enable', TRUE) && function_exists('gardens_client_data_get')) {
-      $gardener_data = gardens_client_data_get('acquia_zuora', 'subscription_disallowed_modules');
+    if (variable_get('gardens_subscriber_modules_enable', TRUE) && $site) {
+      $gardener_data = $site->acquia_zuora['subscription_disallowed_modules'];
       if (!empty($gardener_data) && is_array($gardener_data)) {
         $modules_to_uninstall = array_intersect($disabled_modules, $gardener_data);
       }
@@ -1623,7 +1609,7 @@ function _scarecrow_permissions_validate($form, &$form_state) {
   );
   // Nodes that can be created by anonymous users need to be protected by Mollom
   // with a CAPTCHA on SMB.
-  $site = AcsfSite::load();
+  $site = \Acquia\Acsf\AcsfSite::load();
   if (!$site->client_name) {
     foreach (node_permissions_get_configured_types() as $node_type) {
       if (!empty($form_state['values'][DRUPAL_ANONYMOUS_RID]['create ' . $node_type . ' content']) && !_scarecrow_node_protected_by_mollom($node_type)) {
@@ -1881,7 +1867,7 @@ function theme_scarecrow_media_gallery_download_link($variables) {
  * Implements hook_form_FORM_ID_alter().
  */
 function scarecrow_form_domain_301_redirect_admin_form_alter(&$form, $form_state) {
-  $site = AcsfSite::load();
+  $site = \Acquia\Acsf\AcsfSite::load();
   if (!$site->client_name) {
     // On SMB do not allow disabling the domain check.
     unset($form['domain_301_redirect_check_period']['#options'][0]);

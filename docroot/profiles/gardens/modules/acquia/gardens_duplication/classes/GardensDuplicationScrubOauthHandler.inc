@@ -8,10 +8,10 @@
 /**
  * Scrubs the OAuth keys used by Member API.
  */
-class GardensDuplicationScrubOauthHandler extends AcsfEventHandler {
+class GardensDuplicationScrubOauthHandler extends \Acquia\Acsf\AcsfEventHandler {
 
   /**
-   * Implements AcsfEventHandler::handle().
+   * Implements \Acquia\Acsf\AcsfEventHandler::handle().
    */
   public function handle() {
     drush_print(dt('Entered @class', array('@class' => get_class($this))));

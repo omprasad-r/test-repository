@@ -1,6 +1,8 @@
 <?php
 
-class AcsfConfigUnitTestMissingUrl extends AcsfConfig {
+require_once __DIR__ . '/../vendor/autoload.php';
+
+class AcsfConfigUnitTestMissingUrl extends \Acquia\Acsf\AcsfConfig {
 
   /**
    * Implements AcsfConfig::loadConfig().

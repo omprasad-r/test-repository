@@ -1,6 +1,8 @@
 <?php
 
-class AcsfConfigUnitTest extends AcsfConfig {
+require_once __DIR__ . '/../vendor/autoload.php';
+
+class AcsfConfigUnitTest extends \Acquia\Acsf\AcsfConfig {
 
   /**
    * Implements AcsfConfig::loadConfig().

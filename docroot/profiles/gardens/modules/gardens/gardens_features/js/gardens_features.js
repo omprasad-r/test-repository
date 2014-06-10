@@ -286,7 +286,7 @@
    */
   Drupal.behaviors.GardensFeaturesViewsListFilter = {
     attach: function (context, settings) {
-      $('body.page-admin-structure-views table.#ctools-export-ui-list-items').once('gardens-features-views-list-filter', function () {
+      $('body.page-admin-structure-views table#ctools-export-ui-list-items').once('gardens-features-views-list-filter', function () {
         var $table = $(this);
 
         // Remove any prior links created (for when table gets replaced by AJAX)
@@ -353,8 +353,7 @@
           typeof Drupal.settings.views.ajax_path !== 'undefined' &&
           typeof Drupal.behaviors.ViewsLoadMore === 'undefined') {
         // make sure we have AJAX, but not load_more
-        $('.item-list .pager a').not('a.load-more').once('views-ajax-scroll').click(function ()
-        {
+        $('.item-list .pager a').not('a.load-more').once('views-ajax-scroll').click(function () {
           var outer = $(this).parents('.view');
           if ($(outer).parents('.pane').length) {
             // if there is surrounding pane, scroll to top of it
@@ -404,7 +403,7 @@
           }
           else if (link.href.match(/\/user\/(login|register|password)$/)) {
             if(intab.length == 0) {
-                    link.href = link.href.replace(/\/user\/(login|register|password)/, '/user/$1/ajax');
+              link.href = link.href.replace(/\/user\/(login|register|password)/, '/user/$1/ajax');
             }
             else {
               link.href = link.href.replace(/\/user\/(login|register|password)/, '/user/$1/nojs');

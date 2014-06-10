@@ -10,7 +10,7 @@
       var loginPath = useCapture ? '/user/login' : '/user/login/ajax';
       // Modify all /upload links so that anonymous users are presented
       // a login dialog.
-      var links = $('a[href^=/upload], a[href^=http://'+location.host+'/upload]').once('user-dialog', function(){
+      var links = $('a[href^="/upload"], a[href^="http://' + location.host + '/upload"]').once('user-dialog', function () {
         // Only act on the following types of links:
         // /upload, /upload/image, /upload/video
         // Ignore links that were already set up correctly on the server side.

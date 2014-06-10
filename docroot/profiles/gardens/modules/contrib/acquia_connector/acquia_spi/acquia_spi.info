@@ -4,10 +4,11 @@ package = Acquia Network Connector
 php = 5.0
 core = 7.x
 dependencies[] = acquia_agent
+files[] = tests/acquia_spi.test
 
-; Information added by drupal.org packaging script on 2012-03-12
-version = "7.x-2.2"
+; Information added by Drupal.org packaging script on 2014-04-10
+version = "7.x-2.14"
 core = "7.x"
 project = "acquia_connector"
-datestamp = "1331584237"
+datestamp = "1397136254"
 

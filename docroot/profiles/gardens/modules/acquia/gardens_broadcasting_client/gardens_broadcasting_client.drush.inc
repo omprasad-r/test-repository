@@ -23,7 +23,7 @@ function gardens_broadcasting_client_drush_command() {
  */
 function drush_gardens_broadcasting_client_tasks_get() {
   // When $cluster is empty then it's an SMB site.
-  $site = AcsfSite::load();
+  $site = \Acquia\Acsf\AcsfSite::load();
   $cluster = isset($site->client_name) ? $site->client_name : 'smb';
 
   // Tangle info.
@@ -50,7 +50,7 @@ function drush_gardens_broadcasting_client_tasks_get() {
 
   // Get new tasks.
   try {
-    $message = new AcsfMessageRest('GET', 'site-api/v1/broadcasting/task', array('cluster' => $cluster, 'timestamp' => $timestamp, 'tangle' => $tangle));
+    $message = new \Acquia\Acsf\AcsfMessageRest('GET', 'site-api/v1/broadcasting/task', array('cluster' => $cluster, 'timestamp' => $timestamp, 'tangle' => $tangle));
     $message->send();
     $response = $message->getResponseBody();
     $new_tasks = $response['tasks'];

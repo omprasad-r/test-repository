@@ -1,13 +1,39 @@
 <?php
 
 /**
- * Implements hook_init().
+ * Implements hook_boot().
+ *
+ * We need to ensure that our autoloader is available as early as possible.
  */
-function acsf_init() {
-  module_load_include('inc', 'acsf_events', 'classes/AcsfEvent');
-  module_load_include('inc', 'acsf_events', 'classes/AcsfEventDispatcher');
-  module_load_include('inc', 'acsf_events', 'classes/AcsfEventHandler');
-  module_load_include('inc', 'acsf_log', 'classes/AcsfLog');
+function acsf_boot() {
+  try {
+    acsf_register_autoloader();
+  }
+  catch (\RuntimeException $e) {
+    if (!drupal_is_cli()) {
+      watchdog_exception('acsf', $e);
+    }
+  }
+}
+
+/**
+ * Registers the autoloader for all third-party packages.
+ *
+ * This was taken from the composer_manager module. It provides client code
+ * with a convenient helper function to make sure that the autoloader is
+ * available in cases like updates and installs.
+ */
+function acsf_register_autoloader() {
+  static $registered = FALSE;
+  if (!$registered) {
+    $autoloader = __DIR__ . '/vendor/autoload.php';
+    if (!file_exists($autoloader)) {
+      $message = t('Autoloader not found: @file', array('@file' => $autoloader));
+      throw new \RuntimeException($message);
+    }
+    $registered = TRUE;
+    require $autoloader;
+  }
 }
 
 /**
@@ -35,7 +61,7 @@ function acsf_build_registry() {
 
   usort($registry['events'], 'acsf_registry_sort');
 
-  variable_set('acsf_registry', $registry);
+  acsf_vset('acsf_registry', $registry);
 }
 
 /**
@@ -60,7 +86,7 @@ function acsf_registry_sort($a, $b) {
  * @return Array
  */
 function acsf_get_registry() {
-  return variable_get('acsf_registry', NULL);
+  return acsf_vget('acsf_registry', NULL);
 }
 
 /**
@@ -105,10 +131,103 @@ function acsf_system_site_maintenance_mode_submit(&$form, &$form_state) {
  */
 function acsf_cron() {
   // Periodically refresh the site data.
-  $site = AcsfSite::load();
+  $site = \Acquia\Acsf\AcsfSite::load();
   $refresh_age = time() - 86400 * 7;
   if ($site->last_sf_refresh < $refresh_age) {
     $site->refresh();
   }
 }
 
+/**
+ * Implements hook_acsf_registry().
+ */
+function acsf_acsf_registry() {
+  return array(
+    'events' => array(
+      array(
+        'weight' => -1,
+        'type' => 'acsf_install',
+        'class' => '\Acquia\Acsf\AcsfSiteInfoHandler',
+      ),
+    ),
+  );
+}
+
+/**
+ * Retrieves the Site Factory name.
+ *
+ * @return String
+ *   The name of the factory.
+ */
+function acsf_factory_name() {
+  static $name;
+
+  // This is sometimes used outside of a Drupal bootstrap.
+  acsf_register_autoloader();
+
+  if (empty($name)) {
+    $site = \Acquia\Acsf\AcsfSite::load();
+    $name = !empty($site->service_name_long) ? $site->service_name_long : t('Acquia Cloud Site Factory');
+  }
+
+  return $name;
+}
+
+/**
+ * Retrieves the Site Factory URL.
+ *
+ * @return String
+ *   The URL of the factory.
+ */
+function acsf_factory_url() {
+  static $url;
+
+  // This is sometimes used outside of a Drupal bootstrap.
+  acsf_register_autoloader();
+
+  if (empty($url)) {
+    try {
+      $site = \Acquia\Acsf\AcsfSite::load();
+    }
+    catch (Exception $e) {
+      // Swallow the exception.
+    }
+
+    if (!empty($site) && !empty($site->factory_url)) {
+      // First attempt to use the current site.
+      $url = $site->factory_url;
+    }
+    else {
+      // If that is not viable, use the global config.
+      $config = new \Acquia\Acsf\AcsfConfigDefault();
+      $url = $config->getUrl();
+    }
+  }
+
+  return $url;
+}
+
+/**
+ * Implements hook_watchdog().
+ */
+function acsf_watchdog($log_entry) {
+  // Only escalate messages of certain severity levels.
+  $severity_to_escalate = array(
+    WATCHDOG_EMERGENCY,
+    WATCHDOG_ALERT,
+    WATCHDOG_CRITICAL,
+  );
+
+  if (in_array($log_entry['severity'], $severity_to_escalate)) {
+    $site = \Acquia\Acsf\AcsfSite::load();
+    $record = array(
+      'type' => 'watchdog',
+      'message' => t($log_entry['message'], $log_entry['variables']),
+      'level' => $log_entry['severity'],
+      'timestamp' => REQUEST_TIME,
+      'nid' => $site->site_id,
+    );
+    $acsf_log = new \Acquia\Acsf\AcsfLog();
+    $acsf_log->log($record);
+  }
+}

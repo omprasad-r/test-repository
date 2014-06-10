@@ -74,7 +74,7 @@ function drush_acsf_duplication_scrub_batch($site_name, $standard_domain) {
   ksort($context['scrub_options']);
 
   // Load and execute the site duplication scrub event handlers.
-  $event = AcsfEvent::create('site_duplication_scrub', $context);
+  $event = \Acquia\Acsf\AcsfEvent::create('site_duplication_scrub', $context);
   $event->run();
 
   // Return an error code if the process is incomplete.
@@ -95,9 +95,9 @@ function drush_acsf_duplication_scrub_progress() {
   }
 
   $data = array(
-    'comment_count' => AcsfDuplicationScrubCommentHandler::countRemaining(),
-    'node_count' => AcsfDuplicationScrubNodeHandler::countRemaining(),
-    'user_count' => AcsfDuplicationScrubUserHandler::countRemaining(),
+    'comment_count' => \Acquia\Acsf\AcsfDuplicationScrubCommentHandler::countRemaining(),
+    'node_count' => \Acquia\Acsf\AcsfDuplicationScrubNodeHandler::countRemaining(),
+    'user_count' => \Acquia\Acsf\AcsfDuplicationScrubUserHandler::countRemaining(),
   );
   drupal_alter('acsf_duplication_scrub_remaining_counts', $data);
 
