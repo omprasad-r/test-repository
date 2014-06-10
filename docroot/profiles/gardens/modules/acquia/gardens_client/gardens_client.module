@@ -655,6 +655,7 @@ class EmailVerifier {
   const MUTE_FOR = 86400;
 
   public function __construct() {
+    acsf_register_autoloader();
     $site = \Acquia\Acsf\AcsfSite::load();
     $status = (array) $site->verification_status;
     foreach ($status as $key => $value) {
