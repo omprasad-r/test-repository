@@ -43,17 +43,13 @@ function warner_misc_menu() {
  * Access callback for WYSIWYG customization form.
  */
 function warner_misc_wysiwyg_customization_access() {
-  if (user_access('administer filters') && module_exists('wysiwyg')) {
-    return TRUE;
-  }
-
-  return FALSE;
+  return user_access('administer filters') && module_exists('wysiwyg');
 }
 
 /**
- * Wysiwyg customization form.
+ * Form constructor for the Wysiwyg customization form.
  */
-function warner_misc_wysiwyg_settings_form() {
+function warner_misc_wysiwyg_settings_form($form, &$form_state) {
   $form['warner_misc_wysiwyg_comment_form_buttons']= array(
     '#type' => 'fieldset',
     '#title' => t('Wysiwyg comment form button settings'),
@@ -73,7 +69,7 @@ function warner_misc_wysiwyg_settings_form() {
 
     $form['warner_misc_wysiwyg_comment_form_buttons'][$format] = array(
       '#type' => 'fieldset',
-      '#title' => 'Enabled editor buttons in comments for ' . $filter_formats[$format]->name,
+      '#title' => t('Enabled editor buttons in comments for @filter_format', array('@filter_format' => $filter_formats[$format]->name)),
       '#collapsible' => TRUE,
       '#collapsed' => FALSE,
       '#theme' => 'warner_misc_admin_button_table',
@@ -85,12 +81,12 @@ function warner_misc_wysiwyg_settings_form() {
       foreach ($plugins as $name => $meta) {
         if (isset($meta['buttons']) && is_array($meta['buttons'])) {
           foreach ($profile->settings['buttons'][$name] as $button => $value) {
-            if ($meta['buttons'][$button]) {
+            if (!empty($meta['buttons'][$button])) {
               $button_title = $meta['buttons'][$button];
               $form['warner_misc_wysiwyg_comment_form_buttons'][$format]['buttons'][$button] = array(
                 '#type' => 'checkbox',
                 '#title' => $button_title,
-                '#default_value' => !empty($options[$format]) ? $options[$format][$button] : $value,
+                '#default_value' => isset($options[$format][$button]) ? $options[$format][$button] : $value,
               );
             }
           }
@@ -109,7 +105,7 @@ function warner_misc_wysiwyg_settings_form() {
 }
 
 /**
- * Wysiwyg customization form submit handler.
+ * Form submission handler for warner_misc_wysiwyg_settings_form().
  */
 function warner_misc_wysiwyg_settings_form_submit($form, &$form_state) {
   $values = $form_state['values'];
@@ -128,7 +124,7 @@ function warner_misc_wysiwyg_settings_form_submit($form, &$form_state) {
 }
 
 /**
- * Layout for the buttons in the Wysiwyg customization form.
+ * Returns HTML for a 3-column button table layout.
  */
 function theme_warner_misc_admin_button_table($variables) {
   $form = $variables['form'];
@@ -1116,7 +1112,10 @@ function warner_misc_bakery_transmit($edit, $account, $category) {
  * Implements hook_element_info_alter().
  */
 function warner_misc_element_info_alter(&$types) {
-  $types['text_format']['#pre_render'][] = 'warner_misc_pre_render_text_format';
+  // Check if WYSIWYG is enabled before altering.
+  if (module_exists('wysiwyg')) {
+    $types['text_format']['#pre_render'][] = 'warner_misc_pre_render_text_format';
+  }
 }
 
 /**
@@ -1146,7 +1145,7 @@ function warner_misc_wysiwyg_editor_settings_alter(&$settings, &$context) {
   // If this is a comment form.
   if ($wysiwyg_comment) {
     // Setup our new toolbar.
-    $new_toolbar =  array();
+    $new_toolbar = array();
     // Get allowed buttons for selected input format.
     $comment_allowed_buttons = variable_get('warner_misc_comment_form_buttons_for_' . $context['profile']->format, array());
 
