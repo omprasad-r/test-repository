@@ -89,7 +89,7 @@ function drush_site_export_export_s3() {
     ini_set('memory_limit', $memory_limit);
   }
 
-  $site = \Acquia\Acsf\AcsfSite::load();
+  $site = acsf_get_acsf_site();
   $nid = $site->site_id;
   $uri = site_export_export_both();
   $path = drupal_realpath($uri);

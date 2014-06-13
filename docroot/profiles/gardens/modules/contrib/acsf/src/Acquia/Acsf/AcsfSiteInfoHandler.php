@@ -14,7 +14,7 @@ class AcsfSiteInfoHandler extends AcsfEventHandler {
    * Implements AcsfEventHandler::handle().
    */
   public function handle() {
-    $site = AcsfSite::load();
+    $site = acsf_get_acsf_site();
     $site->refresh();
 
     // Notify the user to verify their email address.
