@@ -131,7 +131,7 @@ function acsf_system_site_maintenance_mode_submit(&$form, &$form_state) {
  */
 function acsf_cron() {
   // Periodically refresh the site data.
-  $site = \Acquia\Acsf\AcsfSite::load();
+  $site = acsf_get_acsf_site();
   $refresh_age = time() - 86400 * 7;
   if ($site->last_sf_refresh < $refresh_age) {
     $site->refresh();
@@ -154,6 +154,20 @@ function acsf_acsf_registry() {
 }
 
 /**
+ * Retrieves the site object.
+ *
+ * This is a safe way to retrieve the site object in cases where the autoloader
+ * has not been run. For example, hook_boot does not run during an update.
+ *
+ * @return \Acquia\Acsf\AcsfSite
+ *   The current site object.
+ */
+function acsf_get_acsf_site() {
+  acsf_register_autoloader();
+  return \Acquia\Acsf\AcsfSite::load();
+}
+
+/**
  * Retrieves the Site Factory name.
  *
  * @return String
@@ -162,11 +176,8 @@ function acsf_acsf_registry() {
 function acsf_factory_name() {
   static $name;
 
-  // This is sometimes used outside of a Drupal bootstrap.
-  acsf_register_autoloader();
-
   if (empty($name)) {
-    $site = \Acquia\Acsf\AcsfSite::load();
+    $site = acsf_get_acsf_site();
     $name = !empty($site->service_name_long) ? $site->service_name_long : t('Acquia Cloud Site Factory');
   }
 
@@ -182,16 +193,8 @@ function acsf_factory_name() {
 function acsf_factory_url() {
   static $url;
 
-  // This is sometimes used outside of a Drupal bootstrap.
-  acsf_register_autoloader();
-
   if (empty($url)) {
-    try {
-      $site = \Acquia\Acsf\AcsfSite::load();
-    }
-    catch (Exception $e) {
-      // Swallow the exception.
-    }
+    $site = acsf_get_acsf_site();
 
     if (!empty($site) && !empty($site->factory_url)) {
       // First attempt to use the current site.
@@ -219,7 +222,7 @@ function acsf_watchdog($log_entry) {
   );
 
   if (in_array($log_entry['severity'], $severity_to_escalate)) {
-    $site = \Acquia\Acsf\AcsfSite::load();
+    $site = acsf_get_acsf_site();
     $record = array(
       'type' => 'watchdog',
       'message' => t($log_entry['message'], $log_entry['variables']),

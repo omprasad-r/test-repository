@@ -386,7 +386,7 @@ function acsf_openid_user_page() {
 function acsf_openid_login_message() {
   // This function may be called when an anonymous visitor loads the /user path,
   // and in that case we have to override the page title.
-  $site = \Acquia\Acsf\AcsfSite::load();
+  $site = acsf_get_acsf_site();
   $factory_name = acsf_factory_name();
 
   drupal_set_title(t('Log in or sign up'));

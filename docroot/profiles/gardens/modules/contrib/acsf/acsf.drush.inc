@@ -160,7 +160,7 @@ function drush_acsf_site_scrub() {
  * get data. When called with the --data option it will simply digest that data.
  */
 function drush_acsf_site_sync() {
-  $site = \Acquia\Acsf\AcsfSite::load();
+  $site = acsf_get_acsf_site();
   $data = drush_get_option('data', NULL);
 
   // Create an event to gather site stats to send to the Factory.

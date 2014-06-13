@@ -414,7 +414,7 @@ function scarecrow_form_mollom_admin_configure_form_alter(&$form, &$form_state) 
 
   // Only enterprise customers may select the option "Accept the post" for "unsure"
   // responses from mollom analysis.
-  $site = \Acquia\Acsf\AcsfSite::load();
+  $site = acsf_get_acsf_site();
   if (!$site->client_name) {
     unset($form['mollom']['unsure']['#options']['binary']);
   }
@@ -663,7 +663,7 @@ function scarecrow_mollom_require_access($mollom_form) {
   // Do not allow removing a node from's Mollom protection if anonymous users
   // may create such nodes.
   $node_form = preg_match('/^([a-z0-9_]+)_node_form$/', $mollom_form['form_id'], $matches) && !empty($matches[1]) && in_array($matches[1], node_permissions_get_configured_types());
-  $site = \Acquia\Acsf\AcsfSite::load();
+  $site = acsf_get_acsf_site();
   if (!$site->client_name && $node_form && user_access('create ' . $matches[1] . ' content', drupal_anonymous_user())) {
     return FALSE;
   }
@@ -893,7 +893,7 @@ function scarecrow_page_alter(&$page) {
 
         // And for nodes that can be created by anonymous users.
         $node_form = preg_match('/^([a-z0-9_]+)_node_form$/', $form_id, $matches) && !empty($matches[1]) && in_array($matches[1], node_permissions_get_configured_types());
-        $site = \Acquia\Acsf\AcsfSite::load();
+        $site = acsf_get_acsf_site();
         if (!$site->client_name && $node_form && user_access('create ' . $matches[1] . ' content', drupal_anonymous_user())) {
           // The following function brings sanitized strings, so we need to use
           // !permission to avoid double encoding.
@@ -1224,7 +1224,7 @@ function scarecrow_disallowed_modules() {
  * @see scarecrow_visible_required_modules()
  */
 function scarecrow_required_modules() {
-  $site = \Acquia\Acsf\AcsfSite::load();
+  $site = acsf_get_acsf_site();
   $required_modules = array(
     'backports',
     'block',
@@ -1357,7 +1357,7 @@ function scarecrow_visible_required_modules() {
  *   The default list of disallowed modules.
  */
 function scarecrow_disallowed_modules_alter(&$modules) {
-  $site = \Acquia\Acsf\AcsfSite::load();
+  $site = acsf_get_acsf_site();
   if (variable_get('gardens_subscriber_modules_enable', TRUE) && $site) {
     $gardener_data = $site->acquia_zuora['subscription_disallowed_modules'];
     if (!empty($gardener_data) && is_array($gardener_data)) {
@@ -1381,7 +1381,7 @@ function scarecrow_disallowed_modules_alter(&$modules) {
  * once on the next page load.
  */
 function _scarecrow_disable_unsubscribed_modules() {
-  $site = \Acquia\Acsf\AcsfSite::load();
+  $site = acsf_get_acsf_site();
   if (variable_get('gardens_subscriber_modules_enable', TRUE) && $site) {
     $gardener_data = $site->acquia_zuora['subscription_disallowed_modules'];
     if(!empty($gardener_data) && is_array($gardener_data)) {
@@ -1404,7 +1404,7 @@ function _scarecrow_disable_unsubscribed_modules() {
  * Uninstall disabled modules, as they may break updates if not.
  */
 function scarecrow_cron() {
-  $site = \Acquia\Acsf\AcsfSite::load();
+  $site = acsf_get_acsf_site();
   // Default interval set to 1 day.
   $interval = variable_get('scarecrow_cron_interval', 60*60*24);
 
@@ -1609,7 +1609,7 @@ function _scarecrow_permissions_validate($form, &$form_state) {
   );
   // Nodes that can be created by anonymous users need to be protected by Mollom
   // with a CAPTCHA on SMB.
-  $site = \Acquia\Acsf\AcsfSite::load();
+  $site = acsf_get_acsf_site();
   if (!$site->client_name) {
     foreach (node_permissions_get_configured_types() as $node_type) {
       if (!empty($form_state['values'][DRUPAL_ANONYMOUS_RID]['create ' . $node_type . ' content']) && !_scarecrow_node_protected_by_mollom($node_type)) {
@@ -1867,7 +1867,7 @@ function theme_scarecrow_media_gallery_download_link($variables) {
  * Implements hook_form_FORM_ID_alter().
  */
 function scarecrow_form_domain_301_redirect_admin_form_alter(&$form, $form_state) {
-  $site = \Acquia\Acsf\AcsfSite::load();
+  $site = acsf_get_acsf_site();
   if (!$site->client_name) {
     // On SMB do not allow disabling the domain check.
     unset($form['domain_301_redirect_check_period']['#options'][0]);

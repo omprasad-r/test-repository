@@ -18,7 +18,7 @@ class AcsfDuplicationScrubInitializeHandler extends AcsfEventHandler {
   public function handle() {
     drush_print(dt('Entered @class', array('@class' => get_class($this))));
     if (!$this->isComplete()) {
-      $site = AcsfSite::load();
+      $site = acsf_get_acsf_site();
       $site->clean();
       variable_del('acsf_duplication_scrub_status');
       variable_set('site_name', $this->event->context['site_name']);

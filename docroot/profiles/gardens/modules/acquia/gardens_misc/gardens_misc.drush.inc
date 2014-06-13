@@ -68,7 +68,7 @@ function drush_gardens_misc_mollom_keys_get() {
  * drush command callback. Get from the Gardener and save mollom keys even if they already exist.
  */
 function drush_gardens_misc_mollom_keys_replace() {
-  $site = \Acquia\Acsf\AcsfSite::load();
+  $site = acsf_get_acsf_site();
   $nid = $site->site_id;
   try {
     $message = new \Acquia\Acsf\AcsfMessageRest('GET', 'site-api/v1/mollom/keys/' . $nid);

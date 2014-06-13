@@ -31,7 +31,7 @@ function gardens_site_variables_get() {
   );
   */
 
-  $site = \Acquia\Acsf\AcsfSite::load();
+  $site = acsf_get_acsf_site();
   return $site->gardener_site_variables;
 }
 
