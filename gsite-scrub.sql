@@ -74,6 +74,9 @@ UPDATE mailing_list_emails SET mail = CONCAT('mailing-list-email-', eid, '@examp
 -- the primary key so it must remain unique).
 UPDATE poll_vote SET hostname = MD5(hostname);
 
+-- Pause all Acquia Lift campaigns. 4 == PERSONALIZE_STATUS_PAUSED
+UPDATE personalize_agent SET status = 4;
+
 -- Clear cache tables from optional modules.
 TRUNCATE `cache_file_styles`;
 TRUNCATE `cache_media_xml`;
