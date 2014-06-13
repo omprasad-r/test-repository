@@ -216,7 +216,7 @@ function drush_acsf_connect_factory() {
 
   // Reset the local site data and run acsf-site-sync to fetch factory data
   // about the site.
-  $site = \Acquia\Acsf\AcsfSite::load();
+  $site = acsf_get_acsf_site();
   $site->clean();
   drush_acsf_site_sync();
   drush_log(dt('Executed acsf-site-sync to gather site data from factory and reset all acsf variables.'), 'ok');

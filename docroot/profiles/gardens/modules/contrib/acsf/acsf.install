@@ -32,8 +32,7 @@ function acsf_update_7002() {
  * Get fresh site info from the Factory.
  */
 function acsf_update_7003() {
-  acsf_register_autoloader();
-  $site = \Acquia\Acsf\AcsfSite::load();
+  $site = acsf_get_acsf_site();
   $site->clean();
   // Stagger the next refresh so that they are not all calling home at once.
   // We'll set them to be some random time in the past week so that the next
@@ -48,8 +47,7 @@ function acsf_update_7003() {
  * De-dupe ACSF variables.
  */
 function acsf_update_7004() {
-  acsf_register_autoloader();
-  $site = \Acquia\Acsf\AcsfSite::load();
+  $site = acsf_get_acsf_site();
   $site->clean();
   // Stagger the next refresh so that they are not all calling home at once.
   // We'll set them to be some random time in the past week so that the next

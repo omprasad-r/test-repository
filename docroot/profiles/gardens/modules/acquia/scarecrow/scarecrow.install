@@ -1543,8 +1543,7 @@ function scarecrow_update_11196() {
  * Sync site data with the Factory.
  */
 function scarecrow_update_11197() {
-  acsf_register_autoloader();
-  $site = \Acquia\Acsf\AcsfSite::load();
+  $site = acsf_get_acsf_site();
   $site->clean();
 }
 
@@ -1608,8 +1607,7 @@ function scarecrow_update_11201() {
   }
 
   // Enable responsive enhancement for colorbox for Warner.
-  acsf_register_autoloader();
-  $site = \Acquia\Acsf\AcsfSite::load();
+  $site = acsf_get_acsf_site();
   $client_name = isset($site->client_name) ? $site->client_name : 'smb';
   if ($client_name == 'warner') {
     variable_set('gardens_features_colorbox_enhancing', 1);

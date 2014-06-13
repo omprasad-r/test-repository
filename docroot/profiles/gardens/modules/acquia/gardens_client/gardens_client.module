@@ -537,7 +537,7 @@ function gardens_client_send_site_data() {
  * Returns TRUE if data was retrieved, FALSE otherwise.
  */
 function gardens_client_phone_home() {
-  $site = \Acquia\Acsf\AcsfSite::load();
+  $site = acsf_get_acsf_site();
   return $site->refresh();
 }
 
@@ -588,7 +588,7 @@ function gardens_client_gardener_unreachable_alert($reset = FALSE) {
  * Whether the subscription used by the site allows local user accounts.
  */
 function gardens_client_subscription_forced_openid() {
-  $site = \Acquia\Acsf\AcsfSite::load();
+  $site = acsf_get_acsf_site();
   return (bool) $site->acquia_zuora['force_openid'];
 }
 
@@ -655,8 +655,7 @@ class EmailVerifier {
   const MUTE_FOR = 86400;
 
   public function __construct() {
-    acsf_register_autoloader();
-    $site = \Acquia\Acsf\AcsfSite::load();
+    $site = acsf_get_acsf_site();
     $status = (array) $site->verification_status;
     foreach ($status as $key => $value) {
       $this->$key = $value;
