@@ -23,7 +23,7 @@ function gardens_broadcasting_client_drush_command() {
  */
 function drush_gardens_broadcasting_client_tasks_get() {
   // When $cluster is empty then it's an SMB site.
-  $site = \Acquia\Acsf\AcsfSite::load();
+  $site = acsf_get_acsf_site();
   $cluster = isset($site->client_name) ? $site->client_name : 'smb';
 
   // Tangle info.

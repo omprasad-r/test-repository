@@ -44,7 +44,7 @@ class AcsfThemeNotify {
     }
 
     try {
-      $site = AcsfSite::load();
+      $site = acsf_get_acsf_site();
       $nid = $site->site_id;
       $parameters = array('event' => $event);
       if ($timestamp) {

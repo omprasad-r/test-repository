@@ -248,7 +248,7 @@ function gardens_misc_load_plugins() {
  * Implements hook_page_alter().
  */
 function gardens_misc_page_alter(&$page) {
-  $site = \Acquia\Acsf\AcsfSite::load();
+  $site = acsf_get_acsf_site();
   // Respects the old overriding method.
   // If this variable is set, the setting from gardener will not be active.
   $override = variable_get('gardens_misc_include_google_analytics', TRUE);
@@ -677,7 +677,7 @@ function gardens_misc_modules_enabled($modules) {
     }
     // For SMB the default external link reaction will be no warning. Enterprise
     // customers have the AcsfSite->client_name populated.
-    $site = \Acquia\Acsf\AcsfSite::load();
+    $site = acsf_get_acsf_site();
     $alert_type = variable_get('extlink_alert_type');
     if (!isset($alert_type) && !$site->client_name) {
       variable_set('extlink_alert_type', '');
@@ -996,7 +996,7 @@ function gardens_misc_form_field_ui_field_settings_form_alter(&$form, &$form_sta
  * Implements hook_form_FORM_ID_alter().
  */
 function gardens_misc_form_user_register_form_alter(&$form, &$form_state, $form_id) {
-  $site = \Acquia\Acsf\AcsfSite::load();
+  $site = acsf_get_acsf_site();
   // Do not do these modifications during an Open ID registration or on the
   // admin user creation form (where the notify checkbox shows up).
   if (!acsf_openid_user_registration_response() && user_is_anonymous()) {
@@ -1177,7 +1177,7 @@ EOF;
 }
 
 function gardens_misc_get_tracking_code_track_pageview() {
-  $site = \Acquia\Acsf\AcsfSite::load();
+  $site = acsf_get_acsf_site();
   // Try to get GA code via phone home.
   $tracking_code = $site->gardener_site_variables['gardens_misc_ga_tracking_code'];
 
@@ -1497,7 +1497,7 @@ function gardens_misc_html_head_alter(&$head_elements) {
  * Returns the site's canonical domain, or NULL if there is none.
  */
 function gardens_misc_get_canonical_domain() {
-  $site = \Acquia\Acsf\AcsfSite::load();
+  $site = acsf_get_acsf_site();
   // The site itself can store a variable (gardens_misc_canonical_domain)
   // specifying its preferred domain. If that doesn't exist, we use the
   // custom domain data from the gardener.
@@ -1517,7 +1517,7 @@ function gardens_misc_get_canonical_domain() {
 function gardens_misc_get_standard_domain() {
   // All Gardens sites have a specific variable that was saved for this during
   // e.g. the "configure" stage; see install_gardens.inc.
-  $site = \Acquia\Acsf\AcsfSite::load();
+  $site = acsf_get_acsf_site();
   return $site->standard_domain;
 }
 
@@ -2120,7 +2120,7 @@ function gardens_misc_field_info_alter(&$info) {
  * Check a site's SSL domains, and adjust their settings if necessary.
  */
 function gardens_misc_adjust_secure_domain_settings_if_necessary() {
-  $site = \Acquia\Acsf\AcsfSite::load();
+  $site = acsf_get_acsf_site();
   // Currently this is only necessary for sites using the Secure Pages module.
   if (module_exists('securepages')) {
     $canonical_domain = gardens_misc_get_canonical_domain();
@@ -2187,7 +2187,7 @@ function gardens_misc_get_site_statistics_token() {
   // The token consists of a hash of the site's Gardener site node id,
   // plus a salt.
   $salt = '05';
-  $site = \Acquia\Acsf\AcsfSite::load();
+  $site = acsf_get_acsf_site();
   $site_nid = $site->site_id;
   $expected_md5 = md5($site_nid . $salt);
   return $expected_md5;
@@ -3247,7 +3247,7 @@ function gardens_misc_form_filter_admin_format_form_alter(&$form, &$form_state) 
  * Returns TRUE if this site is on SMB, FALSE otherwise.
  */
 function gardens_misc_is_smb() {
-  $site = \Acquia\Acsf\AcsfSite::load();
+  $site = acsf_get_acsf_site();
   return (bool) $site->gardens_manager['is_drupalgardens_dot_com'];
 }
 

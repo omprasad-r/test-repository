@@ -221,7 +221,7 @@ function gardens_setup_user_mail_variables() {
   $gardener_url = scarecrow_get_gardener_url();
   $gardener_account_url = ($gardener_url ? $gardener_url . '/user' : 'http://drupalgardens.com/user');
   // Make sure this contains no HTML for mail texts.
-  $site = \Acquia\Acsf\AcsfSite::load();
+  $site = acsf_get_acsf_site();
   $name = isset($site->service_name_long) ? $site->service_name_long : 'Drupal Gardens';
   $service_name = trim(strip_tags($name));
   $variables = array(
