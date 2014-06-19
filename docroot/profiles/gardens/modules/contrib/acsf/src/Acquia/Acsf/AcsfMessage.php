@@ -103,9 +103,17 @@ abstract class AcsfMessage {
       throw new AcsfMessageMalformedResponseException(sprintf('The message to %s resulted in a malformed response. It should be an AcsfMessageResponse object.', $this->endpoint));
     }
 
-    // Ask the response if it is failed.
+    // If the response failed, throw an exception.
     if ($this->response->failed()) {
-      throw new AcsfMessageFailedResponseException(sprintf('The response from %s failed.', $this->endpoint));
+      // The REST API returns error descriptions in the "message" field of the
+      // response body.
+      if (!empty($this->response->body['message'])) {
+        $error_message = sprintf('The request to %s failed with HTTP error: %s %s', $this->endpoint, $this->response->code, $this->response->body['message']);
+      }
+      else {
+        $error_message = sprintf('The request to %s failed.', $this->endpoint);
+      }
+      throw new AcsfMessageFailedResponseException($error_message);
     }
 
     // Allow the implementer to respond right away.

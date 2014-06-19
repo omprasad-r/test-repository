@@ -729,8 +729,11 @@ function themebuilder_bar_save() {
  */
 function themebuilder_bar_change_notification() {
   if (!empty($_POST['event']) && !empty($_POST['theme'])) {
+    $scope = 'theme';
+    $site = acsf_get_acsf_site();
+    $nid = $site->site_id;
     $notify = acsf_theme_notification();
-    return $notify->sendNotification($_POST['event'], $_POST['theme']);
+    return $notify->sendNotification($scope, $_POST['event'], $nid, $_POST['theme']);
   }
 }
 

@@ -1,0 +1,260 @@
+<?php
+
+/**
+ * @file personalize_elements.module
+ * Provides an option set plugin for personalizing ALL THE THINGS.
+ */
+
+define('PERSONALIZE_ELEMENTS_CONTROL_OPTION_ID', 'control-variation');
+define('PERSONALIZE_ELEMENTS_CONTROL_OPTION_LABEL', 'Control variation');
+define('PERSONALIZE_ELEMENTS_HELP_URL_SELECTOR', 'https://docs.acquia.com/lift/personalize/element#selector');
+
+/**
+ * Implements hook_menu().
+ */
+function personalize_elements_menu() {
+  $items['admin/structure/personalize/variations/personalize-elements'] = array(
+    'title' => 'Elements',
+    'description' => 'Personalize page elements.',
+    'page callback' => 'personalize_elements_list',
+    'access callback' => 'user_access',
+    'access arguments' => array('manage personalized content'),
+    'type' => MENU_LOCAL_TASK,
+    'file' => 'personalize_elements.admin.inc',
+  );
+  $items['admin/structure/personalize/variations/personalize-elements/list'] = array(
+    'title' => 'List personalize elements',
+    'type' => MENU_DEFAULT_LOCAL_TASK,
+  );
+  $items['admin/structure/personalize/variations/personalize-elements/add'] = array(
+    'title' => 'Add personalized element',
+    'page callback' => 'drupal_get_form',
+    'page arguments' => array('personalize_elements_form', 'add'),
+    'access arguments' => array('manage personalized content'),
+    'type' => MENU_LOCAL_ACTION,
+    'file' => 'personalize_elements.admin.inc',
+  );
+  $items['admin/structure/personalize/variations/personalize-elements/manage/%personalize_element'] = array(
+    'title' => 'Edit Personalized Element',
+    'page callback' => 'drupal_get_form',
+    'page arguments' => array('personalize_elements_form', FALSE, 6),
+    'access arguments' => array('manage personalized content'),
+    'file' => 'personalize_elements.admin.inc',
+  );
+  $items['admin/structure/personalize/variations/personalize-elements/manage/%personalize_element/edit'] = array(
+    'title' => 'Edit Personalized Element',
+    'type' => MENU_DEFAULT_LOCAL_TASK,
+    'context' => MENU_CONTEXT_INLINE,
+  );
+  $items['admin/structure/personalize/variations/personalize-elements/manage/%personalize_element/delete'] = array(
+    'title' => 'Delete Personalized Element',
+    'page callback' => 'drupal_get_form',
+    'page arguments' => array('personalize_elements_element_delete', 6),
+    'access arguments' => array('manage personalized content'),
+    'type' => MENU_LOCAL_TASK,
+    'file' => 'personalize_elements.admin.inc',
+  );
+  $items['admin/config/content/personalize/personalize-elements'] = array(
+    'type' => MENU_LOCAL_TASK,
+    'title' => 'Personalize Elements',
+    'description' => 'Configuration settings for Personalize Elements module.',
+    'page callback' => 'drupal_get_form',
+    'page arguments' => array('personalize_elements_configuration_form'),
+    'access arguments' => array('use advanced personalize elements features'),
+    'file' => 'personalize_elements.admin.inc',
+  );
+  return $items;
+}
+
+/**
+ * Implements hook_permission().
+ */
+function personalize_elements_permission() {
+  $permissions = array(
+    'use advanced personalize elements features' => array(
+      'title' => t('Use advanced Personalize Elements features'),
+      'description' => t('Includes permission to write JavaScript to be executed for content variations and modifying the set of allowed HTML tags.'),
+      'restrict access' => TRUE,
+    ),
+  );
+
+  return $permissions;
+}
+
+/**
+ * Implements hook_personalize_agent_type().
+ */
+function personalize_elements_personalize_option_set_type() {
+  return array(
+    'elements' => array()
+  );
+}
+
+/**
+ * Implements hook_ctools_plugin_api().
+ */
+function personalize_elements_ctools_plugin_api($owner, $api) {
+  if ($owner == 'personalize' && $api == 'personalize') {
+    return array('version' => 1);
+  }
+}
+
+/**
+ * Implements hook_page_build().
+ */
+function personalize_elements_page_build(&$page) {
+  $option_sets = personalize_option_set_load_by_type('elements', 'label');
+  $elements = array();
+  foreach ($option_sets as $osid => $option_set) {
+    $page_match = TRUE;
+    if (isset($option_set->data['pages']) && !empty($option_set->data['pages'])) {
+      $page_match = personalize_elements_match_page($option_set->data['pages']);
+    }
+    if (!$page_match) {
+      unset($option_sets[$osid]);
+      continue;
+    }
+    $js_id = $js_id = personalize_stringify_osid($option_set->osid);
+    $elements[$js_id] = array(
+      'selector' => $option_set->data['personalize_elements_selector'],
+      'variation_type' => $option_set->data['personalize_elements_type'],
+      // The 'runJS' variation type cannot be previewed in the normal way.
+      'previewable' => $option_set->data['personalize_elements_type'] !== 'runJS',
+    );
+  }
+  if (empty($elements)) {
+    return;
+  }
+  $page['page_top']['personalize_elements'] = array(
+    '#attached' => array(
+      'js' => array(
+        drupal_get_path('module', 'personalize_elements') . '/js/personalize_elements.js' => array(),
+        array(
+          'data' => array(
+            'personalize_elements' => array(
+              'elements' => $elements,
+              'controlOptionName' => PERSONALIZE_ELEMENTS_CONTROL_OPTION_ID,
+            )
+          ),
+          'type' => 'setting'
+        ),
+      ),
+    )
+  );
+  foreach ($option_sets as $option_set) {
+    personalize_element_with_option_set($page['page_top']['personalize_elements'], $option_set);
+  }
+}
+
+/**
+ * Implements hook_personalize_element_load().
+ */
+function personalize_elements_personalize_option_set_load($option_sets) {
+  foreach ($option_sets as $option_set) {
+    if ($option_set->plugin == 'elements') {
+      // Rendered Option Sets are usually in a div with an id of #personalize-osid-123
+      // but for arbitrary elements on the page, the selector is just what was
+      // specified when the Option Set was configured.
+      $option_set->selector = $option_set->data['personalize_elements_selector'];
+    }
+  }
+}
+
+/**
+ * Implements hook_personalize_create_new_links().
+ */
+function personalize_elements_personalize_create_new_links() {
+  return array(
+    array(
+      'title' => 'Personalized Element',
+      'path' => 'admin/structure/personalize/variations/personalize-elements/add',
+    ),
+  );
+}
+
+/**
+ * Implements hook_personalize_edit_link().
+ */
+function personalize_elements_personalize_edit_link($option_set) {
+  if ($option_set->plugin != 'elements') {
+    return '';
+  }
+  return "admin/structure/personalize/variations/personalize-elements/manage/{$option_set->osid}/edit";
+}
+
+/**
+ * Implements hook_personalize_delete_link().
+ */
+function personalize_elements_personalize_delete_link($option_set) {
+  if ($option_set->plugin != 'elements') {
+    return '';
+  }
+  return "admin/structure/personalize/variations/personalize-elements/manage/{$option_set->osid}/delete";
+}
+
+/**
+ * Implements hook_personalize_elements_variation_types().
+ */
+function personalize_elements_personalize_elements_variation_types($filter_by_perms = TRUE) {
+  $types = array(
+    'replaceHtml' => array(
+      'label' => t('Replace the html'),
+      'needs_selector' => TRUE,
+    ),
+    'addClass' => array(
+      'label' => t('Add a class'),
+      'needs_selector' => TRUE,
+    ),
+    'appendHtml' => array(
+      'label' => t('Append HTML'),
+      'needs_selector' => TRUE,
+    ),
+    'prependHtml' => array(
+      'label' => t('Prepend HTML'),
+      'needs_selector' => TRUE,
+    ),
+  );
+  if (user_access('use advanced personalize elements features') || !$filter_by_perms) {
+    $types['runJS'] = array(
+      'label' => t('Run JavaScript code'),
+      'needs_selector' => FALSE,
+    );
+  }
+  return $types;
+}
+
+/**
+ * Loads a personalized element by its osid.
+ *
+ * @param $osid
+ *   The osid of the option set.
+ * @return The loaded option set or NULL if no option set of type
+ *   'elements' exists with the given osid.
+ */
+function personalize_element_load($osid) {
+  $os = personalize_option_set_load($osid);
+  if (!$os || $os->plugin != 'elements') {
+    return NULL;
+  }
+  return $os;
+}
+
+/**
+ * Returns whether the supplied list of pages includes a match for
+ * the current page.
+ *
+ * @param $pages
+ *   String containing a set of pages separated by \n, \r or \r\n.
+ * @return bool
+ *   Returns TRUE if the current path is matched, FALSE otherwise.
+ */
+function personalize_elements_match_page($pages) {
+  // Convert the Drupal path to lowercase
+  $path = drupal_strtolower(drupal_get_path_alias($_GET['q']));
+  // Compare the lowercase internal and lowercase path alias (if any).
+  $page_match = drupal_match_path($path, $pages);
+  if ($path != $_GET['q']) {
+    $page_match = $page_match || drupal_match_path($_GET['q'], $pages);
+  }
+  return $page_match;
+}

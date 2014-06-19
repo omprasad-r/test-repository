@@ -1,0 +1,16 @@
+name = Visitor Actions UI
+description = The User Interface for the Visitor Actions module.
+
+dependencies[] = menu
+dependencies[] = visitor_actions
+dependencies[] = libraries
+
+package = Visitor Actions
+core = 7.x
+
+; Information added by Drupal.org packaging script on 2014-05-30
+version = "7.x-1.0-beta3"
+core = "7.x"
+project = "visitor_actions"
+datestamp = "1401459303"
+

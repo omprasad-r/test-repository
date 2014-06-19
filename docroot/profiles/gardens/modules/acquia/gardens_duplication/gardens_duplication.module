@@ -19,6 +19,7 @@ function gardens_duplication_acsf_registry() {
     'GardensDuplicationScrubOauthHandler'         => 0,
     'GardensDuplicationScrubWebformHandler'       => 0,
     'GardensDuplicationScrubVotingApiHandler'     => 0,
+    'GardensDuplicationScrubAcquiaLiftHandler'    => 0,
   );
   foreach ($scrub_handlers as $class => $weight) {
     $events[] = array(
@@ -62,6 +63,7 @@ function gardens_duplication_acsf_duplication_scrub_context_alter(&$data) {
     'retain_janrain_settings',
     'retain_webform_submissions',
     'retain_voting_api_data',
+    'retain-acquia-lift-config',
   );
   $exact_copy = drush_get_option('exact-copy');
   foreach ($options as $option) {
