@@ -1,5 +1,31 @@
 <?php
 
+if (!function_exists('acsf_hooks_include')) {
+  /**
+   * Scans a Factory hooks directory and includes PHP files.
+   *
+   * @param string $hook_name
+   *   The name of the hook whose files should be included.
+   */
+  function acsf_hooks_include($hook_name) {
+    $dir = DRUPAL_ROOT . '/../factory-hooks/' . $hook_name;
+    if (is_dir($dir) && $handle = opendir($dir)) {
+      while (FALSE !== ($filename = readdir($handle))) {
+        $uri = "$dir/$filename";
+        // Ignore hidden files and only include .php files.
+        if ($filename[0] != '.' && strpos($filename, '.php', strlen($filename) - 4) && is_file($uri)) {
+          include_once $uri;
+        }
+      }
+
+      closedir($handle);
+    }
+  }
+}
+
+// Include custom sites.php code from factory-hooks/pre-sites-php.
+acsf_hooks_include('pre-sites-php');
+
 if (!function_exists('is_acquia_host')) {
   /**
    * Checks whether the site is on Acquia Hosting.
@@ -58,3 +84,6 @@ if ($data === 0) {
 
 $GLOBALS['gardens_site_settings'] = $data['gardens_site_settings'];
 $sites[$dir] = $data['dir'];
+
+// Include custom sites.php code from factory-hooks/post-sites-php.
+acsf_hooks_include('post-sites-php');

@@ -1,5 +1,10 @@
 <?php
 
+// Include custom sites.php code from factory-hooks/pre-sites-php.
+if (function_exists('acsf_hooks_include')) {
+  acsf_hooks_include('pre-settings-php');
+}
+
 /**
  * PHP settings:
  *
@@ -163,4 +168,10 @@ if (file_exists('/var/www/site-php')) {
       $conf[$key] = $value;
     }
   }
+}
+
+// Include custom sites.php code from factory-hooks/pre-sites-php.
+
+if (function_exists('acsf_hooks_include')) {
+  acsf_hooks_include('post-settings-php');
 }

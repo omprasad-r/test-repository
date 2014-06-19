@@ -25,6 +25,12 @@
  * If VCS theming has not been configured for the specified sitegroup, the
  * Site Factory will not start a task.
  */
+
+/**
+ * Constant for the Site Factory WIP task status for completion without error.
+ */
+define('WIP_STATUS_COMPLETED', 16);
+
 global $argv, $argc;
 main($argv, $argc);
 
@@ -66,6 +72,8 @@ function main($argv, $argc) {
       }
     }
 
+    // Assume we will fail until proven otherwise.
+    $success = FALSE;
     // Send Site Factory request.
     $attempts = 3;
     do {
@@ -91,15 +99,23 @@ function main($argv, $argc) {
           if ($verbose) {
             printf("Wip task status: %s\n", print_r($task, TRUE));
           }
-        } while ($task['status'] < 16);
+        } while ($task['status'] < WIP_STATUS_COMPLETED);
 
-        if ($task['status'] != 16 && !has_theme_files($site, $env)) {
-          // Failed to deploy the theme files.
-          printf("Failed to deploy theme files to %s for %s.%s\n", $webnode, $site, $env);
-          exit(1);
+        // Note: STATUS_WARNING is 144, which has the 16 (STATUS_COMPLETED) bit
+        // set, so checking against 16 will be true for both completed, and
+        // warning.
+        if ($task['status'] & WIP_STATUS_COMPLETED) {
+          $success = TRUE;
+          break;
         }
       }
-    } while (!empty($task) && $task['status'] != 16 && $attempts-- > 0);
+    } while ($attempts-- > 0);
+
+    if (!$success) {
+      // Failed to deploy the theme files.
+      printf("Failed to deploy theme files to %s for %s.%s\n", $webnode, $site, $env);
+      exit(1);
+    }
   }
 }
 
@@ -224,7 +240,8 @@ function get_wip_task_status($site, $env, $task_id) {
   }
   catch (Exception $e) {
     $error_message = sprintf('Wip task status failed with error: %s', $e->getMessage());
-    syslog(LOG_ERR, $error_message);
+    $file = __FILE__;
+    syslog(LOG_ERR, "Error in cloud hook pre-web-activate/$file: $error_message");
     $response = new SimpleRestResponse($endpoint, 500, array('message' => $error_message));
   }
   return $response;
@@ -280,7 +297,9 @@ class SimpleRestMessage {
    * @param string $endpoint
    *   The request endpoint.
    * @param string[] $parameters
-   *   Any required parameters for the request.
+   *   Any required parameters for the request. Note: parameters are currently
+   *   only implemented for POST requests. To add support for GET parameters
+   *   would require changes in this method.
    * @param SimpleRestCreds $creds
    *   The credentials to use for the Site Factory request.
    * @throws Exception
