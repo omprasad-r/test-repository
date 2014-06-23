@@ -114,7 +114,7 @@ function gardens_statsd_env_check() {
   }
 
   $site = acsf_get_acsf_site();
-  $stage = isset($site->client_name) ? trim($site->client_name) : 'gardens';
+  $stage = !empty($site->client_name) ? trim($site->client_name) : 'gardens';
   variable_set('gardens_statsd_suffix', "$stage.$tangle");
   variable_set('gardens_statsd_env_checked', time());
 
