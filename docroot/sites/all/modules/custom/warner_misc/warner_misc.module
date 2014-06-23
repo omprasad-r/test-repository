@@ -86,7 +86,7 @@ function warner_misc_wysiwyg_settings_form($form, &$form_state) {
               $form['warner_misc_wysiwyg_comment_form_buttons'][$format]['buttons'][$button] = array(
                 '#type' => 'checkbox',
                 '#title' => $button_title,
-                '#default_value' => isset($options[$format][$button]) ? $options[$format][$button] : $value,
+                '#default_value' => isset($options[$format][$button]) ? $options[$format][$button] : 0,
               );
             }
           }
