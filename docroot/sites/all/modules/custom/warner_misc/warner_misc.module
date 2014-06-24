@@ -81,15 +81,12 @@ function warner_misc_wysiwyg_settings_form($form, &$form_state) {
 
       foreach ($plugins as $name => $meta) {
         if (isset($meta['buttons']) && is_array($meta['buttons'])) {
-          foreach ($meta['buttons'] as $button => $value) {
-            if (!empty($meta['buttons'][$button])) {
-              $button_title = $meta['buttons'][$button];
-              $form['warner_misc_wysiwyg_comment_form_buttons'][$format]['buttons'][$button] = array(
-                '#type' => 'checkbox',
-                '#title' => $button_title,
-                '#default_value' => isset($options[$format][$button]) ? $options[$format][$button] : 0,
-              );
-            }
+          foreach ($meta['buttons'] as $button => $title) {
+            $form['warner_misc_wysiwyg_comment_form_buttons'][$format]['buttons'][$button] = array(
+              '#type' => 'checkbox',
+              '#title' => $title,
+              '#default_value' => isset($options[$format][$button]) ? $options[$format][$button] : 0,
+            );
           }
         }
       }
