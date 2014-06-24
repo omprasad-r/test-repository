@@ -76,11 +76,12 @@ function warner_misc_wysiwyg_settings_form($form, &$form_state) {
     );
 
     if (!empty($profile->settings) && isset($filter_formats[$format])) {
+      // Get custom settings.
       $options[$format] = variable_get('warner_misc_comment_form_buttons_for_' . $format, array());
 
       foreach ($plugins as $name => $meta) {
         if (isset($meta['buttons']) && is_array($meta['buttons'])) {
-          foreach ($profile->settings['buttons'][$name] as $button => $value) {
+          foreach ($meta['buttons'] as $button => $value) {
             if (!empty($meta['buttons'][$button])) {
               $button_title = $meta['buttons'][$button];
               $form['warner_misc_wysiwyg_comment_form_buttons'][$format]['buttons'][$button] = array(
