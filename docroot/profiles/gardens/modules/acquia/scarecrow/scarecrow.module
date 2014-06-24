@@ -1371,6 +1371,16 @@ function scarecrow_disallowed_modules_alter(&$modules) {
     $modules[] = 'acquia_agent';
     $modules[] = 'acquia_spi';
     $modules[] = 'acquia_search';
+    // Likewise, acquia_lift-related modules are not for SMB.
+    $modules[] = 'acquia_lift';
+    $modules[] = 'personalize';
+    $modules[] = 'personalize_blocks';
+    $modules[] = 'personalize_elements';
+    $modules[] = 'personalize_fields';
+    $modules[] = 'personalize_target';
+    $modules[] = 'personalize_url_context';
+    $modules[] = 'visitor_actions';
+    $modules[] = 'visitor_actions_ui';
   }
 }
 

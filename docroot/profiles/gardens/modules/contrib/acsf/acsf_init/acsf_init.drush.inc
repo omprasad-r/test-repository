@@ -227,7 +227,7 @@ function drush_acsf_connect_factory() {
 
   // Send a theme event notification to the Factory.
   $notify = acsf_theme_notification();
-  $notify->sendNotification('create');
+  $notify->sendNotification('site', 'create');
 }
 
 /**
@@ -292,7 +292,7 @@ function drush_acsf_uninstall() {
 function acsf_init_get_required_dirs($repo_root) {
   return array(
     'cloud hooks' => sprintf('%s/hooks/common/post-db-copy', $repo_root),
-    'cloud hook deploy' => sprintf('%s/hooks/common/site-initial-deployment', $repo_root),
+    'cloud hook deploy' => sprintf('%s/hooks/common/pre-web-activate', $repo_root),
     'acquia hook dir' => sprintf('%s/hooks/acquia', $repo_root),
     'cloud hook samples' => sprintf('%s/hooks/samples', $repo_root),
     'site config logic' => sprintf('%s/sites/g', DRUPAL_ROOT),
@@ -314,8 +314,8 @@ function acsf_init_get_required_files($repo_root) {
       'mod' => 0751,
     ),
     '000-acquia-deployment.php' => array(
-      'source' => 'cloud_hooks/common/site-initial-deployment',
-      'dest' => sprintf('%s/hooks/common/site-initial-deployment', $repo_root),
+      'source' => 'cloud_hooks/common/pre-web-activate',
+      'dest' => sprintf('%s/hooks/common/pre-web-activate', $repo_root),
       'mod' => 0751,
     ),
     'db_connect.php' => array(

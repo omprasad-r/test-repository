@@ -1,0 +1,94 @@
+<?php
+
+/**
+ * @file
+ * Sets up the table to link entities with option sets.
+ */
+
+
+/**
+ * Implements hook_schema().
+ */
+function personalize_fields_schema() {
+  $schema = array();
+
+  $schema['personalize_fields_option_sets'] = array(
+    'description' => 'Stores Option Sets linked to Entities.',
+    'fields' => array(
+      'osid' => array(
+        'description' => 'The ID of the option set',
+        'type' => 'int',
+        'not null' => TRUE,
+        'default' => 0,
+      ),
+      'entity_type' => array(
+        'description' => 'The Entity Type of the entity.',
+        'type' => 'varchar',
+        'length' => 128,
+        'not null' => TRUE,
+        'default' => '',
+      ),
+      'entity_id' => array(
+        'type' => 'varchar',
+        'length' => 128,
+        'not null' => TRUE,
+        'default' => '',
+        'description' => 'The Entity ID of this entity.',
+      ),
+      'field_name' => array(
+        'type' => 'varchar',
+        'length' => 32,
+        'not null' => TRUE,
+        'default' => '',
+        'description' => 'The field name.',
+      ),
+    ),
+    'primary key' => array('osid'),
+    'foreign keys' => array(
+      'field_osid' => array(
+        'table' => 'personalize_option_set',
+        'columns' => array('osid' => 'osid'),
+      ),
+    ),
+    'unique keys' => array(
+      'eif' => array('entity_type', 'entity_id', 'field_name'),
+    ),
+  );
+
+  return $schema;
+}
+
+/**
+ * Implements hook_install().
+ */
+function personalize_fields_install() {
+  // This is done to work around a bug in RDF module
+  // @see https://drupal.org/node/1940986 regarding this bug.
+  db_update('system')
+    ->fields(array('weight' => 20))
+    ->condition('name', 'personalize_fields', '=')
+    ->execute();
+}
+
+/**
+ * Implements hook_uninstall().
+ */
+function personalize_fields_uninstall() {
+  // Remove the "personalizable" setting from all fields. We cannot
+  // use field_update_field() for this as it's not possible to remove
+  // existing settings (it just merges the old settings into whatever
+  // settings you pass it).
+  $result = db_select('field_config', 'f')
+    ->fields('f', array('id', 'data'))
+    ->execute();
+  foreach ($result as $row) {
+    $data = unserialize($row->data);
+    if (isset($data['settings']['personalizable'])) {
+      unset($data['settings']['personalizable']);
+    }
+    db_update('field_config')
+      ->fields(array('data' => serialize($data)))
+      ->condition('id', $row->id)
+      ->execute();
+  }
+}

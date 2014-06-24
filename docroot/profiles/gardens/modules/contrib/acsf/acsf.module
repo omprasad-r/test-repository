@@ -108,7 +108,11 @@ function acsf_form_system_site_maintenance_mode_alter(&$form, &$form_state) {
     }
     $form['maintenance_mode']['#disabled'] = TRUE;
   }
-  $form['#submit'][] = 'acsf_system_site_maintenance_mode_submit';
+  else {
+    // If we are not in ACSF maintenance mode, append our custom submit handler
+    // to track when a site admin puts their site into maintenance.
+    $form['#submit'][] = 'acsf_system_site_maintenance_mode_submit';
+  }
 }
 
 /**
@@ -213,7 +217,7 @@ function acsf_factory_url() {
 /**
  * Implements hook_watchdog().
  */
-function acsf_watchdog($log_entry) {
+function acsf_watchdog($log) {
   // Only escalate messages of certain severity levels.
   $severity_to_escalate = array(
     WATCHDOG_EMERGENCY,
@@ -221,16 +225,8 @@ function acsf_watchdog($log_entry) {
     WATCHDOG_CRITICAL,
   );
 
-  if (in_array($log_entry['severity'], $severity_to_escalate)) {
-    $site = acsf_get_acsf_site();
-    $record = array(
-      'type' => 'watchdog',
-      'message' => t($log_entry['message'], $log_entry['variables']),
-      'level' => $log_entry['severity'],
-      'timestamp' => REQUEST_TIME,
-      'nid' => $site->site_id,
-    );
+  if (in_array($log['severity'], $severity_to_escalate)) {
     $acsf_log = new \Acquia\Acsf\AcsfLog();
-    $acsf_log->log($record);
+    $acsf_log->log('watchdog', t($log['message'], $log['variables']), $log['severity']);
   }
 }

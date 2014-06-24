@@ -5,9 +5,11 @@
  * the Gardener instead.
  */
 
-// Don't run any of this code if we are drush
-// or a CLI script.
-if (function_exists('drush_main') || drupal_is_cli()) {
+// Don't run any of this code if we are drush or a CLI script.
+if (function_exists('drush_main') || !function_exists('drupal_bootstrap') || drupal_is_cli()) {
+  if (!function_exists('drush_main')) {
+    header($_SERVER['SERVER_PROTOCOL'] . ' 404 Not Found');
+  }
   return;
 }
 

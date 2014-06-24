@@ -19,6 +19,7 @@ function gardens_duplication_drush_help_alter(&$command) {
       'retain-janrain-settings' => dt('Retain Janrain settings (defaults to --exact-copy).'),
       'retain-webform-submissions' => dt('Retain Webform submissions (defaults to --exact-copy).'),
       'retain-voting-api-data' => dt('Retain Voting API data (defaults to --exact-copy).'),
+      'retain-acquia-lift-config' => dt('Retain Acquia Lift campaign configuration (defaults to --exact-copy).'),
       'mollom-public-key' => dt('The Mollom public key to set.'),
       'mollom-private-key' => dt('The Mollom private key to set.'),
     );

@@ -1,0 +1,87 @@
+<?php
+
+/**
+ * @file Visitor Actions - Installation file.
+ */
+
+/**
+ * Implements hook_schema().
+ */
+function visitor_actions_schema() {
+  $schema['visitor_actions_actions'] = array(
+    'fields' => array(
+      'id' => array(
+        'type' => 'serial',
+        'not null' => TRUE,
+        'description' => 'The internal identifier for any action.',
+      ),
+      'machine_name' => array(
+        'type' => 'varchar',
+        'length' => '255',
+        'not null' => TRUE,
+        'description' => 'The machine-readable name of the action.',
+      ),
+      'label' => array(
+        'type' => 'varchar',
+        'length' => '255',
+        'not null' => TRUE,
+        'description' => 'The label of the action.',
+        'default' => 'unlabeled',
+      ),
+      'plugin' => array(
+        'type' => 'varchar',
+        'length' => '255',
+        'not null' => TRUE,
+        'description' => 'The plugin defining this action.',
+      ),
+      'event' => array(
+        'type' => 'varchar',
+        'length' => '255',
+        'not null' => TRUE,
+        'description' => 'The actual event for this action, e.g. click.',
+      ),
+      'identifier' => array(
+        'type' => 'varchar',
+        'length' => '255',
+        'not null' => TRUE,
+        'default' => '',
+        'description' => 'A string that is used to identify the thing being acted on.',
+      ),
+      'pages' => array(
+        'type' => 'text',
+        'not null' => TRUE,
+        'description' => 'Contains a list of paths by which to restrict the action.',
+      ),
+      'client_side' => array(
+        'description' => 'Boolean indicating whether this is a client-side action.',
+        'type' => 'int',
+        'not null' => TRUE,
+        'default' => 0,
+      ),
+      'module' => array(
+        'description' => 'The name of the providing module if the action has been defined in code.',
+        'type' => 'varchar',
+        'length' => 255,
+        'not null' => FALSE,
+      ),
+      'data' => array(
+        'type' => 'blob',
+        'size' => 'big',
+        'not null' => FALSE,
+        'serialize' => TRUE,
+        'description' => 'Everything else, serialized.',
+      ),
+    ),
+    'primary key' => array('id'),
+    'unique keys' => array(
+      'machine_name' => array('machine_name'),
+    ),
+    'indexes' => array(
+      'plugin_identifier' => array('plugin', 'identifier')
+    )
+  );
+
+  $schema['cache_visitor_actions'] = drupal_get_schema_unprocessed('system', 'cache');
+  $schema['cache_visitor_actions']['description'] = 'Cache table for visitor actions to store action subscribers.';
+  return $schema;
+}
