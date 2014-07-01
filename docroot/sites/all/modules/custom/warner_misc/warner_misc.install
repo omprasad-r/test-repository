@@ -522,31 +522,24 @@ function warner_misc_update_11162() {
     // Get all filter formats.
     $filter_formats = filter_formats();
 
-    // We query the database directly, rather than using the
-    // wysiwyg_profile_load_all() API function, because the wysiwyg module
-    // might be installed but disabled.
-    $result = db_query("SELECT format, settings FROM {wysiwyg} WHERE editor = :editor;", array(':editor' => 'ckeditor'));
-    foreach ($result as $config) {
-      if (!empty($config->settings) && isset($filter_formats[$config->format])) {
-        // The settings array is stored in serialized format.
-        $settings = unserialize($config->settings);
-
+    foreach (wysiwyg_profile_load_all() as $format => $profile) {
+      if (!empty($profile->settings) && isset($filter_formats[$format])) {
         $comment_buttons = array();
         // See if the allowed buttons for comments are enabled and add them.
         // The list of allowed buttons is taken from 'gardens_misc'.
         foreach (array('Bold', 'Italic', 'BulletedList', 'NumberedList', 'Link', 'Unlink', 'Blockquote') as $button) {
-          if (!empty($settings['buttons']['default'][$button])) {
+          if (!empty($profile->settings['buttons']['default'][$button])) {
             $comment_buttons[$button] = 1;
           }
         }
         // Check the media button.
-        if (isset($settings['buttons']['drupal']) && !empty($settings['buttons']['drupal']['media'])) {
+        if (!empty($profile->settings['buttons']['drupal']['media'])) {
           $comment_buttons['media'] = 1;
         }
 
         // Set our custom variable.
         if (!empty($comment_buttons)) {
-          variable_set('warner_misc_comment_form_buttons_for_' . $config->format, $comment_buttons);
+          variable_set('warner_misc_comment_form_buttons_for_' . $format, $comment_buttons);
         }
       }
     }
