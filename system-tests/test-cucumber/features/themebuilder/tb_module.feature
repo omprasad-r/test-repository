@@ -12,11 +12,14 @@ Feature: Basic themebuilder module behaviour
     And I have created a new site
     And I visit my new site
     And I visit the modules page at admin/modules
-    Then I can see a checkbox labelled "Themebuilder" which I am able to uncheck
+    Then I can see a checkbox labelled "Themebuilder"
+    And I am able to uncheck the checkbox and submit the form
+    And I receive a confirmation message
+    And I can verify that the checkbox remains unchecked
 
   Scenario: As a Site Factory user (excluding drupalgardens.com), I see no other themebuilder modules than "Thembuilder" and "Themebuilder preview"
     Given I am logged into a Site Factory installation other than drupalgardens.com (or gsteamer)
     And I have created a new site
     And I visit my new site
     And I visit the modules page at admin/modules
-    Then The only modules I can see containing the word "themebuilder" are "Themebuilder" and "Themebuilder preview"
+    Then the only modules I can see containing the word "themebuilder" are "Themebuilder" and "Themebuilder preview"
