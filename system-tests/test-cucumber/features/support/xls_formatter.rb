@@ -4,7 +4,6 @@ require 'cucumber/formatter/ordered_xml_markup'
 require 'cucumber/formatter/duration'
 require 'cucumber/formatter/io'
 require 'axlsx'
-require 'pry'
 
 module Acquia
   module Formatter

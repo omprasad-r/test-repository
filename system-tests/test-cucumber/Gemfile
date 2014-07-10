@@ -11,7 +11,6 @@ gem 'capybara-screenshot', '=0.1.7'
 gem 'nokogiri'
 gem 'poltergeist'
 gem 'axlsx'
-gem 'pry'
 
 #nobody using it at the moment
 #gem 'sauce' , :git => 'git://github.com/saucelabs/sauce_ruby.git'
