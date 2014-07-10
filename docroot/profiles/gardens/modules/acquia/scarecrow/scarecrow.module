@@ -1224,7 +1224,6 @@ function scarecrow_disallowed_modules() {
  * @see scarecrow_visible_required_modules()
  */
 function scarecrow_required_modules() {
-  $site = acsf_get_acsf_site();
   $required_modules = array(
     'backports',
     'block',
@@ -1297,13 +1296,10 @@ function scarecrow_required_modules() {
     'toolbar',
   );
 
-  // PaaS customers should be able to see and disable the themebuilder modules.
-  // The default service_type is 'paas' unless a specific service_type is set.
-  $service_type = 'paas';
-  if (isset($site->gardens_signup['service_type'])) {
-    $service_type = $site->gardens_signup['service_type'];
-  }
-  if ($service_type !== 'paas') {
+  // Disallow the themebuilder from being diabled on SMB. There is the
+  // possibility that this function is called when gardens_misc is not
+  // available.
+  if (module_exists('gardens_misc') && gardens_misc_is_smb()) {
     $required_modules = array_merge($required_modules, array(
       'themebuilder_log',
       'themebuilder_advanced',

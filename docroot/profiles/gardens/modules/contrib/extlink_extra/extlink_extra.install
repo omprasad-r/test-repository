@@ -1,4 +1,8 @@
 <?php
+/**
+* @file
+* Installation file for extlink_extra
+*/
 
 function extlink_extra_enable() {
   /* Turn on the colorbox module's "Enable Colorbox inline" setting
@@ -6,7 +10,7 @@ function extlink_extra_enable() {
   and build the url like this "?width=500&height=500&inline=true#id-of-content". 
   Other modules may activate this for easy Colorbox integration. */
   variable_set('colorbox_inline', 1);
-  drupal_set_message('Activated the "Enable Colorbox inline" setting.');
+  drupal_set_message(t('Activated the "Enable Colorbox inline" setting.'));
   
   //Figure out what extlink.module's system weight is and add 1 to it so that our scripts and such will be executed afterwards
   $extlink_weight = db_query("SELECT weight FROM {system} WHERE type = 'module' AND name = 'extlink'")->fetchField(0);
