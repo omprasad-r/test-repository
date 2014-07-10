@@ -620,8 +620,18 @@ class AcsfSshWrapper {
       $first_half = ceil($max_length / 2);
       $last_half = $max_length - $first_half;
 
-      $first = substr($string, 0, $first_half);
-      $last = substr($string, -$last_half);
+      // We need to be cautious to break on multibyte character boundaries. So
+      // we prefer to use the mbstring functions if available.
+      if (extension_loaded('mbstring')) {
+        $encoding = mb_detect_encoding($string);
+        $length = mb_strlen($string, $encoding);
+        $first = mb_substr($string, 0, $first_half, $encoding);
+        $last = mb_substr($string, -$last_half, $length, $encoding);
+      }
+      else {
+        $first = substr($string, 0, $first_half);
+        $last = substr($string, -$last_half);
+      }
       $string = sprintf('%s...%s', $first, $last);
     }
     return $string;
