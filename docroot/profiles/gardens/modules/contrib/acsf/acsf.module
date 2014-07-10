@@ -136,7 +136,7 @@ function acsf_system_site_maintenance_mode_submit(&$form, &$form_state) {
 function acsf_cron() {
   // Periodically refresh the site data.
   $site = acsf_get_acsf_site();
-  $refresh_age = time() - 86400 * 7;
+  $refresh_age = time() - 86400;
   if ($site->last_sf_refresh < $refresh_age) {
     $site->refresh();
   }

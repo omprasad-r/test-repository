@@ -119,6 +119,9 @@ class AcsfDuplicationScrubCommentHandler extends AcsfEventHandler {
    *   The number of items remaining in the table.
    */
   public function countRemaining() {
+    if (!module_exists('comment')) {
+      return 0;
+    }
     return db_query('SELECT COUNT(*) FROM {comment}')->fetchField();
   }
 

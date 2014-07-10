@@ -1503,7 +1503,7 @@ function gardens_misc_get_canonical_domain() {
   // custom domain data from the gardener.
   $domain = variable_get('gardens_misc_canonical_domain');
   if (!$domain) {
-    $domain = $site->gardens_manager['custom_domain'];
+    $domain = !empty($site->gardens_manager['custom_domain']) ? $site->gardens_manager['custom_domain'] : NULL;
   }
   return $domain;
 }

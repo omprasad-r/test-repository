@@ -104,7 +104,7 @@ function gardens_limits_init() {
  */
 function gardens_limits_crawler_block_apply() {
   $site = acsf_get_acsf_site();
-  $crawler_blocking_info = $site->sf_abuse['block_crawler'];
+  $crawler_blocking_info = isset($site->sf_abuse['block_crawler']) ? $site->sf_abuse['block_crawler'] : FALSE;
   $site_creation = variable_get('install_time', 0);
   $killswitch = variable_get('gardens_limits_crawler_blocking_killswitch', FALSE);
   $killswitch = $killswitch && $killswitch === gardens_limits_crawler_blocking_killswitch();
@@ -1009,6 +1009,60 @@ function gardens_limits_form_webform_results_download_form_alter(&$form, &$form_
     // are limited, so block it for now.
     $form['range']['#access'] = FALSE;
   }
+}
+
+/**
+ * Implements hook_form_FORM_ID_alter().
+ */
+function gardens_limits_form_views_ui_edit_display_form_alter(&$form, &$form_state) {
+  if (_gardens_limits_views_maximum_items_per_page_get()) {
+    $form['options']['pager_options']['items_per_page']['#element_validate'] = array('_gardens_limits_max_items_per_page');
+    $form['options']['pager_options']['items_per_page']['#description'] = t('The number of items to display per page.');
+  }
+}
+
+/**
+ * Implements hook_form_FORM_ID_alter().
+ */
+function gardens_limits_form_views_ui_add_form_alter(&$form, &$form_state) {
+  if (_gardens_limits_views_maximum_items_per_page_get()) {
+    $form['displays']['page']['options']['items_per_page']['#element_validate'] = array('_gardens_limits_max_items_per_page');
+    $form['displays']['block']['options']['items_per_page']['#element_validate'] = array('_gardens_limits_max_items_per_page');
+  }
+}
+
+/**
+ * Element validate callback for the maximum number of items set per page.
+ */
+function _gardens_limits_max_items_per_page($element, &$form_state) {
+  $max_items_per_page = _gardens_limits_views_maximum_items_per_page_get();
+  if (!$max_items_per_page) {
+    return;
+  }
+
+  $value = (int) $element['#value'];
+  if ($value <= 0) {
+    form_error($element, t('You must specify the maximum number of Views items allowed per page (limit is @max).', array(
+      '@max' => $max_items_per_page,
+    )));
+  }
+  elseif ($value > $max_items_per_page) {
+    form_error($element, t('The value entered is over the maximum limit of @max items per page.', array(
+      '@max' => $max_items_per_page,
+    )));
+  }
+}
+
+/**
+ * Gets the maximum number of items per page allowed on views pages.
+ *
+ * @return int
+ *   The maximum number of items allowed on a views page, zero if any number of
+ *   items may appear on a page.
+ */
+function _gardens_limits_views_maximum_items_per_page_get() {
+  $site = \Acquia\Acsf\AcsfSite::load();
+  return isset($site->gardens_signup['gardens_signup_views_maximum_items_per_page']) ? $site->gardens_signup['gardens_signup_views_maximum_items_per_page'] : 0;
 }
 
 /**
