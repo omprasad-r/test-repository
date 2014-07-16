@@ -1248,7 +1248,7 @@ class Theme {
       }
       $src = $full_src;
     }
-    if (file_exists($dest) && is_link($dest)) {
+    if (!$this->isDraft() && file_exists($dest) && is_link($dest)) {
       // Do not copy to the symbolic link.  This is likely a link that points
       // to the theme repository, which is only available on a single webnode.
       // Instead, remove the link and force a complete copy of the theme.
