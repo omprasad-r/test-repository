@@ -5,6 +5,8 @@
  * Handles the pausing and unpausing of Pingdom checks under certain conditions.
  */
 
+use Acquia\Acsf\AcsfMessageRest;
+
 /**
  * Implements hook_modules_enabled().
  */
