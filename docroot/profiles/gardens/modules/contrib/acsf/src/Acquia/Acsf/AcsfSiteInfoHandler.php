@@ -1,12 +1,11 @@
 <?php
 
-namespace Acquia\Acsf;
-
 /**
  * @file
- * This event handler is responsible for populating the site information after
- * the installation process.
+ * This event handler populates the site information after the installation.
  */
+
+namespace Acquia\Acsf;
 
 class AcsfSiteInfoHandler extends AcsfEventHandler {
 
@@ -18,7 +17,7 @@ class AcsfSiteInfoHandler extends AcsfEventHandler {
     $site->refresh();
 
     // Notify the user to verify their email address.
-    $site->verification_status["last_updated"] = time();
+    $site->verification_status['last_updated'] = time();
 
     $site->save();
   }

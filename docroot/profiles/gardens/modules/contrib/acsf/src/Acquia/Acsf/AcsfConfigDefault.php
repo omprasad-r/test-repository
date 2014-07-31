@@ -1,11 +1,11 @@
 <?php
 
-namespace Acquia\Acsf;
-
 /**
  * @file
  * Creates a config object using our custom INI file.
  */
+
+namespace Acquia\Acsf;
 
 class AcsfConfigDefault extends AcsfConfig {
 
@@ -14,7 +14,7 @@ class AcsfConfigDefault extends AcsfConfig {
    *
    * @var stdClass.
    */
-  static $cacheDefault;
+  protected static $cacheDefault;
 
   /**
    * Implements AcsfConfig::loadConfig().
@@ -29,8 +29,8 @@ class AcsfConfigDefault extends AcsfConfig {
     $this->url = self::$cacheDefault->url;
     $this->username = self::$cacheDefault->username;
     $this->password = self::$cacheDefault->password;
-    $this->url_suffix = self::$cacheDefault->url_suffix;
-    $this->source_url = self::$cacheDefault->source_url;
+    $this->urlSuffix = self::$cacheDefault->urlSuffix;
+    $this->sourceUrl = self::$cacheDefault->sourceUrl;
   }
 
   /**
@@ -38,7 +38,8 @@ class AcsfConfigDefault extends AcsfConfig {
    *
    * The cred file location will match the directory structure of an AH site:
    * /mnt/www/html/[site].[env]/docroot will have a credential file at
-   * /mnt/gfs/[site].[env]/nobackup/sf_shared_creds.ini, using normal INI format:
+   * /mnt/gfs/[site].[env]/nobackup/sf_shared_creds.ini, using normal INI
+   * format:
    *
    * [gardener]
    * url = "http://gardener.[stage].acquia-sites.com"
@@ -49,7 +50,7 @@ class AcsfConfigDefault extends AcsfConfig {
    * @throws AcsfConfigMissingCredsException
    */
   protected function loadIniFile() {
-    $site_name = sprintf('%s.%s', $this->ah_site, $this->ah_env);
+    $site_name = sprintf('%s.%s', $this->ahSite, $this->ahEnv);
     $ini_file = sprintf('/mnt/gfs/%s/nobackup/sf_shared_creds.ini', $site_name);
 
     // After everyone has 2.09, this can be removed.
@@ -60,7 +61,7 @@ class AcsfConfigDefault extends AcsfConfig {
     $acsf_shared_creds = parse_ini_file($ini_file, TRUE);
 
     if (empty($acsf_shared_creds['gardener'])) {
-      throw new AcsfConfigMissingCredsException(sprintf('Shared credential file not found in /mnt/gfs/%s/nobackup/', $site_name));
+      throw new AcsfConfigMissingCredsException(sprintf('Shared credential file not found in /mnt/gfs/%s/nobackup/.', $site_name));
     }
 
     // Set the cached values for subsequent usage.
@@ -68,16 +69,16 @@ class AcsfConfigDefault extends AcsfConfig {
     self::$cacheDefault->username = $acsf_shared_creds['gardener']['username'];
     self::$cacheDefault->password = $acsf_shared_creds['gardener']['password'];
     if (isset($acsf_shared_creds['gardener']['url_suffix'])) {
-      self::$cacheDefault->url_suffix = $acsf_shared_creds['gardener']['url_suffix'];
+      self::$cacheDefault->urlSuffix = $acsf_shared_creds['gardener']['url_suffix'];
     }
     else {
-      self::$cacheDefault->url_suffix = '';
+      self::$cacheDefault->urlSuffix = '';
     }
     if (isset($acsf_shared_creds['gardener']['source_url'])) {
-      self::$cacheDefault->source_url = $acsf_shared_creds['gardener']['source_url'];
+      self::$cacheDefault->sourceUrl = $acsf_shared_creds['gardener']['source_url'];
     }
     else {
-      self::$cacheDefault->source_url = '';
+      self::$cacheDefault->sourceUrl = '';
     }
   }
 

@@ -1,9 +1,16 @@
 <?php
 
 /**
+ * @file
+ * Install related functions.
+ */
+
+/**
  * Implements hook_schema().
  */
 function acsf_variables_schema() {
+  $schema = array();
+
   $schema['acsf_variables'] = array(
     'description' => 'A centralized storage mechanism for all ACSF sensitive variables that can be easily scrubbed.',
     'fields' => array(

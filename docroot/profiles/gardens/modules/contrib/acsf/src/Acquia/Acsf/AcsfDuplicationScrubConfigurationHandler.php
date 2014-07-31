@@ -1,11 +1,11 @@
 <?php
 
-namespace Acquia\Acsf;
-
 /**
  * @file
  * Contains AcsfDuplicationScrubConfigurationHandler.
  */
+
+namespace Acquia\Acsf;
 
 /**
  * Handles the scrubbing of Drupal core configuration.
@@ -50,4 +50,3 @@ class AcsfDuplicationScrubConfigurationHandler extends AcsfEventHandler {
   }
 
 }
-

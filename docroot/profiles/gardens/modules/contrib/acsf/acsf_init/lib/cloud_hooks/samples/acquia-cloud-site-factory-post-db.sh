@@ -23,4 +23,3 @@ echo "$site.$target_env: Received copy of database $db_name from $source_env."
 
 # Retrieve a variable called "site_name" - remember to use the --uri argument!
 drush5 @$site.$target_env --uri=$uri vget site_name
-

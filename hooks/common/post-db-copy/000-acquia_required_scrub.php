@@ -1,9 +1,17 @@
 #!/usr/bin/env php
 <?php
 
-$site = $argv[1];    // AH site group
-$env = $argv[2];     // AH site env
-$db_role = $argv[3]; // Database name
+/**
+ * @file
+ * Scrubs a site after its database has been copied.
+ */
+
+// AH site group.
+$site = $argv[1];
+// AH site env.
+$env = $argv[2];
+// Database name.
+$db_role = $argv[3];
 
 fwrite(STDERR, "Scrubbing site database. Site: $site, Env: $env, Db Role: $db_role\n");
 

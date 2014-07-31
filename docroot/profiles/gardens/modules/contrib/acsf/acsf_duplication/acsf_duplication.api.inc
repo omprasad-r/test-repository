@@ -14,7 +14,7 @@
  *
  * @see drush_acsf_duplication_scrub_progress()
  */
-function hook_acsf_duplication_scrub_remaining_counts_alter(&$data) {
+function hook_acsf_duplication_scrub_remaining_counts_alter(array &$data) {
   $data['node_count'] = \Acquia\Acsf\AcsfDuplicationScrubNodeHandler::countRemaining();
 }
 
@@ -29,7 +29,7 @@ function hook_acsf_duplication_scrub_remaining_counts_alter(&$data) {
  *
  * @see drush_acsf_duplication_scrub_batch()
  */
-function hook_acsf_duplication_scrub_context_alter(&$context) {
+function hook_acsf_duplication_scrub_context_alter(array &$context) {
   $context['scrub_options']['retain_users'] = drush_get_option('exact-copy');
   $context['scrub_options']['retain_content'] = drush_get_option('exact-copy');
 }
@@ -38,11 +38,11 @@ function hook_acsf_duplication_scrub_context_alter(&$context) {
  * Alters the list of admin roles of users to preserve.
  *
  * @param array $admin_roles
- *   An indexed array of admin roles of users to preserve.
+ *   A numeric array of admin roles of users to preserve.
  *
  * @see \Acquia\Acsf\AcsfDuplicationScrubUserHandler::getOpenIdAdmins()
  */
-function hook_acsf_duplication_scrub_admin_roles_alter(&$admin_roles) {
+function hook_acsf_duplication_scrub_admin_roles_alter(array &$admin_roles) {
   if ($role = variable_get('my_module_admin_role')) {
     $admin_roles[] = $role;
   }
@@ -52,13 +52,12 @@ function hook_acsf_duplication_scrub_admin_roles_alter(&$admin_roles) {
  * Alters the list of user IDs to preserve.
  *
  * @param array $preserved_uids
- *   An indexed array of user IDs to preserve.
+ *   A numeric array of user IDs to preserve.
  *
  * @see \Acquia\Acsf\AcsfDuplicationScrubUserHandler::getPreservedUsers()
  */
-function hook_duplication_acsf_duplication_scrub_preserved_users_alter(&$preserved_uids) {
+function hook_duplication_acsf_duplication_scrub_preserved_users_alter(array &$preserved_uids) {
   if ($uids = variable_get('my_module_preserved_uids', array())) {
     $preserved_uids = array_merge($preserved_uids, $uids);
   }
 }
-

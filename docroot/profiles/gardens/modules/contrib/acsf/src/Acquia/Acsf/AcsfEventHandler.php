@@ -1,13 +1,15 @@
 <?php
 
-namespace Acquia\Acsf;
-
 /**
  * @file
+ * Contains AcsfEventHandler.
+ *
  * The purpose of this class is to define an interface for events within Site
  * Factory. Customers who have access to customize their code base can write
  * client code to this interface to interact with events in a standardized way.
  */
+
+namespace Acquia\Acsf;
 
 abstract class AcsfEventHandler {
 
@@ -21,7 +23,7 @@ abstract class AcsfEventHandler {
   public $message = '';
 
   /**
-   * Constructor
+   * Constructor.
    *
    * @param AcsfEvent $event
    *   The event that has been initiated.

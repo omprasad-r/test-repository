@@ -1,5 +1,10 @@
 <?php
 
+/**
+ * @file
+ * Configuration file for Drupal's multi-site directory aliasing feature.
+ */
+
 // Bail out if we're not on an Acquia server.
 if (function_exists('is_acquia_host') && !is_acquia_host()) {
   return;
@@ -27,7 +32,7 @@ if (!isset($_ENV['AH_SITE_NAME']) && file_exists('/var/www/site-scripts/site-inf
 }
 
 /**
- * Returns the sites data structure containing information about all sites/domains.
+ * Returns the sites data structure.
  *
  * @return bool|mixed
  *   An array of sites data on success, or FALSE on failure to load or parse the
@@ -57,8 +62,8 @@ function gardens_site_data_get_filepath() {
   return "/mnt/gfs/{$_ENV['AH_SITE_NAME']}/files-private/sites.json";
 }
 
-/*
- * Performs a full refresh of the APC cached site/domain data, rewriting every key.
+/**
+ * Fully refreshes the APC cached site/domain data, rewriting every key.
  */
 function gardens_site_data_refresh_all() {
   if ($map = gardens_site_data_load_file()) {
@@ -77,12 +82,12 @@ function gardens_site_data_refresh_all() {
  *   'conf', 'flags', 'name' etc.
  * @param array $map
  *   An array containing global information that applies to all sites (site,
- *   env, memcache_inc)
+ *   env, memcache_inc).
  *
  * @return array
  *   A data structure containing information about a single site.
  */
-function gardens_site_data_build_data($site, $map) {
+function gardens_site_data_build_data(array $site, array $map) {
   // All sites use a conventional public file path.
   $db_name = $site['conf']['acsf_db_name'];
   $site['conf']['file_public_path'] = 'sites/g/files/' . $db_name . '/f';
@@ -120,11 +125,13 @@ function gardens_site_data_get_site_from_file($domain) {
 }
 
 /**
- * Returns data for a single domain directly from the JSON file, optionally also
- * storing it in APC.
+ * Returns data for a single domain directly from the JSON file.
  *
- * @param $domain
- *   The domain name to look up in the JSON file
+ * Optionally also stores the data in APC.
+ *
+ * @param string $domain
+ *   The domain name to look up in the JSON file.
+ *
  * @return array|int
  *   An array of site data, or 0 if no site was found for the given domain.
  */
@@ -134,16 +141,18 @@ function gardens_site_data_refresh_one($domain) {
 }
 
 /**
- * Returns data for the specified domains directly from the JSON file, optionally also
- * storing them in APC.
+ * Returns data for the specified domains directly from the JSON file.
+ *
+ * Optionally also stores the data in APC.
  *
  * @param array $domains
- *   The domain names to look up in the JSON file
+ *   The domain names to look up in the JSON file.
+ *
  * @return array
- *   An array keyed by the specified domains, whose values are site data arrays or 0 if
- *   no site was found for the given domain.
+ *   An array keyed by the specified domains, whose values are site data arrays
+ *   or 0 if no site was found for the given domain.
  */
-function gardens_site_data_refresh_domains($domains) {
+function gardens_site_data_refresh_domains(array $domains) {
   $location = gardens_site_data_get_filepath();
   $data = array();
   foreach ($domains as $domain) {
@@ -151,9 +160,9 @@ function gardens_site_data_refresh_domains($domains) {
     $result = shell_exec(sprintf("grep %s %s --no-filename --color=never --context=0", escapeshellarg($domain), escapeshellarg($location)));
 
     if (empty($result)) {
-      // Log an explicit fail in APC if we cannot find the domain,
-      // so that we can take advantage of APC caching the "fail" also. To do this,
-      // cache an integer literal zero for any failed domain.
+      // Log an explicit fail in APC if we cannot find the domain, so that we
+      // can take advantage of APC caching the "fail" also. To do this, cache an
+      // integer literal zero for any failed domain.
       $data[$domain] = 0;
     }
     else {
@@ -176,9 +185,9 @@ function gardens_site_data_refresh_domains($domains) {
       $global_map_data = json_decode($json, TRUE);
 
       if (empty($found_site) || empty($global_map_data)) {
-        // This will happen if the domain appears in the JSON file, but the format
-        // of the file has changed such that the grep-based single-line parsing no
-        // longer works.
+        // This will happen if the domain appears in the JSON file, but the
+        // format of the file has changed such that the grep-based single-line
+        // parsing no longer works.
         // TODO: Log the error in such a way that it will squawk loudly.
         $map = gardens_site_data_load_file();
         $data[$domain] = gardens_site_data_build_data($map['sites'][$domain], $map);
@@ -202,9 +211,9 @@ function gardens_site_data_refresh_domains($domains) {
  *   The domain name used in the cache key to store.
  * @param array $data
  *   An array of data about the site/domain containing keys 'dir' and
- *   'gardens_site_settings'
+ *   'gardens_site_settings'.
  */
-function gardens_site_data_cache_set($domain, $data) {
+function gardens_site_data_cache_set($domain, array $data) {
   if (function_exists('apc_store')) {
     $domain_key = "gardens_domain:$domain";
     apc_store($domain_key, $data, GARDENS_SITE_DATA_TTL);
@@ -213,8 +222,6 @@ function gardens_site_data_cache_set($domain, $data) {
 
 /**
  * Retrieves cached site info from APC for a given domain.
- *
- * @param $domain
  *
  * @return mixed
  *   An object containing information about the site on success, or FALSE if no

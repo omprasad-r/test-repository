@@ -1,11 +1,11 @@
 <?php
 
-namespace Acquia\Acsf;
-
 /**
  * @file
  * Contains AcsfDuplicationScrubModuleEnableHandler.
  */
+
+namespace Acquia\Acsf;
 
 /**
  * Enables modules necessary for the scrubbing process.
@@ -58,4 +58,3 @@ class AcsfDuplicationScrubModuleEnableHandler extends AcsfEventHandler {
   }
 
 }
-

@@ -1,11 +1,11 @@
 <?php
 
-namespace Acquia\Acsf;
-
 /**
  * @file
  * Defines a response from AcsfMessageRest.
  */
+
+namespace Acquia\Acsf;
 
 class AcsfMessageResponseRest extends AcsfMessageResponse {
 
@@ -17,5 +17,5 @@ class AcsfMessageResponseRest extends AcsfMessageResponse {
       return TRUE;
     }
     return FALSE;
-  } 
+  }
 }

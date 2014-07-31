@@ -1,5 +1,10 @@
 <?php
 
+/**
+ * @file
+ * Drupal site-specific configuration file.
+ */
+
 // Include custom sites.php code from factory-hooks/pre-sites-php.
 if (function_exists('acsf_hooks_include')) {
   acsf_hooks_include('pre-settings-php');
@@ -107,7 +112,7 @@ $conf['404_fast_html'] = '<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML+RDFa 1.0//EN"
  * Acquia Cloud Site Factory specific settings.
  */
 if (file_exists('/var/www/site-php')) {
-  // The DB role will be the same as the gardens site directory name
+  // The DB role will be the same as the gardens site directory name.
   $role = basename(conf_path());
   // This global is set in sites.php. It's used to reference the
   // live environment DB setting even when running on the update env.
@@ -117,14 +122,14 @@ if (file_exists('/var/www/site-php')) {
 
   $settings_inc = "/var/www/site-php/{$site}.{$env}/D7-{$env}-{$role}-settings.inc";
   if (file_exists($settings_inc)) {
-    include($settings_inc);
+    include $settings_inc;
   }
   elseif (!isset($_SERVER['SERVER_SOFTWARE']) && (php_sapi_name() == 'cli' || (is_numeric($_SERVER['argc']) && $_SERVER['argc'] > 0))) {
     throw new Exception('No database connection file was found for DB {$role}.');
   }
   else {
     syslog(LOG_ERR, 'GardensError: AN-22471 - No database connection file was found for DB {$role}.');
-    header($_SERVER['SERVER_PROTOCOL'] .' 503 Service unavailable');
+    header($_SERVER['SERVER_PROTOCOL'] . ' 503 Service unavailable');
     print 'The website encountered an unexpected error. Please try again later.';
     exit;
   }
@@ -155,7 +160,7 @@ if (file_exists('/var/www/site-php')) {
     $token_match = !empty($site_settings['flags']['access_restricted']['token']) && !empty($_GET['site_install_token']) && $_GET['site_install_token'] == $site_settings['flags']['access_restricted']['token'];
     $path_match = $_SERVER['SCRIPT_NAME'] == $GLOBALS['base_path'] . 'install.php';
     if (!$token_match || !$path_match) {
-      header($_SERVER['SERVER_PROTOCOL'] .' 503 Service unavailable');
+      header($_SERVER['SERVER_PROTOCOL'] . ' 503 Service unavailable');
       if (!empty($site_settings['flags']['access_restricted']['reason'])) {
         print $site_settings['flags']['access_restricted']['reason'];
       }
@@ -171,7 +176,6 @@ if (file_exists('/var/www/site-php')) {
 }
 
 // Include custom sites.php code from factory-hooks/pre-sites-php.
-
 if (function_exists('acsf_hooks_include')) {
   acsf_hooks_include('post-settings-php');
 }

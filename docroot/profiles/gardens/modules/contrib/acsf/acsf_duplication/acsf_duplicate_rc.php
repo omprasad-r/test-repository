@@ -1,5 +1,10 @@
 <?php
 
+/**
+ * @file
+ * Holds the options for drush command to be picked up automatically.
+ */
+
 $options['structure-tables'] = array(
   'acsf_duplicate' => array(
     'accesslog',

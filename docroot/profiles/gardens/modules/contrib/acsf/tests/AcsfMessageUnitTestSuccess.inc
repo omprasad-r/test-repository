@@ -7,7 +7,7 @@ class AcsfMessageUnitTestSuccess extends \Acquia\Acsf\AcsfMessage {
   /**
    * Implements AcsfMessage::sendMessage().
    */
-  protected function sendMessage($url, $method, $endpoint, $parameters, $username, $password) {
+  protected function sendMessage($url, $method, $endpoint, array $parameters, $username, $password) {
     $response = json_encode(array(
       'url' => $url,
       'method' => $method,

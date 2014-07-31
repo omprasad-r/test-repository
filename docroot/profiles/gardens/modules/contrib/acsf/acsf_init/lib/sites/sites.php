@@ -1,5 +1,10 @@
 <?php
 
+/**
+ * @file
+ * Configuration file for Drupal's multi-site directory aliasing feature.
+ */
+
 if (!function_exists('acsf_hooks_include')) {
   /**
    * Scans a Factory hooks directory and includes PHP files.
@@ -44,7 +49,7 @@ if (empty($_SERVER['HTTP_HOST']) || !is_acquia_host()) {
   return;
 }
 
-require_once(dirname(__FILE__) . '/g/sites.inc');
+require_once dirname(__FILE__) . '/g/sites.inc';
 
 // Drush site-install gets confused about the uri when we specify the
 // --sites-subdir option. The HTTP_HOST is set incorrectly and we can't

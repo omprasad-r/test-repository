@@ -1,28 +1,30 @@
 <?php
 
-namespace Acquia\Acsf;
-
 /**
  * @file
- * AcsfMessage defines a basic message interface between a Drupal site and the Site
- * Factory. It is composed of a AcsfConfig compatible object which defines the
- * location and credentials required to communicate with the Site Factory. There
- * is one abstract method, which client code must implement: sendMessage(). This
- * method is responsible for implementing the communication and returning an
- * AcsfResponse object. This ensures that the client code has predictable input and
- * output.
+ * Contains AcsfMessage.
+ *
+ * AcsfMessage defines a basic message interface between a Drupal site and the
+ * Site Factory. It is composed of a AcsfConfig compatible object which defines
+ * the location and credentials required to communicate with the Site Factory.
+ * There is one abstract method, which client code must implement:
+ * sendMessage(). This method is responsible for implementing the communication
+ * and returning an AcsfResponse object. This ensures that the client code has
+ * predictable input and output.
  *
  * Invocation is simple, the following shows a working example of communicating
  * via REST (using the AcsfMessageRest concrete class). Construction can be as
- * simple as providing a method, endpoint and parameters. Additional arguments may
- * be provided to customize the behavior - namely locating a special config file
- * or providing an anonymous callback function.
+ * simple as providing a method, endpoint and parameters. Additional arguments
+ * may be provided to customize the behavior - namely locating a special config
+ * file or providing an anonymous callback function.
  *
  * $m = new AcsfMessageRest('GET', 'site-api/v1/sync/', array('site_id' => 406));
  * $m->send();
  * $m->getResponseCode();
  * $m->getResponseBody();
  */
+
+namespace Acquia\Acsf;
 
 abstract class AcsfMessage {
 
@@ -36,33 +38,33 @@ abstract class AcsfMessage {
   protected $response;
 
   // An optional Acquia Hosting sitegroup.
-  protected $ah_site;
+  protected $ahSite;
 
   // An optional Acquia Hosting environment.
-  protected $ah_env;
+  protected $ahEnv;
 
   // An optional AcsfConfig object.
   private $config;
 
   /**
-   * Constructor
+   * Constructor.
    *
-   * @param String $method
+   * @param string $method
    *   The request method. e.g. POST, GET, PUT, etc.
-   * @param String $endpoint
+   * @param string $endpoint
    *   The endpoint to contact on the remote server.
-   * @param Array $parameters
+   * @param array $parameters
    *   The list of parameters to send with the request.
    * @param AcsfConfig $config
    *   (Optional) The configuration option.
-   * @param String $ah_site
+   * @param string $ah_site
    *   (Optional) The Acquia Hosting sitegroup.
-   * @param String $ah_env
+   * @param string $ah_env
    *   (Optional) The Acquia Hosting environment.
    * @param Closure $callback
    *   (Optional) An anonymous callback function.
    */
-  public function __construct($method, $endpoint, $parameters = NULL, AcsfConfig $config = NULL, $ah_site = NULL, $ah_env = NULL, Closure $callback = NULL) {
+  public function __construct($method, $endpoint, array $parameters = NULL, AcsfConfig $config = NULL, $ah_site = NULL, $ah_env = NULL, Closure $callback = NULL) {
 
     // Use our default config if not specified.
     if (empty($config)) {
@@ -78,8 +80,8 @@ abstract class AcsfMessage {
     $this->method = $method;
     $this->endpoint = $endpoint;
     $this->parameters = $parameters;
-    $this->ah_site = $ah_site;
-    $this->ah_env = $ah_env;
+    $this->ahSite = $ah_site;
+    $this->ahEnv = $ah_env;
     $this->callback = $callback;
   }
 
@@ -108,7 +110,7 @@ abstract class AcsfMessage {
       // The REST API returns error descriptions in the "message" field of the
       // response body.
       if (!empty($this->response->body['message'])) {
-        $error_message = sprintf('The request to %s failed with HTTP error: %s %s', $this->endpoint, $this->response->code, $this->response->body['message']);
+        $error_message = sprintf('The request to %s failed with HTTP error: %s %s.', $this->endpoint, $this->response->code, $this->response->body['message']);
       }
       else {
         $error_message = sprintf('The request to %s failed.', $this->endpoint);
@@ -140,8 +142,6 @@ abstract class AcsfMessage {
 
   /**
    * Retrieves the response body.
-   *
-   * @return Unknown
    */
   public function getResponseBody() {
     if (empty($this->response)) {
@@ -152,8 +152,6 @@ abstract class AcsfMessage {
 
   /**
    * Retrieves the response code.
-   *
-   * @return Unknown
    */
   public function getResponseCode() {
     if (empty($this->response)) {
@@ -165,22 +163,22 @@ abstract class AcsfMessage {
   /**
    * Sends a message to a remote server and implements a response object.
    *
-   * @param String $url
+   * @param string $url
    *   The URL of the remote service.
-   * @param String $method
+   * @param string $method
    *   The request method. e.g. POST, GET, PUT, etc.
-   * @param String $endpoint
-   * @param String $endpoint
+   * @param string $endpoint
    *   The endpoint to call on the remote service.
-   * @param Array $parameters
+   * @param array $parameters
    *   Parameters to send with the request.
-   * @param String $username
+   * @param string $username
    *   The remote username.
-   * @param String $password
+   * @param string $password
    *   The remote password.
    *
    * @return AcsfMessageResponse
+   *   The message response instance.
    */
-  abstract protected function sendMessage($url, $method, $endpoint, $parameters, $username, $password);
+  abstract protected function sendMessage($url, $method, $endpoint, array $parameters, $username, $password);
 
 }

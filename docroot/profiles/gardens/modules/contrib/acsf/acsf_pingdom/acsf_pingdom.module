@@ -36,11 +36,10 @@ function acsf_pingdom_pause($pause_method = TRUE) {
   try {
     $site = acsf_get_acsf_site();
     $endpoint = sprintf('site-api/v1/pingdom-pause/%s', $site->site_id);
-    $message = new AcsfMessageRest($http_method , $endpoint);
+    $message = new AcsfMessageRest($http_method, $endpoint);
     $message->send();
   }
   catch (Exception $e) {
     // Swallow the exception.
   }
 }
-
