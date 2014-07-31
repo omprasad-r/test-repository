@@ -40,12 +40,12 @@ function acsf_duplication_acsf_registry() {
  * Use this alter hook to add optional data to the scrub event. The data added
  * here is available via the $this->event->context array in event handlers.
  *
- * @param $data
+ * @param array $data
  *   An associative array of context data needed in the event handlers.
  *
  * @see drush_acsf_duplication_scrub_batch()
  */
-function acsf_duplication_acsf_duplication_scrub_context_alter(&$data) {
+function acsf_duplication_acsf_duplication_scrub_context_alter(array &$data) {
   $exact_copy = drush_get_option('exact-copy');
   $options['retain_users'] = drush_get_option('retain-users', $exact_copy);
   $options['retain_content'] = drush_get_option('retain-content', $exact_copy);
@@ -55,4 +55,3 @@ function acsf_duplication_acsf_duplication_scrub_context_alter(&$data) {
   $options['batch_user'] = drush_get_option('batch-user', $batch);
   $data['scrub_options'] = array_merge($data['scrub_options'], $options);
 }
-

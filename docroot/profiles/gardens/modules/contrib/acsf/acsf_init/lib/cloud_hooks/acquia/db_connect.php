@@ -8,7 +8,7 @@
 /**
  * Exit on error.
  *
- * @param String $message
+ * @param string $message
  *   A message to write to sdderr.
  */
 function error($message) {
@@ -19,16 +19,19 @@ function error($message) {
 /**
  * Initiates a connection to a specified database.
  *
- * In some cases, like cloud hooks, we might need to connect to the drupal database where there is no drupal bootstrap. For example, we might need to retrieve a drush compatible uri value before we can run a drush command on a site.
+ * In some cases, like cloud hooks, we might need to connect to the Drupal
+ * database where there is no Drupal bootstrap. For example, we might need to
+ * retrieve a drush compatible uri value before we can run a drush command on a
+ * site.
  *
- * @param String $site
+ * @param string $site
  *   The AH site name.
- * @param String $env
+ * @param string $env
  *   The AH site environment.
- * @param String $db_role
+ * @param string $db_role
  *   The 'role' of the AH database.
  *
- * @return Resource
+ * @return resource
  *   The database resource, if the connection was established.
  */
 function get_db($site, $env, $db_role) {
@@ -47,9 +50,7 @@ function get_db($site, $env, $db_role) {
 
   $link = mysql_connect($host, $user, $pass)
       or error('Could not connect: ' . mysql_error());
-  //fwrite(STDERR, "Connecting to db: $db_name\n");
   mysql_select_db($db_name) or error('Could not select database');
 
   return $link;
 }
-

@@ -1,6 +1,11 @@
 <?php
 
 /**
+ * @file
+ * Connects the site to Acquia Site Factory.
+ */
+
+/**
  * Implements hook_boot().
  *
  * We need to ensure that our autoloader is available as early as possible.
@@ -28,7 +33,7 @@ function acsf_register_autoloader() {
   if (!$registered) {
     $autoloader = __DIR__ . '/vendor/autoload.php';
     if (!file_exists($autoloader)) {
-      $message = t('Autoloader not found: @file', array('@file' => $autoloader));
+      $message = t('Autoloader not found: @file.', array('@file' => $autoloader));
       throw new \RuntimeException($message);
     }
     $registered = TRUE;
@@ -75,25 +80,24 @@ function acsf_registry_sort($a, $b) {
     $b['weight'] = 0;
   }
   if ($a['weight'] == $b['weight']) {
-      return 0;
+    return 0;
   }
   return ($a['weight'] < $b['weight']) ? -1 : 1;
 }
 
 /**
  * Retrieves the registry of class files.
- *
- * @return Array
  */
 function acsf_get_registry() {
-  return acsf_vget('acsf_registry', NULL);
+  return acsf_vget('acsf_registry', array());
 }
 
 /**
  * Implements hook_form_FORM_ID_alter().
  */
 function acsf_form_system_site_maintenance_mode_alter(&$form, &$form_state) {
-  // If we are in ACSF maintenance mode, don't let the admin uncheck the checkbox.
+  // If we are in ACSF maintenance mode, don't let the admin uncheck the
+  // checkbox.
   $acsf_maintenance_time = variable_get('acsf_maintenance_time', 0);
   if ($acsf_maintenance_time && variable_get('maintenance_mode', 0)) {
     drupal_set_message(t('ACSF site maintenance in progress.'), 'warning');
@@ -116,17 +120,17 @@ function acsf_form_system_site_maintenance_mode_alter(&$form, &$form_state) {
 }
 
 /**
- * Submit handler for the system_site_maintenance_mode form.
+ * Form submission handler for system_site_maintenance_mode().
  */
 function acsf_system_site_maintenance_mode_submit(&$form, &$form_state) {
   // ACSF can force a site into maintenance mode, so when a site admin
-  // puts their site into maintenance purposely, we need to track it.
+  // purposely puts their site into maintenance, we need to track it.
   $maintenance_mode = (int) $form_state['values']['maintenance_mode'];
   if ($maintenance_mode) {
-    variable_set('site_owner_maintenance_mode', $maintenance_mode);
+    variable_set('acsf_site_owner_maintenance_mode', $maintenance_mode);
   }
   else {
-    variable_del('site_owner_maintenance_mode');
+    variable_del('acsf_site_owner_maintenance_mode');
   }
 }
 
@@ -173,9 +177,6 @@ function acsf_get_acsf_site() {
 
 /**
  * Retrieves the Site Factory name.
- *
- * @return String
- *   The name of the factory.
  */
 function acsf_factory_name() {
   static $name;
@@ -190,9 +191,6 @@ function acsf_factory_name() {
 
 /**
  * Retrieves the Site Factory URL.
- *
- * @return String
- *   The URL of the factory.
  */
 function acsf_factory_url() {
   static $url;
@@ -227,6 +225,6 @@ function acsf_watchdog($log) {
 
   if (in_array($log['severity'], $severity_to_escalate)) {
     $acsf_log = new \Acquia\Acsf\AcsfLog();
-    $acsf_log->log('watchdog', t($log['message'], $log['variables']), $log['severity']);
+    $acsf_log->log('watchdog', format_string($log['message'], $log['variables']), $log['severity']);
   }
 }

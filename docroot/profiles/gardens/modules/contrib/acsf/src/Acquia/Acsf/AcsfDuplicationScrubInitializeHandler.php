@@ -1,11 +1,11 @@
 <?php
 
-namespace Acquia\Acsf;
-
 /**
  * @file
  * Contains AcsfDuplicationScrubInitializeHandler.
  */
+
+namespace Acquia\Acsf;
 
 /**
  * Handles final operations for the scrub.
@@ -27,13 +27,18 @@ class AcsfDuplicationScrubInitializeHandler extends AcsfEventHandler {
     }
   }
 
+  /**
+   * Returns if this step has already completed.
+   */
   public function isComplete() {
-    acsf_vget('acsf_site_duplication_step_initialize_complete', FALSE);
+    return acsf_vget('acsf_site_duplication_step_initialize_complete', FALSE);
   }
 
+  /**
+   * Sets a flag to indicate that this step has completed.
+   */
   protected function setComplete() {
     acsf_vset('acsf_site_duplication_step_initialize_complete', TRUE, 'acsf_duplication_scrub');
   }
 
 }
-

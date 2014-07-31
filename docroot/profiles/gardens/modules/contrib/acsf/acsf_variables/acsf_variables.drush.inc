@@ -6,7 +6,7 @@
  */
 
 /**
- * Implements hook_drush_command()
+ * Implements hook_drush_command().
  */
 function acsf_variables_drush_command() {
   return array(
@@ -21,7 +21,7 @@ function acsf_variables_drush_command() {
           'example-value' => 'json',
         ),
         'exact' => dt('Only retrieve the exact variable name specified.'),
-      )
+      ),
     ),
     'acsf-vset' => array(
       'description' => dt('Sets a named ACSF variable with an optional group.'),
@@ -31,7 +31,7 @@ function acsf_variables_drush_command() {
       ),
       'options' => array(
         'group' => dt('An optional group name for the variable.'),
-      )
+      ),
     ),
     'acsf-vget-group' => array(
       'description' => dt('Retrieves a group of variables.'),
@@ -43,7 +43,7 @@ function acsf_variables_drush_command() {
           'description' => dt('Format to output the object. Use "print_r" for print_r (default), "export" for var_export, and "json" for JSON.'),
           'example-value' => 'json',
         ),
-      )
+      ),
     ),
     'acsf-vdel' => array(
       'description' => dt('Deletes a named variable.'),
@@ -94,7 +94,10 @@ function drush_acsf_variables_acsf_vget($name) {
           $value = drush_format($variable, NULL, $format);
         }
         else {
-          $value = dt('@name: !value', array('@name' => $name, '!value' => drush_format($variable, NULL, $format)));
+          $value = dt('@name: !value', array(
+            '@name' => $name,
+            '!value' => drush_format($variable, NULL, $format),
+          ));
         }
         drush_print($value);
       }
@@ -147,7 +150,10 @@ function drush_acsf_variables_acsf_vget_group($group) {
       $value = drush_format($data, NULL, $format);
     }
     else {
-      $value = dt('@group: !value', array('@group' => $group, '!value' => drush_format($data, NULL, $format)));
+      $value = dt('@group: !value', array(
+        '@group' => $group,
+        '!value' => drush_format($data, NULL, $format),
+      ));
     }
     drush_print($value);
   }
@@ -187,4 +193,3 @@ function drush_acsf_variables_acsf_vdel($name) {
 function drush_acsf_variables_acsf_info() {
   drush_print(drush_format(acsf_vget('acsf_site_info'), NULL, 'print_r'));
 }
-

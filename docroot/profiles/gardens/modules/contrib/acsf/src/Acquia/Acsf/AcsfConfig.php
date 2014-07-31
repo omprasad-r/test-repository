@@ -1,11 +1,11 @@
 <?php
 
-namespace Acquia\Acsf;
-
 /**
  * @file
- * The AcsfConfig is a simple interface to define how our message configuration should work.
+ * Provides an interface to define how our message configuration should work.
  */
+
+namespace Acquia\Acsf;
 
 abstract class AcsfConfig {
 
@@ -19,23 +19,23 @@ abstract class AcsfConfig {
   protected $password;
 
   // The signup suffix of the Factory.
-  protected $url_suffix;
+  protected $urlSuffix;
 
   // The source URL of the Factory this was staged from.
-  protected $source_url;
+  protected $sourceUrl;
 
   // An optional Acquia Hosting sitegroup.
-  protected $ah_site;
+  protected $ahSite;
 
   // An optional Acquia Hosting environment.
-  protected $ah_env;
+  protected $ahEnv;
 
   /**
    * Constructor.
    *
-   * @param String $ah_site
+   * @param string $ah_site
    *   (Optional) Acquia Hosting sitegroup.
-   * @param String $ah_env
+   * @param string $ah_env
    *   (Optional) Acquia Hosting environment.
    *
    * @throws AcsfConfigIncompleteException
@@ -53,8 +53,8 @@ abstract class AcsfConfig {
       $ah_env = $_ENV['AH_SITE_ENVIRONMENT'];
     }
 
-    $this->ah_site = $ah_site;
-    $this->ah_env = $ah_env;
+    $this->ahSite = $ah_site;
+    $this->ahEnv = $ah_env;
     $this->loadConfig();
 
     // Require the loadConfig implementation to set required values.
@@ -67,8 +67,6 @@ abstract class AcsfConfig {
 
   /**
    * Retrieves the config username.
-   *
-   * @return String.
    */
   public function getUsername() {
     return $this->username;
@@ -76,8 +74,6 @@ abstract class AcsfConfig {
 
   /**
    * Retrieves the config password.
-   *
-   * @return String.
    */
   public function getPassword() {
     return $this->password;
@@ -85,8 +81,6 @@ abstract class AcsfConfig {
 
   /**
    * Retrieves the config URL.
-   *
-   * @return String.
    */
   public function getUrl() {
     return $this->url;
@@ -94,20 +88,16 @@ abstract class AcsfConfig {
 
   /**
    * Retrieves the config URL suffix.
-   *
-   * @return String.
    */
   public function getUrlSuffix() {
-    return $this->url_suffix;
+    return $this->urlSuffix;
   }
 
   /**
    * Retrieves the source URL.
-   *
-   * @return String.
    */
   public function getSourceUrl() {
-    return $this->source_url;
+    return $this->sourceUrl;
   }
 
   /**

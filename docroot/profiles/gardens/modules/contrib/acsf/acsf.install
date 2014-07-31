@@ -1,7 +1,12 @@
 <?php
 
 /**
- * Implements hook_install()
+ * @file
+ * Install, update and uninstall functions for the Acquia Site Factory module.
+ */
+
+/**
+ * Implements hook_install().
  */
 function acsf_install() {
   acsf_build_registry();
@@ -40,7 +45,7 @@ function acsf_update_7003() {
   $rand = 86400 * mt_rand(0, 7);
   $site->last_sf_refresh = time() - $rand;
   $site->save();
-  watchdog('acsf', t('The next acsf-site-sync will be %date.', array('%date' => format_date($site->last_sf_refresh))));
+  watchdog('acsf', 'The next acsf-site-sync will be %date.', array('%date' => format_date($site->last_sf_refresh)));
 }
 
 /**
@@ -55,7 +60,7 @@ function acsf_update_7004() {
   $rand = 86400 * mt_rand(0, 7);
   $site->last_sf_refresh = time() - $rand;
   $site->save();
-  watchdog('acsf', t('The next acsf-site-sync will be %date.', array('%date' => format_date($site->last_sf_refresh))));
+  watchdog('acsf', 'The next acsf-site-sync will be %date.', array('%date' => format_date($site->last_sf_refresh)));
 
   // Remove unused acsf variables.
   acsf_vdel('acsf_site_nid');
@@ -70,4 +75,14 @@ function acsf_update_7004() {
   // Move the registry to an acsf variable.
   $registry = variable_get('acsf_registry', NULL);
   acsf_vset('acsf_registry', $registry);
+}
+
+/**
+ * Migrate site_owner_maintenance_mode variable.
+ */
+function acsf_update_7005() {
+  if ($value = variable_get('site_owner_maintenance_mode', FALSE)) {
+    variable_set('acsf_site_owner_maintenance_mode', $value);
+    variable_del('site_owner_maintenance_mode');
+  }
 }

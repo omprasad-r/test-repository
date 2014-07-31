@@ -2,7 +2,7 @@
 
 /**
  * @file
- *   Prints a drush-compatible uri, given a site, env and db_role.
+ * Prints a drush-compatible uri, given a site, env and db_role.
  */
 
 $site = $argv[1];
@@ -21,4 +21,3 @@ $site_data = unserialize($value);
 $standard_domain = $site_data['standard_domain'];
 
 echo "$standard_domain";
-

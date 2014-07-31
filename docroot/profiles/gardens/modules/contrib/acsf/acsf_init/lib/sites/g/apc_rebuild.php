@@ -9,12 +9,16 @@
  * sitegroup/env.  A GET parameter containing info about the JSON file for
  * verification must be provided in the format mtime-size. eg:
  *
- *   INFO=`stat -c '%Y-%s' /mnt/files/<sitename>.<env>/files-private/sites.json`; curl "http://localhost:<port>/sites/g/apc_rebuild.php?i=$INFO"
+ * INFO=`stat -c '%Y-%s' /mnt/files/<sitename>.<env>/files-private/sites.json`;
+ * curl "http://localhost:<port>/sites/g/apc_rebuild.php?i=$INFO"
  *
  * The full line to add this cron job should look like this (including
  * appropriate escaping):
  *
- *  ./fields-provision.php --cron-add <sitename>:* /5:*:*:*:* --server-filter all --cmd 'INFO=`stat -c "\%Y-\%s" /mnt/files/<sitegroup>.<env>/files-private/sites.json`; curl "http://localhost:<port>/sites/g/apc_rebuild.php?i=$INFO"'
+ * ./fields-provision.php --cron-add <sitename>:* /5:*:*:*:* --server-filter \
+ * all --cmd 'INFO=`stat -c "\%Y-\%s" \
+ * /mnt/files/<sitegroup>.<env>/files-private/sites.json`;
+ * curl "http://localhost:<port>/sites/g/apc_rebuild.php?i=$INFO"'
  *
  * Note that in the above line, the * /5 should not contain spaces, but removing
  * the space from this comment results in the PHP comment block ending
@@ -36,7 +40,7 @@ if (empty($_GET['i']) || $_GET['i'] !== $info) {
   die('Invalid.');
 }
 
-require_once(dirname(__FILE__) . '/sites.inc');
+require_once dirname(__FILE__) . '/sites.inc';
 
 if (!empty($_GET['domains'])) {
   $domains = explode(',', $_GET['domains']);

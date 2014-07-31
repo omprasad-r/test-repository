@@ -3,10 +3,11 @@
 
 /**
  * @file acsf_ssh
- * This is an ssh command wrapper script that makes it far easier to
- * perform logging on all calls that are executed by the Site Factory.
- * It also makes it possible to retrieve the command exit code when
- * the command is being called asynchronously.
+ * Provides an ssh command wrapper to execute commands and capture output.
+ *
+ * This script makes it far easier to perform logging on all calls that are
+ * executed by the Site Factory. It also makes it possible to retrieve the
+ * command exit code when the command is being called asynchronously.
  *
  * Usage:
  *   acsf_ssh <operation> [options]
@@ -21,7 +22,8 @@
  *
  *   Options:
  *     silent       - Don't display any output.  Good for asynchronous calls.
- *     pid          - The process id - required for checking in on asynchronous calls.
+ *     pid          - The process id - required for checking in on asynchronous
+ *                    calls.
  *     env          - The environment.
  *     site         - The site.
  *     no-logs      - Do not retain log data.
@@ -44,8 +46,8 @@
  *   This cleans up log files associated with the pid.
  *
  *   acsf_ssh --exec "ls -l /usr" --no-logs
- *   This performs the ls, displaying the result to stdout and exits with the same
- *   exit code as the associated ls command.  This is a good option for
+ *   This performs the ls, displaying the result to stdout and exits with the
+ *   same exit code as the associated ls command.  This is a good option for
  *   synchronous use unless the error log might be important.
  *
  *   acsf_ssh --is-running --pid <proc id> --start-time <unix timestamp>
@@ -134,7 +136,7 @@ class AcsfSshWrapper {
   /**
    * Initializes a new AcsfSshWrapper object.
    *
-   * @param $options
+   * @param object $options
    *   The options argument returned from _acsf_ssh_parse_command_line().
    */
   public function __construct($options) {
@@ -164,26 +166,21 @@ class AcsfSshWrapper {
   /**
    * Executes the specified command.
    *
-   * @param $command
+   * @param string $command
    *   The Unix command to be executed.
-   *
    * @param bool $encoded_command
    *   Optional.  If FALSE then the $command will be taken as is. If TRUE then
    *   the $command will be assumed to contain a base64 encoded string.
-   *
    * @param bool $log
    *   Optional.  If FALSE, no log files will remain upon completion of
    *   the command.  This is not appropriate for commands that are
    *   executed asynchronously.
-   *
    * @param bool $silent
    *   Optional.  If TRUE, no output will be sent to stdout or stderr.
-   *
    * @param bool $report
    *   Optional.  If TRUE, a message will be sent back to the callback endpoint
    *   specified in the $data variable.
-   *
-   * @param stdClass $data
+   * @param object $data
    *   Optional.  Data relating to the caller.
    *
    * @return int
@@ -258,7 +255,7 @@ class AcsfSshWrapper {
   }
 
   /**
-   * Returns a result string that contains the process id, the stdout and stderr.
+   * Returns a result string with the process id, the stdout and stderr.
    *
    * @return string
    *   The result.
@@ -362,9 +359,9 @@ class AcsfSshWrapper {
       return FALSE;
     }
     else {
-      // We didn't get a header even.  This could happen if we got an
-      // empty string back.  An incomplete response does not indicate
-      // the process terminated.
+      // We didn't get a header even.  This could happen if we got an empty
+      // string back.  An incomplete response does not indicate the process
+      // terminated.
       return NULL;
     }
   }
@@ -410,7 +407,8 @@ class AcsfSshWrapper {
    *   The exit code.
    *
    * @throws Exception
-   *   If the process has not completed or if the exit code is otherwise not available.
+   *   If the process has not completed or if the exit code is otherwise not
+   *   available.
    */
   public function getExitCode() {
     $exit_log = $this->getLogFile('ret');
@@ -427,9 +425,11 @@ class AcsfSshWrapper {
   /**
    * Returns the log contents for the specified log.
    *
-   * @param $type
-   *   The type of log to display.  Options are 'out' for stdout, 'err' for
-   *   stderr, and 'ret' for the return code.
+   * @param string $type
+   *   The type of log to display.  Options are
+   *   - 'out' for stdout,
+   *   - 'err' for stderr,
+   *   - 'ret' for the return code.
    *
    * @return string
    *   The log contents.
@@ -504,7 +504,7 @@ class AcsfSshWrapper {
   /**
    * Parses the header information from a Unix 'ps' call.
    *
-   * @param $ps_line
+   * @param string $ps_line
    *   The first line of output from the ps call.
    *
    * @throws Exception
@@ -528,12 +528,14 @@ class AcsfSshWrapper {
   /**
    * Parses a single line of ps information and returns an object that matches.
    *
-   * @param $ps_line
+   * @param string $ps_line
    *   A single line of output from the ps command.
-   * @param $now
+   * @param int $now
    *   The current time.
+   *
    * @return stdClass
-   *   An object with fields containing the data from the ps information
+   *   An object with fields containing the data from the ps information.
+   *
    * @throws Exception
    *   If the line cannot be parsed as ps data.
    */
@@ -561,22 +563,20 @@ class AcsfSshWrapper {
   /**
    * Calculate the elapsed seconds given a time string from ps.
    *
-   * The ps command will indicate elapsed time as a string.  This
-   * method parses that string and converts it to the number of
-   * elapsed seconds.
+   * The ps command will indicate elapsed time as a string.  This method parses
+   * that string and converts it to the number of elapsed seconds.
    *
-   * @param $time_string
+   * @param string $time_string
    *   The time string from invoking the ps command.
    *
    * @return int
    *   The elapsed seconds.
    */
   private function convertTimeStringToElapsedSeconds($time_string) {
-    // This works by creating an array that contains all of the time
-    // components in reverse (seconds, minutes, hours, days).  This is
-    // done because not all of the time components will be present.
-    // We can then calculate the elapsed time from the time components
-    // provided using the following conversion.
+    // This works by creating an array that contains all of the time components
+    // in reverse (seconds, minutes, hours, days).  This is done because not all
+    // of the time components will be present. We can then calculate the elapsed
+    // time from the time components provided using the following conversion.
     $time_converter = array(
       1,            // seconds
       60,           // minutes
@@ -604,10 +604,9 @@ class AcsfSshWrapper {
   /**
    *  Truncates output such that it does not exceed the specified length.
    *
-   * @param $string
+   * @param string $string
    *   The string to truncate.
-   *
-   * @param $max_length
+   * @param int $max_length
    *   The maximum desired string length.
    *
    * @return string
@@ -642,8 +641,8 @@ class AcsfSshWrapper {
 /**
  * This is the main entry point of the script.
  *
- * This function dispatches control to an appropriate function
- * based on the command line options.
+ * This function dispatches control to an appropriate function d on the command
+ * line options.
  */
 function acsf_ssh_main() {
   $options = _acsf_ssh_parse_command_line();
@@ -693,8 +692,9 @@ function acsf_ssh_main() {
 /**
  * Parses the command line, returning an object that provides the options.
  *
- * @return stdClass
- *   An object that contains all options that were specified on the command line.
+ * @return object
+ *   An object that contains all options that were specified on the command
+ *   line.
  *
  * @throws Exception
  *   If an illegal option was provided.
@@ -702,21 +702,21 @@ function acsf_ssh_main() {
 function _acsf_ssh_parse_command_line() {
   $long_options  = array(
     // Operations:
-    'exec:',          // Execute a command
-    'exit-code',      // Get the exit code
+    'exec:',          // Execute a command.
+    'exit-code',      // Get the exit code.
     'close',          // Free resources associated with this command.
     'is-running',     // Indicate whether the process is still running.
     'kill',           // Kill the process if it is still running.
     'result',         // Get the result from the process.
-    'stdout',         // get stdout
-    'stderr',         // get stderr
-    'version',         // Return the version string.
+    'stdout',         // Get stdout.
+    'stderr',         // Get stderr.
+    'version',        // Return the version string.
 
     // Options:
-    'env:',           // Environment
+    'env:',           // Environment.
     'no-logs',        // Don't log stdout, stderr, or the return code.
     'pid:',           // The process id.
-    'site:',          // Site
+    'site:',          // Site.
     'silent',         // Redirect stdout and stderr.
     'start-time:',    // The process start time.
     'max-output:',    // The maximum length of output (both stdout and stderr).
@@ -824,7 +824,7 @@ function _acsf_ssh_parse_command_line() {
  * All resources associated with the process will be released as a result
  * of calling this function.
  *
- * @param $options
+ * @param object $options
  *   The options object returned from _acsf_ssh_parse_command_line().
  */
 function _acsf_ssh_close($options) {
@@ -838,7 +838,7 @@ function _acsf_ssh_close($options) {
  * This function exits with the same exit code as the command that is being
  * executed.
  *
- * @param $options
+ * @param object $options
  *   The options argument returned from _acsf_ssh_parse_command_line().
  */
 function _acsf_ssh_exec($options) {
@@ -856,7 +856,7 @@ function _acsf_ssh_exec($options) {
  * If the process has completed, the exit code of this script will match that
  * of the completed process.
  *
- * @param $options
+ * @param object $options
  *   The options argument returned from _acsf_ssh_parse_command_line().
  */
 function _acsf_ssh_is_running($options) {
@@ -883,7 +883,7 @@ function _acsf_ssh_is_running($options) {
  * and the exit code of this script will match that of the associated
  * process.
  *
- * @param $options
+ * @param object $options
  *   The options argument returned from _acsf_ssh_parse_command_line().
  */
 function _acsf_ssh_get_exit_code($options) {
@@ -904,10 +904,11 @@ function _acsf_ssh_get_exit_code($options) {
  *
  * @param $options
  *   The options argument returned from _acsf_ssh_parse_command_line().
- *
  * @param $type
- *   The log type.  'out' for the stdout log; 'err' for the stderr log;
- *   'ret' for the return value log.
+ *   The log type.
+ *   - 'out' for the stdout log;
+ *   - 'err' for the stderr log;
+ *   - 'ret' for the return value log.
  */
 function _acsf_ssh_get_log($options, $type) {
   $wrapper = new AcsfSshWrapper($options);
@@ -924,7 +925,7 @@ function _acsf_ssh_get_log($options, $type) {
 /**
  * Kills the associated process if it is still running.
  *
- * @param $options
+ * @param object $options
  *   The options argument returned from _acsf_ssh_parse_command_line().
  */
 function _acsf_ssh_kill($options) {
@@ -935,7 +936,7 @@ function _acsf_ssh_kill($options) {
 /**
  * Returns the result from the process.
  *
- * @param $options
+ * @param object $options
  *   The options argument returned from _acsf_ssh_parse_command_line().
  */
 function _acsf_ssh_result($options) {
@@ -949,7 +950,7 @@ function _acsf_ssh_result($options) {
 /**
  * Returns the version string.
  *
- * @param $options
+ * @param object $options
  *   The options argument returned from _acsf_ssh_parse_command_line().
  */
 function _acsf_ssh_version($options) {

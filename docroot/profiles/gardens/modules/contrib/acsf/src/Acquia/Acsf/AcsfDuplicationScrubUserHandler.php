@@ -1,11 +1,11 @@
 <?php
 
-namespace Acquia\Acsf;
-
 /**
  * @file
  * Contains AcsfDuplicationScrubUserHandler.
  */
+
+namespace Acquia\Acsf;
 
 /**
  * Handles the scrubbing of Drupal users.
@@ -62,7 +62,7 @@ class AcsfDuplicationScrubUserHandler extends AcsfEventHandler {
    * @param array $uids
    *   An indexed array of user IDs to delete.
    */
-  protected function deleteUsers($uids = array()) {
+  protected function deleteUsers(array $uids = array()) {
     foreach ($uids as $uid) {
       $this->reassignFiles($uid);
       user_delete($uid);
@@ -99,7 +99,7 @@ class AcsfDuplicationScrubUserHandler extends AcsfEventHandler {
    *   An indexed array of user IDs to preserve.
    */
   public function getPreservedUsers() {
-    $preserved = self::getOpenIdAdmins(); // Preserve Open ID admins.
+    $preserved = array_merge(self::getOpenIdAdmins(), self::getSiteAdmins()); // Preserve Open ID and site admins.
     $preserved[] = 0; // Preserve the anonymous user.
     $preserved[] = 1; // Preserve UID 1.
     drupal_alter('acsf_duplication_scrub_preserved_users', $preserved);
@@ -113,11 +113,34 @@ class AcsfDuplicationScrubUserHandler extends AcsfEventHandler {
    *   An indexed array of user IDs representing Open ID admins.
    */
   public function getOpenIdAdmins() {
+    $uids = array();
     $admin_roles = array(
       variable_get('user_admin_role'),
     );
     drupal_alter('acsf_duplication_scrub_admin_roles', $admin_roles);
-    $uids = db_query('SELECT a.uid FROM {authmap} a INNER JOIN {users_roles} r ON a.uid = r.uid WHERE a.module = :module AND r.rid IN (:admin_roles)', array(':module' => 'openid', ':admin_roles' => $admin_roles))->fetchCol();
+    if (!empty($admin_roles)) {
+      $uids = db_query('SELECT a.uid FROM {authmap} a INNER JOIN {users_roles} r ON a.uid = r.uid WHERE a.module = :module AND r.rid IN (:admin_roles)', array(':module' => 'openid', ':admin_roles' => $admin_roles))->fetchCol();
+    }
+
+    return $uids;
+  }
+
+  /**
+   * Gets a list of site admins.
+   *
+   * @return array
+   *   An indexed array of user IDs representing site admins.
+   */
+  public function getSiteAdmins() {
+    $uids = array();
+    $admin_roles = array(
+      variable_get('user_admin_role'),
+    );
+    drupal_alter('acsf_duplication_scrub_admin_roles', $admin_roles);
+    if (!empty($admin_roles)) {
+      $uids = db_query('SELECT u.uid FROM {users} u INNER JOIN {users_roles} r ON u.uid = r.uid WHERE r.rid IN (:admin_roles)', array(':admin_roles' => $admin_roles))->fetchCol();
+    }
+
     return $uids;
   }
 
@@ -133,4 +156,3 @@ class AcsfDuplicationScrubUserHandler extends AcsfEventHandler {
   }
 
 }
-

@@ -1,6 +1,11 @@
 <?php
 
 /**
+ * @file
+ * Provides drush commands necessary for site duplication.
+ */
+
+/**
  * Implements hook_drush_command().
  */
 function acsf_duplication_drush_command() {
@@ -9,7 +14,7 @@ function acsf_duplication_drush_command() {
   $items['acsf-duplication-scrub-batch'] = array(
     'description' => dt('Runs one iteration of the batch scrubbing process on the duplicated site.'),
     'arguments' => array(
-      'site_name' => dt('The new name of the duplicated site'),
+      'site_name' => dt('The new name of the duplicated site.'),
       'standard_domain' => dt('The standard domain of the duplicated site.'),
     ),
     'options' => array(
@@ -43,13 +48,16 @@ function acsf_duplication_drush_help($section) {
   switch ($section) {
     case 'drush:acsf-duplication-scrub-batch':
       return dt('Runs one iteration of the batch scrubbing process on the duplicated site.');
+
     case 'drush:acsf-duplication-scrub-progress':
       return dt('Returns status information about the progress of the batch scrubbing process.');
   }
 }
 
 /**
- * Runs one iteration of the batch scrubbing process on the duplicated site.
+ * Command callback. Scrubs some data on the duplicated site.
+ *
+ * Runs one iteration of the batch scrubbing process.
  */
 function drush_acsf_duplication_scrub_batch($site_name, $standard_domain) {
   if (empty($site_name)) {
@@ -87,7 +95,7 @@ function drush_acsf_duplication_scrub_batch($site_name, $standard_domain) {
 }
 
 /**
- * Outputs progress information on the site duplication scrub.
+ * Command callback. Outputs progress information on the site duplication scrub.
  */
 function drush_acsf_duplication_scrub_progress() {
   if (!module_exists('acsf')) {
@@ -104,4 +112,3 @@ function drush_acsf_duplication_scrub_progress() {
   $format = drush_get_option('format', 'print_r');
   drush_print(drush_format($data, NULL, $format));
 }
-

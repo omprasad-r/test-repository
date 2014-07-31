@@ -106,14 +106,14 @@ function acsf_openid_authentication_page() {
     }
 
     // We put this in syslog() directly since site owners don't need to see it.
-    watchdog('acsf_openid', t('OpenID login failed: result: "@status"; user: @name (@mail); site: @url; openid: @openid; browser: @browser', array(
+    watchdog('acsf_openid', 'OpenID login failed: result: "@status"; user: @name (@mail); site: @url; openid: @openid; browser: @browser', array(
       '@status' => $response['status'] . (isset($message) ? ' ' . $message : ''),
       '@name' => $sreg_values['nickname'],
       '@mail' => $sreg_values['email'],
       '@url' => $GLOBALS['base_url'],
       '@openid' => $response['openid.claimed_id'],
       '@browser' => $_SERVER['HTTP_USER_AGENT'],
-    )));
+    ));
 
     drupal_goto();
   }
@@ -187,9 +187,9 @@ function acsf_openid_user_register_page() {
     // Set a custom page title. We use a different title depending on whether
     // we are inside or outside the overlay, since inside the overlay the user
     // is not "inside" the site yet so it makes sense to refer to it in the
-    // third person, but outside the overlay it doesn't :)
+    // third person, but outside the overlay it doesn't.
     if (module_exists('overlay') && variable_get('acsf_openid_overlay_for_registration', 1)) {
-      drupal_set_title(t('The site !site-name wants to know more about you.', array('!site-name' => '<em class="placeholder">' . filter_xss_admin(acsf_openid_site_name_or_domain()) . '</em>')), PASS_THROUGH);
+      drupal_set_title(t('The site %site-name wants to know more about you.', array('%site-name' => acsf_openid_site_name_or_domain())), PASS_THROUGH);
     }
     else {
       drupal_set_title(t('Complete your registration'));
@@ -396,7 +396,7 @@ function acsf_openid_login_message() {
       '#type' => 'container',
       '#attributes' => array(),
       'title' => array(
-        '#markup' => t('This site is hosted on the !service_name_long service.', array('!service_name_long' => $factory_name)),
+        '#markup' => t('This site is hosted on the @service_name_long service.', array('@service_name_long' => $factory_name)),
       ),
       'links' => array(
         '#markup' => ' ' . $links['content'],
@@ -417,5 +417,5 @@ function acsf_openid_factory_redirection_page() {
   $args = func_get_args();
   $factory_url = acsf_factory_url();
   // Redirect to user URL on the factory with these arguments.
-  drupal_goto($factory_url . '/user/' . join('/', $args), array('query' => array('render' => 'overlay')));
+  drupal_goto($factory_url . '/user/' . implode('/', $args), array('query' => array('render' => 'overlay')));
 }
