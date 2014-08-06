@@ -49,12 +49,6 @@ function scarecrow_menu() {
  * Implementation of hook_init().
  */
 function scarecrow_init() {
-  // Add the gardener URL to the page for further use.
-  drupal_add_js(
-    array('gardenerURL' => scarecrow_get_gardener_url()),
-    'setting'
-  );
-
   // Notes (this function disables modules not covered by a site owner's subscription):
   // 1. init won't run on a cached page, so any modules will remain
   //    enabled until the first non-cached call (either a logged-in user or cache
