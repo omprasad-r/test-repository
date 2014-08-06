@@ -1,0 +1,51 @@
+<?php
+/**
+ * @file
+ * Install file.
+ */
+
+/**
+ * Implements hook_schema().
+ */
+function crate_d2d_schema() {
+  $schema = array();
+  $schema['crate_d2d_field_extras'] = array(
+
+    // Example (partial) specification for table "node".
+    'description' => 'The base table for nodes.',
+    'fields' => array(
+      'id' => array(
+        'description' => 'The primary identifier for this field extra.',
+        'type' => 'serial',
+        'unsigned' => TRUE,
+        'not null' => TRUE,
+      ),
+      'migration_name' => array(
+        'description' => 'The machine name of the migration.',
+        'type' => 'varchar',
+        'length' => 512,
+        'not null' => TRUE,
+        'default' => '',
+      ),
+      'field_name' => array(
+        'description' => 'The machine name of the field.',
+        'type' => 'varchar',
+        'length' => 512,
+        'not null' => TRUE,
+        'default' => '',
+      ),
+      'callback' => array(
+        'description' => 'The callback for the field handler.',
+        'type' => 'varchar',
+        'length' => 512,
+        'not null' => TRUE,
+        'default' => '',
+      ),
+    ),
+    'indexes' => array(
+      'field_callbacks' => array('migration_name', 'field_name'),
+    ),
+    'primary key' => array('id'),
+  );
+  return $schema;
+}

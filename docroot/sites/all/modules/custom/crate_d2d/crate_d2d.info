@@ -1,0 +1,10 @@
+name = "Crate migration support"
+description = "Adds additional crate-specific migration options."
+package = "Migration"
+core = 7.x
+
+dependencies[] = migrate
+dependencies[] = migrate_d2d
+
+files[] = include/handler.inc
+files[] = include/stubs.inc
