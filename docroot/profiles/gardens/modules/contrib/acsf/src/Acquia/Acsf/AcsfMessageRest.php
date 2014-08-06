@@ -1,20 +1,20 @@
 <?php
 
-namespace Acquia\Acsf;
-
 /**
  * @file
  * This class is an implementation of our XML-RPC service.
  */
 
+namespace Acquia\Acsf;
+
 class AcsfMessageRest extends AcsfMessage {
-  protected $retry_max = 3;
-  protected $retry_wait = 5;
+  protected $retryMax = 3;
+  protected $retryWait = 5;
 
   /**
-   * Override.
+   * {@inheritdoc}
    */
-  public function __construct($method, $endpoint, $parameters = NULL, AcsfConfig $config = NULL, $ah_site = NULL, $ah_env = NULL, Closure $callback = NULL) {
+  public function __construct($method, $endpoint, array $parameters = NULL, AcsfConfig $config = NULL, $ah_site = NULL, $ah_env = NULL, Closure $callback = NULL) {
     if (empty($config)) {
       $config = new AcsfConfigRest($ah_site, $ah_env);
     }
@@ -24,9 +24,9 @@ class AcsfMessageRest extends AcsfMessage {
   /**
    * Implements AcsfMessage::sendMessage().
    */
-  protected function sendMessage($url, $method, $endpoint, $parameters, $username, $password) {
+  protected function sendMessage($url, $method, $endpoint, array $parameters, $username, $password) {
 
-    $useragent = sprintf('%s.%s %s', $this->ah_site, $this->ah_env, gethostname());
+    $useragent = sprintf('%s.%s %s', $this->ahSite, $this->ahEnv, gethostname());
     $curl = curl_init();
 
     curl_setopt($curl, CURLOPT_RETURNTRANSFER, 1);
@@ -62,12 +62,12 @@ class AcsfMessageRest extends AcsfMessage {
     $attempts = 0;
     $response = FALSE;
 
-    while (!$response && ++$attempts <= $this->retry_max) {
+    while (!$response && ++$attempts <= $this->retryMax) {
       $response = curl_exec($curl);
       if (!$response) {
         $error = curl_error($curl);
         watchdog('AcsfMessageRest', $error, array(), WATCHDOG_ERROR);
-        sleep($this->retry_wait);
+        sleep($this->retryWait);
       }
     }
 

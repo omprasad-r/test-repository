@@ -1,7 +1,12 @@
 <?php
 
 /**
- * Implements hook_drush_command()
+ * @file
+ * Provides drush commands to set up a site for Acquia Site Factory.
+ */
+
+/**
+ * Implements hook_drush_command().
  */
 function acsf_init_drush_command() {
   return array(
@@ -32,13 +37,12 @@ function acsf_init_drush_command() {
           'example-value' => 'john.smith@example.com',
         ),
         'site-owner-roles' => array(
-          'description' => dt('A list of comma-separated roles that should be granted to the site owner (optional)'),
+          'description' => dt('A list of comma-separated roles that should be granted to the site owner (optional).'),
           'example-value' => 'editor, site manager',
         ),
       ),
       'examples' => array(
-        'drush acsf-connect-factory --site-admin-mail="user3@example.com" --site-owner-name="John Smith" --site-owner-mail="john.smith@example.com"' =>
-          'Connect the site to the factory and sets the owner to John Smith.',
+        'drush acsf-connect-factory --site-admin-mail="user3@example.com" --site-owner-name="John Smith" --site-owner-mail="john.smith@example.com"' => dt('Connect the site to the factory and sets the owner to John Smith.'),
       ),
     ),
     'acsf-init-verify' => array(
@@ -55,7 +59,7 @@ function acsf_init_drush_command() {
 }
 
 /**
- * Callback: executes the required changes to this repository.
+ * Command callback: executes the required changes to this repository.
  */
 function drush_acsf_init() {
   // Retrieve the path to the acsf module relative to this file.
@@ -64,11 +68,14 @@ function drush_acsf_init() {
   $repo_root = str_replace('/docroot', '', DRUPAL_ROOT);
   $lib_path = sprintf('%s/%s/acsf/acsf_init/lib', DRUPAL_ROOT, $relative_path);
 
-  drush_print('Installing ACSF requirements.');
+  drush_print(dt('Installing ACSF requirements.'));
 
   // Create the required directories.
   foreach (acsf_init_get_required_dirs($repo_root) as $name => $dir) {
-    drush_print(dt('Creating directory for !name at !dir', array('!name' => $name, '!dir' => $dir)));
+    drush_print(dt('Creating directory for !name at !dir', array(
+      '!name' => $name,
+      '!dir' => $dir,
+    )));
     if (!file_exists($dir)) {
       if (mkdir($dir, 0755, TRUE)) {
         drush_log(dt('Success'), 'success', 'success');
@@ -87,7 +94,10 @@ function drush_acsf_init() {
     $source = sprintf('%s/%s/%s', $lib_path, $location['source'], $file);
     $dest = sprintf('%s/%s', $location['dest'], $file);
     $mod = isset($location['mod']) ? $location['mod'] : FALSE;
-    drush_print(dt('Copying !file to !dest.', array('!file' => $source, '!dest' => $dest)));
+    drush_print(dt('Copying !file to !dest.', array(
+      '!file' => $source,
+      '!dest' => $dest,
+    )));
     if (file_exists($dest)) {
       $confirm = drush_confirm(dt('Destination file exists, continue?'));
       if ($confirm === FALSE) {
@@ -115,7 +125,7 @@ function drush_acsf_init() {
 }
 
 /**
- * Callback: Connect a site to a factory.
+ * Command callback: Connect a site to a Factory.
  */
 function drush_acsf_connect_factory() {
   // Preliminary validation before starting to modify the database.
@@ -135,16 +145,24 @@ function drush_acsf_connect_factory() {
   // Make sure there is no regular user account with the admin email address.
   $site_admin_mail_account = user_load_by_mail($site_admin_mail);
   if ($site_admin_mail_account && $site_admin_mail_account->uid > 1) {
-    return drush_set_error(dt('Unable to sync the admin account, the email address @mail is already used by the user account @uid.', array('@mail' => $site_admin_mail, '@uid' => $site_admin_mail_account->uid)));
+    return drush_set_error(dt('Unable to sync the admin account, the email address @mail is already used by the user account @uid.', array(
+      '@mail' => $site_admin_mail,
+      '@uid' => $site_admin_mail_account->uid,
+    )));
   }
   // Make sure there is no user with the same name before creating a new user.
   if (empty($site_owner_account) && user_load_by_name($site_owner_name)) {
-    return drush_set_error(dt('Unable to create the site owner account, there is already a user account with the name @site-owner-name but with a different email address.', array('@site-owner-name' => $site_owner_name)));
+    return drush_set_error(dt('Unable to create the site owner account, there is already a user account with the name @site-owner-name but with a different email address.', array(
+      '@site-owner-name' => $site_owner_name,
+    )));
   }
   // Make sure the name isn't used by another user with a different email.
   $conflicting_account = user_load_by_name($site_owner_name);
   if ($conflicting_account && $site_owner_account->uid !== $conflicting_account->uid) {
-    return drush_set_error(dt('Unable to update the site owner account, uid @uid is already using the name @site-owner-name but with a different email address.', array('@uid' => $conflicting_account->uid, '@site-owner-name' => $site_owner_name)));
+    return drush_set_error(dt('Unable to update the site owner account, uid @uid is already using the name @site-owner-name but with a different email address.', array(
+      '@uid' => $conflicting_account->uid,
+      '@site-owner-name' => $site_owner_name,
+    )));
   }
   // If a list of roles was specified, make sure they all exist.
   foreach ($site_owner_roles as $role) {
@@ -231,7 +249,7 @@ function drush_acsf_connect_factory() {
 }
 
 /**
- * Callback: Verify that acsf-init was run against the current version.
+ * Command callback: Verify that acsf-init was run against the current version.
  */
 function drush_acsf_init_verify() {
   $drupal_root = rtrim(DRUPAL_ROOT, '/.');
@@ -247,11 +265,15 @@ function drush_acsf_init_verify() {
     $dest = sprintf('%s/%s', $location['dest'], $file);
     if (!file_exists($dest)) {
       $error = TRUE;
-      drush_set_error('FILE MISSING', sprintf('The file %s is missing.', $file));
+      drush_set_error('FILE MISSING', dt('The file !file is missing.', array(
+        '!file' => $file,
+      )));
     }
     elseif (md5_file($source) != md5_file($dest)) {
       $error = TRUE;
-      drush_set_error('FILE OUT OF DATE', sprintf('The file %s is out of date.', $file));
+      drush_set_error('FILE OUT OF DATE', dt('The file !file is out of date.', array(
+        '!file' => $file,
+      )));
     }
   }
 
@@ -264,7 +286,7 @@ function drush_acsf_init_verify() {
 }
 
 /**
- * Callback: Uninstalls ACSF files from the code base.
+ * Command callback: Uninstalls ACSF files from the code base.
  */
 function drush_acsf_uninstall() {
   drush_print('Removing ACSF requirements.');

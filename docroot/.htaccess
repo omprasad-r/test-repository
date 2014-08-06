@@ -121,6 +121,10 @@ DirectoryIndex index.php index.html index.htm
     Order Deny,Allow
     Deny from All
   </Files>
+  # We no longer use XML-RPC.
+  <Files "xmlrpc.php">
+    Order allow,deny
+  </Files>
 
   ## Gardens compatibility with old files directories ##
 

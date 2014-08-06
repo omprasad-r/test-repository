@@ -1,11 +1,11 @@
 <?php
 
-namespace Acquia\Acsf;
-
 /**
  * @file
  * Creates a config object using our REST API keys.
  */
+
+namespace Acquia\Acsf;
 
 class AcsfConfigRest extends AcsfConfigDefault {
 

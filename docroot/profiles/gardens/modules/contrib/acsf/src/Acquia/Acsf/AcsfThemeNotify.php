@@ -75,7 +75,7 @@ class AcsfThemeNotify {
       );
     }
     catch (\Exception $e) {
-      $error_message = t('AcsfThemeNotify failed with error: @message', array('@message' => $e->getMessage()));
+      $error_message = t('AcsfThemeNotify failed with error: @message.', array('@message' => $e->getMessage()));
       syslog(LOG_ERR, $error_message);
 
       // Send a log message to the Factory.

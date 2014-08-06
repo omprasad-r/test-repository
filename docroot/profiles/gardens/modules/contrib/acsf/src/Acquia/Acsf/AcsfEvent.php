@@ -1,11 +1,12 @@
 <?php
 
-namespace Acquia\Acsf;
-
 /**
- * An event within the ACSF framework encapsulates a dispatcher and a list of event
- * handlers. The event will contain an internal context that is accessible from
- * the handlers.
+ * @file
+ * Contains AcsfEvent.
+ *
+ * An event within the ACSF framework encapsulates a dispatcher and a list of
+ * event handlers. The event will contain an internal context that is accessible
+ * from the handlers.
  *
  * $type = 'site_duplication_scrub';
  * $registry = acsf_get_registry();
@@ -19,6 +20,8 @@ namespace Acquia\Acsf;
  * $event->run();
  */
 
+namespace Acquia\Acsf;
+
 class AcsfEvent {
 
   protected $handlers;
@@ -30,16 +33,16 @@ class AcsfEvent {
    *   The event dispatcher object.
    * @param AcsfLog $log
    *   The log object.
-   * @param String $type
+   * @param string $type
    *   The type of event to run.
-   * @param Array $registry
+   * @param array $registry
    *   The registry from acsf_registry.
-   * @param Array $context
+   * @param array $context
    *   An arbitrary context for handlers.
    * @param AcsfSite $site
    *   The site being operated upon (optional).
    */
-  public function __construct(AcsfEventDispatcher $dispatcher, AcsfLog $log, $type, $registry, $context, AcsfSite $site = NULL) {
+  public function __construct(AcsfEventDispatcher $dispatcher, AcsfLog $log, $type, array $registry, array $context, AcsfSite $site = NULL) {
 
     $this->dispatcher = $dispatcher;
     $this->log = $log;
@@ -57,12 +60,12 @@ class AcsfEvent {
   /**
    * Creates an event using ACSF defaults.
    *
-   * @param String $type
+   * @param string $type
    *   The type of event to execute.
-   * @param Array $context
+   * @param array $context
    *   A custom context to pass to event handlers.
    */
-  public static function create($type, $context = array()) {
+  public static function create($type, array $context = array()) {
     $registry = acsf_get_registry();
     $event = new static(
       new AcsfEventDispatcher(),
@@ -75,8 +78,7 @@ class AcsfEvent {
   }
 
   /**
-   * Produces data that can be used to debug an event and the performance of its
-   * handlers including run time and error messages.
+   * Produces data that can be used to track and debug an event.
    */
   public function debug() {
     $debug = array();
@@ -84,10 +86,10 @@ class AcsfEvent {
     foreach (array_keys($this->handlers) as $key) {
       foreach ($this->handlers[$key] as $handler) {
         $debug['handlers'][$key][] = array(
-         'class' => get_class($handler),
-         'started' => $handler->started,
-         'completed' => $handler->completed,
-         'message' => $handler->message,
+          'class' => get_class($handler),
+          'started' => $handler->started,
+          'completed' => $handler->completed,
+          'message' => $handler->message,
         );
       }
     }
@@ -114,10 +116,11 @@ class AcsfEvent {
   /**
    * Pops (actually shifts to preserve order) a handler from the internal list.
    *
-   * @param String $type
+   * @param string $type
    *   The type of handler: incomplete, complete or failed.
    *
    * @return AcsfEventHandler
+   *   The next event handler.
    */
   public function popHandler($type = 'incomplete') {
     if (array_key_exists($type, $this->handlers)) {
@@ -133,10 +136,10 @@ class AcsfEvent {
    *
    * @param AcsfEventHandler $handler
    *   The handler to add.
-   * @param String $type
+   * @param string $type
    *   The type of handler: incomplete, complete or failed.
    */
-  public function pushHandler($handler, $type = 'incomplete') {
+  public function pushHandler(AcsfEventHandler $handler, $type = 'incomplete') {
     if (!is_subclass_of($handler, '\Acquia\Acsf\AcsfEventHandler')) {
       throw new AcsfEventHandlerIncompatibleException(sprintf('The handler class "%s" is incompatible with this event, must subclass AcsfEventHandler.', get_class($handler)));
     }

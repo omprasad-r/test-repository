@@ -6,7 +6,7 @@
  */
 
 /**
- * Implements hook_drush_command()
+ * Implements hook_drush_command().
  */
 function acsf_theme_drush_command() {
   return array(
@@ -25,7 +25,7 @@ function acsf_theme_drush_command() {
 }
 
 /**
- * Drush command callback: Sends a theme change notification to the Factory.
+ * Command callback: Sends a theme change notification to the Factory.
  */
 function drush_acsf_theme_notify($scope) {
   $event = drush_get_option('event', 'modify');

@@ -1,7 +1,12 @@
 <?php
 
 /**
- * Implements hook_drush_command()
+ * @file
+ * Provides drush commands for site related operations.
+ */
+
+/**
+ * Implements hook_drush_command().
  */
 function acsf_drush_command() {
   return array(
@@ -9,9 +14,9 @@ function acsf_drush_command() {
       'description' => dt('Rebuilds the ACSF registry.'),
     ),
     'acsf-site-sync' => array(
-      'description' => 'Synchronize data with the Factory.',
+      'description' => dt('Synchronize data with the Factory.'),
       'options' => array(
-        'data' => 'A base64 encoded php array describing the site generated from the Factory.',
+        'data' => dt('A base64 encoded php array describing the site generated from the Factory.'),
       ),
     ),
     'acsf-get-factory-creds' => array(
@@ -23,51 +28,51 @@ function acsf_drush_command() {
     ),
     'go-offline' => array(
       'bootstrap' => DRUSH_BOOTSTRAP_DRUPAL_DATABASE,
-      'description' => 'Set a site hard offline via SQL.',
+      'description' => dt('Set a site hard offline via SQL.'),
       'aliases' => array('go-off'),
     ),
     'go-online' => array(
       'bootstrap' => DRUSH_BOOTSTRAP_DRUPAL_DATABASE,
-      'description' => 'Set a site online via SQL.',
+      'description' => dt('Set a site online via SQL.'),
       'aliases' => array('go-on'),
     ),
     'report-complete-async-process' => array(
       'bootstrap' => DRUSH_BOOTSTRAP_DRUPAL_ROOT,
-      'description' => 'Send notice back to the Factory when a process completes.',
+      'description' => dt('Send notice back to the Factory when a process completes.'),
       'options' => array(
-        'data' => 'Serialized PHP data regarding the caller.',
+        'data' => dt('Serialized PHP data regarding the caller.'),
       ),
     ),
     'localhost-curl' => array(
-      'description' => "Makes a localhost curl request.",
+      'description' => dt('Makes a localhost curl request.'),
       'arguments' => array(
-        'path' => 'The path of the URL.',
+        'path' => dt('The path of the URL.'),
       ),
       'required-arguments' => TRUE,
       'options' => array(
         'port' => array(
-          'description' => 'Port to use (default is 8081).',
+          'description' => dt('Port to use (default is 8081).'),
           'example-value' => '8082',
         ),
         'timeout' => array(
-          'description' => 'cURL request timeout (default is 120 sec)',
+          'description' => dt('cURL request timeout (default is 120 sec)'),
           'example-value' => '300',
         ),
         'host-header' => array(
-          'description' => 'Host header (default taken from the alias, or --uri, or omitted).',
+          'description' => dt('Host header (default taken from the alias, or --uri, or omitted).'),
           'example-value' => 'foo.drupalgardens.com',
         ),
       ),
       'examples' => array(
-        'drush @sitename curl /index.php' => 'Use the URL from the slias and curl index.php.',
+        'drush @sitename curl /index.php' => dt('Use the URL from the alias and curl index.php.'),
       ),
       'aliases' => array('curl'),
       'bootstrap' => DRUSH_BOOTSTRAP_DRUSH, // No bootstrap at all.
     ),
     'acsf-version-get' => array(
-      'description' => 'Fetches the version of the acsf moduleset.',
+      'description' => dt('Fetches the version of the acsf moduleset.'),
       'arguments' => array(
-        'path' => 'The path to the acsf moduleset.',
+        'path' => dt('The path to the acsf moduleset.'),
       ),
       'bootstrap' => DRUSH_BOOTSTRAP_DRUSH, // No bootstrap at all.
     ),
@@ -75,7 +80,7 @@ function acsf_drush_command() {
 }
 
 /**
- * Drush command. Rebuilds the ACSF registry.
+ * Command callback. Rebuilds the ACSF registry.
  */
 function drush_acsf_build_registry() {
   acsf_build_registry();
@@ -83,7 +88,7 @@ function drush_acsf_build_registry() {
 }
 
 /**
- * Drush command. Scrubs the site database.
+ * Command callback. Scrubs the site database.
  */
 function drush_acsf_site_scrub() {
   $config = new \Acquia\Acsf\AcsfConfigDefault();
@@ -99,11 +104,17 @@ function drush_acsf_site_scrub() {
 
   // Replace the source Factory authmap URLs with the new Factory URL.
   if ($factory_url && $source_url) {
-    $result = db_query("UPDATE {authmap} SET authname=REPLACE(authname, '$source_url', '$factory_url')");
-    drush_print(dt('Replacing authmap entries for !source with !dest.', array('!source' => $source_url, '!dest' => $factory_url)));
+    $result = db_query('UPDATE {authmap} SET authname = REPLACE(authname, :source_url, :factory_url)', array(
+      ':source_url' => $source_url,
+      ':factory_url' => $factory_url,
+    ));
+    drush_print(dt('Replacing authmap entries for !source with !dest.', array(
+      '!source' => $source_url,
+      '!dest' => $factory_url,
+    )));
   }
   if (!$result) {
-    drush_print('Unable to replace any authmap entries.');
+    drush_print(dt('Unable to replace any authmap entries.'));
   }
 
   // Remove openid associations.
@@ -145,8 +156,8 @@ function drush_acsf_site_scrub() {
   drush_set_option('sanitize-email', 'no');
   drush_set_option('sanitize-password', 'no');
 
-  // Run the sanitization which allows customers to use hook_drush_sql_sanitize()
-  // to provide custom scrubbing.
+  // Run the sanitization which allows customers to use
+  // hook_drush_sql_sanitize() to provide custom scrubbing.
   drush_sql_sanitize();
 
   // Mark this database as scrubbed.
@@ -154,7 +165,7 @@ function drush_acsf_site_scrub() {
 }
 
 /**
- * Drush command. Synchronizes data with the Factory.
+ * Command callback. Synchronizes data with the Factory.
  *
  * When executed without a --data option, this command will call the Factory to
  * get data. When called with the --data option it will simply digest that data.
@@ -192,15 +203,17 @@ function drush_acsf_site_sync() {
 }
 
 /**
- * Drush command. Run all these queries using direct SQL in case the site is WSOD.
+ * Command callback. Puts a site into maintenance.
  */
 function drush_acsf_go_offline() {
   include_once './includes/lock.inc';
   $query = _drush_acsf_clear_maint();
   // For now hard-code a 10 minute expected offline time.
-  $expected = time() + 10*60;
+  $expected = time() + 10 * 60;
+
+  // Run all these queries using direct SQL in case the site is WSOD.
   $query .= "INSERT INTO variable (name, value) VALUES ('maintenance_mode', 'i:1;'); ";
-  $query .= "INSERT INTO variable (name, value) VALUES ('acsf_maintenance_time', '". serialize($expected) ."'); ";
+  $query .= "INSERT INTO variable (name, value) VALUES ('acsf_maintenance_time', '" . serialize($expected) . "'); ";
 
   // Get the cron lock to prevent cron from running during an update.
   // Use a large lock timeout because an update can take a long time.
@@ -238,25 +251,27 @@ function drush_acsf_get_factory_creds() {
 }
 
 /**
- * Run after a go-offline command executes. Verify maintenance_mode variable.
+ * Runs after a go-offline command executes. Verifies maintenance_mode variable.
  */
 function drush_acsf_post_go_offline() {
   $content = _drush_acsf_get_raw_variable('maintenance_mode');
   if (strpos($content, 'i:1;') !== FALSE) {
-    drush_log("Site has been placed offline", 'success');
+    drush_log('Site has been placed offline.', 'success');
   }
   else {
-    drush_log("Site has not been placed offline", 'error');
+    drush_log('Site has not been placed offline.', 'error');
   }
 }
 
 /**
- * Drush command. Run all these queries using direct SQL in case the site is WSOD.
+ * Command command. Takes a site out of maintenance.
  */
 function drush_acsf_go_online() {
   include_once './includes/lock.inc';
   // Determine whether the user intended the site to be in maintenance mode.
-  $content = _drush_acsf_get_raw_variable('site_owner_maintenance_mode');
+  $content = _drush_acsf_get_raw_variable('acsf_site_owner_maintenance_mode');
+
+  // Run all these queries using direct SQL in case the site is WSOD.
   $query = _drush_acsf_clear_maint();
   if (!empty($content)) {
     $query .= "INSERT INTO variable (name, value) VALUES ('maintenance_mode', 'i:1;'); ";
@@ -268,26 +283,26 @@ function drush_acsf_go_online() {
 }
 
 /**
- * Run after a go-online command executes. Verify maintenance_mode variable.
+ * Runs after a go-online command executes. Verifies maintenance_mode variable.
  */
 function drush_acsf_post_go_online() {
   $content = _drush_acsf_get_raw_variable('maintenance_mode');
   if (empty($content)) {
-    drush_log("Site has been placed online", 'success');
+    drush_log('Site has been placed online.', 'success');
   }
   else {
-    $content = _drush_acsf_get_raw_variable('site_owner_maintenance_mode');
+    $content = _drush_acsf_get_raw_variable('acsf_site_owner_maintenance_mode');
     if (empty($content)) {
-      drush_log("Site has not been placed online", 'error');
+      drush_log('Site has not been placed online.', 'error');
     }
     else {
-      drush_log("Site has been left offline as set by the site owner", 'success');
+      drush_log('Site has been left offline as set by the site owner.', 'success');
     }
   }
 }
 
 /**
- * Drush command callback. Sends a cURL request to localhost for a site.
+ * Command callback. Sends a cURL request to localhost for a site.
  */
 function drush_acsf_localhost_curl($path) {
   $alias = drush_get_context('alias');
@@ -313,17 +328,21 @@ function drush_acsf_localhost_curl($path) {
   $code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
 
   if ($errno) {
-    drush_set_error('HOSTING_ERROR', 'cURL error: ' . curl_error($ch));
+    drush_set_error('HOSTING_ERROR', dt('cURL error: !error.', array(
+      '!error' => curl_error($ch),
+    )));
   }
   elseif ($code != 200) {
-    drush_set_error('HOSTING_ERROR', 'received code: ' . $code);
+    drush_set_error('HOSTING_ERROR', dt('Received code: @code.', array(
+      '@code' => $code,
+    )));
   }
   curl_close($ch);
   drush_print($content);
 }
 
 /**
- * Helper function to build common SQL for clearing maintenance mode.
+ * Builds a common SQL query for clearing maintenance mode.
  */
 function _drush_acsf_clear_maint() {
   $query = '';
@@ -339,9 +358,7 @@ function _drush_acsf_clear_maint() {
 }
 
 /**
- * Get the value of the variable directly from the variable table.
- *
- * @param string $variable_name
+ * Gets the value of a variable directly from the database specified by name.
  *
  * @return string
  *   The raw output of the command-line mysql query.
@@ -352,13 +369,13 @@ function _drush_acsf_get_raw_variable($variable_name) {
 }
 
 /**
- * Drush command. Reports process completion back to the factory.
+ * Command callback. Reports process completion back to the factory.
  */
 function drush_acsf_report_complete_async_process() {
   $data = unserialize(drush_get_option('data', NULL));
 
   if (empty($data->callback) || empty($data->object_id) || empty($data->acsf_path)) {
-    drush_set_error('Data error', 'Requires serialized object in --data argument with $data->callback and $data->object_id populated.');
+    drush_set_error('Data error', dt('Requires serialized object in --data argument with $data->callback and $data->object_id populated.'));
     exit(1);
   }
 
@@ -391,7 +408,7 @@ function drush_acsf_report_complete_async_process() {
 }
 
 /**
- * Drush command. Fetches the version of the acsf moduleset.
+ * Command callback. Fetches the version of the acsf moduleset.
  */
 function drush_acsf_version_get($path) {
   $version = '0.0';

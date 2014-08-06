@@ -2,8 +2,7 @@
 
 /**
  * @file
- * Install, update and uninstall functions for the Acquia Site Factory OpenID
- * module.
+ * Install related functions for the Acquia Site Factory OpenID module.
  */
 
 /**

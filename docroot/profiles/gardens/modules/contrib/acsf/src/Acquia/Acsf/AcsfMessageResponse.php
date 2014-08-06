@@ -1,11 +1,11 @@
 <?php
 
-namespace Acquia\Acsf;
-
 /**
  * @file
  * This simple interface defines the way that responses are constructed.
  */
+
+namespace Acquia\Acsf;
 
 abstract class AcsfMessageResponse {
 
@@ -21,11 +21,11 @@ abstract class AcsfMessageResponse {
   /**
    * Constructor.
    *
-   * @param String $endpoint
+   * @param string $endpoint
    *   The endpoint on the remote service.
-   * @param Unknown $code
+   * @param mixed $code
    *   The response code from the remote call.
-   * @param Unknown $body
+   * @param mixed $body
    *   The body of the response.
    */
   public function __construct($endpoint, $code, $body) {

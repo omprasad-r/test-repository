@@ -1,16 +1,21 @@
 <?php
 
-namespace Acquia\Acsf;
-
 /**
  * @file
+ * Contains AcsfEventDispatcher.
+ *
  * This class defines the base event dispatcher. This will take a specified list
- * of handlers and execute them serially. Any handler has the option to interrupt
- * the execution of the event.
+ * of handlers and execute them serially. Any handler has the option to
+ * interrupt the execution of the event.
  */
+
+namespace Acquia\Acsf;
 
 class AcsfEventDispatcher {
 
+  /**
+   * Constructor.
+   */
   public function __construct() {
     $this->running = FALSE;
   }
@@ -28,7 +33,7 @@ class AcsfEventDispatcher {
    * @param AcsfEvent $event
    *   The AcsfEvent that is being executed.
    */
-  public function dispatch($event) {
+  public function dispatch(AcsfEvent $event) {
     $this->running = TRUE;
 
     while ($this->running && $handler = $event->popHandler('incomplete')) {

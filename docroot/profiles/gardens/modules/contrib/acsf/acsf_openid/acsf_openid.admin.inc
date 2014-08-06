@@ -144,10 +144,10 @@ function acsf_openid_admin_invite_people_form_submit($form, &$form_state) {
 /**
  * Saves an invited email address to the database.
  *
- * @param $email
+ * @param string $email
  *   The email address to save.
  *
- * @return
+ * @return bool
  *   TRUE if an invitation was created; FALSE if did not need to be created
  *   because the e-mail address was already invited.
  */
@@ -217,11 +217,11 @@ function acsf_openid_admin_settings_form($form, $form_state) {
     $description = t("During registration, account fields are always displayed in the overlay. If enabled, custom fields will use the overlay also, instead of the site's page.");
   }
   else {
-    $title = t('Use the overlay for custom user fields during !service_name_long account registration', array(
-      '!service_name_long' => $factory_name,
+    $title = t('Use the overlay for custom user fields during @service_name_long account registration', array(
+      '@service_name_long' => $factory_name,
     ));
-    $description = t("When a user registers with a !service_name_long account, fields provided by !service_name_long are always displayed in the overlay. If enabled, custom fields will use the overlay also, instead of the site's page.", array(
-      '!service_name_long' => $factory_name,
+    $description = t("When a user registers with a @service_name_long account, fields provided by @service_name_long are always displayed in the overlay. If enabled, custom fields will use the overlay also, instead of the site's page.", array(
+      '@service_name_long' => $factory_name,
     ));
   }
   $form['overlay_status']['acsf_openid_overlay_for_registration'] = array(

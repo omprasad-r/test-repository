@@ -1,16 +1,15 @@
 <?php
 
-namespace Acquia\Acsf;
-
 /**
  * @file
- * This class contains information about this site and its relationship to the
- * Site Factory.
+ * Contains AcsfSite.
  */
+
+namespace Acquia\Acsf;
 
 class AcsfSite {
 
-  static $cache;
+  protected static $cache;
 
   protected $info = array();
 
@@ -69,7 +68,7 @@ class AcsfSite {
    *   The value to store internally.
    */
   public function __set($key, $value) {
-     $this->info[$key] = $value;
+    $this->info[$key] = $value;
   }
 
   /**
@@ -79,6 +78,7 @@ class AcsfSite {
    *   The key of the internal storage to look up.
    *
    * @return mixed
+   *   The value of the key.
    */
   public function __get($key) {
     if (isset($this->info[$key])) {
@@ -93,6 +93,7 @@ class AcsfSite {
    *   The key of the internal storage to look up.
    *
    * @return bool
+   *   TRUE if there is a value is set for the key.
    */
   public function __isset($key) {
     return isset($this->info[$key]);
@@ -119,9 +120,9 @@ class AcsfSite {
    * @return bool
    *   Returns TRUE if the data fetch was successful.
    */
-  public function refresh($data = array()) {
+  public function refresh(array $data = array()) {
     if (function_exists('is_acquia_host') && !is_acquia_host()) {
-      return;
+      return FALSE;
     }
 
     try {
@@ -201,7 +202,7 @@ class AcsfSite {
    * @param array $site_info
    *   The information to merge.
    */
-  public function mergeSiteInfo($site_info) {
+  public function mergeSiteInfo(array $site_info) {
     if (!empty($site_info)) {
       foreach ($site_info as $key => $value) {
         $this->info[$key] = $value;
@@ -215,7 +216,7 @@ class AcsfSite {
    * @param array $site_info
    *   The information to merge.
    */
-  public function saveSiteInfo($site_info) {
+  public function saveSiteInfo(array $site_info) {
     $this->mergeSiteInfo($site_info);
     $this->last_sf_refresh = time();
     $this->save();

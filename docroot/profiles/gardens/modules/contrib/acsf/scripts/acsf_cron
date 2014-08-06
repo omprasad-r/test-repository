@@ -26,7 +26,7 @@
  */
 
 /**
- * Class AcsfCronWrapper
+ * Class AcsfCronWrapper.
  *
  * This class is responsible for invoking drush commands on a large set of
  * sites.  Mostly it is used to invoke drush cron.
@@ -85,11 +85,11 @@ class AcsfCronWrapper {
   }
 
   /**
-   * Executes the specified drush command .
+   * Executes the specified drush command.
    *
-   * @param $drush
+   * @param string $drush
    *   How drush should be invoked.
-   * @param $command
+   * @param string $command
    *   The drush command to be executed.
    *
    * @return int
@@ -104,7 +104,8 @@ class AcsfCronWrapper {
         $failed_sites = $this->execOnSites($drush, $command, $failed_sites);
       }
       if (!empty($failed_sites)) {
-        // Some sites failed.  Enumerate those for the caller and indicate failure.
+        // Some sites failed.  Enumerate those for the caller and indicate
+        // failure.
         print(implode("\n", $failed_sites));
         return 1;
       }
@@ -116,7 +117,7 @@ class AcsfCronWrapper {
   }
 
   /**
-   * Executes the specified drush command .
+   * Executes the specified drush command.
    *
    * @param string $drush
    *   How drush should be invoked.
@@ -128,7 +129,7 @@ class AcsfCronWrapper {
    * @return array
    *   Sites on which the command failed.
    */
-  private function execOnSites($drush, $command, $sites) {
+  private function execOnSites($drush, $command, array $sites) {
     $failed_runs = array();
     try {
       foreach ($sites as $site) {
@@ -202,7 +203,6 @@ class AcsfCronWrapper {
 
 }
 
-
 /**
  * This is the main entry point of the script.
  *
@@ -229,8 +229,9 @@ function acsf_cron_main() {
 /**
  * Parses the command line, returning an object that provides the options.
  *
- * @return stdClass
- *   An object that contains all options that were specified on the command line.
+ * @return object
+ *   An object that contains all options that were specified on the command
+ *   line.
  *
  * @throws Exception
  *   If an illegal option was provided.

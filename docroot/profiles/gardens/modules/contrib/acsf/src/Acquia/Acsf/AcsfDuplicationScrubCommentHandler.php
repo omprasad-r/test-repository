@@ -1,11 +1,11 @@
 <?php
 
-namespace Acquia\Acsf;
-
 /**
  * @file
  * Contains AcsfDuplicationScrubCommentHandler.
  */
+
+namespace Acquia\Acsf;
 
 /**
  * Handles the scrubbing of Drupal comments.
@@ -103,7 +103,7 @@ class AcsfDuplicationScrubCommentHandler extends AcsfEventHandler {
    *   Optional. Whether or not the comments are orphans, since these need to be
    *   deleting differently.
    */
-  protected function deleteItems($cids, $orphaned = FALSE) {
+  protected function deleteItems(array $cids, $orphaned = FALSE) {
     if ($orphaned) {
       db_delete('comment')->condition('cid', $cids, 'IN')->execute();
     }
@@ -126,4 +126,3 @@ class AcsfDuplicationScrubCommentHandler extends AcsfEventHandler {
   }
 
 }
-

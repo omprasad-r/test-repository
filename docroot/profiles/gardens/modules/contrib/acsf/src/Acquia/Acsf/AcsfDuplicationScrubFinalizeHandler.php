@@ -1,11 +1,11 @@
 <?php
 
-namespace Acquia\Acsf;
-
 /**
  * @file
  * Contains AcsfDuplicationScrubFinalizeHandler.
  */
+
+namespace Acquia\Acsf;
 
 /**
  * Handles final operations for the scrub.
@@ -48,4 +48,3 @@ class AcsfDuplicationScrubFinalizeHandler extends AcsfEventHandler {
   }
 
 }
-

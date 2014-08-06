@@ -25,6 +25,9 @@ function acsf_theme_cron() {
   }
 }
 
+/**
+ * Returns a new AcsfThemeNotify instance.
+ */
 function acsf_theme_notification() {
   return new \Acquia\Acsf\AcsfThemeNotify();
 }

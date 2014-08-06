@@ -93,7 +93,7 @@ class UnitTest extends PHPUnit_Framework_TestCase {
   /**
    * Tests that incompatible handlers may not be added.
    *
-   * @expectedException \Acquia\Acsf\AcsfEventHandlerIncompatibleException
+   * @expectedException PHPUnit_Framework_Error
    */
   public function testAcsfEventHandlerIncompatibleClass() {
     $event = new \Acquia\Acsf\AcsfEvent(new \Acquia\Acsf\AcsfEventDispatcher(), new \Acquia\Acsf\AcsfLog(), 'unit_test', array(), array());

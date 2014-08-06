@@ -1,11 +1,11 @@
 <?php
 
-namespace Acquia\Acsf;
-
 /**
  * @file
  * Contains AcsfDuplicationScrubNodeHandler.
  */
+
+namespace Acquia\Acsf;
 
 /**
  * Handles the scrubbing of Drupal nodes.
@@ -85,4 +85,3 @@ class AcsfDuplicationScrubNodeHandler extends AcsfEventHandler {
   }
 
 }
-

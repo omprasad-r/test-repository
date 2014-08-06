@@ -49,13 +49,13 @@ function acsf_vdel($name) {
 /**
  * Creates an in-memory storage for acsf_variables to simulate a db.
  *
- * @param String $name
+ * @param string $name
  *   The name of the variable to store.
- * @param Mixed $value
+ * @param mixed $value
  *   The value of the variable to store.
- * @param String $group
+ * @param string $group
  *   The group name of the variable to store.
- * @param Boolean $delete
+ * @param bool $delete
  *   Whether or not to delete the specified variable.
  */
 function acsf_variable_storage($name = NULL, $value = NULL, $group = NULL, $delete = FALSE) {

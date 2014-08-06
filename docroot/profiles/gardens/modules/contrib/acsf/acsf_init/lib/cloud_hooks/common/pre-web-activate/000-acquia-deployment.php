@@ -2,6 +2,7 @@
 <?php
 
 /**
+ * @file
  * This script is responsible for deploying theme files on each webnode.
  *
  * When a webnode is launched, this script is called by Acquia Hosting with
@@ -40,9 +41,9 @@ main($argv, $argc);
  * Determines whether there are theme files, and request them from the Site
  * Factory if needed.
  *
- * @param $argv
+ * @param string $argv
  *   The command line arguments.
- * @param $argc
+ * @param int $argc
  *   The number of command line arguments.
  */
 function main($argv, $argc) {
@@ -142,9 +143,9 @@ function has_theme_files($site, $env) {
 /**
  * Returns the shared credentials.
  *
- * @param $site
+ * @param string $site
  *   The hosting sitegroup name.
- * @param $env
+ * @param string $env
  *   The hosting environment name.
  *
  * @return SimpleRestCreds
@@ -188,11 +189,11 @@ function get_theme_directory($site, $env) {
 /**
  * Sends the request to deploy themes on the specified webnode.
  *
- * @param $site
+ * @param string $site
  *   The hosting site group name.
- * @param $env
+ * @param string $env
  *   The hosting environment name.
- * @param $webnode
+ * @param string $webnode
  *   The fully qualified webnode name.
  *
  * @return SimpleRestResponse
@@ -220,11 +221,11 @@ function request_theme_files($site, $env, $webnode) {
 /**
  * Requests status of a particular wip task.
  *
- * @param $site
+ * @param string $site
  *   The hosting site group name.
- * @param $env
+ * @param string $env
  *   The hosting environment name.
- * @param $task_id
+ * @param int $task_id
  *   The Wip task id.
  *
  * @return SimpleRestResponse
@@ -248,7 +249,7 @@ function get_wip_task_status($site, $env, $task_id) {
 }
 
 /**
- * Class SimpleRestCreds
+ * Class SimpleRestCreds.
  *
  * Contains the REST credentials that will be used when making Site Factory
  * requests.
@@ -258,6 +259,16 @@ class SimpleRestCreds {
   public $password;
   public $url;
 
+  /**
+   * Creates a new instance of SimpleRestCreds.
+   *
+   * @param string $name
+   *   The username to be used to contact Site Factory.
+   * @param string $password
+   *   The password to be used to contact Site Factory.
+   * @param string $url
+   *   The url of the Site Factory.
+   */
   public function __construct($name, $password, $url) {
     $this->name = $name;
     $this->password = $password;
@@ -266,13 +277,13 @@ class SimpleRestCreds {
 }
 
 /**
- * Class SimpleRestMessage
+ * Class SimpleRestMessage.
  *
  * A simple class used to send REST requests to the Site Factory.
  */
 class SimpleRestMessage {
-  private $retry_max = 3;
-  private $retry_wait = 5;
+  private $retryMax = 3;
+  private $retryWait = 5;
   private $site;
   private $env;
 
@@ -296,19 +307,20 @@ class SimpleRestMessage {
    *   The request method.  Either 'POST' or 'GET'.
    * @param string $endpoint
    *   The request endpoint.
-   * @param string[] $parameters
+   * @param array $parameters
    *   Any required parameters for the request. Note: parameters are currently
    *   only implemented for POST requests. To add support for GET parameters
    *   would require changes in this method.
    * @param SimpleRestCreds $creds
    *   The credentials to use for the Site Factory request.
+   *
    * @throws Exception
    *   If the request fails.
    *
    * @return \SimpleRestResponse
    *   The response.
    */
-  public function send($method, $endpoint, $parameters, $creds) {
+  public function send($method, $endpoint, array $parameters, SimpleRestCreds $creds) {
     $error = '';
     $user_agent = sprintf('%s.%s %s', $this->site, $this->env, gethostname());
     $curl = curl_init();
@@ -342,11 +354,11 @@ class SimpleRestMessage {
     $attempts = 0;
     $response = FALSE;
 
-    while (!$response && ++$attempts <= $this->retry_max) {
+    while (!$response && ++$attempts <= $this->retryMax) {
       $response = curl_exec($curl);
       if (!$response) {
         $error = curl_error($curl);
-        sleep($this->retry_wait);
+        sleep($this->retryWait);
       }
     }
 
@@ -401,7 +413,7 @@ class SimpleRestResponse {
    * @param array $response_body
    *   The response body.
    */
-  public function __construct($endpoint, $response_code, $response_body) {
+  public function __construct($endpoint, $response_code, array $response_body) {
     $this->endpoint = $endpoint;
     $this->code = $response_code;
     $this->body = $response_body;

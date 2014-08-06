@@ -1,11 +1,11 @@
 <?php
 
-namespace Acquia\Acsf;
-
 /**
  * @file
  * Contains AcsfDuplicationScrubTruncateTablesHandler.
  */
+
+namespace Acquia\Acsf;
 
 /**
  * Truncates various undesirable Drupal core tables.
@@ -46,7 +46,13 @@ class AcsfDuplicationScrubTruncateTablesHandler extends AcsfEventHandler {
     $this->truncateTables($tables);
   }
 
-  public function truncateTables($tables = array()) {
+  /**
+   * Truncates database tables.
+   *
+   * @param array $tables
+   *   The list of tables to be truncated.
+   */
+  public function truncateTables(array $tables = array()) {
     foreach ($tables as $table) {
       if (db_table_exists($table)) {
         db_delete($table)->execute();
@@ -55,4 +61,3 @@ class AcsfDuplicationScrubTruncateTablesHandler extends AcsfEventHandler {
   }
 
 }
-

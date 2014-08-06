@@ -1,11 +1,11 @@
 <?php
 
-namespace Acquia\Acsf;
-
 /**
  * @file
  * Contains AcsfDuplicationScrubTemporaryFilesHandler.
  */
+
+namespace Acquia\Acsf;
 
 /**
  * Handles the scrubbing of Drupal temporary files.
@@ -38,4 +38,3 @@ class AcsfDuplicationScrubTemporaryFilesHandler extends AcsfEventHandler {
   }
 
 }
-
