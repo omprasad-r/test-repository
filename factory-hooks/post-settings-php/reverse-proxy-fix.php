@@ -11,6 +11,6 @@
  * these situation we will have to add the right IP to the config.
  */
 
-if (!in_array('10.145.221.72', $GLOBALS['conf']['reverse_proxies'])) {
+if (!in_array('10.145.221.72', $GLOBALS['conf']['reverse_proxy_addresses'])) {
   $GLOBALS['conf']['reverse_proxies'][] = '10.145.221.72';
 }
