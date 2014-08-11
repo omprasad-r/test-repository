@@ -1,0 +1,7 @@
+name = "Migration support for Ceelo Green"
+description = "Migration for Ceelo Green"
+package = "Development"
+core = 7.x
+
+dependencies[] = migrate
+dependencies[] = migrate_extras
