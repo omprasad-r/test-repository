@@ -13,13 +13,25 @@ function migrate_ceelo_migrate_api() {
       ),
     ),
     'migrations' => array(
-      'Incentive' => array(
-        'class_name' => 'TeslaIncentiveMigration',
-        'group_name' => 'tesla',
-        'source_type'      => 'incentive',
-        'destination_type' => 'incentive',
-        'description'      => 'Incentive Migration',
-        'user_migration'    => 'User',
+      'News' => array(
+        'class_name'  => 'CeeloNewsMigration',
+        'group_name'  => 'ceelo',
+        'description' => 'News Migration',
+      ),
+      'Photo' => array(
+        'class_name'   => 'CeeloPhotoMigration',
+        'group_name'   => 'ceelo',
+        'description'  => 'Photo Migration',
+      ),
+      'Show' => array(
+        'class_name'   => 'CeeloShowMigration',
+        'group_name'   => 'ceelo',
+        'description'  => 'Photo Migration',
+      ),
+      'Video' => array(
+        'class_name'   => 'CeeloVideoMigration',
+        'group_name'   => 'ceelo',
+        'description'  => 'Photo Migration',
       ),
     ),
   );
