@@ -17,11 +17,11 @@ class CeeloPhotoMigration extends CeeloMigration {
     ), MigrateDestinationNode::getKeySchema());
 
     $this->source = new MigrateSourceCSV(dirname(__FILE__) . '/../data/photos.txt', array(
-      array('PhotoID' => 'Artificial Primary Key'),
-      array('Gallery' => 'Gallery Name'),
-      array('Category' => 'Photo Category'),
-      array('Photo' => 'Photo url'),
-      array('URL' => 'Canonical Url'),
+      array('PhotoID', 'Artificial Primary Key'),
+      array('Gallery', 'Gallery Name'),
+      array('Category', 'Photo Category'),
+      array('Photo', 'Photo url'),
+      array('URL', 'Canonical Url'),
     ), array(
       'delimiter'   => "\t",
       'header_rows' => 1,
