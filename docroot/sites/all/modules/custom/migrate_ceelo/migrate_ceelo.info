@@ -5,3 +5,9 @@ core = 7.x
 
 dependencies[] = migrate
 dependencies[] = migrate_extras
+
+files[] = includes/base.inc
+files[] = includes/news.inc
+files[] = includes/photos.inc
+files[] = includes/shows.inc
+files[] = includes/videos.inc
