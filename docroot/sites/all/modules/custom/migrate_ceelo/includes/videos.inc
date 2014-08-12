@@ -33,6 +33,8 @@ class CeeloVideoMigration extends CeeloMigration {
     $this->addFieldMapping('title', 'Name');
     $this->addFieldMapping('field_video_asset', 'Embed');
 
+    $this->addFieldMapping('migrate_redirects', 'URL');
+
     // TODO: Figure out the url grabbiness (has to parse....).
   }
 

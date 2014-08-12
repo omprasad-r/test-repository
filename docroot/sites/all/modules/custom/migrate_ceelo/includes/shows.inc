@@ -54,6 +54,7 @@ class CeeloShowMigration extends CeeloMigration {
     $this->addFieldMapping('field_event_buylink', 'TicketLink');
 
     $this->addFieldMapping('status', 'Active');
+    $this->addFieldMapping('migrate_redirects', 'URL');
 
   }
 }

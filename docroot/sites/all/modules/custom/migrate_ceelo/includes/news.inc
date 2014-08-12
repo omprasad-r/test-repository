@@ -40,7 +40,9 @@ class CeeloNewsMigration extends CeeloMigration {
     $this->addFieldMapping('body:format')->defaultValue('full_html');
     $this->addFieldMapping('created', 'DateRelease');
     $this->addFieldMapping('status', 'Active');
-    $this->addFieldMapping('tags', 'Tags')->separator(',');
-    $this->addFieldMapping('tags:create_term')->defaultValue(TRUE);
+    $this->addFieldMapping('field_tags', 'Tags')->separator(',');
+    $this->addFieldMapping('field_tags:create_term')->defaultValue(TRUE);
+
+    $this->addFieldMapping('migrate_redirects', 'URL');
   }
 }
