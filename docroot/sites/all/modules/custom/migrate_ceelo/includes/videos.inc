@@ -17,14 +17,14 @@ class CeeloVideoMigration extends CeeloMigration {
     ), MigrateDestinationNode::getKeySchema());
 
     $this->source = new MigrateSourceCSV(dirname(__FILE__) . '/../data/videos.txt', array(
-      'VideoID',
-      'Name',
-      'Code',
-      'Keywords',
-      'Description',
-      'Active',
-      'Embed',
-      'URL',
+      'VideoID' => 'PK',
+      'Name' => 'Field Name',
+      'Code' => 'Video Code',
+      'Keywords' => 'Tags',
+      'Description' => 'Description',
+      'Active' => 'Status',
+      'Embed' => 'Embed object',
+      'URL' => 'Canonical URL',
     ), array(
       'delimiter'   => "\t",
       'header_rows' => 1,

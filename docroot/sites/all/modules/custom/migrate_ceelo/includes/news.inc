@@ -17,18 +17,18 @@ class CeeloNewsMigration extends CeeloMigration {
     ), MigrateDestinationNode::getKeySchema());
 
     $this->source = new MigrateSourceCSV(dirname(__FILE__) . '/../data/news.txt', array(
-      'NewsID',
-      'NewsTypeID',
-      'Title',
-      'SubTitle',
-      'Summary',
-      'Article',
-      'DateArticle',
-      'DateRelease',
-      'DateArchive',
-      'Active',
-      'Tags',
-      'URL',
+      'NewsID' => 'PK',
+      'NewsTypeID' => '?',
+      'Title' => 'Title',
+      'SubTitle' => 'Subtitle - Mostly empty',
+      'Summary' => 'Summary field',
+      'Article' => 'Full article text',
+      'DateArticle' => 'createdish',
+      'DateRelease' => 'What we are using for created',
+      'DateArchive' => 'Date archived?',
+      'Active' => 'Status',
+      'Tags' => 'Tags',
+      'URL' => 'url',
     ), array(
       'delimiter'   => "\t",
       'header_rows' => 1,
@@ -37,6 +37,7 @@ class CeeloNewsMigration extends CeeloMigration {
     $this->addFieldMapping('title', 'Title');
     $this->addFieldMapping('body', 'Article');
     $this->addFieldMapping('body:summary', 'Summary');
+    $this->addFieldMapping('body:format')->defaultValue('full_html');
     $this->addFieldMapping('created', 'DateRelease');
     $this->addFieldMapping('status', 'Active');
     $this->addFieldMapping('tags', 'Tags')->separator(',');
