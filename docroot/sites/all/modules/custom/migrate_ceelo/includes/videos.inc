@@ -16,7 +16,7 @@ class CeeloVideoMigration extends CeeloMigration {
         ),
     ), MigrateDestinationNode::getKeySchema());
 
-    $this->source = new MigrateSourceCSV('data/videos.txt', array(
+    $this->source = new MigrateSourceCSV(dirname(__FILE__) . '/data/videos.txt', array(
       'VideoID',
       'Name',
       'Code',
