@@ -16,7 +16,7 @@ class CeeloPhotoMigration extends CeeloMigration {
         ),
     ), MigrateDestinationNode::getKeySchema());
 
-    $this->source = new MigrateSourceCSV(dirname(__FILE__) . '/data/photos.txt', array(
+    $this->source = new MigrateSourceCSV(dirname(__FILE__) . '/../data/photos.txt', array(
       'PhotoID',
       'Gallery',
       'Category',

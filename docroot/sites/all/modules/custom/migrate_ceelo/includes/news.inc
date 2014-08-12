@@ -16,7 +16,7 @@ class CeeloNewsMigration extends CeeloMigration {
         ),
     ), MigrateDestinationNode::getKeySchema());
 
-    $this->source = new MigrateSourceCSV(dirname(__FILE__) . '/data/news.txt', array(
+    $this->source = new MigrateSourceCSV(dirname(__FILE__) . '/../data/news.txt', array(
       'NewsID',
       'NewsTypeID',
       'Title',

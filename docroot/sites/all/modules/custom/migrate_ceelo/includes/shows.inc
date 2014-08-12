@@ -16,7 +16,7 @@ class CeeloShowMigration extends CeeloMigration {
         ),
     ), MigrateDestinationNode::getKeySchema());
 
-    $this->source = new MigrateSourceCSV(dirname(__FILE__) . '/data/shows.txt', array(
+    $this->source = new MigrateSourceCSV(dirname(__FILE__) . '/../data/shows.txt', array(
       'VenueEventID',
       'VenueID',
       'Name',
