@@ -5,7 +5,7 @@ class CeeloVideoMigration extends CeeloMigration {
     parent::__construct($arguments);
 
     $this->destination = new MigrateDestinationNode('video');
-    $this->map = new MigrateSQLMap($this->machineName, array(
+    $this->map = new MigrateSQLMap($this->machineName,
       array(
         'PhotoID' =>
         array(
@@ -14,7 +14,6 @@ class CeeloVideoMigration extends CeeloMigration {
           'not null' => TRUE,
           'description' => 'Photo ID from TSV',
         ),
-      )
     ), MigrateDestinationNode::getKeySchema());
 
     $this->source = new MigrateSourceCSV('data/videos.txt', array(

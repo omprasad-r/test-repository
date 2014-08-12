@@ -5,7 +5,7 @@ class CeeloNewsMigration extends CeeloMigration {
     parent::__construct($arguments);
 
     $this->destination = new MigrateDestinationNode('blog');
-    $this->map = new MigrateSQLMap($this->machineName, array(
+    $this->map = new MigrateSQLMap($this->machineName,
       array(
         'NewsID' =>
         array(
@@ -14,7 +14,6 @@ class CeeloNewsMigration extends CeeloMigration {
           'not null' => TRUE,
           'description' => 'News ID from TSV',
         ),
-      )
     ), MigrateDestinationNode::getKeySchema());
 
     $this->source = new MigrateSourceCSV('data/news.txt', array(

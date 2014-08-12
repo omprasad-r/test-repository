@@ -5,7 +5,7 @@ class CeeloShowMigration extends CeeloMigration {
     parent::__construct($arguments);
 
     $this->destination = new MigrateDestinationNode('event');
-    $this->map = new MigrateSQLMap($this->machineName, array(
+    $this->map = new MigrateSQLMap($this->machineName,
       array(
         'VenueEventID' =>
         array(
@@ -14,7 +14,6 @@ class CeeloShowMigration extends CeeloMigration {
           'not null' => TRUE,
           'description' => 'PK, you know?',
         ),
-      )
     ), MigrateDestinationNode::getKeySchema());
 
     $this->source = new MigrateSourceCSV('data/shows.txt', array(
