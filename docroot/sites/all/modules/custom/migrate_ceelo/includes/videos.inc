@@ -41,6 +41,11 @@ class CeeloVideoMigration extends CeeloMigration {
 
   public function prepareRow($row) {
     $row->Embed = $this->getEmbedUrl($row->Embed);
+
+    // Deal with weird oembed links
+    if (strpos($row->Embed, 'http://www.youtube.com/oembed?iframe=0&wmode=transparent&url=') !== FALSE) {
+      $row->Embed = urldecode(str_replace('http://www.youtube.com/oembed?iframe=0&wmode=transparent&url=', '', $row->Embed));
+    }
   }
 
   protected function getEmbedUrl($value) {
