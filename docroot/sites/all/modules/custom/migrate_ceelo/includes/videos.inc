@@ -40,7 +40,7 @@ class CeeloVideoMigration extends CeeloMigration {
   }
 
   public function prepareRow($row) {
-    $row->embed = $this->getEmbedUrl($row->embed);
+    $row->Embed = $this->getEmbedUrl($row->Embed);
   }
 
   protected function getEmbedUrl($value) {
