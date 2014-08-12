@@ -4,6 +4,9 @@
 function migrate_ceelo_migrate_api() {
   $api = array(
     'api' => 2,
+    'destination handlers' => array(
+      'MigrateRedirectEntityHandler',
+    ),
     'groups' => array(
       'ceelo' => array(
         'title' => t('Ceelo Green Content'),
