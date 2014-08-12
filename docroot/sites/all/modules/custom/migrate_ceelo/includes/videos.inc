@@ -32,6 +32,7 @@ class CeeloVideoMigration extends CeeloMigration {
 
     $this->addFieldMapping('title', 'Name');
     $this->addFieldMapping('field_video_asset', 'Embed');
+    $this->addFieldMapping('field_video_asset:file_class')->defaultValue('MigrateExtrasFileYoutube');
 
     $this->addFieldMapping('migrate_redirects', 'URL');
 
