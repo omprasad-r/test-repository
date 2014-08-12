@@ -7,7 +7,7 @@ class CeeloVideoMigration extends CeeloMigration {
     $this->destination = new MigrateDestinationNode('video');
     $this->map = new MigrateSQLMap($this->machineName,
       array(
-        'PhotoID' =>
+        'VideoID' =>
         array(
           'type' => 'int',
           'unsigned' => TRUE,
@@ -49,7 +49,15 @@ class CeeloVideoMigration extends CeeloMigration {
 
     $embed_regex = '#<param name="movie" value=["\'](.*?)["\']\s*>#';
 
-    preg_match($embed_regex, $value, $match);
+    preg_match($embed_regex, $value, $matches);
+
+    if (!empty($matches[1])) {
+      return $matches[1];
+    }
+
+    $iframe_regex = '#<iframe .*? src=["\'](.*?)["\']\s*>#';
+
+    preg_match($iframe_regex, $value, $matches);
 
     if (!empty($matches[1])) {
       return $matches[1];
