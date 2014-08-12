@@ -26,11 +26,6 @@ function migrate_ceelo_migrate_api() {
         'group_name'   => 'ceelo',
         'description'  => 'Photo Migration',
       ),
-      'Show' => array(
-        'class_name'   => 'CeeloShowMigration',
-        'group_name'   => 'ceelo',
-        'description'  => 'Photo Migration',
-      ),
       'Video' => array(
         'class_name'   => 'CeeloVideoMigration',
         'group_name'   => 'ceelo',
