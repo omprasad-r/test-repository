@@ -41,13 +41,14 @@ class CeeloShowMigration extends CeeloMigration {
     ));
 
     $this->addFieldMapping('title', 'Name');
-    $this->addFieldMapping('category')->defaultValue('Show');
-    $this->addFieldMapping('category:create_term')->defaultValue(TRUE);
+    $this->addFieldMapping('field_event_category')->defaultValue('Show');
+    $this->addFieldMapping('field_event_category:create_term')->defaultValue(TRUE);
 
-    $this->addFieldMapping('date', 'StartDate');
+    $this->addFieldMapping('field_event_date', 'StartDate');
 
     $this->addFieldMapping('field_event_city', 'Town');
     $this->addFieldMapping('field_event_country', 'Country');
+    $this->addFieldMapping('field_event_state', 'County');
 
     $this->addFieldMapping('field_event_venue', 'VenueName');
 
