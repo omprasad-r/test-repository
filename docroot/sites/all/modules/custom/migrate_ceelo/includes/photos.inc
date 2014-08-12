@@ -31,6 +31,9 @@ class CeeloPhotoMigration extends CeeloMigration {
     $this->addFieldMapping('field_photo_category:create_term')->defaultValue(TRUE);
 
     $this->addFieldMapping('title', 'Photo');
-    // TODO: Figure out the url grabbiness.
+
+    $this->addFieldMapping('field_photo_asset', 'URL');
+    $this->addFieldMapping('field_photo_asset:file_class')->defaultValue('MigrateFileUri');
+    $this->addFieldMapping('field_photo_asset:urlencode')->defaultValue(FALSE);
   }
 }
