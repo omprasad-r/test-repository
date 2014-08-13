@@ -11,7 +11,7 @@ function migrate_ceelo_migrate_api() {
       'ceelo' => array(
         'title' => t('Ceelo Green Content'),
         'default_format'    => 'full_html',
-        'default_user'      => 1,
+        'default_user'      => 'Webcrew',
         'source_dir'        => variable_get('ceelo_migrate_files_path', '/data/files/files'),
       ),
     ),
