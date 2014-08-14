@@ -61,7 +61,7 @@ class CeeloVideoMigration extends CeeloMigration {
       return $matches[1];
     }
 
-    $iframe_regex = '#<iframe .*? src=["\'](.*?)["\']\s*>#';
+    $iframe_regex = '#<iframe .*? src=["\'](.*?)["\'].*?>#';
 
     preg_match($iframe_regex, $value, $matches);
 
