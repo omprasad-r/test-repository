@@ -5,6 +5,7 @@ core = 7.x
 
 dependencies[] = migrate
 dependencies[] = migrate_extras
+dependencies[] = media_youtube
 
 files[] = includes/base.inc
 files[] = includes/news.inc
