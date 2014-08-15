@@ -18,8 +18,10 @@ class CeeloPhotoMigration extends CeeloMigration {
 
     $this->source = new MigrateSourceCSV(dirname(__FILE__) . '/../data/photos.txt', array(
       array('PhotoID', 'Artificial Primary Key'),
+      array('Link', 'Redirect URL'),
       array('Gallery', 'Gallery Name'),
       array('Category', 'Photo Category'),
+      array('Created', 'Created date'),
       array('Photo', 'Photo url'),
       array('URL', 'Canonical Url'),
     ), array(
@@ -35,5 +37,9 @@ class CeeloPhotoMigration extends CeeloMigration {
     $this->addFieldMapping('field_photo_asset', 'URL');
     $this->addFieldMapping('field_photo_asset:file_class')->defaultValue('MigrateFileUri');
     $this->addFieldMapping('field_photo_asset:urlencode')->defaultValue(FALSE);
+
+    $this->addFieldMapping('created', 'Created');
+
+    $this->addFieldMapping('migrate_redirects', 'Link');
   }
 }
