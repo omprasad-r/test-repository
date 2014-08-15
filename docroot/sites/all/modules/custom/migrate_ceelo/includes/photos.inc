@@ -39,7 +39,7 @@ class CeeloPhotoMigration extends CeeloMigration {
     $this->addFieldMapping('field_photo_asset:urlencode')->defaultValue(FALSE);
 
     $this->addFieldMapping('created', 'Created');
-    $this->addFieldMapping('updated', 'Created');
+    $this->addFieldMapping('changed', 'Created');
 
     $this->addFieldMapping('migrate_redirects', 'Link');
   }
