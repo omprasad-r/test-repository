@@ -180,13 +180,31 @@ class CrateD2DMigrateHandler {
    *
    * For example, this is the album/track thing.
    *
-   * @todo Not quite sure how to handle this one yet.
+   * @todo Make the source table configurable?
    *
    * @param string $value
-   *   The source value.
+   *   The source value, which doesn't matter to this method.
+   *
+   * @return NULL|int
+   *   The source id or NULL
    */
   protected function reverseTrackRelationship($value) {
+    $migrate_arguments = $this->migration->getArguments();
 
+    // Find the source ID of the attached node:
+    $source_nid = Database::getConnection('default', $migrate_arguments['source_connection'])
+      ->select('content_field_album_tracks', 't')
+      ->fields('t', array('nid'))
+      ->condition('field_album_tracks_nid', $this->currentRow->nid)
+      ->execute()
+      ->fetchField();
+
+    if (empty($source_nid)) {
+      return NULL;
+    }
+
+    // Just return the source id, because you can set the source migration as appropriate.
+    return $source_nid;
   }
 
   /**
@@ -307,9 +325,33 @@ class CrateD2DMigrateHandler {
     preg_match($embed_regex, $value, $match);
 
     if (!empty($matches[1])) {
-      return $matches[1];
+      $found_match = $matches[1];
     }
 
-    return $value;
+    if (empty($found_match)) {
+      $iframe_regex = '#<iframe .*? src=["\'](.*?)["\'].*?>#';
+
+      preg_match($iframe_regex, $value, $matches);
+
+      if (!empty($matches[1])) {
+        $found_match = $matches[1];
+      }
+    }
+
+    if (empty($found_match)) {
+      return $value;
+    }
+
+    // Deal with weird oembed links
+    if (strpos($found_match, 'http://www.youtube.com/oembed?iframe=0&wmode=transparent&url=') !== FALSE) {
+      $found_match = urldecode(str_replace('http://www.youtube.com/oembed?iframe=0&wmode=transparent&url=', '', $found_match));
+    }
+
+    // Handle // uris.
+    if ($found_match == '/') {
+      $found_match = "http:" . $found_match;
+    }
+
+    return $found_match;
   }
 }
