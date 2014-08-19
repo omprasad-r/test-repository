@@ -65,7 +65,7 @@ class CeeloNewsMigration extends CeeloMigration {
    *   Text!
    */
   protected function handleInvalidImages($text) {
-    $image_regex = '#<img.*src=["\'](.*?)["\'][^\>]*>#';
+    $image_regex = '#<img.*?src=["\'](.*?)["\'][^\>]*?>#';
 
     preg_match_all($image_regex, $text, $matches);
 
