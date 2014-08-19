@@ -78,7 +78,14 @@ class CeeloNewsMigration extends CeeloMigration {
         continue;
       }
 
+      // youtube in an image source?
+      if (strpos($match, 'youtube.com') !== FALSE) {
+        continue;
+      }
+
       $image_url = 'http://securecdn.warnerartists.com/ugc/ceelo/' . $match;
+
+      $image_url = str_replace(' ', '%20', $image_url);
 
       $file = system_retrieve_file($image_url, NULL, TRUE, FILE_EXISTS_REPLACE);
 
