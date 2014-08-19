@@ -45,4 +45,53 @@ class CeeloNewsMigration extends CeeloMigration {
 
     $this->addFieldMapping('migrate_redirects', 'URL');
   }
+
+  public function prepareRow($row) {
+    $row->Article = $this->handleInvalidImages($row->Article);
+  }
+
+  /**
+   * Tries to find any images that don't have an absolute URL.
+   *
+   * It will grab them from the intertubes and save it down to a local file
+   * and drop it in the file_managed table.
+   *
+   * @todo Figure out if I need to check file_managed for this.
+   *
+   * @param string $text
+   *   Incoming Source text
+   *
+   * @return string
+   *   Text!
+   */
+  protected function handleInvalidImages($text) {
+    $image_regex = '#<img.*src=["\'](.*?)["\'][^\>]*>#';
+
+    preg_match_all($image_regex, $text, $matches);
+
+    if (empty($matches)) {
+      return $text;
+    }
+
+    foreach ($matches[1] as $idx => $match) {
+      if (strpos($match, 'http') === 0) {
+        continue;
+      }
+
+      $image_url = 'http://securecdn.warnerartists.com/ugc/ceelo/' . $match;
+
+      $file = system_retrieve_file($image_url, NULL, TRUE, FILE_EXISTS_REPLACE);
+
+      if (empty($file)) {
+        $this->queueMessage('Unable to save file ' . $match, MigrationBase::MESSAGE_WARNING);
+        continue;
+      }
+
+      $url = file_create_url($file->uri);
+
+      $text = str_replace($match, $url, $text);
+    }
+
+    return $text;
+  }
 }
