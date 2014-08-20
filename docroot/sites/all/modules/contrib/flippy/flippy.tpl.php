@@ -38,7 +38,7 @@
       <?php if (!$link['href']): ?>
         <?php print $link['title']; ?>
       <?php else: ?>
-        <?php print l($link['title'], $link['href'], array('html' => TRUE)); ?>
+        <?php print l($link['title'], $link['href'], array('html' => TRUE, 'attributes' => array('title' => $link['title']))); ?>
       <?php endif; ?>
     </li>
   <?php endforeach; ?>
