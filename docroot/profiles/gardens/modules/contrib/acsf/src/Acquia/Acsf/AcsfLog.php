@@ -65,7 +65,7 @@ class AcsfLog {
   public function enabled() {
     $site = $_ENV['AH_SITE_GROUP'];
     $env = $_ENV['AH_SITE_ENVIRONMENT'];
-    return !file_exists(sprintf('/mnt/gfs/%s.%s/files-private/sf-log-block', $site, $env));
+    return !file_exists(sprintf('/mnt/files/%s.%s/files-private/sf-log-block', $site, $env));
   }
 
 }

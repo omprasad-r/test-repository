@@ -32,7 +32,7 @@ function gardens_site_variables_get() {
   */
 
   $site = acsf_get_acsf_site();
-  return $site->gardener_site_variables;
+  return !empty($site->gardener_site_variables) ? $site->gardener_site_variables : array();
 }
 
 /**

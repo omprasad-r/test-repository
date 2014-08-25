@@ -109,6 +109,9 @@ function oembed_filter_oembed_process($text, $filter, $format, $langcode, $cache
 
   $_oembed_default_attributes = !empty($filter->settings['options']) ? oembed_parse_attr($filter->settings['options']) : array();
 
+  // Undo auto paragraph around media tags.
+  $text = preg_replace('/<p>\s*+(\[embed\b.*?\].+?\[\/embed\])\s*+<\/p>/s', '$1', $text);
+
   $pattern = '/(.?)\[embed\b(.*?)\](.+?)\[\/embed\](.?)/s';
   $text = preg_replace_callback($pattern, 'oembed_preg_tag_replace', $text);
 

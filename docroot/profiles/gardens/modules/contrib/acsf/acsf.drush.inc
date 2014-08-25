@@ -410,7 +410,10 @@ function drush_acsf_report_complete_async_process() {
 /**
  * Command callback. Fetches the version of the acsf moduleset.
  */
-function drush_acsf_version_get($path) {
+function drush_acsf_version_get($path = NULL) {
+  if (empty($path)) {
+    $path = __DIR__;
+  }
   $version = '0.0';
   $acsf_file_path = rtrim($path, '/') . '/acsf.info';
   if (file_exists($acsf_file_path)) {

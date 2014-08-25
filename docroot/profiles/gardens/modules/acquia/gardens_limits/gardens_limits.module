@@ -1036,7 +1036,7 @@ function gardens_limits_form_views_ui_add_form_alter(&$form, &$form_state) {
  */
 function _gardens_limits_max_items_per_page($element, &$form_state) {
   $max_items_per_page = _gardens_limits_views_maximum_items_per_page_get();
-  if (!$max_items_per_page) {
+  if (!$max_items_per_page || $element['#name'] != 'pager_options[items_per_page]') {
     return;
   }
 

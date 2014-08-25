@@ -38,7 +38,7 @@ class AcsfConfigDefault extends AcsfConfig {
    *
    * The cred file location will match the directory structure of an AH site:
    * /mnt/www/html/[site].[env]/docroot will have a credential file at
-   * /mnt/gfs/[site].[env]/nobackup/sf_shared_creds.ini, using normal INI
+   * /mnt/files/[site].[env]/nobackup/sf_shared_creds.ini, using normal INI
    * format:
    *
    * [gardener]
@@ -50,18 +50,12 @@ class AcsfConfigDefault extends AcsfConfig {
    * @throws AcsfConfigMissingCredsException
    */
   protected function loadIniFile() {
-    $site_name = sprintf('%s.%s', $this->ahSite, $this->ahEnv);
-    $ini_file = sprintf('/mnt/gfs/%s/nobackup/sf_shared_creds.ini', $site_name);
-
-    // After everyone has 2.09, this can be removed.
-    if (!file_exists($ini_file)) {
-      $ini_file = sprintf('/mnt/gfs/%s/nobackup/gardens_xmlrpc_creds.ini', $site_name);
-    }
+    $ini_file = sprintf('/mnt/files/%s.%s/nobackup/sf_shared_creds.ini', $this->ahSite, $this->ahEnv);
 
     $acsf_shared_creds = parse_ini_file($ini_file, TRUE);
 
     if (empty($acsf_shared_creds['gardener'])) {
-      throw new AcsfConfigMissingCredsException(sprintf('Shared credential file not found in /mnt/gfs/%s/nobackup/.', $site_name));
+      throw new AcsfConfigMissingCredsException(sprintf('Shared credential file not found in /mnt/files/%s.%s/nobackup/.', $this->ahSite, $this->ahEnv));
     }
 
     // Set the cached values for subsequent usage.
