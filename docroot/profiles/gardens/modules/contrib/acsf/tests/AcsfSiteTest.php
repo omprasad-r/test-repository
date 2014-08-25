@@ -58,17 +58,6 @@ class AcsfSiteTest extends PHPUnit_Framework_TestCase {
   }
 
   /**
-   * Tests that AcsfSite requires a node ID.
-   *
-   * @expectedException \Acquia\Acsf\AcsfSiteMissingIdentifierException
-   */
-  public function testAcsfSiteConstructorRequirements() {
-    unset($GLOBALS['gardens_site_settings']['conf']['acsf_site_id']);
-    $site = new \Acquia\Acsf\AcsfSite();
-    $GLOBALS['gardens_site_settings']['conf']['acsf_site_id'] = $this->site_id;
-  }
-
-  /**
    * Tests the __get() method.
    *
    * Test the public interface by using the __set() directly and then checking

@@ -42,7 +42,7 @@ class MediaOEmbedStreamWrapper extends MediaReadOnlyStreamWrapper {
         case 'photo':
           return 'image/oembed';
         default:
-          return 'html/oembed';
+          return 'text/oembed';
       }
     }
     return FALSE;

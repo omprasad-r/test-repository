@@ -1464,7 +1464,7 @@ function scarecrow_forbidden_permissions() {
     // gardens_features_required_media_browser_plugins_alter()), so remove the
     // permission too.
     'add media from remote urls',
-    'administer oembed presets',
+    'administer oembed',
     'administer openid client ax',
     'administer software updates',
     'block IP addresses',
