@@ -140,14 +140,32 @@ class DrupalVersion6 extends DrupalVersion {
               $widget_settings = unserialize($row->widget_settings);
               $global_settings = unserialize($row->global_settings);
               if (!empty($widget_settings['custom_alt'])) {
-                $columns[$field_name . ':alt'] = $field_name . '_alt';
+                if (Database::getConnection('default',
+                  $this->arguments['source_connection'])
+                       ->schema()
+                       ->fieldExists("content_type_{$bundle}", "{$field_name}_alt")
+                ) {
+                  $columns[$field_name . ':alt'] = $field_name . '_alt';
+                }
               }
               if (!empty($widget_settings['custom_title'])) {
-                $columns[$field_name . ':title'] = $field_name . '_title';
+                if (Database::getConnection('default',
+                  $this->arguments['source_connection'])
+                  ->schema()
+                  ->fieldExists("content_type_{$bundle}", "{$field_name}_title")
+                ) {
+                  $columns[$field_name . ':title'] = $field_name . '_title';
+                }
               }
               if (!empty($global_settings['description_field'])) {
-                $columns[$field_name . ':description'] =
-                  $field_name . '_description';
+                if (Database::getConnection('default',
+                  $this->arguments['source_connection'])
+                  ->schema()
+                  ->fieldExists("content_type_{$bundle}", "{$field_name}_description")
+                ) {
+                  $columns[$field_name . ':description'] =
+                    $field_name . '_description';
+                }
               }
             }
             else {
