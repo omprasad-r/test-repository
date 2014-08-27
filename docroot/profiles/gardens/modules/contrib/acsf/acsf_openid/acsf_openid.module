@@ -75,6 +75,11 @@ function acsf_openid_menu() {
  * Implements hook_menu_alter().
  */
 function acsf_openid_menu_alter(&$items) {
+  // OpenID customizations should not be running on a local environment.
+  if (function_exists('is_acquia_host') && !is_acquia_host()) {
+    return;
+  }
+
   // Replace the final OpenID authentication page so we can provide faster
   // authentication, ability to register invited users when site registration is
   // closed and to allow content managers who registered locally to be still

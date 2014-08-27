@@ -2,7 +2,7 @@
 
 $plugin = array(
   'schema' => 'oembedcore_provider',
-  'access' => 'administer oembed presets',
+  'access' => 'administer oembed',
   'menu' => array(
     'menu prefix' => 'admin/config/media/oembed',
     'menu item' => 'provider',
