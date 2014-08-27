@@ -38,7 +38,8 @@ class AcsfSite {
       $site_id = $GLOBALS['gardens_site_settings']['conf']['acsf_site_id'];
     }
 
-    if (empty($site_id)) {
+    // If we are on Acquia hosting, ensure that we are connected to a Factory.
+    if (function_exists('is_acquia_host') && is_acquia_host() && empty($site_id)) {
       throw new AcsfSiteMissingIdentifierException('Cannot instantiate AcsfSite without a site id from the Site Factory. Ensure that it is passed to the constructor or set in sites.json.');
     }
 

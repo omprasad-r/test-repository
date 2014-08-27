@@ -14,7 +14,7 @@ function oembedfield_field_formatter_info() {
       'label' => t('OEmbed'),
       'field types' => array('link_field'),
       'description' => t('Embeds links if possible - otherwise just links them.'),
-      'settings' => array('preset' => NULL),
+      'settings' => array('maxwidth' => '', 'maxheight' => ''),
     ),
   );
 
@@ -28,21 +28,16 @@ function oembedfield_field_formatter_settings_form($field, $instance, $view_mode
   $display = $instance['display'][$view_mode];
   $settings = $display['settings'];
 
-  $options = array(
-    '' => t('default'),
-  );
-  foreach (oembedcore_preset_load_all() as $preset) {
-    if (empty($preset->disabled)) {
-      $options[$preset->name] = $preset->name;
-    }
-  }
   $element = array();
-  $element['preset'] = array(
-    '#title' => t('oEmbed preset'),
-    '#type' => 'select',
-    '#options' => $options,
-    '#default_value' => $settings['preset'],
-    '#required' => FALSE,
+  $element['maxwidth'] = array(
+    '#title' => t('Maximum Width'),
+    '#type' => 'textfield',
+    '#default_value' => $settings['maxwidth'],
+  );
+  $element['maxheight'] = array(
+    '#title' => t('Maximum Height'),
+    '#type' => 'textfield',
+    '#default_value' => $settings['maxheight'],
   );
 
   return $element;
@@ -57,7 +52,9 @@ function oembedfield_field_formatter_settings_summary($field, $instance, $view_m
 
   $summary = '';
 
-  $summary = t('Preset') . ': ' . (!empty($settings['preset']) ?  $settings['preset'] : 'default');
+  $summary .= t('Max Width') . ': ' . (!empty($settings['maxwidth']) ?  $settings['maxwidth'] : 'default');
+  $summary .= '<br />';
+  $summary .= t('Max Height') . ': ' . (!empty($settings['maxheight']) ?  $settings['maxheight'] : 'default');
 
   return $summary;
 }
@@ -70,14 +67,8 @@ function oembedfield_field_formatter_view($entity_type, $entity, $field, $instan
 
   foreach ($items as $delta => $item) {
     $attributes = array();
-    $url = $item['url'];
-    $preset = oembedcore_preset_load($display['settings']['preset']);
-    if (!empty($preset)) {
-      $attributes = array_filter(array(
-        'maxwidth' => intval($preset->width),
-        'maxheight' => intval($preset->height),
-      ));
-    }
+    $url = url($item['url'], $item + array('external' => TRUE));
+    $attributes = array_filter($display['settings']);
 
     $element[$delta] = oembedcore_render_cache('oembed', $url, $attributes);
   }

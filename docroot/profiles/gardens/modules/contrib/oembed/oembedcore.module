@@ -12,13 +12,9 @@ function oembedcore_help($path, $arg) {
   switch ($path) {
     case 'admin/help#oembedcore':
       $output = '<p>'. t('oEmbed module will allow your Drupal site to embed content from <a href="@oembed">oEmbed</a>-providers as well as for the site to become an oEmbed-provider itself so that other oEmbed-enabled websites can easily embed your content.', array('@oembed' => 'http://www.oembed.com/')) .'</p>';
-      $output .= '<p>'. t('Create <a href="@preset">presets</a> to customize the way oEmbed content appears on your site.', array('@preset' => url('admin/build/oembed/preset'))) .'</p>';
       $output .= '<p>'. t('Add or enable <a href="@provider">providers</a> to embed content from other sites.', array('@provider' => url('admin/build/oembed/provider'))) .'</p>';
       return $output;
     case 'admin/build/oembed':
-    case 'admin/build/oembed/preset':
-      $output = '<p>'. t('Presets are the dimensions and other display properties of content embedded on your site.') .'</p>';
-      return $output;
     case 'admin/build/oembed/provider':
       $output = '<p>'. t('Providers are other web sites with oEmbed endpoints whose content you can embed on your site.') .'</p>';
       return $output;
@@ -30,9 +26,9 @@ function oembedcore_help($path, $arg) {
  */
 function oembedcore_permission() {
   return array(
-    'administer oembed presets' => array(
-      'title' => t('Administer oEmbed presets'),
-      'description' => t('Define new presets and providers for oEmbed.'),
+    'administer oembed' => array(
+      'title' => t('Administer oEmbed'),
+      'description' => t('Define providers for oEmbed.'),
     ),
   );
 }
@@ -97,12 +93,11 @@ function oembedcore_menu_alter(&$items) {
 
   // Create a new menu item where all oembed export UIs will be local tasks by
   // copying the export UI's menu item that will become the default local task.
-  $items['admin/config/media/oembed'] = $items['admin/config/media/oembed/preset'];
+  $items['admin/config/media/oembed'] = $items['admin/config/media/oembed/provider'];
   $items['admin/config/media/oembed']['title'] = 'oEmbed';
   $items['admin/config/media/oembed']['description'] = 'Admin overview of oEmbed.';
 
-  $items['admin/config/media/oembed/preset']['type'] = MENU_DEFAULT_LOCAL_TASK;
-  $items['admin/config/media/oembed/provider']['type'] = MENU_LOCAL_TASK;
+  $items['admin/config/media/oembed/provider']['type'] = MENU_DEFAULT_LOCAL_TASK;
 }
 
 /**
@@ -121,13 +116,73 @@ function oembedcore_theme() {
 }
 
 /**
- * Implements of hook_default_oembedcore_provider().
+ * Implementation of hook_default_oembedcore_provider()
  */
 function oembedcore_default_oembedcore_provider() {
   $providers = array();
 
   $provider = new stdClass;
-  $provider->disabled = TRUE; /* Edit this to true to make a default provider disabled initially */
+  $provider->disabled = FALSE; /* Edit this to true to make a default provider disabled initially */
+  $provider->name = 'flickr';
+  $provider->title = 'Flickr';
+  $provider->endpoint = 'http://www.flickr.com/services/oembed/';
+  $provider->scheme = 'http://*.flickr.com/*
+http://flickr.com/*
+http://flic.kr/*';
+  $providers['flickr'] = $provider;
+
+  $provider = new stdClass;
+  $provider->disabled = FALSE; /* Edit this to true to make a default provider disabled initially */
+  $provider->name = 'qik';
+  $provider->title = 'Qik';
+  $provider->endpoint = 'http://qik.com/api/oembed.json';
+  $provider->scheme = 'http://qik.com/video/*
+http://qik.com/*
+http://qik.ly/*';
+  $providers['qik'] = $provider;
+
+  $provider = new stdClass;
+  $provider->disabled = FALSE; /* Edit this to true to make a default provider disabled initially */
+  $provider->name = 'revision3';
+  $provider->title = 'Revision3';
+  $provider->endpoint = 'http://revision3.com/api/oembed/';
+  $provider->scheme = 'http://*.revision3.com/*
+http://revision3.com/*';
+  $providers['revision3'] = $provider;
+
+  $provider = new stdClass;
+  $provider->disabled = FALSE; /* Edit this to true to make a default provider disabled initially */
+  $provider->name = 'soundcloud';
+  $provider->title = 'SoundCloud';
+  $provider->endpoint = 'http://soundcloud.com/oembed';
+  $provider->scheme = 'http://soundcloud.com/*
+http://soundcloud.com/*/*
+http://soundcloud.com/*/sets/*
+http://soundcloud.com/groups/*
+http://snd.sc/*';
+  $providers['soundcloud'] = $provider;
+
+  $provider = new stdClass;
+  $provider->disabled = FALSE; /* Edit this to true to make a default provider disabled initially */
+  $provider->name = 'twitter';
+  $provider->title = 'Twitter';
+  $provider->endpoint = 'https://api.twitter.com/1/statuses/oembed.json';
+  $provider->scheme = 'http://twitter.com/*/status/*
+http://twitter.com/*/statuses/*
+http://www.twitter.com/*/status/*
+http://www.twitter.com/*/statuses/*
+http://mobile.twitter.com/*/status/*
+http://mobile.twitter.com/*/statuses/*
+https://twitter.com/*/status/*
+https://twitter.com/*/statuses/*
+https://www.twitter.com/*/status/*
+https://www.twitter.com/*/statuses/*
+https://mobile.twitter.com/*/status/*
+https://mobile.twitter.com/*/statuses/*';
+  $providers['twitter'] = $provider;
+
+  $provider = new stdClass;
+  $provider->disabled = FALSE; /* Edit this to true to make a default provider disabled initially */
   $provider->name = 'viddler';
   $provider->title = 'Viddler';
   $provider->endpoint = 'http://lab.viddler.com/services/oembed/';
@@ -135,48 +190,34 @@ function oembedcore_default_oembedcore_provider() {
   $providers['viddler'] = $provider;
 
   $provider = new stdClass;
-  $provider->disabled = TRUE; /* Edit this to true to make a default provider disabled initially */
-  $provider->name = 'flickr';
-  $provider->title = 'Flickr';
-  $provider->endpoint = 'http://www.flickr.com/services/oembed/';
-  $provider->scheme = 'http://*.flickr.com/*
-http://flickr.com/*';
-  $providers['flickr'] = $provider;
-
-  $provider = new stdClass;
-  $provider->disabled = TRUE; /* Edit this to true to make a default provider disabled initially */
-  $provider->name = 'qik';
-  $provider->title = 'Qik';
-  $provider->endpoint = 'http://qik.com/api/oembed.json';
-  $provider->scheme = 'http://qik.com/video/*
-http://qik.com/*';
-  $providers['qik'] = $provider;
-
-  $provider = new stdClass;
-  $provider->disabled = TRUE; /* Edit this to true to make a default provider disabled initially */
-  $provider->name = 'revision3';
-  $provider->title = 'Revision3';
-  $provider->endpoint = 'http://revision3.com/api/oembed/';
-  $provider->scheme = 'http://*.revision3.com/*';
-  $providers['revision3'] = $provider;
-
-  $provider = new stdClass;
-  $provider->disabled = TRUE; /* Edit this to true to make a default provider disabled initially */
+  $provider->disabled = FALSE; /* Edit this to true to make a default provider disabled initially */
   $provider->name = 'vimeo';
   $provider->title = 'Vimeo';
-  $provider->endpoint = 'http://www.vimeo.com/api/oembed.json';
+  $provider->endpoint = 'http://vimeo.com/api/oembed.json';
   $provider->scheme = 'http://www.vimeo.com/groups/*/videos/*
 http://www.vimeo.com/*
 http://vimeo.com/groups/*/videos/*
-http://vimeo.com/*';
+http://vimeo.com/*
+http://vimeo.com/m/#/*';
   $providers['vimeo'] = $provider;
 
   $provider = new stdClass;
-  $provider->disabled = TRUE; /* Edit this to true to make a default provider disabled initially */
+  $provider->disabled = FALSE; /* Edit this to true to make a default provider disabled initially */
   $provider->name = 'youtube';
   $provider->title = 'YouTube';
   $provider->endpoint = 'http://www.youtube.com/oembed';
-  $provider->scheme = 'http://*.youtube.com/watch*';
+  $provider->scheme = 'http://*.youtube.com/watch*
+http://*.youtube.com/v/*
+https://*.youtube.com/watch*
+https://*.youtube.com/v/*
+http://youtu.be/*
+http://*.youtube.com/user/*
+http://*.youtube.com/*#*/*
+http://m.youtube.com/watch*
+http://m.youtube.com/index*
+http://*.youtube.com/profile*
+http://*.youtube.com/view_play_list*
+http://*.youtube.com/playlist*';
   $providers['youtube'] = $provider;
 
   return $providers;
@@ -360,7 +401,11 @@ function oembedcore_oembed_fetch($provider, $url, $matches, $attributes = array(
         if (!is_object($embed)) {
           try {
             $embed = @new SimpleXMLElement($response->data);
-            $embed = (object) get_object_vars($embed);
+
+            // This is a simple way to convert the SimpleXMLElement into a stdClass which
+            // can be serialized and cached.
+            $embed = json_decode(json_encode($embed));
+
             if (!is_string($embed->title)) {
               $embed->title = '';
             }
@@ -507,12 +552,9 @@ function oembedcore_pre_render_content($element) {
       $element['#content'] = array(
         '#theme' => 'image',
         '#path' => $embed->url,
-        '#alt' => empty($embed->title) ? t('Embedded image') : $embed->title,
+        '#alt' => oembedcore_alt_attr($embed),
         '#attributes' => $element['#attributes'],
       );
-      if (!empty($embed->provider_name)) {
-        $element['#content']['#alt'] .= ', '. t('on') .' '. $embed->provider_name;
-      }
       break;
 
     case 'link':
@@ -568,19 +610,9 @@ function oembedcore_pre_render_children($element) {
       $element['#prefix'] = '<span class="oembed oembed-photo">';
       $element['#suffix'] = '</span>';
 
-      // alt attribute using hopefully available title and provider name.
-      if ($embed->title) {
-        $string = '@title';
-      } else {
-        $string = 'Embedded image';
-      }
-      if ($embed->provider_name) {
-        $string .= ' on @provider_name';
-      }
-
       $attributes = array(
         'src' => check_url($embed->url),
-        'alt' => t($string, array('@title' => $embed->title, '@provider_name' => $embed->provider_name)),
+        'alt' => oembedcore_alt_attr($embed),
       );
 
       $element['content'] = array(
@@ -717,8 +749,23 @@ function oembedcore_render_cache($type, $url, $options = array(), $expire = NULL
   );
 }
 
-// --------------------------------------------------------------------------
-// Preset database info.
+/**
+ * Generate a string for use as ALT attribute.
+ */
+function oembedcore_alt_attr($embed) {
+
+  // alt attribute using hopefully available title and provider name.
+  if ($embed->title) {
+    $string = '@title';
+  } else {
+    $string = 'Embedded image';
+  }
+  if ($embed->provider_name) {
+    $string .= ' on @provider_name';
+  }
+
+  return t($string, array('@title' => $embed->title, '@provider_name' => $embed->provider_name));
+}
 
 /**
  * Implement hook_ctools_plugin_directory().
@@ -727,76 +774,6 @@ function oembedcore_ctools_plugin_directory($module, $plugin) {
   if ($module == 'ctools' && $plugin == 'export_ui') {
     return 'plugins/' . $plugin;
   }
-}
-
-/**
- * Create a new preset with defaults appropriately set from schema.
- */
-function oembedcore_preset_new() {
-  ctools_include('export');
-  return ctools_export_new_object('oembedcore_preset');
-}
-
-/**
- * Load a single preset
- */
-function oembedcore_preset_load($name) {
-  ctools_include('export');
-  $result = ctools_export_load_object('oembedcore_preset', 'names', array($name));
-  if (isset($result[$name])) {
-    return $result[$name];
-  }
-  else {
-    return FALSE;
-  }
-}
-
-/**
- * Load all presets.
- */
-function oembedcore_preset_load_all() {
-  ctools_include('export');
-  return ctools_export_load_object('oembedcore_preset');
-}
-
-/**
- * Write a preset to the database.
- */
-function oembedcore_preset_save(&$preset) {
-  $update = (isset($preset->pid)) ? array('pid') : array();
-  drupal_write_record('oembedcore_preset', $preset, $update);
-  return $preset;
-}
-
-/**
- * Remove a preset.
- */
-function oembedcore_preset_delete($preset) {
-  db_delete('oembedcore_preset')
-    ->condition('name', $preset->name)
-    ->condition('pid', $preset->pid)
-    ->execute();
-}
-
-/**
- * Export a preset
- */
-function oembedcore_preset_export($preset, $indent = '') {
-  ctools_include('export');
-  $output = ctools_export_object('oembedcore_preset', $preset, $indent);
-  return $output;
-}
-
-/**
- * Lists all available presets
- */
-function oembedcore_preset_list() {
-  $return = array();
-  $presets = oembedcore_preset_load_all();
-  foreach ($presets as $preset) {
-    $return[$preset->name] = $preset->name;
-  }
-  return $return;
 }
 
 // --------------------------------------------------------------------------

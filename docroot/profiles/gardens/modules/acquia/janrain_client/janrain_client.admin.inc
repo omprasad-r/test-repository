@@ -246,7 +246,7 @@ function janrain_client_get_rpxnow_url() {
       watchdog('janrain_client', $e->getMessage(), array(), WATCHDOG_ERROR);
     }
 
-    if ($result) {
+    if (isset($result['data'])) {
       return $result['data'];
     }
     else {

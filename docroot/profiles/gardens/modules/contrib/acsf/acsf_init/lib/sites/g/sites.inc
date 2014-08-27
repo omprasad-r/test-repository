@@ -17,7 +17,7 @@ define('GARDENS_SITE_DATA_USE_APC', (get_cfg_var('gardens.disable_apc_for_sites_
 define('GARDENS_SITE_DATA_TTL', 1800);
 
 // Populate $_ENV if we are running cli.
-if (!isset($_ENV['AH_SITE_NAME']) && file_exists('/var/www/site-scripts/site-info.php')) {
+if ((!isset($_ENV['AH_SITE_NAME']) || !isset($_ENV['AH_SITE_GROUP']) || !isset($_ENV['AH_SITE_ENVIRONMENT'])) && file_exists('/var/www/site-scripts/site-info.php')) {
   require_once '/var/www/site-scripts/site-info.php';
   list($name, $group, $stage, $secret) = ah_site_info();
   if (!isset($_ENV['AH_SITE_NAME'])) {
@@ -51,7 +51,7 @@ function gardens_site_data_load_file() {
  * Returns the location of the sites data json file.
  *
  * We rely on the existence of the files-private directory that's created in
- * /mnt/gfs next to the public files directory.
+ * /mnt/files next to the public files directory.
  *
  * @return string
  *   The json file location.
@@ -59,7 +59,7 @@ function gardens_site_data_load_file() {
 function gardens_site_data_get_filepath() {
   // Use the "real" path here rather than the canonical hosting path
   // to minimize symlink traversal.
-  return "/mnt/gfs/{$_ENV['AH_SITE_NAME']}/files-private/sites.json";
+  return "/mnt/files/{$_ENV['AH_SITE_GROUP']}.{$_ENV['AH_SITE_ENVIRONMENT']}/files-private/sites.json";
 }
 
 /**

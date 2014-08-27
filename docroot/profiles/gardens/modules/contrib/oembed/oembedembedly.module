@@ -17,7 +17,7 @@ function oembedembedly_menu() {
     'page callback'    => 'drupal_get_form',
     'page arguments'   => array('oembedembedly_admin'),
     'type'             => MENU_LOCAL_TASK,
-    'access arguments' => array('administer oembed presets'),
+    'access arguments' => array('administer oembed'),
   );
 
   return $items;
