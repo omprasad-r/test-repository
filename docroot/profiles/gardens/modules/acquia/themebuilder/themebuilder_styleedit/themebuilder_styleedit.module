@@ -107,8 +107,33 @@ function themebuilder_styleedit_upload($image_type = FALSE) {
   else {
     $validators['file_validate_is_image'] = array();
   }
+
+  // Because the only validation done in core is on the existence of the
+  // filename within temporary://, we need to do a little checking of our own
+  // and, if needed, change the destination name from the default.
+  $destination = FALSE;
+  $filename = $_FILES['files']['name']['styleedit'];
+  $predicted_target = gardens_misc_prefix_file_dir($filename, 'temporary');
+  $predicted_uri = "temporary://$predicted_target";
+
+  // We only need to check entity really, as duplicate files are handled
+  // correctly in file_save_upload -> file_destination.
+  if (drupal_file_exists($predicted_uri, FILE_CHECK_EXISTS_ENTITY)) {
+    // Due to the fact that the $destination argument to file_save_upload is a
+    // directory, we cannot rely on the simpler filename changes.  The only
+    // thing we can change for de-duping purposes is the directory.
+    $dirname = drupal_dirname($predicted_uri);
+    $counter = 0;
+    do {
+      $destination = "$dirname/$counter";
+      $uri = $destination . "/$filename";
+      ++$counter;
+    } while (drupal_file_exists($uri, FILE_CHECK_EXISTS_FILE_OR_ENTITY));
+    file_prepare_directory($destination, FILE_CREATE_DIRECTORY);
+  }
+
   // Save file to /tmp, if it is in fact an image.
-  $file = file_save_upload('styleedit', $validators);
+  $file = file_save_upload('styleedit', $validators, $destination);
   if ($file && $image_type === 'favicon') {
     $favicon = themebuilder_styleedit_convert_to_favicon($file);
     if ($favicon) {
@@ -120,6 +145,8 @@ function themebuilder_styleedit_upload($image_type = FALSE) {
   $theme =& themebuilder_compiler_get_current_theme();
   $filepath = $theme->addImage($file);
   if ($filepath) {
+    // Clean up the temporary file as soon as we know we have a permanent one.
+    file_delete($file);
     // We have the absolute path to the image on the filesystem. Return a path
     // relative to the theme being edited.
     $relative_path = 'images/' . basename($filepath);

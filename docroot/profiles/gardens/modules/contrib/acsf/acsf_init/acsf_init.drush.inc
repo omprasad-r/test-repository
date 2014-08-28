@@ -368,10 +368,6 @@ function acsf_init_get_required_files($repo_root) {
       'source' => 'sites/g',
       'dest' => sprintf('%s/sites/g', DRUPAL_ROOT),
     ),
-    'apcstat.php' => array(
-      'source' => 'sites/g',
-      'dest' => sprintf('%s/sites/g', DRUPAL_ROOT),
-    ),
     '.gitignore' => array(
       'source' => 'sites/g',
       'dest' => sprintf('%s/sites/g', DRUPAL_ROOT),

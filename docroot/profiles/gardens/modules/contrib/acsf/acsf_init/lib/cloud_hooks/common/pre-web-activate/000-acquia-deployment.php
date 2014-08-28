@@ -155,11 +155,8 @@ function has_theme_files($site, $env) {
  *   If the credentials cannot be read for any reason.
  */
 function get_shared_creds($site, $env) {
-  $path = sprintf('/mnt/gfs/%s.%s/nobackup', $site, $env);
+  $path = sprintf('/mnt/files/%s.%s/nobackup', $site, $env);
   $shared = sprintf('%s/sf_shared_creds.ini', $path);
-  if (!file_exists($shared)) {
-    $shared = sprintf('%s/gardens_xmlrpc_creds.ini', $path);
-  }
   if (file_exists($shared)) {
     $data = parse_ini_file($shared, TRUE);
     if (!empty($data) && !empty($data['gardener'])) {

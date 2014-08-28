@@ -23,6 +23,10 @@ class AcsfDuplicationScrubInitializeHandler extends AcsfEventHandler {
       variable_del('acsf_duplication_scrub_status');
       variable_set('site_name', $this->event->context['site_name']);
       variable_set('install_time', time());
+      // As a preparatory step, remove any corrupt file entries that may prevent
+      // duplication from succeeding. Specifically, remove any file with an
+      // empty URI string.
+      db_delete('file_managed')->condition('uri', '')->execute();
       $this->setComplete();
     }
   }

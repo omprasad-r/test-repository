@@ -13,7 +13,7 @@ if (!function_exists('acsf_hooks_include')) {
    *   The name of the hook whose files should be included.
    */
   function acsf_hooks_include($hook_name) {
-    $dir = DRUPAL_ROOT . '/../factory-hooks/' . $hook_name;
+    $dir = getcwd() . '/../factory-hooks/' . $hook_name;
     if (is_dir($dir) && $handle = opendir($dir)) {
       while (FALSE !== ($filename = readdir($handle))) {
         $uri = "$dir/$filename";

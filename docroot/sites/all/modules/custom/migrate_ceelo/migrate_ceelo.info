@@ -1,0 +1,14 @@
+name = "Migration support for Ceelo Green"
+description = "Migration for Ceelo Green"
+package = "Development"
+core = 7.x
+
+dependencies[] = migrate
+dependencies[] = migrate_extras
+dependencies[] = media_youtube
+
+files[] = includes/base.inc
+files[] = includes/news.inc
+files[] = includes/photos.inc
+files[] = includes/shows.inc
+files[] = includes/videos.inc

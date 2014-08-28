@@ -675,6 +675,15 @@ function gardens_misc_modules_enabled($modules) {
         'format' => 'safe_html',
       ));
     }
+    elseif (!isset($alert_text)) {
+      // extlink_extra will default 'extlink_alert_type' to 'colorbox', if
+      // it's not already set. In that case we should have the alert text
+      // initialized as well.
+      variable_set('extlink_alert_text', array(
+        'value' => extlink_extra_alert_default(),
+        'format' => 'safe_html',
+      ));
+    }
     // For SMB the default external link reaction will be no warning. Enterprise
     // customers have the AcsfSite->client_name populated.
     $site = acsf_get_acsf_site();
@@ -1179,7 +1188,9 @@ EOF;
 function gardens_misc_get_tracking_code_track_pageview() {
   $site = acsf_get_acsf_site();
   // Try to get GA code via phone home.
-  $tracking_code = $site->gardener_site_variables['gardens_misc_ga_tracking_code'];
+  if (!empty($site->gardener_site_variables['gardens_misc_ga_tracking_code'])) {
+    $tracking_code = $site->gardener_site_variables['gardens_misc_ga_tracking_code']['value'];
+  }
 
   // If cron runs at longer time intervals, fall back to the variable.
   // This can be removed at a later time.
@@ -3118,6 +3129,12 @@ function gardens_misc_media_internet_add_https_conversion($form, &$form_state) {
       }
       catch (Exception $e) {
       }
+    }
+    // If validation fails (e.g. content does not exists), we need to catch
+    // that exception as well.
+    catch (MediaInternetValidationException $e) {
+      form_set_error('embed_code', $e->getMessage());
+      return;
     }
   }
 }

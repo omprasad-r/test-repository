@@ -1,4 +1,0 @@
-The following patches have been applied to this project:
-- https://drupal.org/files/flippy-no_forcing_arrow_characters-2007028-2.patch
-- https://drupal.org/files/flippy-pager_blocks_all_node_types-2006986-2.patch
-- https://drupal.org/files/flippy-add_token_support-2007240-5.patch

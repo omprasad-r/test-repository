@@ -86,3 +86,13 @@ function acsf_update_7005() {
     variable_del('site_owner_maintenance_mode');
   }
 }
+
+/**
+ * Add a common temporary directory, within the site's file directory.
+ */
+function acsf_update_7006() {
+  $tmp_dir = 'public://acsf_tmp';
+  file_prepare_directory($tmp_dir, FILE_CREATE_DIRECTORY | FILE_MODIFY_PERMISSIONS);
+  // Don't allow anything to be served from the tmp dir.
+  file_put_contents("$tmp_dir/.htaccess", "Order deny,allow\ndeny from all\n");
+}
