@@ -175,3 +175,20 @@ function _crate_d2d_override_migrations() {
     }
   }
 }
+
+function _crate_d2d_reverse_override_migrations() {
+  // Grab all migration classes and see if they have a replacement.
+  $query = db_select('migrate_status', 'ms')
+    ->fields('ms', array('machine_name', 'class_name'));
+
+  $rows = $query->execute()->fetchAll();
+
+  foreach ($rows as $row) {
+    if ($replacement = CrateD2DStubResolver::getReplacedClass($row->class_name)) {
+      db_query('UPDATE migrate_status SET class_name = :cn WHERE machine_name = :mn', array(
+        ':cn' => $replacement,
+        ':mn' => $row->machine_name,
+      ));
+    }
+  }
+}

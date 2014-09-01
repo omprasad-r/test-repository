@@ -12,6 +12,9 @@ function crate_d2d_drush_command() {
     'crate-d2d-migrate-override' => array(
       'drupal dependencies' => array('migrate'),
     ),
+    'crate-d2d-migrate-undo-override' => array(
+      'drupal dependencies' => array('migrate'),
+    ),
   );
 }
 
@@ -20,4 +23,11 @@ function crate_d2d_drush_command() {
  */
 function drush_crate_d2d_migrate_override() {
   _crate_d2d_override_migrations();
+}
+
+/**
+ * Undoes overrides.
+ */
+function drush_crate_d2d_migrate_undo_override() {
+  _crate_d2d_reverse_override_migrations();
 }

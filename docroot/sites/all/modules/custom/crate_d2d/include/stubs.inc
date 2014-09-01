@@ -44,6 +44,24 @@ class CrateD2DStubResolver {
 
     return $class_name;
   }
+
+  /**
+   * Finds the base class from which an overridden class derives.
+   *
+   * This is the inverse of getReplacedClass.
+   *
+   * @param $class_name
+   * @return mixed
+   */
+  public static function getBaseClass($class_name) {
+    $classes = array_flip(self::$replacedClasses);
+
+    if (isset($classes[$class_name])) {
+      return $classes[$class_name];
+    }
+
+    return $class_name;
+  }
 }
 
 class CrateD2DComment7Migration extends DrupalComment7Migration {
