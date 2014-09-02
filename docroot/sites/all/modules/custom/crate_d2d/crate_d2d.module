@@ -184,7 +184,7 @@ function _crate_d2d_reverse_override_migrations() {
   $rows = $query->execute()->fetchAll();
 
   foreach ($rows as $row) {
-    if ($replacement = CrateD2DStubResolver::getReplacedClass($row->class_name)) {
+    if ($replacement = CrateD2DStubResolver::getBaseClass($row->class_name)) {
       db_query('UPDATE migrate_status SET class_name = :cn WHERE machine_name = :mn', array(
         ':cn' => $replacement,
         ':mn' => $row->machine_name,
