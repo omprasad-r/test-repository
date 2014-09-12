@@ -183,7 +183,7 @@ function acsf_factory_name() {
 
   if (empty($name)) {
     $site = acsf_get_acsf_site();
-    $name = !empty($site->service_name_long) ? $site->service_name_long : t('Acquia Cloud Site Factory');
+    $name = !empty($site->service_name_long) ? check_plain(trim($site->service_name_long)) : t('Acquia Cloud Site Factory');
   }
 
   return $name;

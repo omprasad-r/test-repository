@@ -86,10 +86,8 @@ function main($argv, $argc) {
       if ($response->code == 200) {
         $task_id = $response->body['task_id'];
         if ($task_id == 'NA') {
-          if ($verbose) {
-            printf("VCS theming is not configured for %s.%s\n", $site, $env);
-          }
-          break;
+          printf("VCS theming is not configured for %s.%s\n", $site, $env);
+          exit;
         }
 
         // Wait here until the themes are deployed.

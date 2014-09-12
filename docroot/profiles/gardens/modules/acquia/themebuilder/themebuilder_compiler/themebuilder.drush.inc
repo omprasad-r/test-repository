@@ -44,6 +44,17 @@ function themebuilder_drush_command() {
     'dependencies' => array('themebuilder_compiler'),
     'description' => 'Lists all themes known to themebuilder and their bases. Output is only available in JSON format.',
   );
+  $items['themebuilder-file-operations-flag-acquire'] = array(
+    'dependencies' => array('themebuilder_compiler'),
+    'description' => 'Acquires lock on themebuilder file operations.',
+  );
+  $items['themebuilder-file-operations-flag-release'] = array(
+    'dependencies' => array('themebuilder_compiler'),
+    'description' => 'Releases lock on themebuilder file operations.',
+    'arguments' => array(
+      'token' => dt('The token that was provided by themebuilder-file-operations-flag-acquire.'),
+    ),
+  );
   return $items;
 }
 
@@ -276,4 +287,32 @@ function array_diff_recursive($array1, $array2, $ci = FALSE) {
   }
 
   return $return;
+}
+
+/**
+ * Acquires lock on themebuilder file operations.
+ */
+function drush_themebuilder_file_operations_flag_acquire() {
+  // Using acsf_vset instead of variable_set to avoid rebuilding the variable
+  // cache.
+  try {
+    $semaphore = themebuilder_compiler_get_semaphore();
+    acsf_vset('themebuilder_file_operations_flag', REQUEST_TIME);
+    themebuilder_compiler_release_semaphore($semaphore);
+    drush_print('acquired#' . drupal_get_token('themebuilder_file_operations_flag:' . REQUEST_TIME) . '#');
+  }
+  catch (ThemeBuilderException $e) {
+    // The semaphore could not be acquired, probably already taken.
+    drush_print('taken');
+  }
+}
+
+/**
+ * Releases lock on themebuilder file operations.
+ */
+function drush_themebuilder_file_operations_flag_release($token) {
+  $file_operation_flag = acsf_vget('themebuilder_file_operations_flag', 0);
+  if ($file_operation_flag && drupal_valid_token($token, 'themebuilder_file_operations_flag:' . $file_operation_flag)) {
+    acsf_vdel('themebuilder_file_operations_flag');
+  }
 }
