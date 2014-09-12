@@ -46,6 +46,10 @@ DELETE FROM `variable` WHERE `name` LIKE 'akamai_%';
 -- Scrub domain_301_redirect settings --
 DELETE FROM `variable` WHERE `name` LIKE 'domain_301_redirect_%';
 
+-- Scrub securepages insecure and secure URL ---
+DELETE FROM `variable` WHERE `name` = 'securepages_basepath';
+DELETE FROM `variable` WHERE `name` = 'securepages_basepath_ssl';
+
 -- -----------------------------------------------------------------------------
 -- Define a stored procedure that ignores any "table does not exist" errors
 -- from MySQL, since these occur whenever we try to scrub a database table that
