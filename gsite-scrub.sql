@@ -46,7 +46,7 @@ DELETE FROM `variable` WHERE `name` LIKE 'akamai_%';
 -- Scrub domain_301_redirect settings --
 DELETE FROM `variable` WHERE `name` LIKE 'domain_301_redirect_%';
 
--- Scrub securepages insecure and secure URL ---
+-- Scrub securepages insecure and secure URL --
 DELETE FROM `variable` WHERE `name` = 'securepages_basepath';
 DELETE FROM `variable` WHERE `name` = 'securepages_basepath_ssl';
 
