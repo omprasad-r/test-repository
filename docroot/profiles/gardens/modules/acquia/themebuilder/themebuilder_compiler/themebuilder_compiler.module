@@ -3258,6 +3258,24 @@ function themebuilder_compiler_get_semaphore() {
       ThemeBuilderLog()->gardensError('Failed to get the semaphore.', $e->getMessage() . ' ' . $semaphore->id);
       themebuilder_compiler_internal_error();
     }
+
+    $attempts = 0;
+    $file_operations_allowed = FALSE;
+    do {
+      // Check if file operations have been flagged by Factory.
+      $file_operations_allowed = themebuilder_compiler_file_operations_is_allowed();
+      if (!$file_operations_allowed) {
+        sleep(10);
+      }
+      $attempts++;
+    } while (!$file_operations_allowed && $attempts < 10);
+
+    if (!$file_operations_allowed) {
+      themebuilder_compiler_release_semaphore($semaphore);
+      $error_text = "File operations are temporarily blocked for lock $id";
+      ThemeBuilderLog()->error('File operations are temporarily blocked.', "Lock id is $id");
+      throw new ThemeBuilderException($error_text);
+    }
   }
   else {
     // TODO: atomic semaphore strategy appropriate for multiple webnodes.
@@ -3274,23 +3292,41 @@ function themebuilder_compiler_get_semaphore() {
     // Also, since we are not running PHP ever on windows or < 5.0, we should use
     // usleep() so we can sleep less than 1 sec.
     $attempts = 0;
-    $failed = TRUE;
+    $lock_acquired = FALSE;
+    $file_operations_allowed = FALSE;
     do {
-      if (lock_acquire(THEME_BUILDER_SEMAPHORE_NAME, 300)) {
-        $failed = FALSE;
+      if (!$lock_acquired) {
+        if (lock_acquire(THEME_BUILDER_SEMAPHORE_NAME, 300)) {
+          $lock_acquired = TRUE;
+        }
+        else {
+          // Block up to 30 seconds until the lock may be available.
+          lock_wait(THEME_BUILDER_SEMAPHORE_NAME);
+        }
       }
-      else {
-        // Block up to 30 seconds until the lock may be available.
-        lock_wait(THEME_BUILDER_SEMAPHORE_NAME);
+
+      // Check if file operations have been flagged by Factory.
+      if ($lock_acquired) {
+        $file_operations_allowed = themebuilder_compiler_file_operations_is_allowed();
+        if (!$file_operations_allowed) {
+          sleep(10);
+        }
       }
+
       // Slight hack here - but this should fail gracefully.
       $id = drupal_static('_lock_id');
       $attempts++;
-    } while ($failed && $attempts < 10);
+    } while ((!$lock_acquired || !$file_operations_allowed) && $attempts < 10);
 
-    if ($failed) {
+    if (!$lock_acquired) {
       $error_text = "Failed to acquire lock $id";
       ThemeBuilderLog()->error('Failed to acquire a lock.', "Note that we should be using a semaphore instead of a DB-based locking strategy until we have an implementation that respects the order of the requests.  Lock id is $id");
+      throw new ThemeBuilderException($error_text);
+    }
+    elseif (!$file_operations_allowed) {
+      themebuilder_compiler_release_semaphore($semaphore);
+      $error_text = "File operations are temporarily blocked for lock $id";
+      ThemeBuilderLog()->error('File operations are temporarily blocked.', "Lock id is $id");
       throw new ThemeBuilderException($error_text);
     }
     else {
@@ -3298,6 +3334,7 @@ function themebuilder_compiler_get_semaphore() {
       $semaphore->status = TRUE;
     }
   }
+
   return $semaphore;
 }
 
@@ -3339,6 +3376,30 @@ function themebuilder_compiler_remove_semaphore($semaphore) {
       $sm->remove(THEME_BUILDER_THEME_SEMAPHORE, $semaphore->resource);
     }
   }
+}
+
+/**
+ * Checks if file operations is allowed for Themebuilder.
+ *
+ * When a Themebuilder theme changes then a notification is sent to the Factory
+ * so it can pick up the new version of the theme, commit them and replace the
+ * theme directory in gluster with a symlink to a directory on the ephemeral
+ * disk. To avoid conflicts between Factory's and the save's file operations,
+ * Factory will flag the site before it's about to create the symlink.
+ *
+ * The Factory is using a flag instead of a semaphore because its operation is
+ * not restricted to a single process, and Drupal will release all
+ * lock_acquire() locks once a process has finished. Since Themebuilder's lock
+ * is restricted to a single process, it won't need to set this flag, just have
+ * to respect it's value. This flag should be short lived, so a minute or so old
+ * flag should be safe to disregard.
+ *
+ * @see themebuilder_drush_themebuilder_file_operations_flag_acquire()
+ * @see themebuilder_drush_themebuilder_file_operations_flag_release()
+ */
+function themebuilder_compiler_file_operations_is_allowed() {
+  $file_operations_flag = acsf_vget('themebuilder_file_operations_flag', 0);
+  return !$file_operations_flag || $file_operations_flag < time() - acsf_vget('themebuilder_file_operations_flag_timeout', 60);
 }
 
 /**

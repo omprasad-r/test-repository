@@ -96,3 +96,26 @@ function acsf_update_7006() {
   // Don't allow anything to be served from the tmp dir.
   file_put_contents("$tmp_dir/.htaccess", "Order deny,allow\ndeny from all\n");
 }
+
+/**
+ * Tokenize 'service name' in default email templates.
+ */
+function acsf_update_7007() {
+  $service_name = acsf_factory_name();
+  $factory_url = acsf_factory_url();
+  $factory_account_url = $factory_url . '/user';
+  $original_email_templates = array(
+    'user_mail_register_no_approval_required_body' => "[user:name],\n\nThank you for registering at [site:name] with your $service_name account. You can change your password or edit your profile by visiting $factory_account_url.\n\n-- [site:name] team\n[site:url]\n",
+    'user_mail_register_pending_approval_body' => "[user:name],\n\nThank you for registering at [site:name] with your $service_name account. Your application for membership on this site is currently pending approval. We will send another email to let you know when it has been approved.\n\n-- [site:name] team\n[site:url]\n",
+    'user_mail_register_admin_created_body' => "You have been invited to be a member of [site:url-brief], a site hosted by $service_name.\n\nPlease complete your registration using the link below and the e-mail address [user:mail]:\n\n[site:register-url]\n",
+  );
+  $current_email_templates = acsf_openid_setup_user_mail_variables();
+
+  // Cycle through emails and make changes if "old" template is used.
+  foreach ($original_email_templates as $name => $value) {
+    $notification = variable_get($name, NULL);
+    if (empty($notification) || $notification == $value) {
+      variable_set($name, $current_email_templates[$name]);
+    }
+  }
+}

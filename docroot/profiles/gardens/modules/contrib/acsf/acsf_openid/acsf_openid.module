@@ -740,9 +740,9 @@ function acsf_openid_form_user_profile_form_alter(&$form, &$form_state) {
       '#title' => t('Username and e-mail address'),
       '#type' => 'item',
       '#markup' => check_plain($account->name) . '<br />' . check_plain($account->mail),
-      '#description' => t('Change these values, your password and your avatar on <a href="@url">the @service_name_long server</a>.', array(
+      '#description' => t('Change these values, your password and your avatar on <a href="@url">the !service_name_long server</a>.', array(
         '@url' => $factory_url . '/user',
-        '@service_name_long' => $factory_name,
+        '!service_name_long' => $factory_name,
       )),
       '#weight' => -20,
     );
@@ -813,7 +813,7 @@ function acsf_openid_block_info() {
 
   return array(
     'login' => array(
-      'info' => acsf_openid_force_openid() ? t('@service_name_long login', array('@service_name_long' => $factory_name)) : t('User login'),
+      'info' => acsf_openid_force_openid() ? t('!service_name_long login', array('!service_name_long' => $factory_name)) : t('User login'),
     ),
   );
 }
@@ -913,13 +913,13 @@ function acsf_openid_user_cancel_methods_alter(&$methods) {
   // already understand what's going on.)
   if (acsf_openid_force_openid()) {
     $methods['user_cancel_delete']['title'] = t("Remove account and the account's content from this site.");
-    $methods['user_cancel_delete']['description'] = t('Your account will be removed from this site and all account information deleted. All of your content on this site will also be deleted. The account is not removed from @service_domain or any other @service_name_long sites.', array(
-      '@service_name_long' => $factory_name,
+    $methods['user_cancel_delete']['description'] = t('Your account will be removed from this site and all account information deleted. All of your content on this site will also be deleted. The account is not removed from @service_domain or any other !service_name_long sites.', array(
+      '!service_name_long' => $factory_name,
       '@service_domain' => str_replace(array('http://', 'https://'), '', $factory_url),
     ));
     $methods['user_cancel_reassign']['title'] = t("Remove account from this site. The account's content will be owned by the <em class=\"placeholder\">Anonymous</em> user.");
-    $methods['user_cancel_reassign']['description'] = t('Your account will be removed from this site and all account information deleted. All of your content on this site will be assigned to the <em class="placeholder">Anonymous</em> user. The account is not removed from @service_domain or any other @service_name_long sites.', array(
-      '@service_name_long' => $factory_name,
+    $methods['user_cancel_reassign']['description'] = t('Your account will be removed from this site and all account information deleted. All of your content on this site will be assigned to the <em class="placeholder">Anonymous</em> user. The account is not removed from @service_domain or any other !service_name_long sites.', array(
+      '!service_name_long' => $factory_name,
       '@service_domain' => str_replace(array('http://', 'https://'), '', $factory_url),
     ));
   }
@@ -940,7 +940,7 @@ function acsf_openid_token_info() {
   $factory_name = acsf_factory_name();
 
   if (acsf_openid_force_openid()) {
-    $description = t('The URL of a @service_name_long registration overlay window appearing above the front page of the site.', array('@service_name_long' => $factory_name));
+    $description = t('The URL of a !service_name_long registration overlay window appearing above the front page of the site.', array('!service_name_long' => $factory_name));
   }
   else {
     $description = t("The URL of the site's registration page.");
@@ -949,6 +949,16 @@ function acsf_openid_token_info() {
   $token_info['tokens']['site']['register-url'] = array(
     'name' => t('Registration URL'),
     'description' => $description,
+  );
+
+  $token_info['tokens']['site']['service-name'] = array(
+    'name' => t('Service name'),
+    'description' => t('The name of the Site Factory.'),
+  );
+
+  $token_info['tokens']['site']['factory-account-url'] = array(
+    'name' => t('Site Factory account URL'),
+    'description' => t('The URL of the account page on Site Factory.'),
   );
 
   return $token_info;
@@ -960,24 +970,40 @@ function acsf_openid_token_info() {
 function acsf_openid_tokens($type, $tokens, array $data = array(), array $options = array()) {
   $replacements = array();
 
-  if ($type == 'site' && isset($tokens['register-url'])) {
-    $url_options = array('absolute' => TRUE);
-    if (isset($options['language'])) {
-      $url_options['language'] = $options['language'];
-    }
+  if ($type == 'site') {
+    foreach ($tokens as $name => $original) {
+      switch ($name) {
+        case 'register-url':
+          $url_options = array('absolute' => TRUE);
+          if (isset($options['language'])) {
+            $url_options['language'] = $options['language'];
+          }
 
-    if (acsf_openid_force_openid()) {
-      $register_link = 'acsf-openid-factory/register';
-      if (module_exists('overlay') && variable_get('acsf_openid_overlay_for_login', 1)) {
-        $url_options['fragment'] = 'overlay=' . $register_link;
-        $register_link = '<front>';
+          if (acsf_openid_force_openid()) {
+            $register_link = 'acsf-openid-factory/register';
+            if (module_exists('overlay') && variable_get('acsf_openid_overlay_for_login', 1)) {
+              $url_options['fragment'] = 'overlay=' . $register_link;
+              $register_link = '<front>';
+            }
+          }
+          else {
+            $register_link = 'user/register';
+          }
+
+          $replacements[$original] = url($register_link, $url_options);
+          break;
+
+        case 'service-name':
+          $service_name = acsf_factory_name();
+          $replacements[$original] = $service_name;
+          break;
+
+        case 'factory-account-url':
+          $factory_url = acsf_factory_url();
+          $replacements[$original] = $factory_url . '/user';
+          break;
       }
     }
-    else {
-      $register_link = 'user/register';
-    }
-
-    $replacements[$tokens['register-url']] = url($register_link, $url_options);
   }
 
   return $replacements;
@@ -991,18 +1017,13 @@ function acsf_openid_tokens($type, $tokens, array $data = array(), array $option
  * which notification emails we wish to override.
  */
 function acsf_openid_setup_user_mail_variables() {
-  $factory_name = acsf_factory_name();
-  $factory_url = acsf_factory_url();
-  $factory_account_url = $factory_url . '/user';
-  // Make sure this contains no HTML for mail texts.
-  $service_name = trim(strip_tags($factory_name));
   $variables = array(
-    'user_mail_register_no_approval_required_body' => "[user:name],\n\nThank you for registering at [site:name] with your $service_name account. You can change your password or edit your profile by visiting $factory_account_url.\n\n-- [site:name] team\n[site:url]\n",
-    'user_mail_register_pending_approval_body' => "[user:name],\n\nThank you for registering at [site:name] with your $service_name account. Your application for membership on this site is currently pending approval. We will send another email to let you know when it has been approved.\n\n-- [site:name] team\n[site:url]\n",
-    'user_mail_status_activated_body' => "[user:name],\n\nWelcome to [site:name]! Your membership has been activated. You may log in by visiting [site:name] and clicking on the \"Log in\" link. You can also visit $factory_account_url to change your password or add profile information.\n\n-- [site:name] team\n[site:url]\n",
+    'user_mail_register_no_approval_required_body' => "[user:name],\n\nThank you for registering at [site:name] with your [site:service-name] account. You can change your password or edit your profile by visiting [site:factory-account-url].\n\n-- [site:name] team\n[site:url]\n",
+    'user_mail_register_pending_approval_body' => "[user:name],\n\nThank you for registering at [site:name] with your [site:service-name] account. Your application for membership on this site is currently pending approval. We will send another email to let you know when it has been approved.\n\n-- [site:name] team\n[site:url]\n",
+    'user_mail_status_activated_body' => "[user:name],\n\nWelcome to [site:name]! Your membership has been activated. You may log in by visiting [site:name] and clicking on the \"Log in\" link. You can also visit [site:factory-account-url] to change your password or add profile information.\n\n-- [site:name] team\n[site:url]\n",
     'user_mail_status_blocked_body' => "[user:name],\n\nYour membership at [site:name] has been revoked.\n\n-- [site:name] team\n[site:url]\n",
     'user_mail_register_admin_created_subject' => "An administrator invited you to join the site [site:name]",
-    'user_mail_register_admin_created_body' => "You have been invited to be a member of [site:url-brief], a site hosted by $service_name.\n\nPlease complete your registration using the link below and the e-mail address [user:mail]:\n\n[site:register-url]\n",
+    'user_mail_register_admin_created_body' => "You have been invited to be a member of [site:url-brief], a site hosted by [site:service-name].\n\nPlease complete your registration using the link below and the e-mail address [user:mail]:\n\n[site:register-url]\n",
   );
   return $variables;
 }

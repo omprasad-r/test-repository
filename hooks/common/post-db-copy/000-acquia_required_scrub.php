@@ -6,53 +6,81 @@
  * Scrubs a site after its database has been copied.
  */
 
-// AH site group.
-$site = $argv[1];
-// AH site env.
-$env = $argv[2];
-// Database name.
-$db_role = $argv[3];
+if (empty($argv[3])) {
+  echo "Error: Not enough arguments.\n";
+  exit(1);
+}
 
-fwrite(STDERR, "Scrubbing site database. Site: $site, Env: $env, Db Role: $db_role\n");
+$site    = $argv[1]; // AH site group.
+$env     = $argv[2]; // AH site env.
+$db_role = $argv[3]; // Database name.
 
-// Get the db connection.
+fwrite(STDERR, sprintf("Scrubbing site database: site: %s; env: %s; db_role: %s;\n", $site, $env, $db_role));
+
+// Get a database connection.
 require dirname(__FILE__) . '/../../acquia/db_connect.php';
 $link = get_db($site, $env, $db_role);
 
 // Get the site name from the database.
-$result = mysql_query('SELECT value FROM acsf_variables WHERE name = "acsf_site_info"');
-$value = mysql_result($result, 0);
-mysql_close($link);
-$site_info = unserialize($value);
+$result = database_query_result("SELECT value FROM acsf_variables WHERE name = 'acsf_site_info'");
+$site_info = unserialize($result);
 $site_name = $site_info['site_name'];
 if (empty($site_name)) {
-  error('Could not retrieve standard domain from database.');
+  error('Could not retrieve the site name from the database.');
 }
-fwrite(STDERR, "Site name: $site_name\n");
+fwrite(STDERR, "Site name: $site_name;\n");
 
-// Locate the acsf module to get the factory creds.
-$acsf_location = realpath(dirname(trim(shell_exec(sprintf('find /var/www/html/%s.%s/docroot/ -name acsf.drush.inc', $site, $env)))));
-if (empty($acsf_location)) {
+// Get the location of acsf module from the system table.
+$result = database_query_result("SELECT filename FROM system WHERE name = 'acsf' AND status = 1");
+$acsf_dir = dirname($result);
+if (empty($acsf_dir)) {
   error('Could not locate the ACSF module.');
 }
+$docroot = sprintf('/var/www/html/%s.%s/docroot', $site, $env);
+$acsf_location = "$docroot/$acsf_dir";
+fwrite(STDERR, "ACSF location: $acsf_location;\n");
 
-// Get the target url suffix from the gardener.
-$command = sprintf('AH_SITE_GROUP=%1$s AH_SITE_ENVIRONMENT=%2$s drush5 @%1$s.%2$s -r /var/www/html/%1$s.%2$s/docroot -i %3$s acsf-get-factory-creds --pipe', escapeshellarg($site), escapeshellarg($env), escapeshellarg($acsf_location));
-fwrite(STDERR, "Executing command: $command\n");
+mysql_close($link);
 
+// Get the Factory creds using acsf-get-factory-creds.
+$command = sprintf(
+  'AH_SITE_GROUP=%1$s AH_SITE_ENVIRONMENT=%2$s drush5 @%1$s.%2$s -r %4$s -i %3$s acsf-get-factory-creds --pipe',
+  escapeshellarg($site),
+  escapeshellarg($env),
+  escapeshellarg($acsf_location),
+  escapeshellarg($docroot)
+);
+fwrite(STDERR, "Executing: $command;\n");
 $creds = json_decode(trim(shell_exec($command)));
+
+// Get the target URL suffix from the Factory.
 $url_suffix = $creds->url_suffix;
 if (empty($url_suffix)) {
-  error('Could not retrieve site factory url suffix.');
+  error('Could not retrieve Site Factory URL suffix.');
 }
 
 // Create a new standard domain name.
 $new_domain = "$site_name.$url_suffix";
 
-// Scrub the ACSF modules.
-$command = sprintf("drush5 @%s.%s -r /var/www/html/%s.%s/docroot -l %s -y acsf-site-scrub", escapeshellarg($site), escapeshellarg($env), escapeshellarg($site), escapeshellarg($env), escapeshellarg($new_domain));
-print "Executing $command";
+// Execute the scrub.
+$command = sprintf(
+  'drush5 @%s.%s -r /var/www/html/%s.%s/docroot -l %s -y acsf-site-scrub',
+  escapeshellarg($site),
+  escapeshellarg($env),
+  escapeshellarg($site),
+  escapeshellarg($env),
+  escapeshellarg($new_domain)
+);
+fwrite(STDERR, "Executing: $command;\n");
 $result = shell_exec($command);
 print $result;
 
-// TODO: exit(1) if not scrubbed?
+// @todo Exit with an error status code if scrubbing failed.
+
+function database_query_result($query) {
+  $result = mysql_query($query);
+  if (!$result) {
+    error('Query failed: ' . $query);
+  }
+  return mysql_result($result, 0);
+}
