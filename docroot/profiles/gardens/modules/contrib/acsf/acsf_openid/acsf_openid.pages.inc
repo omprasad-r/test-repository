@@ -396,7 +396,7 @@ function acsf_openid_login_message() {
       '#type' => 'container',
       '#attributes' => array(),
       'title' => array(
-        '#markup' => t('This site is hosted on the @service_name_long service.', array('@service_name_long' => $factory_name)),
+        '#markup' => t('This site is hosted on the !service_name_long service.', array('!service_name_long' => $factory_name)),
       ),
       'links' => array(
         '#markup' => ' ' . $links['content'],

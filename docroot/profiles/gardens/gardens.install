@@ -217,20 +217,13 @@ function gardens_setup_user_mail() {
  * to reset these variables to "factory defaults."
  */
 function gardens_setup_user_mail_variables() {
-  acsf_register_autoloader();
-  $gardener_url = scarecrow_get_gardener_url();
-  $gardener_account_url = ($gardener_url ? $gardener_url . '/user' : 'http://drupalgardens.com/user');
-  // Make sure this contains no HTML for mail texts.
-  $site = acsf_get_acsf_site();
-  $name = isset($site->service_name_long) ? $site->service_name_long : 'Drupal Gardens';
-  $service_name = trim(strip_tags($name));
   $variables = array(
-    'user_mail_register_no_approval_required_body' => "[user:name],\n\nThank you for registering at [site:name] with your $service_name account. You can change your password or edit your profile by visiting $gardener_account_url.\n\n-- [site:name] team\n[site:url]\n",
-    'user_mail_register_pending_approval_body' => "[user:name],\n\nThank you for registering at [site:name] with your $service_name account. Your application for membership on this site is currently pending approval. We will send another email to let you know when it has been approved.\n\n-- [site:name] team\n[site:url]\n",
-    'user_mail_status_activated_body' => "[user:name],\n\nWelcome to [site:name]! Your membership has been activated. You may log in by visiting [site:name] and clicking on the \"Log in\" link. You can also visit $gardener_account_url to change your password or add profile information.\n\n-- [site:name] team\n[site:url]\n",
+    'user_mail_register_no_approval_required_body' => "[user:name],\n\nThank you for registering at [site:name] with your [site:service-name] account. You can change your password or edit your profile by visiting [site:factory-account-url].\n\n-- [site:name] team\n[site:url]\n",
+    'user_mail_register_pending_approval_body' => "[user:name],\n\nThank you for registering at [site:name] with your [site:service-name] account. Your application for membership on this site is currently pending approval. We will send another email to let you know when it has been approved.\n\n-- [site:name] team\n[site:url]\n",
+    'user_mail_status_activated_body' => "[user:name],\n\nWelcome to [site:name]! Your membership has been activated. You may log in by visiting [site:name] and clicking on the \"Log in\" link. You can also visit [site:factory-account-url] to change your password or add profile information.\n\n-- [site:name] team\n[site:url]\n",
     'user_mail_status_blocked_body' => "[user:name],\n\nYour membership at [site:name] has been revoked.\n\n-- [site:name] team\n[site:url]\n",
     'user_mail_register_admin_created_subject' => "An administrator invited you to join the site [site:name]",
-    'user_mail_register_admin_created_body' => "You have been invited to be a member of [site:url-brief], a site hosted by $service_name.\n\nPlease complete your registration using the link below and the e-mail address [user:mail]:\n\n[site:register-url]\n",
+    'user_mail_register_admin_created_body' => "You have been invited to be a member of [site:url-brief], a site hosted by [site:service-name].\n\nPlease complete your registration using the link below and the e-mail address [user:mail]:\n\n[site:register-url]\n",
   );
   return $variables;
 }

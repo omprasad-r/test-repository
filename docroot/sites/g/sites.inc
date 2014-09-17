@@ -209,11 +209,12 @@ function gardens_site_data_refresh_domains(array $domains) {
  *
  * @param string $domain
  *   The domain name used in the cache key to store.
- * @param array $data
+ * @param mixed $data
  *   An array of data about the site/domain containing keys 'dir' and
- *   'gardens_site_settings'.
+ *   'gardens_site_settings'. If the domain was not found in the sites.json then
+ *   a scalar 0.
  */
-function gardens_site_data_cache_set($domain, array $data) {
+function gardens_site_data_cache_set($domain, $data) {
   if (function_exists('apc_store')) {
     $domain_key = "gardens_domain:$domain";
     apc_store($domain_key, $data, GARDENS_SITE_DATA_TTL);
