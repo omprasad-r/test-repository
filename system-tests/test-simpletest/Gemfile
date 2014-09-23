@@ -1,6 +1,0 @@
-source :rubygems
-gem 'rake'
-gem "net-ssh"
-gem "net-scp"
-gem "json"
-gem 'excon'
