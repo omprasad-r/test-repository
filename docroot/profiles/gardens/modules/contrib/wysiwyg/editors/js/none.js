@@ -17,7 +17,7 @@ Drupal.wysiwyg.editor.attach.none = function(context, params, settings) {
   if (params.resizable) {
     var $wrapper = $('#' + params.field).parents('.form-textarea-wrapper:first');
     $wrapper.addClass('resizable');
-    if (Drupal.behaviors.textarea.attach) {
+    if (Drupal.behaviors.textarea) {
       Drupal.behaviors.textarea.attach();
     }
   }
@@ -25,6 +25,9 @@ Drupal.wysiwyg.editor.attach.none = function(context, params, settings) {
 
 /**
  * Detach a single or all editors.
+ *
+ * The editor syncs its contents back to the original field before its instance
+ * is removed.
  *
  * @param context
  *   A DOM element, supplied by Drupal.attachBehaviors().
@@ -34,13 +37,14 @@ Drupal.wysiwyg.editor.attach.none = function(context, params, settings) {
  *   all editors should be detached and saved, so they can be submitted in
  *   AJAX/AHAH applications.
  * @param trigger
- *   (optional) A string describing why the editor is being detached. May be one
- *   of 'unload' (default), 'move', or 'serialize'. Editors need to be destroyed
- *   when their element is being removed from the DOM ('unload') or moved
- *   ('move'). If detach was called simply because of an AJAX request to
- *   serialize the form and send it to the server ('serialize'), we can leave
- *   the WYSIWYG in place, and just update the underlying element with the new
- *   text.
+ *   A string describing why the editor is being detached.
+ *   Possible triggers are:
+ *   - unload: (default) Another or no editor is about to take its place.
+ *   - move: Currently expected to produce the same result as unload.
+ *   - serialize: The form is about to be serialized before an AJAX request or
+ *     a normal form submission. If possible, perform a quick detach and leave
+ *     the editor's GUI elements in place to avoid flashes or scrolling issues.
+ * @see Drupal.detachBehaviors
  */
 Drupal.wysiwyg.editor.detach.none = function (context, params, trigger) {
   if (typeof params != 'undefined' && (trigger != 'serialize')) {
@@ -73,6 +77,14 @@ Drupal.wysiwyg.editor.instance.none = {
     else {
       editor.value += content;
     }
+  },
+
+  setContent: function (content) {
+    $('#' + this.field).val(content);
+  },
+
+  getContent: function () {
+    return $('#' + this.field).val();
   }
 };
 

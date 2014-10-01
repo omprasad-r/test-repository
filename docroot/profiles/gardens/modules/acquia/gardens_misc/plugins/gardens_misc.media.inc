@@ -48,7 +48,8 @@ function gardens_misc_wysiwyg_editor_settings_alter(&$settings, &$context) {
       $settings['toolbar'][] = array('media');
     }
   }
-  $settings['skin'] = 'kama';
+  // The default CKEditor 4 skin is 'moono'.
+  $settings['skin'] = 'moono';
 
   // Check to see if we're creating an instance of the WYSIWYG for a comment form
   global $wysiwyg_comment;

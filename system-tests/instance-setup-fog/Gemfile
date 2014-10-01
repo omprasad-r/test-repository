@@ -1,0 +1,7 @@
+source :rubygems
+gem 'rake'
+#git rev until https://github.com/fog/fog/issues/998 is in stable
+gem "fog", :git => 'git://github.com/fog/fog.git', :ref => 'ac072e490399ad830f6ed7b5a6524d66809c7bed'
+gem 'excon'
+gem 'net-netrc'
+gem 'json'

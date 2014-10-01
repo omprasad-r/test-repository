@@ -1,0 +1,11 @@
+# used in the test case and the rakefile
+# used in the rake file
+
+new_sites: ['gardener']
+#info for getting into basethemes site
+local_gardener : false
+#Tag the test in saucelabs
+sauce_tags: ['gardens-performance']
+
+performance_test_user: basethemeupdater
+performance_test_password: D2bESEPTW!

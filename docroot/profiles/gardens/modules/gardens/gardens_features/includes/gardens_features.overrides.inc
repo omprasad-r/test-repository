@@ -9,25 +9,26 @@
  * Implements hook_wysiwyg_editor_settings_alter().
  */
 function gardens_features_wysiwyg_editor_settings_alter(&$settings, &$context) {
-  // CKEditor 3.5 added an IFRAME plugin and a flash plugin. They convert
-  // width="100%" to width="100". Until that's fixed, don't use these plugins.
-  // The flash plugin is overriden in the gardens_features module.
-  if ($context['editor']['name'] == 'ckeditor' && version_compare($context['editor']['installed version'], '3.5.0.6260', '>=')) {
+  // Remove LTR and RTL buttons.
+  if ($context['editor']['name'] == 'ckeditor') {
     if (empty($settings['removePlugins'])) {
-      $settings['removePlugins'] = 'iframe';
+      $settings['removePlugins'] = 'bidi';
     }
-    elseif (strpos($settings['removePlugins'], 'iframe') === FALSE) {
-      $settings['removePlugins'] .= ',iframe';
+    elseif (strpos($settings['removePlugins'], 'bidi') === FALSE) {
+      $settings['removePlugins'] .= ',bidi';
     }
   }
-  // Remove the gardens-flash and gardens-wmode plugin buttons. The functionality
-  // remains, but we don't want buttons in the WYSIWYG UI.
-  $custom_buttons = array('gardens-flash', 'gardens-wmode');
+
+  // Remove the gardens-wmode plugin button. The functionality remains, but we
+  // don't want the button in the WYSIWYG UI.
   if ($context['editor']['name'] == 'ckeditor' && !empty($settings['toolbar'])) {
     foreach ($settings['toolbar'] as $i => $toolbar ) {
       foreach ($toolbar as $j => $button) {
-        if (in_array($button, $custom_buttons)) {
+        if ($button == 'gardens-wmode') {
           unset($settings['toolbar'][$i][$j]);
+
+          // Reindex array after the removed element.
+          $settings['toolbar'][$i] = array_values($settings['toolbar'][$i]);
         }
       }
     }

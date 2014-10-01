@@ -1,0 +1,40 @@
+## This Rakefile is for tearing down an EC2 instance after a test is done
+require 'bundler/setup'
+require 'acquia_qa/it'
+require 'acquia_qa/log'
+require 'acquia_qa/os'
+require 'acquia_qa/ssh'
+require 'acquia_qa/rake'
+require 'acquia_qa/fields'
+require 'acquia_qa/gardener'
+require 'rake/testtask'
+require 'acquia_qa/configuration'
+require 'acquia_qa/svn'
+require 'acquia_qa/site'
+require 'relative'
+include Acquia::Config
+include OS
+include Acquia::SSH
+include DrupalSite
+require '../lib/test_tasks' #has the teardown/stop_master task
+require 'acquia_qa/gardens_automation'
+
+# see:  http://rake.rubyforge.org/classes/Rake/TestTask.html
+# to run one test only, call it like:
+# rake run TEST=20_smoke_test.rb
+
+#@TODO: paramaterize this
+yaml_file_name = ENV['GARDENS_TEST_CUSTOM_YAML'] || 'test_set.yaml'
+Log.logger.info("Using yaml config: #{yaml_file_name}")
+config_file = File.expand_path_relative_to_caller(yaml_file_name)
+remote_rakefile = File.expand_path_relative_to_caller('../helpers/remote-rakefile.rb')
+GardensTestRun.instance.setup(config_file, remote_rakefile)
+
+ENV['AVAIL_ZONE'] = GardensTestRun.instance.config.availability_zone
+
+
+if ["prod", "gardens"].include?(ENV['FIELDS_STAGE'])
+  raise "Woah, easy there! You tried to shut down a protected stage!"
+end
+
+raise 'You must set env var FIELDS_SSH_ID to use the rakefile' if ENV['FIELDS_SSH_ID'].nil?

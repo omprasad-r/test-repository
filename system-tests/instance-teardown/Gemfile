@@ -1,0 +1,11 @@
+source :rubygems
+
+gem 'acquia_qa', :git => 'ssh://git@git.acquia.com/mnt/git/repos/acquia_qa.git'
+
+gem 'escape'
+
+gem 'ci_reporter'
+
+gem 'mkrf'
+
+

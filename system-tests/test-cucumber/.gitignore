@@ -1,0 +1,5 @@
+*.html
+*.png
+junit_reports
+.bundle
+bundler_gems

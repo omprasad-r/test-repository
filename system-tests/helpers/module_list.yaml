@@ -1,0 +1,76 @@
+modulegroups:
+    - Core
+    - Other
+
+visible_modules:
+    - AddThis
+    - Comment Notify
+    - External Links
+    - Flexible blogs
+    - Follow
+    - Pathauto
+    - Rotating banner
+    - Simplified menu administration
+    - Site Verification
+    - Font management
+    - Aggregator
+    - Blog
+    - Book
+    - Comment
+    - Contact
+    - Content translation
+    - Contextual links
+    - Contextual Flyout Links
+    - Dashboard
+    - Database logging
+    - Field
+    - Field SQL storage
+    - Field UI
+    - Filter
+    - Flag
+    - Flag actions
+    - Forum
+    - Help
+    - List
+    - Locale
+    - Menu
+    - Node
+    - Number
+    - Options
+    - Path
+    - Poll
+    - RDF
+    - Redirect
+    - Search
+    - Unified SEO UI
+    - Shortcut
+    - Statistics
+    - System
+    - Text
+    - Theme preview
+    - Tracker
+    - Trigger
+    - User
+    - Analytics Variables
+    - Media Gallery
+    - Gardens features
+    - Save Draft
+    - Simplified modules
+    - Gardens feedback
+    - Google Analytics
+    - Mailing List
+    - Meta Tags
+    - Wysiwyg
+    - XML sitemap
+    - Taxonomy
+    - Webforms
+    - Views
+    - Fivestar
+    - JavaScript libraries
+    - Edit profile
+    - 'Media: image editing'
+    - Views Bulk Operations
+    - Taxonomy Access Control #for paid tiers
+    - Session cookie lifetime
+    - WordPress Import # for paid tiers
+    - Mobile App Services
