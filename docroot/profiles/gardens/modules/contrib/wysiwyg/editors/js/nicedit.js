@@ -31,7 +31,6 @@ Drupal.wysiwyg.editor.attach.nicedit = function(context, params, settings) {
  * See Drupal.wysiwyg.editor.detach.none() for a full description of this hook.
  */
 Drupal.wysiwyg.editor.detach.nicedit = function (context, params, trigger) {
-  trigger = trigger || 'unload';
   if (typeof params != 'undefined') {
     var instance = nicEditors.findEditor(params.field);
     if (instance) {
@@ -75,7 +74,7 @@ Drupal.wysiwyg.editor.instance.nicedit = {
     // IE.
     if (document.selection) {
       editingArea.focus();
-      sel.createRange().text = content;
+      sel.createRange().pasteHTML(content);
     }
     else {
       // Convert selection to a range.
@@ -102,6 +101,14 @@ Drupal.wysiwyg.editor.instance.nicedit = {
       // Only fragment children are inserted.
       range.insertNode(fragment);
     }
+  },
+
+  setContent: function (content) {
+    nicEditors.findEditor(this.field).setContent(content);
+  },
+
+  getContent: function () {
+    return nicEditors.findEditor(this.field).getContent();
   }
 };
 

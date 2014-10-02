@@ -6,6 +6,25 @@
  */
 
 /**
+ * Define ACF (Advanced Content Filter) modes.
+ *
+ * Advanced Content Filter works in automatic mode when the
+ * CKEDITOR.config.allowedContent setting is not provided. During editor
+ * initialization, editor features add their rules to the filter. As a result,
+ * only the content that may be edited using currently loaded features is
+ * allowed, and all the rest is filtered out.
+ *
+ * Advanced Content Filter works in custom mode when the
+ * CKEDITOR.config.allowedContent setting is defined. This configuration option
+ * tells the filter which HTML elements, attributes, styles, and classes are
+ * allowed. Based on defined rules (called Allowed Content Rules) the editor
+ * filters input data and decides which features can be activated.
+ */
+define('WYSIWYG_CKEDITOR_ACF_DISABLED', 0);
+define('WYSIWYG_CKEDITOR_ACF_AUTOMATIC', 1);
+define('WYSIWYG_CKEDITOR_ACF_CUSTOM', 2);
+
+/**
  * Plugin implementation of hook_editor().
  */
 function wysiwyg_ckeditor_editor() {
@@ -27,8 +46,11 @@ function wysiwyg_ckeditor_editor() {
         ),
       ),
     ),
+    'install note callback' => 'wysiwyg_ckeditor_install_note',
     'version callback' => 'wysiwyg_ckeditor_version',
     'themes callback' => 'wysiwyg_ckeditor_themes',
+    'settings form callback' => 'wysiwyg_ckeditor_settings_form',
+    'init callback' => 'wysiwyg_ckeditor_init',
     'settings callback' => 'wysiwyg_ckeditor_settings',
     'plugin callback' => 'wysiwyg_ckeditor_plugins',
     'plugin settings callback' => 'wysiwyg_ckeditor_plugin_settings',
@@ -46,6 +68,15 @@ function wysiwyg_ckeditor_editor() {
     ),
   );
   return $editor;
+}
+
+/**
+ * Return an install note.
+ */
+function wysiwyg_ckeditor_install_note() {
+  $output = '<p class="warning">' . t('Do NOT download the "CKEditor for Drupal" edition.') . '</br>';
+  $output .= t('Make sure you install the full package as not all plugins work with the standard package.') . '</p>';
+  return $output;
 }
 
 /**
@@ -68,7 +99,8 @@ function wysiwyg_ckeditor_version($editor) {
     // version:'CKEditor 3.0 SVN',revision:'3665'
     // version:'3.0 RC',revision:'3753'
     // version:'3.0.1',revision:'4391'
-    if (preg_match('@version:\'(?:CKEditor )?([\d\.]+)(?:.+revision:\'([\d]+))?@', $line, $version)) {
+    // version:"4.0",revision:"769d96134b"
+    if (preg_match('@version:[\'"](?:CKEditor )?([\d\.]+)(?:.+revision:[\'"]([[:xdigit:]]+))?@', $line, $version)) {
       fclose($library);
       // Version numbers need to have three parts since 3.0.1.
       $version[1] = preg_replace('/^(\d+)\.(\d+)$/', '${1}.${2}.0', $version[1]);
@@ -112,6 +144,144 @@ function wysiwyg_ckeditor_themes($editor, $profile) {
 }
 
 /**
+ * Enhances the editor profile settings form for CKEditor.
+ *
+ * Adds support for CKEditor's advanced stylesSets, which are a more advanced
+ * implementation and combination of block formats and font styles that allow
+ * to adjust the HTML element, attributes, and CSS styles at once.
+ *
+ * @see http://docs.cksource.com/CKEditor_3.x/Developers_Guide/Styles
+ * @see http://docs.cksource.com/ckeditor_api/symbols/CKEDITOR.config.html#.stylesSet
+ */
+function wysiwyg_ckeditor_settings_form(&$form, &$form_state) {
+  $profile = $form_state['wysiwyg_profile'];
+  $settings = $profile->settings;
+  $installed_version = $form_state['wysiwyg']['editor']['installed version'];
+
+  $ckeditor_defaults = array(
+    'block_formats' => 'p,address,pre,h2,h3,h4,h5,h6,div',
+    // Custom setting.
+    'default_toolbar_grouping' => FALSE,
+    'forcePasteAsPlainText' => FALSE,
+    'resize_enabled' => TRUE,
+    'simple_source_formatting' => FALSE,
+    'toolbarLocation' => 'top',
+    'allowedContent' => TRUE,
+  );
+
+  if (version_compare($installed_version, '3.2.1', '>=')) {
+    $ckeditor_defaults['stylesSet'] = '';
+  }
+
+  $settings += $ckeditor_defaults;
+
+  if (version_compare($installed_version, '4.1.0', '>=')) {
+    $form['output']['acf'] = array(
+      '#type' => 'fieldset',
+      '#title' => t('Advanced Content Filter'),
+      '#description' => t('ACF limits and adapts input data (HTML code added in source mode or by the editor.setData method, pasted HTML code, etc.) so it matches the editor configuration in the best possible way. It may also deactivate features which generate HTML code that is not allowed by the configuration. See <a href="@url">@url</a> for details.', array('@url' => url('http://docs.ckeditor.com/#!/guide/dev_advanced_content_filter'))),
+    );
+    $form['output']['acf']['acf_mode'] = array(
+      '#type' => 'select',
+      '#title' => t('Mode'),
+      '#options' => array(
+        WYSIWYG_CKEDITOR_ACF_AUTOMATIC => t('Automatic'),
+        WYSIWYG_CKEDITOR_ACF_CUSTOM => t('Custom'),
+        WYSIWYG_CKEDITOR_ACF_DISABLED => t('Disabled'),
+      ),
+      '#default_value' => isset($profile->settings['acf_mode']) ? $profile->settings['acf_mode'] : WYSIWYG_CKEDITOR_ACF_DISABLED,
+      '#description' => t('If set to <em>Automatic</em> or <em>Custom</em>, the editor will strip out any content not explicitely allowed <strong>when the editor loads</strong>.'),
+    );
+
+    $form['output']['acf']['acf_allowed_content'] = array(
+      '#type' => 'textarea',
+      '#title' => t('Content Rules'),
+      '#default_value' => isset($profile->settings['acf_allowed_content']) ? $profile->settings['acf_allowed_content'] : '',
+      '#description' => t('Rules for whitelisting content for the advanced content filter. Both string and object formats accepted. Uses the <a href="@allowed_url">allowedContent</a> setting in <em>Custom</em> mode <strong>or</strong> the <a href="@extra_allwed_url">extraAllowedContent</a> settings in <em>Automatic</em> mode internally. See <a href="@info_url">@info_url</a> for details.', array('@info_url' => url('http://docs.ckeditor.com/#!/guide/dev_allowed_content_rules'), '@allowed_url' => url('http://docs.ckeditor.com/#!/api/CKEDITOR.config-cfg-allowedContent'), '@allowed_extra_url' => url('http://docs.ckeditor.com/#!/api/CKEDITOR.config-cfg-extraAllowedContent'))),
+      '#states' => array(
+        'visible' => array(
+          ':input[name="acf_mode"]' => array(
+            array('value' => WYSIWYG_CKEDITOR_ACF_AUTOMATIC),
+            array('value' => WYSIWYG_CKEDITOR_ACF_CUSTOM),
+          ),
+        ),
+      ),
+      '#element_validate' => array('wysiwyg_ckeditor_settings_form_validate_allowed_content'),
+    );
+  }
+
+  if (version_compare($installed_version, '3.6.0', '>=')) {
+    $form['appearance']['default_toolbar_grouping'] = array(
+      '#type' => 'checkbox',
+      '#title' => t('Use default toolbar button grouping'),
+      '#default_value' => !empty($settings['default_toolbar_grouping']),
+      '#return_value' => 1,
+      '#description' => t('This option gives you the ability to enable/disable the usage of default groupings for toolbar buttons. If enabled, toolbar buttons will be placed into predetermined groups instead of all in a single group.'),
+    );
+  }
+
+  if (version_compare($installed_version, '3.2.1', '>=')) {
+    // Replace CSS classes element description to explain the advanced syntax.
+    $form['css']['css_classes']['#description'] = t('Optionally define CSS classes for the "Font style" dropdown list.<br />Enter one class on each line in the format: !format. Example: !example<br />If left blank, CSS classes are automatically imported from loaded stylesheet(s).', array(
+      '!format' => '<code>[label]=[element].[class]</code>',
+      '!example' => '<code>Title=h1.title</code>',
+    ));
+    $form['css']['css_classes']['#element_validate'][] = 'wysiwyg_ckeditor_settings_form_validate_css_classes';
+  }
+  else {
+    // Versions below 3.2.1 do not support Font styles at all.
+    $form['css']['css_classes']['#access'] = FALSE;
+  }
+}
+
+/**
+ * #element_validate handler for ACF Allowed Content element altered by wysiwyg_ckeditor_settings_form().
+ */
+function wysiwyg_ckeditor_settings_form_validate_allowed_content($element, &$form_state) {
+  if (_wysiwyg_ckeditor_settings_acf_is_obj($element['#value']) && json_decode($element['#value']) === NULL) {
+    form_error($element, t('Allowed content is not valid JSON.'));
+  }
+}
+
+/**
+ * #element_validate handler for CSS classes element altered by wysiwyg_ckeditor_settings_form().
+ */
+function wysiwyg_ckeditor_settings_form_validate_css_classes($element, &$form_state) {
+  if (wysiwyg_ckeditor_settings_parse_styles($element['#value']) === FALSE) {
+    form_error($element, t('The specified CSS classes are syntactically incorrect.'));
+  }
+}
+
+/**
+ * Returns an initialization JavaScript for this editor library.
+ *
+ * @param array $editor
+ *   The editor library definition.
+ * @param string $library
+ *   The library variant key from $editor['libraries'].
+ * @param object $profile
+ *   The (first) wysiwyg editor profile.
+ *
+ * @return string
+ *   A string containing inline JavaScript to execute before the editor library
+ *   script is loaded.
+ */
+function wysiwyg_ckeditor_init($editor) {
+  // CKEditor unconditionally searches for its library filename in SCRIPT tags
+  // on the page upon loading the library in order to determine the base path to
+  // itself. When JavaScript aggregation is enabled, this search fails and all
+  // relative constructed paths within CKEditor are broken. The library has a
+  // CKEditor.basePath property, but it is not publicly documented and thus not
+  // reliable. The official documentation suggests to solve the issue through
+  // the global window variable.
+  // @see http://docs.cksource.com/CKEditor_3.x/Developers_Guide/Specifying_the_Editor_Path
+  $library_path = base_path() . $editor['library path'] . '/';
+  return <<<EOL
+window.CKEDITOR_BASEPATH = '$library_path';
+EOL;
+}
+
+/**
  * Return runtime editor settings for a given wysiwyg profile.
  *
  * @param $editor
@@ -126,15 +296,17 @@ function wysiwyg_ckeditor_themes($editor, $profile) {
  *   Drupal.settings.wysiwyg.configs.{editor}
  */
 function wysiwyg_ckeditor_settings($editor, $config, $theme) {
+  $default_skin = (version_compare($editor['installed version'], '4.0.0', '<') ? 'kama' : 'mono');
   $settings = array(
-    'baseHref' => $GLOBALS['base_url'] . '/',
-    'width' => '100%',
+    'width' => 'auto',
     // For better compatibility with smaller textareas.
     'resize_minWidth' => 450,
-    'height' => isset($config['height']) ? $config['height'] : 400,
+    // Rough estimate of editor height in pixels:
+    // 40 for the toolbar, 29 for the first row, and 15 for the rest.
+    'height' => isset($config['rows']) ? 40 + 29 + 15 * ($config['rows'] - 1) : 400,
     // @todo Do not use skins as themes and add separate skin handling.
     'theme' => 'default',
-    'skin' => !empty($theme) ? $theme : 'kama',
+    'skin' => !empty($theme) ? $theme : $default_skin,
     // By default, CKEditor converts most characters into HTML entities. Since
     // it does not support a custom definition, but Drupal supports Unicode, we
     // disable at least the additional character sets. CKEditor always converts
@@ -160,6 +332,27 @@ function wysiwyg_ckeditor_settings($editor, $config, $theme) {
     $settings['apply_source_formatting'] = $config['apply_source_formatting'];
   }
 
+  // Advanced Content Filter
+  // @see http://docs.ckeditor.com/#!/guide/dev_advanced_content_filter
+  if (!isset($config['acf_mode']) || WYSIWYG_CKEDITOR_ACF_DISABLED == $config['acf_mode']) {
+    $settings['allowedContent'] = TRUE;
+  }
+  else {
+    if (_wysiwyg_ckeditor_settings_acf_is_obj($config['acf_allowed_content'])) {
+      $acf_content = json_decode($config['acf_allowed_content']);
+    }
+    else {
+      $acf_content = $config['acf_allowed_content'];
+    }
+
+    if (WYSIWYG_CKEDITOR_ACF_CUSTOM == $config['acf_mode']) {
+      $settings['allowedContent'] = $acf_content;
+    }
+    elseif (WYSIWYG_CKEDITOR_ACF_AUTOMATIC == $config['acf_mode']) {
+      $settings['extraAllowedContent'] = $acf_content;
+    }
+  }
+
   if (isset($config['css_setting'])) {
     // Versions below 3.0.1 could only handle one stylesheet.
     if (version_compare($editor['installed version'], '3.0.1.4391', '<')) {
@@ -167,7 +360,7 @@ function wysiwyg_ckeditor_settings($editor, $config, $theme) {
         $settings['contentsCss'] = reset(wysiwyg_get_css());
       }
       elseif ($config['css_setting'] == 'self' && isset($config['css_path'])) {
-        $settings['contentsCss'] = strtr($config['css_path'], array('%b' => base_path(), '%t' => path_to_theme()));
+        $settings['contentsCss'] = strtr($config['css_path'], array('%b' => base_path(), '%t' => drupal_get_path('theme', variable_get('theme_default', NULL))));
       }
     }
     else {
@@ -175,8 +368,17 @@ function wysiwyg_ckeditor_settings($editor, $config, $theme) {
         $settings['contentsCss'] = wysiwyg_get_css();
       }
       elseif ($config['css_setting'] == 'self' && isset($config['css_path'])) {
-        $settings['contentsCss'] = explode(',', strtr($config['css_path'], array('%b' => base_path(), '%t' => path_to_theme())));
+        $settings['contentsCss'] = explode(',', strtr($config['css_path'], array('%b' => base_path(), '%t' => drupal_get_path('theme', variable_get('theme_default', NULL)))));
       }
+    }
+  }
+
+  // Parse and define the styles set for the Styles plugin (3.2.1+).
+  // @todo This should be a plugin setting, but Wysiwyg does not support
+  //   plugin-specific settings yet.
+  if (!empty($config['buttons']['default']['Styles']) && version_compare($editor['installed version'], '3.2.1', '>=')) {
+    if ($styles = wysiwyg_ckeditor_settings_parse_styles($config['css_classes'])) {
+      $settings['stylesSet'] = $styles;
     }
   }
 
@@ -184,7 +386,7 @@ function wysiwyg_ckeditor_settings($editor, $config, $theme) {
     $settings['language'] = $config['language'];
   }
   if (isset($config['resizing'])) {
-    // CKEditor tests "!== false", so ensure it is a Boolean.
+    // CKEditor performs a type-agnostic comparison on this particular setting.
     $settings['resize_enabled'] = (bool) $config['resizing'];
   }
   if (isset($config['toolbar_loc'])) {
@@ -192,6 +394,8 @@ function wysiwyg_ckeditor_settings($editor, $config, $theme) {
   }
 
   $settings['toolbar'] = array();
+  $supports_groups = version_compare($editor['installed version'], '3.6.0', '>=');
+  $use_default_groups = $supports_groups && !empty($config['default_toolbar_grouping']);
   if (!empty($config['buttons'])) {
     $extra_plugins = array();
     $plugins = wysiwyg_get_plugins($editor['name']);
@@ -205,7 +409,13 @@ function wysiwyg_ckeditor_settings($editor, $config, $theme) {
           }
           // Add buttons.
           if ($type == 'buttons') {
-            $settings['toolbar'][] = $button;
+            if ($use_default_groups) {
+              $settings['toolbar'][_wysiwyg_ckeditor_group($button)][] = $button;
+            }
+            else {
+              // Use one button row for backwards compatibility.
+              $settings['toolbar'][] = $button;
+            }
           }
           // Add external Drupal plugins to the list of extensions.
           if ($type == 'buttons' && !empty($plugins[$plugin]['proxy'])) {
@@ -234,10 +444,70 @@ function wysiwyg_ckeditor_settings($editor, $config, $theme) {
       $settings['extraPlugins'] = implode(',', $extra_plugins);
     }
   }
-  // For now, all buttons are placed into one row.
-  $settings['toolbar'] = array($settings['toolbar']);
+
+  if ($use_default_groups) {
+    // Organize groups to use lables to improves accesibility
+    // http://docs.ckeditor.com/#!/guide/dev_toolbar-section-3.
+    $groups_toolbar = array();
+    foreach ($settings['toolbar'] as $group => $items) {
+      $groups_toolbar[] = array(
+        'name' => $group,
+        'items' => $items,
+      );
+      $settings['toolbar'] = $groups_toolbar;
+    }
+  }
+  else {
+    // For now, all buttons are placed into one row.
+    $settings['toolbar'] = array($settings['toolbar']);
+  }
 
   return $settings;
+}
+
+/**
+ * Parses CSS classes settings string into a stylesSet JavaScript settings array.
+ *
+ * @param string $css_classes
+ *   A string containing CSS class definitions to add to the Style dropdown
+ *   list, separated by newlines.
+ *
+ * @return array|false
+ *   An array containing the parsed stylesSet definition, or FALSE on parse
+ *   error.
+ *
+ * @see wysiwyg_ckeditor_settings_form()
+ * @see wysiwyg_ckeditor_settings_form_validate_css_classes()
+ *
+ * @todo This should be a plugin setting, but Wysiwyg does not support
+ *   plugin-specific settings yet.
+ */
+function wysiwyg_ckeditor_settings_parse_styles($css_classes) {
+  $set = array();
+  $input = trim($css_classes);
+  if (empty($input)) {
+    return $set;
+  }
+  // Handle both Unix and Windows line-endings.
+  foreach (explode("\n", str_replace("\r", '', $input)) as $line) {
+    $line = trim($line);
+    // [label]=[element].[class][.[class]][...] pattern expected.
+    if (!preg_match('@^.+= *[a-zA-Z0-9]+(\.[a-zA-Z0-9_ -]+)*$@', $line)) {
+      return FALSE;
+    }
+    list($label, $selector) = explode('=', $line, 2);
+    $classes = explode('.', $selector);
+    $element = array_shift($classes);
+
+    $style = array();
+    $style['name'] = trim($label);
+    $style['element'] = trim($element);
+    if (!empty($classes)) {
+      $style['attributes']['class'] = implode(' ', array_map('trim', $classes));
+    }
+    $set[] = $style;
+  }
+  return $set;
 }
 
 /**
@@ -294,6 +564,7 @@ function wysiwyg_ckeditor_plugins($editor) {
         'Bold' => t('Bold'), 'Italic' => t('Italic'), 'Underline' => t('Underline'),
         'Strike' => t('Strike-through'),
         'JustifyLeft' => t('Align left'), 'JustifyCenter' => t('Align center'), 'JustifyRight' => t('Align right'), 'JustifyBlock' => t('Justify'),
+        'BidiLtr' => t('Left-to-right'), 'BidiRtl' => t('Right-to-left'),
         'BulletedList' => t('Bullet list'), 'NumberedList' => t('Numbered list'),
         'Outdent' => t('Outdent'), 'Indent' => t('Indent'),
         'Undo' => t('Undo'), 'Redo' => t('Redo'),
@@ -317,6 +588,7 @@ function wysiwyg_ckeditor_plugins($editor) {
         'Maximize' => t('Maximize'),
         'SpellChecker' => t('Check spelling'), 'Scayt' => t('Check spelling as you type'),
         'About' => t('About'),
+        'Templates' => t('Templates'),
       ),
       'internal' => TRUE,
     ),
@@ -325,9 +597,118 @@ function wysiwyg_ckeditor_plugins($editor) {
   if (version_compare($editor['installed version'], '3.1.0.4885', '<')) {
     unset($plugins['default']['buttons']['CreateDiv']);
   }
+  if (version_compare($editor['installed version'], '3.4.0.5808', '<')) {
+    unset($plugins['default']['buttons']['BidiLtr']);
+    unset($plugins['default']['buttons']['BidiRtl']);
+  }
   if (version_compare($editor['installed version'], '3.5.0.6260', '<')) {
     unset($plugins['default']['buttons']['Iframe']);
   }
   return $plugins;
 }
 
+/**
+ * Define grouping for ckEditor buttons.
+ */
+function _wysiwyg_ckeditor_group($button) {
+  switch ($button) {
+    case 'Source':
+      $group = 'document';
+      break;
+
+    case 'Cut':
+    case 'Copy':
+    case 'Paste':
+    case 'PasteText':
+    case 'PasteFromWord':
+    case 'Undo':
+    case 'Redo':
+      $group = 'clipboard';
+      break;
+
+    case 'Find':
+    case 'Replace':
+    case 'SelectAll':
+    case 'SpellChecker':
+    case 'Scayt':
+      $group = 'editing';
+      break;
+
+    case 'Bold':
+    case 'Italic':
+    case 'Underline':
+    case 'Strike':
+    case 'Subscript':
+    case 'Superscript':
+    case 'RemoveFormat':
+      $group = 'basicstyles';
+      break;
+
+    case 'NumberedList':
+    case 'BulletedList':
+    case 'Outdent':
+    case 'Indent':
+    case 'Blockquote':
+    case 'CreateDiv':
+    case 'JustifyLeft':
+    case 'JustifyCenter':
+    case 'JustifyRight':
+    case 'JustifyBlock':
+    case 'BidiLtr':
+    case 'BidiRtl':
+      $group = 'paragraph';
+      break;
+
+    case 'Link':
+    case 'Unlink':
+    case 'Anchor':
+      $group = 'links';
+      break;
+
+    case 'Image':
+    case 'Flash':
+    case 'Table':
+    case 'HorizontalRule':
+    case 'Smiley':
+    case 'SpecialChar':
+    case 'Iframe':
+    case 'Templates':
+      $group = 'insert';
+      break;
+
+    case 'Styles':
+    case 'Format':
+    case 'Font':
+    case 'FontSize':
+      $group = 'styles';
+      break;
+
+    case 'TextColor':
+    case 'BGColor':
+      $group = 'colors';
+      break;
+
+    case 'Maximize':
+    case 'ShowBlocks':
+    case 'About':
+      $group = 'tools';
+      break;
+
+    default:
+      $group = 'other';
+  }
+  return $group;
+}
+
+/**
+ * Determine if string is supposed to be ACF obj format.
+ *
+ * @see http://docs.ckeditor.com/#!/guide/dev_allowed_content_rules
+ */
+function _wysiwyg_ckeditor_settings_acf_is_obj($string) {
+  if (strstr($string, ':') === FALSE) {
+    return FALSE;
+  }
+
+  return TRUE;
+}

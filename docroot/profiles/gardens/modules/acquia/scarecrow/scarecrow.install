@@ -1635,3 +1635,33 @@ function scarecrow_update_11202() {
     }
   }
 }
+
+/**
+ * Uncheck the 'SpellChecker' button in every wysiwyg profile.
+ */
+function scarecrow_update_11203() {
+  if (module_exists('wysiwyg')) {
+    // Get all filter formats.
+    $filter_formats = filter_formats();
+
+    foreach (wysiwyg_profile_load_all() as $format => $profile) {
+      if (!empty($profile->settings) && isset($filter_formats[$format])) {
+        $settings = $profile->settings;
+        if (is_array($settings['buttons']['default']) && isset($settings['buttons']['default']['SpellChecker'])) {
+          $settings['buttons']['default']['SpellChecker'] = 0;
+
+          // Update CKEditor settings.
+          $data = array(
+            'format' => $format,
+            'editor' => 'ckeditor',
+            'settings' => serialize($settings),
+          );
+          drupal_write_record('wysiwyg', $data, 'format');
+
+          // Clear all Wysiwyg profile caches.
+          wysiwyg_profile_cache_clear();
+        }
+      }
+    }
+  }
+}

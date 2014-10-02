@@ -1,6 +1,6 @@
 require 'yaml'
 
-GARDENS_MODULES = YAML.load_file(File.dirname(File.expand_path(__FILE__)) + '/../../../helpers/module_list.yml')
+GARDENS_MODULES = YAML.load_file(File.dirname(File.expand_path(__FILE__)) + '/../../../helpers/module_list.yaml')
 
 
 def get_modules(options = {})
