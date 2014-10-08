@@ -9,7 +9,7 @@ class ModuleManagerCapy
   end
 
   def initialize
-    module_file = File.dirname(File.expand_path(__FILE__)) + '/module_list.yml'
+    module_file = File.dirname(File.expand_path(__FILE__)) + '/module_list.yaml'
     @modules = YAML.load_file(module_file)
   end
 

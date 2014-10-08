@@ -11,7 +11,6 @@ Drupal.wysiwygInit = function() {
   if (/KDE/.test(navigator.vendor)) {
     return;
   }
-
   jQuery.each(Drupal.wysiwyg.editor.init, function(editor) {
     // Clone, so original settings are not overwritten.
     this(jQuery.extend(true, {}, Drupal.settings.wysiwyg.configs[editor]));
@@ -76,7 +75,7 @@ Drupal.behaviors.attachWysiwyg = {
         if (event.isDefaultPrevented()) {
           return;
         }
-        Drupal.wysiwygDetach(context, params[format]);
+        Drupal.wysiwygDetach(context, params[format], 'serialize');
       });
     });
   },
@@ -156,8 +155,15 @@ Drupal.wysiwygAttach = function(context, params) {
  *   An object containing input format parameters.
  * @param trigger
  *   A string describing what is causing the editor to be detached.
+ *
+ * @see Drupal.detachBehaviors
  */
 Drupal.wysiwygDetach = function (context, params, trigger) {
+  // Do not attempt to detach an unknown editor instance (Ajax).
+  if (typeof Drupal.wysiwyg.instances[params.field] == 'undefined') {
+    return;
+  }
+  trigger = trigger || 'unload';
   var editor = Drupal.wysiwyg.instances[params.field].editor;
   if (jQuery.isFunction(Drupal.wysiwyg.editor.detach[editor])) {
     Drupal.wysiwyg.editor.detach[editor](context, params, trigger);
@@ -207,6 +213,7 @@ Drupal.wysiwyg.toggleWysiwyg = function (event) {
     Drupal.wysiwyg.editor.attach.none(context, params);
     Drupal.wysiwyg.instances[params.field] = Drupal.wysiwyg.editor.instance.none;
     Drupal.wysiwyg.instances[params.field].editor = 'none';
+    Drupal.wysiwyg.instances[params.field].field = params.field;
     $(this).html(Drupal.settings.wysiwyg.enable).blur();
   }
   else {
@@ -253,5 +260,10 @@ Drupal.wysiwyg.getParams = function(element, params) {
  * Allow certain editor libraries to initialize before the DOM is loaded.
  */
 Drupal.wysiwygInit();
+
+// Respond to CTools detach behaviors event.
+$(document).bind('CToolsDetachBehaviors', function(event, context) {
+  Drupal.behaviors.attachWysiwyg.detach(context, {}, 'unload');
+});
 
 })(jQuery);

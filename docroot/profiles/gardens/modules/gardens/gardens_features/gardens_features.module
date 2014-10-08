@@ -2112,3 +2112,17 @@ function gardens_features_acsf_registry() {
   );
 }
 
+/**
+ * Implements hook_form_FORM_ID_alter().
+ *
+ * Remove "Left to right" and "Right to left" buttons from the wysiwyg profile
+ * form.
+ */
+function gardens_features_form_wysiwyg_profile_form_alter(&$form, $form_state) {
+  $hidden_buttons = array('BidiLtr', 'BidiRtl');
+  foreach ($hidden_buttons as $button) {
+    $form['buttons']['default'][$button]['#disabled'] = TRUE;
+    $form['buttons']['default'][$button]['#value'] = FALSE;
+    $form['buttons']['default'][$button]['#title'] .= ' ' . t('(unsupported)');
+  }
+}

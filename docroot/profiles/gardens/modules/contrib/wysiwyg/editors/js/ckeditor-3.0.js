@@ -23,6 +23,10 @@ Drupal.wysiwyg.editor.init.ckeditor = function(settings) {
         }
       }
     }
+    // Register Font styles (versions 3.2.1 and above).
+    if (Drupal.settings.wysiwyg.configs.ckeditor[format].stylesSet) {
+      CKEDITOR.stylesSet.add(format, Drupal.settings.wysiwyg.configs.ckeditor[format].stylesSet);
+    }
   }
 };
 
@@ -33,6 +37,8 @@ Drupal.wysiwyg.editor.init.ckeditor = function(settings) {
 Drupal.wysiwyg.editor.attach.ckeditor = function(context, params, settings) {
   // Apply editor instance settings.
   CKEDITOR.config.customConfig = '';
+
+  var $drupalToolbar = $('#toolbar', Drupal.overlayChild ? window.parent.document : document);
 
   settings.on = {
     instanceReady: function(ev) {
@@ -125,6 +131,19 @@ Drupal.wysiwyg.editor.attach.ckeditor = function(context, params, settings) {
 
     focus: function(ev) {
       Drupal.wysiwyg.activeId = ev.editor.name;
+    },
+
+    afterCommandExec: function(ev) {
+      // Fix Drupal toolbar obscuring editor toolbar in fullscreen mode.
+      if (ev.data.name != 'maximize') {
+        return;
+      }
+      if (ev.data.command.state == CKEDITOR.TRISTATE_ON) {
+        $drupalToolbar.hide();
+      }
+      else {
+        $drupalToolbar.show();
+      }
     }
   };
 
@@ -140,7 +159,7 @@ Drupal.wysiwyg.editor.attach.ckeditor = function(context, params, settings) {
  *   always return an array to simplify all detach functions.
  */
 Drupal.wysiwyg.editor.detach.ckeditor = function (context, params, trigger) {
-  var method = (trigger && trigger == 'serialize') ? 'updateElement' : 'destroy';
+  var method = (trigger == 'serialize') ? 'updateElement' : 'destroy';
   if (typeof params != 'undefined') {
     var instance = CKEDITOR.instances[params.field];
     if (instance) {
@@ -165,7 +184,8 @@ Drupal.wysiwyg.editor.instance.ckeditor = {
           editor.on('mode', function(ev) {
             if (ev.editor.mode == 'wysiwyg') {
               // Inject CSS files directly into the editing area head tag.
-              $('head', $('#cke_contents_' + ev.editor.name + ' iframe').eq(0).contents()).append('<link rel="stylesheet" href="' + settings.css + '" type="text/css" >');
+              var iframe = $('#cke_contents_' + ev.editor.name + ' iframe, #' + ev.editor.id + '_contents iframe');
+              $('head', iframe.eq(0).contents()).append('<link rel="stylesheet" href="' + settings.css + '" type="text/css" >');
             }
           });
         }
@@ -180,12 +200,7 @@ Drupal.wysiwyg.editor.instance.ckeditor = {
                   data.node = data.node.$;
                 }
                 if (selection.getType() == CKEDITOR.SELECTION_TEXT) {
-                  if (CKEDITOR.env.ie) {
-                    data.content = selection.getNative().createRange().text;
-                  }
-                  else {
-                    data.content = selection.getNative().toString();
-                  }
+                  data.content = selection.getSelectedText();
                 }
                 else if (data.node) {
                   // content is supposed to contain the "outerHTML".
@@ -211,9 +226,18 @@ Drupal.wysiwyg.editor.instance.ckeditor = {
     // @todo Don't know if we need this yet.
     return content;
   },
+
   insert: function(content) {
     content = this.prepareContent(content);
     CKEDITOR.instances[this.field].insertHtml(content);
+  },
+
+  setContent: function (content) {
+    CKEDITOR.instances[this.field].setData(content);
+  },
+
+  getContent: function () {
+    return CKEDITOR.instances[this.field].getData();
   }
 };
 
