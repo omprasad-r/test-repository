@@ -99,7 +99,7 @@ class DrupalPicture6Migration extends DrupalFile6Migration {
     // which will default it to an integer key.
     $this->map = new MigrateSQLMap($arguments['machine_name'],
       array(
-        'filepath' => array(
+        'picture' => array(
           'type' => 'varchar',
           'length' => 255,
           'not null' => TRUE,
@@ -119,6 +119,12 @@ class DrupalPicture6Migration extends DrupalFile6Migration {
         'type' => 'int',
       );
     }
+
+    // Override these mappings to use 'picture' instead of 'filepath'.
+    $this->addFieldMapping('value', 'picture', FALSE)
+         ->callbacks(array($this, 'fixUri'));
+    $this->addFieldMapping('destination_file', 'picture', FALSE)
+      ->callbacks(array($this, 'fixUri'));
 
     // No appropriate timestamp to save, so let it default.
     $this->addFieldMapping('timestamp', NULL, FALSE);
@@ -146,7 +152,7 @@ class DrupalPicture6Migration extends DrupalFile6Migration {
              ->orderBy('access');
     $query->addField('f', 'access');
     // Return the field name the file migration expects.
-    $query->addField('f', 'picture', 'filepath');
+    $query->addField('f', 'picture');
     return $query;
   }
 }

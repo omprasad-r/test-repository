@@ -3,7 +3,7 @@ description = "Migration from one Drupal site to another, using migration mappin
 package = "Migration"
 core = 7.x
 
-dependencies[] = migrate
+dependencies[] = migrate (>7.x-2.5)
 
 files[] = migrate_d2d.migrate.inc
 
@@ -50,9 +50,9 @@ files[] = d7/role.inc
 files[] = d7/taxonomy.inc
 files[] = d7/user.inc
 
-; Information added by drupal.org packaging script on 2013-06-12
-version = "7.x-2.1-beta1+4-dev"
+; Information added by Drupal.org packaging script on 2014-10-09
+version = "7.x-2.1-beta1+37-dev"
 core = "7.x"
 project = "migrate_d2d"
-datestamp = "1371060240"
+datestamp = "1412867338"
 

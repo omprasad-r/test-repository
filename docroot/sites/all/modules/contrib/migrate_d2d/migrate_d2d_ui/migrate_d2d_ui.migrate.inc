@@ -189,10 +189,6 @@ class MigrateD2DWizard extends MigrateUIWizard {
 
     // Add driver specific configuration options.
     foreach ($drivers as $key => $driver) {
-      // @todo: For now skip pgsql, causes validation errors
-      if ($key == 'pgsql') {
-        continue;
-      }
       $form['driver']['#options'][$key] = $driver->name();
       $form['settings'][$key] = $driver->getFormOptions(array());
       // Rewrite descriptions, which assume the database is being selected to
@@ -225,6 +221,29 @@ class MigrateD2DWizard extends MigrateUIWizard {
     }
 
     return $form;
+  }
+
+  /**
+   * Override the basic form to add appropriate driver validation.
+   *
+   * @return array
+   */
+  public function form(&$form_state) {
+    $form = parent::form($form_state);
+
+    // Detect if we are on the DB step of migrate_d2d_ui wizard.
+    if (isset($form['driver'])) {
+      // Limit validation errors to fields associated with the selected DB
+      // driver. e.g. validate DB name/host for mysql but not for sqlite.
+      $validation = array();
+      $validation[] = array('driver');
+      if (isset($form_state['input']['driver'])) {
+        $validation[] = array('settings', $form_state['input']['driver']);
+      }
+      $form['actions']['next']['#limit_validation_errors'] = $validation;
+    }
+
+    return($form);
   }
 
   /**
@@ -267,6 +286,9 @@ class MigrateD2DWizard extends MigrateUIWizard {
         if ($site_name) {
           $this->groupTitle = $site_name;
           $this->groupName = preg_replace('/[^A-Za-z0-9]/', '', $site_name);
+          if (strlen($this->groupName) > 9) {
+            $this->groupName = substr(md5($this->groupName), 0, 9);
+          }
         }
         else {
           $this->groupName = $this->groupTitle = 'd' . $this->sourceVersion;
@@ -322,6 +344,7 @@ class MigrateD2DWizard extends MigrateUIWizard {
               ->fields('r', array('name'))
               ->condition('name', array('anonymous user', 'authenticated user'), 'NOT IN')
               ->execute();
+    $role_options = array();
     foreach ($result as $row) {
       $role_options[$row->name] = $row->name;
     }
@@ -817,7 +840,7 @@ class MigrateD2DWizard extends MigrateUIWizard {
     );
 
     $message = t('<p>Please review your migration settings. When you submit this
-      form, n migration job containing a migration task for each type of item to be
+      form, a migration job containing a migration task for each type of item to be
       imported will be created and you will be left at the
       dashboard.</p>');
 
@@ -984,7 +1007,7 @@ class MigrateD2DWizard extends MigrateUIWizard {
           'source_type' => $source_type,
           'destination_type' => $destination_type,
           'description' => t('Migration of @source_type nodes from Drupal @version',
-                   array('@vocabulary' => $source_name,
+                   array('@source_type' => $source_name,
                          '@version' => $this->sourceVersion)),
         );
         if ($this->userMigration) {
@@ -1048,6 +1071,7 @@ class MigrateD2DWizard extends MigrateUIWizard {
     static $connection;
     if (!isset($connection)) {
       $connection_key = $this->groupName . '_legacy';
+      $this->database['prefix'] = $this->database['db_prefix'];
       Database::addConnectionInfo($connection_key, 'default', $this->database);
       $connection = Database::getConnection('default', $connection_key);
     }
