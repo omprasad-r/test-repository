@@ -1654,7 +1654,7 @@ function scarecrow_update_11203() {
           $data = array(
             'format' => $format,
             'editor' => 'ckeditor',
-            'settings' => serialize($settings),
+            'settings' => $settings,
           );
           drupal_write_record('wysiwyg', $data, 'format');
 
