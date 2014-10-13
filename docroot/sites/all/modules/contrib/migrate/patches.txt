@@ -1,1 +1,2 @@
 https://www.drupal.org/files/issues/migrate-ignore_highwater-2312075-1.patch
+https://www.drupal.org/files/issues/migrate-empty_null_default-2352971-1.patch
