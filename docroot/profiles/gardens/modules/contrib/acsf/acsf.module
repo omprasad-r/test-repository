@@ -7,10 +7,9 @@
 
 /**
  * Implements hook_boot().
- *
- * We need to ensure that our autoloader is available as early as possible.
  */
 function acsf_boot() {
+  // We need to ensure that our autoloader is available as early as possible.
   try {
     acsf_register_autoloader();
   }
@@ -18,6 +17,11 @@ function acsf_boot() {
     if (!drupal_is_cli()) {
       watchdog_exception('acsf', $e);
     }
+  }
+
+  // Add a response header if we're in maintenance mode.
+  if (variable_get('maintenance_mode', FALSE)) {
+    drupal_add_http_header('X-SF-Maintenance', 'enabled');
   }
 }
 
