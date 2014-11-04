@@ -92,9 +92,6 @@ function acsf_openid_authentication_page() {
   else {
     drupal_set_message(t('Your login could not be completed successfully, due to an internal error. Try again later.'), 'error');
 
-    module_load_include('inc', 'openid');
-    $sreg_values = openid_extract_namespace($response, OPENID_NS_SREG, 'sreg');
-
     // Elaborate on why session data is missing.
     if (empty($_SESSION)) {
       if (empty($_COOKIE[session_name()])) {
@@ -106,14 +103,22 @@ function acsf_openid_authentication_page() {
     }
 
     // We put this in syslog() directly since site owners don't need to see it.
-    watchdog('acsf_openid', 'OpenID login failed: result: "@status"; user: @name (@mail); site: @url; openid: @openid; browser: @browser', array(
-      '@status' => $response['status'] . (isset($message) ? ' ' . $message : ''),
-      '@name' => $sreg_values['nickname'],
-      '@mail' => $sreg_values['email'],
-      '@url' => $GLOBALS['base_url'],
-      '@openid' => $response['openid.claimed_id'],
-      '@browser' => $_SERVER['HTTP_USER_AGENT'],
-    ));
+    if (isset($_SESSION['openid']['response'])) {
+      $sreg_values = openid_extract_namespace($response, OPENID_NS_SREG, 'sreg');
+      watchdog('acsf_openid', 'OpenID login failed: result: "@status"; user: @name (@mail); site: @url; openid: @openid; browser: @browser', array(
+        '@status' => $response['status'] . (isset($message) ? ' ' . $message : ''),
+        '@name' => $sreg_values['nickname'],
+        '@mail' => $sreg_values['email'],
+        '@url' => $GLOBALS['base_url'],
+        '@openid' => $response['openid.claimed_id'],
+        '@browser' => $_SERVER['HTTP_USER_AGENT'],
+      ));
+    }
+    else {
+      watchdog('acsf_openid', 'OpenID login failed: result: "@status"', array(
+        '@status' => $response['status'] . (isset($message) ? ' ' . $message : ''),
+      ));
+    }
 
     drupal_goto();
   }

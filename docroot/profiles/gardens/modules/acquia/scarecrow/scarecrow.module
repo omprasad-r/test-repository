@@ -395,6 +395,15 @@ function _scarecrow_node_protected_by_mollom($node_type) {
 function scarecrow_form_mollom_admin_settings_alter(&$form, &$form_state) {
   if (scarecrow_is_enabled()) {
     $form['access-keys']['#access'] = FALSE;
+    if (!empty($form['mollom_advanced']['mollom_connection_timeout'])) {
+      $form['mollom_advanced']['mollom_connection_timeout']['#access'] = FALSE;
+    }
+    if (!empty($form['mollom_advanced']['mollom_fai_entity_types'])) {
+      $form['mollom_advanced']['mollom_fai_entity_types']['#access'] = FALSE;
+    }
+    if (!empty($form['mollom_advanced']['mollom_fai_dialog']) && $form['mollom_advanced']['mollom_fai_dialog']['#type'] != 'value') {
+      $form['mollom_advanced']['mollom_fai_dialog']['#access'] = FALSE;
+    }
   }
 }
 
@@ -1477,6 +1486,9 @@ function scarecrow_forbidden_permissions() {
     'execute views_bulk_operations_script_action',
     // Disallow audit trail configuration.
     'administer audit trail',
+    // The related feature is being hidden with a form alter so the permission
+    // necessary to it should be hidden.
+    'report to mollom',
   );
   return variable_get('scarecrow_forbidden_permissions', $default_forbidden_permissions);
 }

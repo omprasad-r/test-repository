@@ -1665,3 +1665,14 @@ function scarecrow_update_11203() {
     }
   }
 }
+
+/**
+ * Ensure that 'report to mollom' permission is hidden.
+ */
+function scarecrow_update_11204() {
+  $forbidden_permissions = scarecrow_forbidden_permissions();
+  if (!in_array('report to mollom', $forbidden_permissions)) {
+    $forbidden_permissions[] = 'report to mollom';
+    variable_set('scarecrow_forbidden_permissions', $forbidden_permissions);
+  }
+}

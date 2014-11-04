@@ -160,7 +160,7 @@ function get_shared_creds($site, $env) {
     if (!empty($data) && !empty($data['gardener'])) {
       return new SimpleRestCreds($data['gardener']['username'],
         $data['gardener']['password'],
-        $data['gardener']['hostname']);
+        $data['gardener']['url']);
     }
   }
   throw new Exception(sprintf('Unable to read credentials from %s', $shared));
