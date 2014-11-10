@@ -1,0 +1,16 @@
+diff --git a/job_scheduler/job_scheduler.install b/job_scheduler/job_scheduler.install
+index 0967795..867af06 100644
+--- a/job_scheduler/job_scheduler.install
++++ b/job_scheduler/job_scheduler.install
+@@ -179,3 +179,10 @@ function job_scheduler_update_7101() {
+   );
+   db_add_field('job_schedule', 'item_id', $spec, array('primary key' => array('item_id')));
+ }
++
++/*
++ * Implementation hook_uninstall().
++ */
++function job_scheduler_uninstall() {
++  db_query("DELETE FROM {variable} WHERE name LIKE 'job_scheduler%'");
++}
+\ No newline at end of file

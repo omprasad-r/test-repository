@@ -1,0 +1,223 @@
+diff --git a/feeds/feeds.rules.inc b/feeds/feeds.rules.inc
+index dce753a..69e9f54 100644
+--- a/feeds/feeds.rules.inc
++++ b/feeds/feeds.rules.inc
+@@ -37,7 +37,7 @@ function feeds_rules_event_info() {
+     $entity_type = $processor->entityType();
+     $label = isset($entity_info[$entity_type]['label']) ? $entity_info[$entity_type]['label'] : $entity_type;
+ 
+-    $info['feeds_import_'. $importer->id] = array(
++    $info['feeds_import_' . $importer->id] = array(
+       'label' => t('Before saving an item imported via @name.', array('@name' => $importer->config['name'])),
+       'group' => t('Feeds'),
+       'variables' => array(
+@@ -52,7 +52,7 @@ function feeds_rules_event_info() {
+     );
+     // Add bundle information if the node processor is used.
+     if ($processor instanceof FeedsNodeProcessor) {
+-      $info['feeds_import_'. $importer->id]['variables'][$entity_type]['bundle'] = $processor->bundle();
++      $info['feeds_import_' . $importer->id]['variables'][$entity_type]['bundle'] = $processor->bundle();
+     }
+   }
+   return $info;
+diff --git a/feeds/libraries/common_syndication_parser.inc b/feeds/libraries/common_syndication_parser.inc
+index 9589950..b2fad01 100644
+--- a/feeds/libraries/common_syndication_parser.inc
++++ b/feeds/libraries/common_syndication_parser.inc
+@@ -85,32 +85,32 @@ function _parser_common_syndication_feed_format_detect($xml) {
+ /**
+  * Parse atom feeds.
+  */
+-function _parser_common_syndication_atom10_parse($feed_XML) {
++function _parser_common_syndication_atom10_parse($feed_xml) {
+   $parsed_source = array();
+ 
+   $ns = array(
+     "georss" => "http://www.georss.org/georss",
+   );
+ 
+-  $base = $feed_XML->xpath("@base");
++  $base = $feed_xml->xpath("@base");
+   $base = (string) array_shift($base);
+   if (!valid_url($base, TRUE)) {
+     $base = FALSE;
+   }
+ 
+   // Detect the title
+-  $parsed_source['title'] = isset($feed_XML->title) ? _parser_common_syndication_title("{$feed_XML->title}") : "";
++  $parsed_source['title'] = isset($feed_xml->title) ? _parser_common_syndication_title("{$feed_xml->title}") : "";
+   // Detect the description
+-  $parsed_source['description'] = isset($feed_XML->subtitle) ? "{$feed_XML->subtitle}" : "";
++  $parsed_source['description'] = isset($feed_xml->subtitle) ? "{$feed_xml->subtitle}" : "";
+ 
+-  $parsed_source['link'] = _parser_common_syndication_link($feed_XML->link);
++  $parsed_source['link'] = _parser_common_syndication_link($feed_xml->link);
+   if (valid_url($parsed_source['link']) && !valid_url($parsed_source['link'], TRUE) && !empty($base)) {
+     $parsed_source['link'] = $base . $parsed_source['link'];
+   }
+ 
+   $parsed_source['items'] = array();
+ 
+-  foreach ($feed_XML->entry as $news) {
++  foreach ($feed_xml->entry as $news) {
+ 
+     $original_url = NULL;
+     $guid = !empty($news->id) ? "{$news->id}" : NULL;
+@@ -186,8 +186,8 @@ function _parser_common_syndication_atom10_parse($feed_XML) {
+       $original_author = "{$news->author->name}";
+       $author_found = TRUE;
+     }
+-    if (!empty($feed_XML->author->name) && !$author_found) {
+-      $original_author = "{$feed_XML->author->name}";
++    if (!empty($feed_xml->author->name) && !$author_found) {
++      $original_author = "{$feed_xml->author->name}";
+     }
+ 
+     $original_url = _parser_common_syndication_link($news->link);
+@@ -242,7 +242,7 @@ function _parser_common_syndication_atom10_parse($feed_XML) {
+  *
+  * @see http://web.resource.org/rss/1.0/
+  */
+-function _parser_common_syndication_RDF10_parse($feed_XML) {
++function _parser_common_syndication_RDF10_parse($feed_xml) {
+   // Declare some canonical standard prefixes for well-known namespaces:
+   static $canonical_namespaces = array(
+     'rdf'      => 'http://www.w3.org/1999/02/22-rdf-syntax-ns#',
+@@ -258,10 +258,10 @@ function _parser_common_syndication_RDF10_parse($feed_XML) {
+   );
+ 
+   // Get all namespaces declared in the feed element.
+-  $namespaces = $feed_XML->getNamespaces(TRUE);
++  $namespaces = $feed_xml->getNamespaces(TRUE);
+ 
+   // Process the <rss:channel> resource containing feed metadata:
+-  foreach ($feed_XML->children($canonical_namespaces['rss'])->channel as $rss_channel) {
++  foreach ($feed_xml->children($canonical_namespaces['rss'])->channel as $rss_channel) {
+     $parsed_source = array(
+       'title'       => _parser_common_syndication_title((string) $rss_channel->title),
+       'description' => (string) $rss_channel->description,
+@@ -272,7 +272,7 @@ function _parser_common_syndication_RDF10_parse($feed_XML) {
+   }
+ 
+   // Process each <rss:item> resource contained in the feed:
+-  foreach ($feed_XML->children($canonical_namespaces['rss'])->item as $rss_item) {
++  foreach ($feed_xml->children($canonical_namespaces['rss'])->item as $rss_item) {
+ 
+     // Extract all available RDF statements from the feed item's RDF/XML
+     // tags, allowing for both the item's attributes and child elements to
+@@ -351,7 +351,7 @@ function _parser_common_syndication_RDF10_item($rdf_data, $mappings) {
+ /**
+  * Parse RSS2.0 feeds.
+  */
+-function _parser_common_syndication_RSS20_parse($feed_XML) {
++function _parser_common_syndication_RSS20_parse($feed_xml) {
+ 
+   $ns = array(
+     "content" => "http://purl.org/rss/1.0/modules/content/",
+@@ -361,14 +361,14 @@ function _parser_common_syndication_RSS20_parse($feed_XML) {
+ 
+   $parsed_source = array();
+   // Detect the title.
+-  $parsed_source['title'] = isset($feed_XML->channel->title) ? _parser_common_syndication_title("{$feed_XML->channel->title}") : "";
++  $parsed_source['title'] = isset($feed_xml->channel->title) ? _parser_common_syndication_title("{$feed_xml->channel->title}") : "";
+   // Detect the description.
+-  $parsed_source['description'] = isset($feed_XML->channel->description) ? "{$feed_XML->channel->description}" : "";
++  $parsed_source['description'] = isset($feed_xml->channel->description) ? "{$feed_xml->channel->description}" : "";
+   // Detect the link.
+-  $parsed_source['link'] = isset($feed_XML->channel->link) ? "{$feed_XML->channel->link}" : "";
++  $parsed_source['link'] = isset($feed_xml->channel->link) ? "{$feed_xml->channel->link}" : "";
+   $parsed_source['items'] = array();
+ 
+-  foreach ($feed_XML->xpath('//item') as $news) {
++  foreach ($feed_xml->xpath('//item') as $news) {
+     $title = $body = $original_author = $original_url = $guid = '';
+ 
+     $category = $news->xpath('category');
+diff --git a/feeds/plugins/FeedsHTTPFetcher.inc b/feeds/plugins/FeedsHTTPFetcher.inc
+index 4e7afc7..3aacb49 100644
+--- a/feeds/plugins/FeedsHTTPFetcher.inc
++++ b/feeds/plugins/FeedsHTTPFetcher.inc
+@@ -147,7 +147,7 @@ class FeedsHTTPFetcher extends FeedsFetcher {
+      '#default_value' => $this->config['request_timeout'],
+      '#element_validate' => array('element_validate_integer_positive'),
+      '#maxlength' => 3,
+-     '#size'=> 30,
++     '#size' => 30,
+    );
+     return $form;
+   }
+diff --git a/feeds/plugins/FeedsProcessor.inc b/feeds/plugins/FeedsProcessor.inc
+index c2b0af5..d6a595e 100644
+--- a/feeds/plugins/FeedsProcessor.inc
++++ b/feeds/plugins/FeedsProcessor.inc
+@@ -226,7 +226,7 @@ abstract class FeedsProcessor extends FeedsPlugin {
+         // Allow modules to alter the entity before saving.
+         module_invoke_all('feeds_presave', $source, $entity, $item, $entity_id);
+         if (module_exists('rules')) {
+-          rules_invoke_event('feeds_import_'. $source->importer()->id, $entity);
++          rules_invoke_event('feeds_import_' . $source->importer()->id, $entity);
+         }
+ 
+         // Enable modules to skip saving at all.
+@@ -812,7 +812,7 @@ abstract class FeedsProcessor extends FeedsPlugin {
+     include_once DRUPAL_ROOT . '/includes/utility.inc';
+     $message = $e->getMessage();
+     $message .= '<h3>Original item</h3>';
+-    $message .= '<pre>' . drupal_var_export($item). '</pre>';
++    $message .= '<pre>' . drupal_var_export($item) . '</pre>';
+     $message .= '<h3>Entity</h3>';
+     $message .= '<pre>' . drupal_var_export($entity) . '</pre>';
+     return $message;
+diff --git a/feeds/tests/feeds_mapper_profile.test b/feeds/tests/feeds_mapper_profile.test
+index 9ced5db..2a39b5b 100644
+--- a/feeds/tests/feeds_mapper_profile.test
++++ b/feeds/tests/feeds_mapper_profile.test
+@@ -83,7 +83,7 @@ class FeedsMapperProfileTestCase extends FeedsMapperTestCase {
+     $this->drupalPost('admin/structure/feeds/profile_import/settings', $edit, 'Save');
+ 
+     // Import CSV file.
+-    $this->importFile('profile_import', $this->absolutePath() .'/tests/feeds/profile.csv');
++    $this->importFile('profile_import', $this->absolutePath() . '/tests/feeds/profile.csv');
+     $this->assertText('Created 2 users.');
+ 
+     // Check the two imported users.
+diff --git a/feeds/tests/parser_csv.test b/feeds/tests/parser_csv.test
+index 2905b39..a34e0a7 100644
+--- a/feeds/tests/parser_csv.test
++++ b/feeds/tests/parser_csv.test
+@@ -42,13 +42,13 @@ class ParserCSVTest extends DrupalWebTestCase  {
+     include $this->absolutePath() . '/tests/feeds/nodes.csv.php';
+ 
+     $delimiters = $this->getDelimiters();
+-    foreach($delimiters as $delimiterType => $delimiter) {
++    foreach ($delimiters as $delimiterType => $delimiter) {
+       $file =  $this->absolutePath() . '/tests/feeds/nodes_' . $delimiterType . '.csv';
+       $iterator = new ParserCSVIterator($file);
+       $parser = new ParserCSV();
+       $parser->setDelimiter($delimiter);
+       $rows = $parser->parse($iterator);
+-      $this->assertFalse($parser->lastLinePos(), t('CSV reports all lines parsed, with delimiter: ') . $delimiterType);
++      $this->assertFalse($parser->lastLinePos(), t('CSV reports all lines parsed, with delimiter:') . $delimiterType);
+       $this->assertEqual(md5(serialize($rows)), md5(serialize($control_result)), t('Parsed result matches control result.'));
+     }
+   }
+@@ -61,7 +61,7 @@ class ParserCSVTest extends DrupalWebTestCase  {
+     include $this->absolutePath() . '/tests/feeds/nodes.csv.php';
+ 
+     $delimiters = $this->getDelimiters();
+-    foreach($delimiters as $delimiterType => $delimiter) {
++    foreach ($delimiters as $delimiterType => $delimiter) {
+       $file =  $this->absolutePath() . '/tests/feeds/nodes_' . $delimiterType . '.csv';
+       // Set up parser with 2 lines to parse per call.
+       $iterator = new ParserCSVIterator($file);
+@@ -80,8 +80,8 @@ class ParserCSVTest extends DrupalWebTestCase  {
+       }
+       while ($pos = $parser->lastLinePos());
+ 
+-      $this->assertEqual(md5(serialize($rows)), md5(serialize($control_result)), t('Batch parsed result matches control result for delimiter: ') . $delimiterType);
+-    }
++      $this->assertEqual(md5(serialize($rows)), md5(serialize($control_result)), t('Batch parsed result matches control result for delimiter:') . $delimiterType);
++    }   
+   }
+ 
+   /**

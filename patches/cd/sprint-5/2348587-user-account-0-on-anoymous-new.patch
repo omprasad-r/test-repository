@@ -1,0 +1,35 @@
+diff --git a/spambot/spambot.module b/spambot/spambot.module
+index ee6f4c2..f75eff6 100644
+--- a/spambot/spambot.module
++++ b/spambot/spambot.module
+@@ -39,7 +39,7 @@ function spambot_menu() {
+   $items['user/%user/spambot'] = array(
+     'title' => 'Spam',
+     'page callback' => 'drupal_get_form',
+-    'page arguments' => array('spambot_user_spam_admin_form', 1),
++    'page arguments' => array('spambot_user_spam_admin_form'),
+     'access arguments' => array('administer users'),
+     'type' => MENU_LOCAL_TASK,
+     'file' => 'spambot.pages.inc',
+diff --git a/spambot/spambot.pages.inc b/spambot/spambot.pages.inc
+index 67948e1..5de30aa 100644
+--- a/spambot/spambot.pages.inc
++++ b/spambot/spambot.pages.inc
+@@ -1,6 +1,16 @@
+ <?php
+ 
+-function spambot_user_spam_admin_form($form, &$form_state, $account) {
++/*
++ * Spambot admin form to take action if user found as spam
++ */
++function spambot_user_spam_admin_form($form, &$form_state) {
++  $account = user_load_by_name(arg(1));
++  if (!isset($account->uid)) {
++    $form['notice'] = array(
++      "#markup" => "The Anonymous user account can't be reported for spam. If you intended to block a user account verify that the url is /user/XXXX/spambot where XXXX is a valid UID"
++    );
++    return $form;
++  }
+   $node_count = db_select('node')->condition('uid', $account->uid, '=')
+     ->countQuery()->execute()->fetchField();
+   
