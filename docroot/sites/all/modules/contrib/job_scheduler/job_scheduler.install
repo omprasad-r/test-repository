@@ -179,3 +179,10 @@ function job_scheduler_update_7101() {
   );
   db_add_field('job_schedule', 'item_id', $spec, array('primary key' => array('item_id')));
 }
+
+/*
+ * Implementation hook_uninstall().
+ */
+function job_scheduler_uninstall() {
+  db_query("DELETE FROM {variable} WHERE name LIKE 'job_scheduler%'");
+}
