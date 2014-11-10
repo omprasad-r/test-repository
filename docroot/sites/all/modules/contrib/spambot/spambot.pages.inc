@@ -1,6 +1,16 @@
 <?php
 
-function spambot_user_spam_admin_form($form, &$form_state, $account) {
+/*
+ * Spambot admin form to take action if user found as spam
+ */
+function spambot_user_spam_admin_form($form, &$form_state) {
+  $account = user_load_by_name(arg(1));
+  if (!isset($account->uid)) {
+    $form['notice'] = array(
+      "#markup" => "The Anonymous user account can't be reported for spam. If you intended to block a user account verify that the url is /user/XXXX/spambot where XXXX is a valid UID"
+    );
+    return $form;
+  }
   $node_count = db_select('node')->condition('uid', $account->uid, '=')
     ->countQuery()->execute()->fetchField();
   
