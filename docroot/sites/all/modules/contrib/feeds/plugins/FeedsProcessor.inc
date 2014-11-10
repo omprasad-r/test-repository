@@ -226,7 +226,7 @@ abstract class FeedsProcessor extends FeedsPlugin {
         // Allow modules to alter the entity before saving.
         module_invoke_all('feeds_presave', $source, $entity, $item, $entity_id);
         if (module_exists('rules')) {
-          rules_invoke_event('feeds_import_'. $source->importer()->id, $entity);
+          rules_invoke_event('feeds_import_' . $source->importer()->id, $entity);
         }
 
         // Enable modules to skip saving at all.
@@ -812,7 +812,7 @@ abstract class FeedsProcessor extends FeedsPlugin {
     include_once DRUPAL_ROOT . '/includes/utility.inc';
     $message = $e->getMessage();
     $message .= '<h3>Original item</h3>';
-    $message .= '<pre>' . drupal_var_export($item). '</pre>';
+    $message .= '<pre>' . drupal_var_export($item) . '</pre>';
     $message .= '<h3>Entity</h3>';
     $message .= '<pre>' . drupal_var_export($entity) . '</pre>';
     return $message;

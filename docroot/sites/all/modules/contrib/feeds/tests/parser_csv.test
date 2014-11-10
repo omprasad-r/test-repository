@@ -42,13 +42,13 @@ class ParserCSVTest extends DrupalWebTestCase  {
     include $this->absolutePath() . '/tests/feeds/nodes.csv.php';
 
     $delimiters = $this->getDelimiters();
-    foreach($delimiters as $delimiterType => $delimiter) {
+    foreach ($delimiters as $delimiterType => $delimiter) {
       $file =  $this->absolutePath() . '/tests/feeds/nodes_' . $delimiterType . '.csv';
       $iterator = new ParserCSVIterator($file);
       $parser = new ParserCSV();
       $parser->setDelimiter($delimiter);
       $rows = $parser->parse($iterator);
-      $this->assertFalse($parser->lastLinePos(), t('CSV reports all lines parsed, with delimiter: ') . $delimiterType);
+      $this->assertFalse($parser->lastLinePos(), t('CSV reports all lines parsed, with delimiter:') . $delimiterType);
       $this->assertEqual(md5(serialize($rows)), md5(serialize($control_result)), t('Parsed result matches control result.'));
     }
   }
@@ -61,7 +61,7 @@ class ParserCSVTest extends DrupalWebTestCase  {
     include $this->absolutePath() . '/tests/feeds/nodes.csv.php';
 
     $delimiters = $this->getDelimiters();
-    foreach($delimiters as $delimiterType => $delimiter) {
+    foreach ($delimiters as $delimiterType => $delimiter) {
       $file =  $this->absolutePath() . '/tests/feeds/nodes_' . $delimiterType . '.csv';
       // Set up parser with 2 lines to parse per call.
       $iterator = new ParserCSVIterator($file);
@@ -80,8 +80,8 @@ class ParserCSVTest extends DrupalWebTestCase  {
       }
       while ($pos = $parser->lastLinePos());
 
-      $this->assertEqual(md5(serialize($rows)), md5(serialize($control_result)), t('Batch parsed result matches control result for delimiter: ') . $delimiterType);
-    }
+      $this->assertEqual(md5(serialize($rows)), md5(serialize($control_result)), t('Batch parsed result matches control result for delimiter:') . $delimiterType);
+    }   
   }
 
   /**

@@ -147,7 +147,7 @@ class FeedsHTTPFetcher extends FeedsFetcher {
      '#default_value' => $this->config['request_timeout'],
      '#element_validate' => array('element_validate_integer_positive'),
      '#maxlength' => 3,
-     '#size'=> 30,
+     '#size' => 30,
    );
     return $form;
   }

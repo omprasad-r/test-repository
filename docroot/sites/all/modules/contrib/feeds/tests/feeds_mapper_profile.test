@@ -83,7 +83,7 @@ class FeedsMapperProfileTestCase extends FeedsMapperTestCase {
     $this->drupalPost('admin/structure/feeds/profile_import/settings', $edit, 'Save');
 
     // Import CSV file.
-    $this->importFile('profile_import', $this->absolutePath() .'/tests/feeds/profile.csv');
+    $this->importFile('profile_import', $this->absolutePath() . '/tests/feeds/profile.csv');
     $this->assertText('Created 2 users.');
 
     // Check the two imported users.
