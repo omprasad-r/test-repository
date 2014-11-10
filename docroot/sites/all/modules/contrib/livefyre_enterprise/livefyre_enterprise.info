@@ -1,0 +1,14 @@
+name = Livefyre enterprise
+description = Implement Livefyre for enterprise users on your Drupal Site.
+core = 7.x
+
+configure = admin/config/content/livefyre-enterprise
+
+dependencies[] = entity
+
+; Information added by Drupal.org packaging script on 2014-07-17
+version = "7.x-1.1"
+core = "7.x"
+project = "livefyre_enterprise"
+datestamp = "1405623828"
+

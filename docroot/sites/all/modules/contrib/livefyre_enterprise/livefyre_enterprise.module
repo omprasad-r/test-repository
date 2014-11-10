@@ -1,0 +1,669 @@
+<?php
+/**
+ * @file
+ *  Display Livefyre comments.
+ */
+
+/**
+ * Define the zor library Livefyre will pull down from.
+ */
+define('LF_ZOR', 'http://zor.livefyre.com/wjs/v3.0/javascripts/livefyre.js');
+
+/**
+ * Include the Livefyre API
+ */
+include_once 'livefyre-api/libs/php/Livefyre.php';
+
+/**
+ * Implements hook_help().
+ */
+function livefyre_enterprise_help($path, $arg) {
+  switch ($path) {
+    case 'admin/help#livefyre-enterprise':
+      return '<p>' . t('Implements Livefyre for enterprise users') . '</p>';
+      break;
+  }
+}
+
+/**
+ * Implements hook_menu().
+ */
+function livefyre_enterprise_menu() {
+  $items = array();
+
+  $items['admin/config/content/livefyre-enterprise'] = array(
+    'title' => 'Livefyre enterprise',
+    'description' => 'Livefyre enterprise Plugin for Drupal',
+    'page callback' => 'drupal_get_form',
+    'page arguments' => array('livefyre_enterprise_admin'),
+    'access arguments' => array('administer livefyre enterprise settings'),
+    'file' => 'livefyre_enterprise.admin.inc',
+  );
+
+  return $items;
+}
+
+/**
+ * Implements hook_permission().
+ */
+function livefyre_enterprise_permission() {
+  return array(
+    'administer livefyre enterprise settings' => array(
+      'title' => t('Administer Livefyre enterprise module'),
+      'description' => t('Perform administration tasks for the Livefyre enterprise module.'),
+    ),
+    'access livefyre enterprise comments' => array(
+      'title' => t('Access Livefyre enterprise comments'),
+      'description' => t('Use Livefyre entperise comments on the site.'),
+    ),
+    'bypass livefyre enterprise comments visibility settings' => array(
+      'title' => t('Bypass Livefyre enterprise comments visibility settings'),
+      'description' => t('Show Livefyre enterprise comment fields, regardless of the field settings.'),
+    ),
+  );
+}
+
+/**
+ * Implements hook_cron().
+ *
+ * Sync livefyre comment with the created entities.
+ */
+function livefyre_enterprise_cron() {
+  livefyre_enterprise_comment_sync();
+}
+
+/**
+ * Implements hook_field_info().
+ */
+function livefyre_enterprise_field_info() {
+  return array(
+    'livefyre_enterprise' => array(
+      'label' => t('Livefyre enterprise'),
+      'description' => t('This field stores that the Livefyre enterprise comment is enabled or not.'),
+      'default_widget' => 'livefyre_enterprise_checkbox',
+      'default_formatter' => 'livefyre_enterprise_full',
+      'instance_settings' => array(
+        'livefyre_enterprise_settings_hide' => 0,
+      ),
+    ),
+  );
+}
+
+/**
+ * Implements hook_form_FORM_ID_alter().
+ *
+ * Hide cardinality settings and set it to 1 and also hide the required checkbox
+ * because it will be not used with the hide option.
+ */
+function livefyre_enterprise_form_field_ui_field_edit_form_alter(&$form, &$form_state, $form_id) {
+  if ($form['#field']['type'] == 'livefyre_enterprise') {
+    // Hide the cardinality setting on the field settings for Livefyre fields.
+    $form['field']['cardinality']['#default_value'] = 1;
+    $form['field']['#access'] = FALSE;
+    // Hide required field from the field settings form.
+    $form['instance']['required']['#access'] = FALSE;
+  }
+}
+
+/**
+ * Implements hook_field_instance_settings_form().
+ */
+function livefyre_enterprise_field_instance_settings_form($field, $instance) {
+  $settings = $instance['settings'];
+
+  $form['livefyre_enterprise_settings_hide'] = array(
+    '#type' => 'checkbox',
+    '#title' => t('Hide Livefyre enterprise comment settings'),
+    '#description' => t('If you check this checkbox, content editors will not be able to modify the default settings on the content form.'),
+    '#default_value' => $settings['livefyre_enterprise_settings_hide'],
+    '#weight' => 10,
+  );
+
+  return $form;
+}
+
+/**
+ * Implements hook_field_is_empty().
+ */
+function livefyre_enterprise_field_is_empty($item, $field) {
+  if (empty($item['value']) && (string) $item['value'] !== '0') {
+    return TRUE;
+  }
+  return FALSE;
+}
+
+/**
+ * Implements hook_field_formatter_info().
+ */
+function livefyre_enterprise_field_formatter_info() {
+  return array(
+    'livefyre_enterprise_full' => array(
+      'label' => t('Full'),
+      'description' => t('Shows the full comment stream'),
+      'field types' => array('livefyre_enterprise'),
+    ),
+    'livefyre_enterprise_comments_number' => array(
+      'label' => t('Comments number'),
+      'description' => t('Shows only the number of comments'),
+      'field types' => array('livefyre_enterprise'),
+    ),
+  );
+}
+
+/**
+ * Implements hook_field_formatter_view().
+ */
+function livefyre_enterprise_field_formatter_view($entity_type, $entity, $field, $instance, $langcode, $items, $display) {
+  $element = array();
+  list($id, $vid, $bundle) = entity_extract_ids($entity_type, $entity);
+
+  // Generate the article id from the current entity and entity ID. Use the
+  // entity's url instead of type:id because it will easier to handle in the
+  // block implementation.
+  $article_id = entity_uri($entity_type, $entity);
+  $article_id = $article_id['path'];
+
+  switch ($display['type']) {
+    case 'livefyre_enterprise_full':
+      foreach ($items as $delta => $item) {
+        if ($item['value']) {
+          $element[$delta] = array(
+            '#theme' => 'livefyre_enterprise_formatter_full',
+            '#entity' => $entity,
+            '#article_id' => $article_id,
+            '#widget_id' => "livefyre-enterprise-entity-{$entity_type}-id-{$id}-field-{$field['id']}-{$delta}",
+            '#title' => isset($entity->title) ? $entity->title : drupal_get_title(),
+          );
+        }
+      }
+      break;
+
+    case 'livefyre_enterprise_comments_number':
+      foreach ($items as $delta => $item) {
+        if ($item['value']) {
+          $element[$delta] = array(
+            '#theme' => 'livefyre_enterprise_formatter_comments_number',
+            '#article_id' => $article_id,
+            '#site_id' => variable_get('livefyre_enterprise_site_id'),
+          );
+        }
+      }
+      break;
+  }
+
+  return $element;
+}
+
+/**
+ * Implements hook_field_widget_info().
+ */
+function livefyre_enterprise_field_widget_info() {
+  return array(
+    'livefyre_enterprise_checkbox' => array(
+      'label' => t('Checkbox'),
+      'field types' => array('livefyre_enterprise'),
+    ),
+  );
+}
+
+/**
+ * Implements hook_field_access().
+ */
+function livefyre_enterprise_field_access($op, $field, $entity_type, $entity, $account) {
+  if ($field['type'] === "livefyre_enterprise" && $op === "view") {
+    return user_access('access livefyre enterprise comments');
+  }
+
+  return TRUE;
+}
+
+/**
+ * Implements hook_field_widget_form().
+ */
+function livefyre_enterprise_field_widget_form(&$form, &$form_state, $field, $instance, $langcode, $items, $delta, $element) {
+  if ($instance['widget']['type'] == 'livefyre_enterprise_checkbox') {
+    $value = isset($items[$delta]['value']) ? $items[$delta]['value'] : 1;
+    $element += array(
+      '#type' => 'checkbox',
+      '#default_value' => $value,
+    );
+    // If the form is hide from the user, check the bypass permission.
+    if ($instance['settings']['livefyre_enterprise_settings_hide']) {
+      $element['#access'] = user_access('bypass livefyre enterprise comments visibility settings');
+    }
+  }
+
+  return array('value' => $element);
+}
+
+/**
+ * Implements hook_theme().
+ */
+function livefyre_enterprise_theme($existing, $type, $theme, $path) {
+  return array(
+    'livefyre_enterprise_formatter_full' => array(
+      'variables' => array(
+        'entity' => new stdClass(),
+        'article_id' => '',
+        'widget_id' => '',
+        'title' => '',
+      )
+    ),
+    'livefyre_enterprise_formatter_comments_number' => array(
+      'variables' => array(
+        'article_id' => '',
+        'site_id' => '',
+      )
+    ),
+  );
+}
+
+/**
+ * Implements hook_entity_info().
+ */
+function livefyre_enterprise_entity_info() {
+  $return = array(
+    'livefyre_enterprise_comment' => array(
+      'label' => t('Livefyre enterprise Comment'),
+      'controller class' => 'EntityAPIController',
+      'module' => 'livefyre_enterprise',
+      'views controller class' => 'LivefyreEnterpriseEntityDefaultViewsController',
+      'base table' => 'livefyre_enterprise_comments',
+      'fieldable' => FALSE,
+      'entity keys' => array(
+        'id' => 'lfcid',
+      ),
+      'bundles' => array(
+        'livefyre_enterprise_comment' => array(
+          'label' => t('Livefyre enterprise Comment'),
+        ),
+      ),
+      'view modes' => array(
+        'full' => array(
+          'label' => t('Livefyre enterprise Comment'),
+          'custom settings' => FALSE,
+        ),
+      ),
+    ),
+  );
+  return $return;
+}
+
+/**
+ * Renders livefyre field's full formatter.
+ */
+function theme_livefyre_enterprise_formatter_full(&$variables) {
+  // Custom delegate object if this is and enterprise customer.
+  $delegate = 'authDelegate';
+
+  livefyre_enterprise_page_setup();
+
+  $out = livefyre_enterprise_get_bootstrapped_data($variables['article_id'], '<div id="' . $variables['widget_id'] . '">');
+
+  // Add JS libs.
+  module_load_include('inc', 'livefyre_enterprise', 'livefyre-enterprise-code');
+  $conv = livefyre_enterprise_build_conv($variables['article_id'], $variables['title']);
+  $output = $conv->to_initjs_v3($variables['widget_id'], $delegate);
+  $cleansed_tags = str_replace('<script type="text/javascript">', "", $output);
+  $cleansed_tags = str_replace('</script>', "", $cleansed_tags);
+  livefyre_enterprise_add_footer($cleansed_tags);
+
+  // Return with the id. If the bootstrap exists it will contain the generated
+  // html data too for search engines.
+  return $out;
+}
+
+/**
+ * Renders livefyre comments number field formatter.
+ */
+function theme_livefyre_enterprise_formatter_comments_number(&$variables) {
+  $network = variable_get('livefyre_enterprise_network', 'livefyre.com');
+  $element = array(
+    '#tag' => 'script',
+    '#type' => 'html_tag',
+    '#attributes' => array(
+      'src' => "http://zor.{$network}/wjs/v1.0/javascripts/CommentCount.js",
+      'type' => 'text/javascript',
+      'data-lf-domain' => $network,
+    ),
+  );
+  drupal_add_html_head($element, 'livefyre_enterprise_commentcountjs');
+  $out = '<span class="livefyre-enterprise-commentcount livefyre-commentcount" data-lf-site-id="' . $variables['site_id'] . '" data-lf-article-id="' . $variables['article_id'] . '">' .
+    t('0 Comments')
+    . '</span>';
+
+  return $out;
+}
+
+/**
+ * Gets the cached data with bootstrap API.
+ *
+ * @param $article_id
+ *   The id of the current request.
+ * @param string $prefix
+ *   The html wrapper prefix.
+ * @param string $suffix
+ *   The html wrapper suffix.
+ *
+ * @return string
+ *   The generated html code.
+ */
+function livefyre_enterprise_get_bootstrapped_data($article_id, $prefix = '<div id="livefyre">', $suffix = '</div>') {
+  // Build the http request.
+  $encoded_article_id = base64_encode($article_id);
+  $network = variable_get('livefyre_enterprise_network', 'livefyre.com');
+  $site_id = variable_get('livefyre_enterprise_site_id');
+  $newtwork_url = "/{$network}/{$site_id}/{$encoded_article_id}/bootstrap.html";
+  $url = "http://bootstrap.{$network}/bs3" . $newtwork_url;
+  $options = array(
+    'method' => 'GET',
+  );
+
+  $res = drupal_http_request($url, $options);
+  // The cache exist. Bootstrap API doesn't return with the correct status, so
+  // the status code will 200 but the html data will contain the network url.
+  if ($res->code == 200 && !strstr($res->data, $newtwork_url)) {
+    return $prefix . $res->data . $suffix;
+  }
+  else {
+    return $prefix . $suffix;
+  }
+}
+
+/**
+ * Builds a Conversation object to get JS embed string.
+ *
+ * @param string $article_id
+ *   Unique article ID for the conversation being created.
+ * @return
+ *   The block information with Livefyre's conversation data added to it.
+ */
+function livefyre_enterprise_build_conv($article_id, $title) {
+  global $base_url;
+
+  $site_id = variable_get('livefyre_enterprise_site_id');
+  $site_key = variable_get('livefyre_enterprise_site_key');
+  $source_url = $base_url . '/' . current_path();
+  $network = variable_get('livefyre_enterprise_network', 'livefyre.com');
+  $network_key = variable_get('livefyre_enterprise_network_key', NULL);
+  $delegate = livefyre_enterprise_get_delegates();
+
+  // Define Livefyre API variables
+  $domain = new Livefyre_Domain($network, $network_key);
+  $site = $domain->site($site_id, $site_key);
+  $article = $site->article($article_id, $source_url, $title);
+  $conv = $article->conversation();
+
+  if (!$delegate) {
+    // Authenticate the user.
+    livefyre_enterprise_user_authentication();
+  }
+  else {
+    // Use custom delegate functions if the user added custom ones in the admin interface.
+    drupal_add_js($delegate,
+      array(
+        'type' => 'inline',
+        'scope' => 'footer',
+        'weight' => -91,
+      )
+    );
+  }
+
+  return $conv;
+}
+
+/**
+ * Adds teh JS embed to the page.
+ *
+ * @param string $src
+ *   The delta letting us know we're in Livefyre Land.
+ */
+function livefyre_enterprise_add_footer($src) {
+  // Add a default delegate if we hasn't set it yet.
+  $delegates = livefyre_enterprise_get_delegates();
+  if (!$delegates) {
+    $authDelegate = "window.authDelegate = new fyre.conv.RemoteAuthDelegate();";
+    $src = "{$authDelegate}\n{$src}";
+  }
+
+  $src .= "\nif (typeof LivefyreDrupal == 'undefined') {
+      window.LivefyreDrupal = new Array();\n} LivefyreDrupal.push(lf_config);";
+
+  // Check for Janrain implementation
+  if (variable_get('livefyre_enterprise_jr_capture')) {
+    $src = "function livefyreJanrainInit(){\n{$src}}";
+  }
+
+  drupal_add_js('' . $src,
+    array(
+      'type' => 'inline',
+      'scope' => 'footer',
+      'weight' => -90,
+    )
+  );
+}
+
+/**
+ * Spits out the setup every page with Livefyre needs.
+ */
+function livefyre_enterprise_page_setup() {
+  global $user;
+  // Build the Livefyre zor URL
+  $livefyre_zor = LF_ZOR;
+  $lf_network = variable_get('livefyre_enterprise_network', 'livefyre.com');
+  if (variable_get('livefyre_enterprise_environment') != 1) {
+    $livefyre_zor = "http://zor." . $lf_network . "/wjs/v3.0/javascripts/livefyre.js";
+  }
+
+  // Add the external javascript to the page
+  drupal_add_js($livefyre_zor,
+    array(
+      'type' => 'external',
+      'scope' => 'header',
+    )
+  );
+
+  // Add destination variable to js settings.
+  $js_settings = array(
+    'livefyreEnterprise' => drupal_get_destination(),
+  );
+  $js_settings['livefyreEnterprise']['uid'] = $user->uid;
+  drupal_add_js($js_settings, 'setting');
+}
+
+/**
+ * Gets the comments form livefyre server and stores them as Drupal comments.
+ */
+function livefyre_enterprise_comment_sync() {
+  $lf_network = variable_get('livefyre_enterprise_network', 'livefyre.com');
+  $lf_site_id = variable_get('livefyre_enterprise_site_id');
+  $lf_site_key = variable_get('livefyre_enterprise_site_key');
+  $since_id = variable_get('livefyre_enterprise_since_id', '');
+  $page_site = variable_get('livefyre_enterprise_sync_activity_number', 0);
+  if ($page_size <= 0){
+    return;
+  }
+  $query = array(
+    'page_size' => $page_size,
+    'sig_created' => REQUEST_TIME,
+  );
+  $sig = getHmacsha1Signature(base64_decode($lf_site_key), drupal_http_build_query($query));
+  $query['sig'] = $sig;
+
+  $res = drupal_http_request("http://bootstrap.{$lf_network}/api/v1.1/private/feed/site/{$lf_site_id}/sync/{$since_id}?" . drupal_http_build_query($query));
+  if ($res->code == 200) {
+    $data = json_decode($res->data);
+
+    // Store the message last status (state) and the latest body text to store.
+    $messages = array();
+    foreach ($data as $message) {
+      // If we limit the number of the results the last object will not have id.
+      if (!isset($message->lf_comment_id)) {
+        continue;
+      }
+
+      if (!isset($messages[$message->lf_comment_id])) {
+        $messages[$message->lf_comment_id] = array(
+          'original' => $message,
+          'status' => $message->state,
+          'body' => $message->body_text,
+        );
+      }
+      else {
+        $messages[$message->lf_comment_id]['status'] = $message->state;
+        $messages[$message->lf_comment_id]['body'] = $message->body_text;
+      }
+      // Store since ID for the next sync event.
+      variable_set('livefyre_enterprise_since_id', $message->activity_id);
+    }
+
+    foreach ($messages as $lf_comment_id => $message) {
+      $original_message = $message['original'];
+      $comment = new stdClass();
+      $comment->lf_comment_id = $lf_comment_id;
+      // Update the existing entity.
+      if ($lfcid = livefyre_enterprise_get_lfcid_from_lf_comment_id($lf_comment_id)) {
+        $comment->lfcid = $lfcid;
+      }
+      // Delete the entity if it removed from livefyre system.
+      if ($message['status'] == 'deleted' && isset($comment->lfcid)) {
+        entity_delete('livefyre_enterprise_comment', $comment->lfcid);
+        continue;
+      }
+      // Do not do anything if the comment doesn't exist in Drupal and
+      // marked as deleted in livefyre system.
+      if ($message['status'] == 'deleted' && !isset($comment->lfcid)) {
+        continue;
+      }
+
+      // Store parent entity ID.
+      if (isset($original_message->lf_parent_comment_id) && $pid = livefyre_enterprise_get_lfcid_from_lf_comment_id($original_message->lf_parent_comment_id)) {
+        $comment->pid = $pid;
+      }
+
+      // These properties are not allowed to update so store only if this is a
+      // new comment.
+      if (!isset($comment->lfcid)) {
+        // Check if the user is an existing Drupal user.
+        $users = user_load_multiple(array(), array('mail' => $original_message->author_email));
+        if ($users) {
+          $account = reset($users);
+          $comment->uid = $account->uid;
+        }
+        else {
+          $comment->uid = 0;
+        }
+        $comment->name = $original_message->display_name;
+        $comment->mail = $original_message->author_email;
+
+        // Other property informations.
+        $comment->created = $original_message->created;
+        $comment->hostname = $original_message->ip_address;
+        if (isset($original_message->author_url)) {
+          $comment->homepage = $original_message->author_url;
+        }
+        $comment->path = $original_message->article_identifier;
+      }
+
+      $comment->published = $message['status'] == 'active' ? 1 : 0;
+      $comment->status = $message['status'];
+      $comment->body = $message['body'];
+      // Store the entity.
+      entity_save('livefyre_enterprise_comment', $comment);
+    }
+  }
+}
+
+/**
+ * Returns with the Drupal entity ID from the livefyre comment ID.
+ *
+ * @param $lf_comment_id
+ *
+ * @return int|null
+ */
+function livefyre_enterprise_get_lfcid_from_lf_comment_id($lf_comment_id) {
+  $query = new EntityFieldQuery();
+  $query->entityCondition('entity_type', 'livefyre_enterprise_comment')
+    ->propertyCondition('lf_comment_id', $lf_comment_id);
+
+  $result = $query->execute();
+
+  if (isset($result['livefyre_enterprise_comment'])) {
+    $lfcids = array_keys($result['livefyre_enterprise_comment']);
+    return current($lfcids);
+  }
+
+  return NULL;
+}
+
+/**
+ * Authenticate the currently logged in user to the livefyre widget.
+ */
+function livefyre_enterprise_user_authentication() {
+  global $user;
+
+  // Always add the javascript because the js will check the authentication but
+  // we need to run the login/logout delegate functions independently of the
+  // user is logged in or not.
+  drupal_add_js(drupal_get_path('module', 'livefyre_enterprise') . '/livefyre_enterprise.js', array('scope' => 'footer'));
+  // Return if the user is anonymus.
+  if ($user->uid == 0) {
+    return;
+  }
+
+  // Generate a user token for the authentication.
+  $network = variable_get('livefyre_enterprise_network', 'livefyre.com');
+  $network_key = variable_get('livefyre_enterprise_network_key', NULL);
+  $domain = new Livefyre_Domain($network, $network_key);
+  $token = $domain->user($user->uid, $user->name)->token();
+
+  $js_settings = array(
+    'livefyreEnterprise' => array(
+      'userToken' => $token,
+    ),
+  );
+
+  // Add necessary javascript files and pass the token variable.
+  drupal_add_js($js_settings, 'setting');
+}
+
+/**
+ * Check if there is any custom delegates has saved.
+ *
+ * @return string|bool
+ *  Delegate functions.
+ */
+function livefyre_enterprise_get_delegates() {
+  $delegate = variable_get('livefyre_enterprise_auth_delegate', '');
+  if (!empty($delegate)) {
+    return $delegate;
+  }
+
+  return FALSE;
+}
+
+/**
+ * Livefyre Views Controller class.
+ */
+class LivefyreEnterpriseEntityDefaultViewsController extends EntityDefaultViewsController {
+
+  /**
+   * Edit special fields to views_data().
+   */
+  public function views_data() {
+    $data = parent::views_data();
+
+    // Created field.
+    $data['livefyre_enterprise_comments']['created']['field']['handler'] = 'views_handler_field_date';
+    $data['livefyre_enterprise_comments']['created']['filter']['handler'] = 'views_handler_filter_date';
+    $data['livefyre_enterprise_comments']['created']['argument']['handler'] = 'views_handler_argument_date';
+    $data['livefyre_enterprise_comments']['created']['sort']['handler'] = 'views_handler_sort_date';
+    // Homepage field.
+    $data['livefyre_enterprise_comments']['homepage']['field']['handler'] = 'views_handler_field_url';
+    // Published field.
+    $data['livefyre_enterprise_comments']['published']['field']['handler'] = 'views_handler_field_boolean';
+    $data['livefyre_enterprise_comments']['published']['filter']['handler'] = 'views_handler_filter_boolean_operator';
+
+    return $data;
+  }
+}

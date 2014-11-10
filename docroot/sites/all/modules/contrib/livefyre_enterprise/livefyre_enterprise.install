@@ -1,0 +1,154 @@
+<?php
+/**
+ * @file
+ * Provides any required installation or upgrade path requirements.
+ */
+
+/**
+ * Implements hook_field_schema().
+ */
+function livefyre_enterprise_field_schema($field) {
+  $columns = array(
+    'value' => array(
+      'type' => 'int',
+      'not null' => FALSE,
+      'size' => 'tiny',
+    ),
+  );
+  return array(
+    'columns' => $columns,
+  );
+}
+
+/**
+ * Implements hook_schema().
+ */
+function livefyre_enterprise_schema() {
+  $schema['livefyre_enterprise_comments'] = array(
+    'description' => 'Connection table between drupal comments and livefyre comments.',
+    'fields' => array(
+      'lfcid' => array(
+        'type' => 'serial',
+        'not null' => TRUE,
+        'description' => 'Primary Key: Unique livefyre comment ID.',
+      ),
+      'lf_comment_id' => array(
+        'description' => "The livefyre comment's id from livefyre system.",
+        'type' => 'int',
+        'unsigned' => TRUE,
+        'not null' => TRUE,
+        'default' => 0
+      ),
+      'pid' => array(
+        'type' => 'int',
+        'not null' => TRUE,
+        'default' => 0,
+        'description' => 'The {livefyre_enterprise_comments}.lfcid to which this comment is a reply. If set to 0, this comment is not a reply to an existing comment.',
+      ),
+      'uid' => array(
+        'description' => "The comment creator's id. Primary key of {users} table.",
+        'type' => 'int',
+        'unsigned' => TRUE,
+        'not null' => TRUE,
+        'default' => 0,
+      ),
+      'name' => array(
+        'type' => 'varchar',
+        'length' => 60,
+        'not null' => FALSE,
+        'description' => "The comment author's name. Uses {users}.name if the user is logged in, otherwise uses the value typed into the comment form.",
+      ),
+      'mail' => array(
+        'type' => 'varchar',
+        'length' => 64,
+        'not null' => FALSE,
+        'description' => "The comment author's e-mail address from the comment form, if user is anonymous, and the 'Anonymous users may/must leave their contact information' setting is turned on.",
+      ),
+      'created' => array(
+        'type' => 'int',
+        'not null' => TRUE,
+        'default' => 0,
+        'description' => 'Timestamp for when comment was created.',
+      ),
+      'hostname' => array(
+        'type' => 'varchar',
+        'length' => 128,
+        'not null' => TRUE,
+        'default' => '',
+        'description' => "The author's host name.",
+      ),
+      'homepage' => array(
+        'type' => 'varchar',
+        'length' => 255,
+        'not null' => FALSE,
+        'description' => "The comment author's home page address from the comment form, if user is anonymous, and the 'Anonymous users may/must leave their contact information' setting is turned on.",
+      ),
+      'path' => array(
+        'description' => 'The path where the comment is attached.',
+        'type' => 'varchar',
+        'length' => 255,
+        'not null' => TRUE,
+        'default' => ''
+      ),
+      'body' => array(
+        'description' => 'The body text of the comment.',
+        'type' => 'text',
+        'not null' => TRUE,
+      ),
+      'published' => array(
+        'type' => 'int',
+        'unsigned' => TRUE,
+        'not null' => TRUE,
+        'default' => 1,
+        'size' => 'tiny',
+        'description' => 'The published status of a comment. (0 = Not Published, 1 = Published)',
+      ),
+      'status' => array(
+        'type' => 'varchar',
+        'length' => 255,
+        'not null' => TRUE,
+        'default' => '',
+        'description' => 'The latest status of a comment in the Livefyre system.',
+      ),
+    ),
+    'unique keys' => array(
+      'lf_comment_id' => array('lf_comment_id')
+    ),
+    'indexes' => array(
+      'created' => array('created'),
+      'mail' => array('mail'),
+      'uid' => array('uid'),
+      'path' => array('path'),
+      'published' => array('published'),
+      'status' => array('status'),
+    ),
+    'foreign keys' => array(
+      'user_id' => array(
+        'table' => 'users',
+        'columns' => array('uid' => 'uid'),
+      ),
+    ),
+    'primary key' => array('lfcid'),
+  );
+
+  return $schema;
+}
+
+/**
+ * Implements hook_uninstall().
+ *
+ * Delete created variables.
+ */
+function livefyre_enterprise_uninstall() {
+  variable_del('livefyre_enterprise_site_id');
+  variable_del('livefyre_enterprise_site_key');
+  variable_del('livefyre_enterprise_since_id');
+  variable_del('livefyre_enterprise_network');
+  variable_del('livefyre_enterprise_network_key');
+  variable_del('livefyre_enterprise_auth_delegate');
+  variable_del('livefyre_enterprise_conv_load_callback');
+  variable_del('livefyre_enterprise_custom_css');
+  variable_del('livefyre_enterprise_environment');
+  variable_del('livefyre_enterprise_jr_capture');
+  variable_del('livefyre_enterprise_sync_activity_number');
+}
