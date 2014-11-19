@@ -6,9 +6,9 @@ configure = admin/config/user-interface/timeago
 files[] = timeago.install
 files[] = timeago.module
 
-; Information added by drupal.org packaging script on 2012-09-29
-version = "7.x-2.1"
+; Information added by Drupal.org packaging script on 2014-11-06
+version = "7.x-2.3"
 core = "7.x"
 project = "timeago"
-datestamp = "1348962069"
+datestamp = "1415314687"
 
