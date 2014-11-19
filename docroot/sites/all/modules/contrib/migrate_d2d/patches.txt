@@ -1,2 +1,0 @@
-https://www.drupal.org/files/issues/migrate_d2d-imagefield_missing_cols-2313985-1.patch
-https://www.drupal.org/files/issues/migrate_d2d-d7_youtube_fileclass-2320857-1.patch

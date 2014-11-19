@@ -5,22 +5,6 @@
  */
 
 /**
- * Implements hook_install().
- *
- * @param $phase
- *
- * @return array
- */
-function migrate_d2d_install() {
-  $t = get_t();
-  // We need to make sure we've got at least the Migrate 2.6 beta - identify
-  // it by the new MigrateDefaultFieldHandler class.
-  if (!class_exists('MigrateDefaultFieldHandler')) {
-    throw new Exception($t('Migrate 2.6 or greater is required by migrate_d2d'));
-  }
-}
-
-/**
  * Make sure any previously-encrypted source_database arguments are appropriately
  * marked as encrypted going forward.
  */
