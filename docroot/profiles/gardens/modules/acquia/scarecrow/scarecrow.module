@@ -573,11 +573,6 @@ function scarecrow_menu_alter(&$items) {
     // Disallow access to date popup config page.
     'admin/config/date/date_popup' => FALSE,
     'admin/reports/fields/permissions' => FALSE,
-    // Hide the main feeds.module menu item.  Should be all we need to hide for
-    // now, as nothing else seems to work without Feeds Admin UI.
-    'import' => FALSE,
-    // Also, hide the Feeds admin UI for now (WM-29)
-    'admin/structure/feeds' => FALSE,
     // Hide all akamai admin callbacks.
     'admin/config/system/akamai' => FALSE,
     'admin/config/system/akamai/settings' => FALSE,
