@@ -5,15 +5,17 @@
  * Provides a visitor context plugin for querystring params.
  */
 
+define('PERSONALIZE_COOKIE_EXISTS_PREFIX', 'has-cookie-');
+
 /**
  * Implements hook_menu().
  */
 function personalize_url_context_menu() {
   $items = array();
-  $items['admin/config/content/personalize/url_context'] = array(
+  $items['admin/config/content/personalize/browser_context'] = array(
     'type' => MENU_LOCAL_TASK,
-    'title' => 'Querystring Contexts',
-    'description' => 'Configure which querystring parameters can be used as visitor contexts.',
+    'title' => 'Browser Contexts',
+    'description' => 'Configure which querystring parameters and cookies can be used as visitor contexts.',
     'page callback' => 'drupal_get_form',
     'page arguments' => array('personalize_url_context_admin_form'),
     'access arguments' => array('administer personalize configuration'),
@@ -32,6 +34,13 @@ function personalize_url_context_personalize_visitor_context() {
     'handler' => array(
       'file' => 'QuerystringContext.inc',
       'class' => 'QuerystringContext',
+    ),
+  );
+  $info['cookie_context'] = array(
+    'path' => $path . '/visitor_context',
+    'handler' => array(
+      'file' => 'CookieContext.inc',
+      'class' => 'CookieContext',
     ),
   );
   return $info;
@@ -80,12 +89,10 @@ function personalize_url_context_page_build(&$page) {
 }
 
 /**
- * Configuration form for url querystring params.
+ * Configuration form for querystring params and cookies
  *
- * This form allows the specification of querystring parameters and their
- * corresponding sets of possible values so that these can be used for
- * targeting purposes. The lists of possible values are only needed for
- * explicit targeting.
+ * This form allows the specification of querystring parameters and cookies so
+ * that these can be used for targeting purposes.
  */
 function personalize_url_context_admin_form($form, &$form_state) {
   $form = array(
@@ -96,7 +103,7 @@ function personalize_url_context_admin_form($form, &$form_state) {
     )
   );
   $query_string_contexts = variable_get('personalize_url_querystring_contexts', _personalize_url_context_get_utm_parameter_names());
-  $form['contexts'] = array(
+  $form['querystring_contexts'] = array(
     '#prefix' => '<div class="personalize-url-context-textarea">',
     '#suffix' => '</div>',
     '#description' => t('List here all of the querystring parameters you might want to use for targeting purposes in your campaigns. Put each parameter on its own line.'),
@@ -105,6 +112,15 @@ function personalize_url_context_admin_form($form, &$form_state) {
     '#default_value' => !empty($query_string_contexts) ? implode("\r\n", $query_string_contexts) : '',
   );
 
+  $cookie_contexts = variable_get('personalize_cookie_contexts', array());
+  $form['cookie_contexts'] = array(
+    '#prefix' => '<div class="personalize-cookie-context-textarea">',
+    '#suffix' => '</div>',
+    '#description' => t('List here all of the cookies you might want to use for targeting purposes in your campaigns. Put each cookie on its own line.'),
+    '#type' => 'textarea',
+    '#title' => t('Cookie contexts'),
+    '#default_value' => !empty($cookie_contexts) ? implode("\r\n", $cookie_contexts) : '',
+  );
   $form['actions'] = array('#type' => 'actions');
   $form['actions']['submit_form'] = array(
     '#type' => 'submit',
@@ -133,12 +149,21 @@ function _personalize_url_context_get_utm_parameter_names() {
  * Submit callback for the configuration form.
  */
 function personalize_url_context_admin_form_submit($form, &$form_state) {
-  $contexts = array();
-  if ($form_state['values']['contexts']) {
-    $new_contexts = explode("\r\n", $form_state['values']['contexts']);
+  $querystring_contexts = array();
+  if ($form_state['values']['querystring_contexts']) {
+    $new_contexts = explode("\r\n", $form_state['values']['querystring_contexts']);
     foreach ($new_contexts as $context) {
-      $contexts[] = trim($context);
+      $querystring_contexts[] = trim($context);
     }
   }
-  variable_set('personalize_url_querystring_contexts', $contexts);
+  variable_set('personalize_url_querystring_contexts', $querystring_contexts);
+
+  $cookie_contexts = array();
+  if ($form_state['values']['cookie_contexts']) {
+    $new_contexts = explode("\r\n", $form_state['values']['cookie_contexts']);
+    foreach ($new_contexts as $context) {
+      $cookie_contexts[] = trim($context);
+    }
+  }
+  variable_set('personalize_cookie_contexts', $cookie_contexts);
 }

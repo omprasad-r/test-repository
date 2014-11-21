@@ -5,7 +5,7 @@
  * Tests for Personalize Elements module.
  */
 
-class PersonalizeElementsTest extends DrupalWebTestCase {
+class PersonalizeElementsTest extends PersonalizeBaseTest {
 
   public static function getInfo() {
     return array(
@@ -76,8 +76,8 @@ class PersonalizeElementsTest extends DrupalWebTestCase {
     $this->drupalPost('admin/structure/personalize/variations/personalize-elements/add', $edit, $this->getButton('save'));
     $this->assertText('You must choose an operation');
 
-    $edit['variation_type'] = 'replaceHtml';
-    $this->assertFieldByName('options[0][option_label]', PERSONALIZE_ELEMENTS_CONTROL_OPTION_LABEL);
+    $edit['variation_type'] = 'appendHtml';
+    $this->assertFieldByName('options[0][option_label]', PERSONALIZE_CONTROL_OPTION_LABEL);
     $this->drupalPost('admin/structure/personalize/variations/personalize-elements/add', $edit, $this->getButton('save'));
     $this->assertText($options_count_error);
     $this->drupalPost(NULL, array(), $this->getButton('add_another'));
@@ -88,27 +88,28 @@ class PersonalizeElementsTest extends DrupalWebTestCase {
     $edit['options[2][personalize_elements_content]'] = '<div>other content</div>';
     $this->drupalPost(NULL, $edit, $this->getButton('save'));
 
-    $option_set = personalize_option_set_load(1);
+    $option_sets = personalize_option_set_load_multiple(FALSE, array(), TRUE);
+    $option_set = reset($option_sets);
     $this->assertEqual(2, count($option_set->options));
     $edit = array();
     $edit['add_control_option'] = TRUE;
-    $this->drupalPost('admin/structure/personalize/variations/personalize-elements/manage/1/edit', $edit, $this->getButton('save'));
+    $this->drupalPost("admin/structure/personalize/variations/personalize-elements/manage/{$option_set->osid}/edit", $edit, $this->getButton('save'));
 
-    $option_set = personalize_option_set_load(1, TRUE);
+    $option_set = personalize_option_set_load($option_set->osid, TRUE);
     $this->assertEqual(3, count($option_set->options));
 
     // Add another element with a script tag.
-    $this->drupalGet('admin/structure/personalize/variations/personalize-elements/manage/1/edit');
-    $this->assertFieldByName('options[0][option_label]', PERSONALIZE_ELEMENTS_CONTROL_OPTION_LABEL);
+    $this->drupalGet("admin/structure/personalize/variations/personalize-elements/manage/{$option_set->osid}/edit");
+    $this->assertFieldByName('options[0][option_label]', PERSONALIZE_CONTROL_OPTION_LABEL);
     $this->drupalPost(NULL, array(), $this->getButton('add_another'));
     $edit = array();
     $edit['options[3][personalize_elements_content]'] = '<script type="text/javascript">alert("xss");</script>';
     $this->drupalPost(NULL, $edit, $this->getButton('save'));
     $this->assertText(t('Disallowed HTML tags were removed from 1 variation.'));
-    $option_set = personalize_option_set_load(1, TRUE);
+    $option_set = personalize_option_set_load($option_set->osid, TRUE);
     $control_option = array(
-      'option_id' => PERSONALIZE_ELEMENTS_CONTROL_OPTION_ID,
-      'option_label' => PERSONALIZE_ELEMENTS_CONTROL_OPTION_LABEL,
+      'option_id' => PERSONALIZE_CONTROL_OPTION_ID,
+      'option_label' => PERSONALIZE_CONTROL_OPTION_LABEL,
       'personalize_elements_content' => '',
     );
     $expected = array(
@@ -137,10 +138,10 @@ class PersonalizeElementsTest extends DrupalWebTestCase {
     // Remove one of the options by setting content to nothing.
     $edit = array();
     $edit['options[2][personalize_elements_content]'] = '';
-    $this->drupalPost('admin/structure/personalize/variations/personalize-elements/manage/1/edit', $edit, $this->getButton('save'));
+    $this->drupalPost("admin/structure/personalize/variations/personalize-elements/manage/{$option_set->osid}/edit", $edit, $this->getButton('save'));
     unset($expected[2]);
     $expected = array_values($expected);
-    $option_set = personalize_option_set_load(1, TRUE);
+    $option_set = personalize_option_set_load($option_set->osid, TRUE);
     $this->assertEqual(count($expected), count($option_set->options));
     foreach ($expected as $i => $option) {
       $this->assertEqual($option, $option_set->options[$i]);
@@ -149,10 +150,10 @@ class PersonalizeElementsTest extends DrupalWebTestCase {
     // Remove the control option.
     $edit = array();
     $edit['add_control_option'] = FALSE;
-    $this->drupalPost('admin/structure/personalize/variations/personalize-elements/manage/1/edit', $edit, $this->getButton('save'));
+    $this->drupalPost("admin/structure/personalize/variations/personalize-elements/manage/{$option_set->osid}/edit", $edit, $this->getButton('save'));
     unset($expected[0]);
     $expected = array_values($expected);
-    $option_set = personalize_option_set_load(1, TRUE);
+    $option_set = personalize_option_set_load($option_set->osid, TRUE);
     $this->assertEqual(count($expected), count($option_set->options));
     foreach ($expected as $i => $option) {
       $this->assertEqual($option, $option_set->options[$i]);
@@ -163,7 +164,7 @@ class PersonalizeElementsTest extends DrupalWebTestCase {
     $edit['options[1][personalize_elements_content]'] = '';
     $this->drupalPost('admin/structure/personalize/variations/personalize-elements/manage/1/edit', $edit, $this->getButton('save'));
     $this->assertText($options_count_error);
-    $option_set = personalize_option_set_load(1, TRUE);
+    $option_set = personalize_option_set_load($option_set->osid, TRUE);
     $this->assertEqual(count($expected), count($option_set->options));
     foreach ($expected as $i => $option) {
       $this->assertEqual($option, $option_set->options[$i]);
@@ -172,9 +173,9 @@ class PersonalizeElementsTest extends DrupalWebTestCase {
     // Add back the control option.
     $edit = array();
     $edit['add_control_option'] = TRUE;
-    $this->drupalPost('admin/structure/personalize/variations/personalize-elements/manage/1/edit', $edit, $this->getButton('save'));
+    $this->drupalPost("admin/structure/personalize/variations/personalize-elements/manage/{$option_set->osid}/edit", $edit, $this->getButton('save'));
     array_unshift($expected, $control_option);
-    $option_set = personalize_option_set_load(1, TRUE);
+    $option_set = personalize_option_set_load($option_set->osid, TRUE);
     $this->assertEqual(count($expected), count($option_set->options));
     foreach ($expected as $i => $option) {
       $this->assertEqual($option, $option_set->options[$i]);
@@ -186,14 +187,27 @@ class PersonalizeElementsTest extends DrupalWebTestCase {
       'pages_all' => 1,
       'pages' => 'about',
     );
-    $this->drupalPost('admin/structure/personalize/variations/personalize-elements/manage/1/edit', $edit, $this->getButton('save'));
-    $this->drupalGet('admin/structure/personalize/variations/personalize-elements/manage/1/edit');
+    $this->drupalPost("admin/structure/personalize/variations/personalize-elements/manage/{$option_set->osid}/edit", $edit, $this->getButton('save'));
+    $this->drupalGet("admin/structure/personalize/variations/personalize-elements/manage/{$option_set->osid}/edit");
     $this->assertFieldByName('pages', '');
 
     $edit['pages_all'] = 0;
     $this->drupalPost(NULL, $edit, $this->getButton('save'));
-    $this->drupalGet('admin/structure/personalize/variations/personalize-elements/manage/1/edit');
+    $this->drupalGet("admin/structure/personalize/variations/personalize-elements/manage/{$option_set->osid}/edit");
     $this->assertFieldByName('pages', 'about');
+
+    // Now edit  and specify '<front>' as the path.
+    $edit = array(
+      'pages' => '<front>',
+    );
+    $this->drupalPost("admin/structure/personalize/variations/personalize-elements/manage/{$option_set->osid}/edit", $edit, $this->getButton('save'));
+    $this->assertNoText('The selected pages must contain valid paths.');
+    // Now edit the action and specify an invalid path.
+    $edit = array(
+      'pages' => 'some invalid url',
+    );
+    $this->drupalPost("admin/structure/personalize/variations/personalize-elements/manage/{$option_set->osid}/edit", $edit, $this->getButton('save'));
+    $this->assertText('The selected pages must contain valid paths.');
   }
 
   /**
@@ -201,8 +215,8 @@ class PersonalizeElementsTest extends DrupalWebTestCase {
    */
   function testPersonalizeElementsAdminFilter() {
     $control_option = array(
-      'option_id' => PERSONALIZE_ELEMENTS_CONTROL_OPTION_ID,
-      'option_label' => PERSONALIZE_ELEMENTS_CONTROL_OPTION_LABEL,
+      'option_id' => PERSONALIZE_CONTROL_OPTION_ID,
+      'option_label' => PERSONALIZE_CONTROL_OPTION_LABEL,
       'personalize_elements_content' => '',
     );
 
@@ -214,13 +228,15 @@ class PersonalizeElementsTest extends DrupalWebTestCase {
       'agent_select' => 'test-agent',
       'title' => $this->randomName(),
       'selector' => '#some-id',
-      'variation_type' => 'replaceHtml',
+      'variation_type' => 'appendHtml',
       'options[1][option_label]' => 'first-option',
       'options[1][personalize_elements_content]' => '<script type="text/javascript">alert("xss");</script>',
     );
     $this->drupalPost('admin/structure/personalize/variations/personalize-elements/add', $edit, $this->getButton('save'));
     $this->assertText(t('Disallowed HTML tags were removed from 1 variation.'));
-    $option_set = personalize_option_set_load(1, TRUE);
+    $option_sets = personalize_option_set_load_multiple(FALSE, array(), TRUE);
+    $option_set = end($option_sets);
+    $option_set = personalize_option_set_load($option_set->osid, TRUE);
     $expected = array(
       0 => $control_option,
       1 => array(
@@ -245,10 +261,12 @@ class PersonalizeElementsTest extends DrupalWebTestCase {
     );
     $this->drupalPost('admin/structure/personalize/variations/personalize-elements/add', $edit, $this->getButton('save'));
     $this->assertNoText(t('Disallowed HTML tags were removed from 1 variation.'));
-    $option_set = personalize_option_set_load(2, TRUE);
+    $option_sets = personalize_option_set_load_multiple(FALSE, array(), TRUE);
+    $option_set = end($option_sets);
+    $option_set = personalize_option_set_load($option_set->osid, TRUE);
     $control_option = array(
-      'option_id' => PERSONALIZE_ELEMENTS_CONTROL_OPTION_ID,
-      'option_label' => PERSONALIZE_ELEMENTS_CONTROL_OPTION_LABEL,
+      'option_id' => PERSONALIZE_CONTROL_OPTION_ID,
+      'option_label' => PERSONALIZE_CONTROL_OPTION_LABEL,
       'personalize_elements_content' => '',
     );
     $expected = array(
@@ -276,7 +294,7 @@ class PersonalizeElementsTest extends DrupalWebTestCase {
       'agent_basic_info[title]' => $agent_name,
       'agent_basic_info[options][test_agent][use_client_side_goal_processing]' => FALSE,
       'title' => $this->randomName(),
-      'variation_type' => 'replaceHtml',
+      'variation_type' => 'appendHtml',
       'selector' => '#some-id',
       'add_control_option' => TRUE,
       'options[1][option_label]' => 'first-option',
@@ -291,7 +309,9 @@ class PersonalizeElementsTest extends DrupalWebTestCase {
     else {
       $this->fail("The agent was not saved");
     }
-    $option_set = personalize_option_set_load(1);
+    $option_sets = personalize_option_set_load_multiple(FALSE, array(), TRUE);
+    $option_set = end($option_sets);
+    $option_set = personalize_option_set_load($option_set->osid, TRUE);
     $this->assertEqual(2, count($option_set->options));
     $this->assertEqual($machine_name, $option_set->agent);
   }
@@ -318,6 +338,57 @@ class PersonalizeElementsTest extends DrupalWebTestCase {
   }
 
   /**
+   * Tests that inactive variation types are only available for backwards
+   * compatibility.
+   */
+  function testPersonalizeElementsStatus() {
+    $admin_user = $this->drupalCreateUser(array('access administration pages', 'administer site configuration', 'access content', 'manage personalized content'));
+    $this->drupalLogin($admin_user);
+
+    // First verify that the retired variation type is not available in a
+    // new form.
+    $this->drupalGet('admin/structure/personailze/variations/personalize-elements/add');
+    $this->assertNoRaw('<option value="replaceHtml">Replace the html</option>');
+
+    // Create an option set of an inactive variation type.
+    $option_set = array(
+      'label' => $this->randomName(),
+      'plugin' => 'elements',
+      'agent' => 'test-agent',
+      'executor' => 'personalizeElements',
+      'options' => array(
+        array(
+          'option_id' => PERSONALIZE_CONTROL_OPTION_ID,
+          'option_label' => PERSONALIZE_CONTROL_OPTION_LABEL,
+          'personalize_elements_content' => '',
+        ),
+        array(
+          'option_id' => personalize_generate_option_label(1),
+          'option_label' => $this->randomName(),
+          'personalize_elements_content' => $this->randomString(),
+        ),
+      ),
+      'data' => array(
+        'personalize_elements_selector' => '.some-class-name',
+        'personalize_elements_type' => 'replaceHtml',
+        'pages' => '',
+      ),
+    );
+    $option_set = personalize_option_set_save((object) $option_set);
+
+    // Edit the option set and verify that the inactive type is available in the
+    // variation type select list.
+    $this->drupalGet('admin/structure/personalize/variations/personalize-elements/manage/' . $option_set->osid . '/edit');
+    $this->assertOptionSelected('edit-variation-type', 'replaceHtml');
+
+    // Create a new element with an active variation type and verify that the
+    // edit page does not include the inactive variation type.
+    $active_option_set = $this->createPersonalizedElement(array('selector' => '.some-other-class-name', 'variation_type' => 'addClass'));
+    $this->drupalGet('admin/structure/personalize/variations/personalize-elements/manage/' . $active_option_set->osid . '/edit');
+    $this->assertNoRaw('<option value="replaceHtml">Replace the html</option>');
+  }
+
+  /**
    * Tests that the correct settings are added when Personalize Elements
    * are configured.
    */
@@ -331,7 +402,6 @@ class PersonalizeElementsTest extends DrupalWebTestCase {
     // Make sure the expected js settings are there.
     $settings = $this->drupalGetSettings();
     $personalize_elements_settings = $settings['personalize_elements'];
-    $this->assertEqual(PERSONALIZE_ELEMENTS_CONTROL_OPTION_ID, $personalize_elements_settings['controlOptionName']);
     $js_id = $js_id = personalize_stringify_osid($option_set->osid);
     $expected = array(
       $js_id => array(
@@ -352,14 +422,58 @@ class PersonalizeElementsTest extends DrupalWebTestCase {
     $this->drupalGet('');
     $settings = $this->drupalGetSettings();
     // There should be no settings on the home page.
-    $this->assertFalse(isset($settings['personalize_elements']));
+    $this->assertFalse(isset($settings['personalize_elements']['elements']));
 
     $this->drupalGet('user');
     // The settings should show up on the user page.
     $settings = $this->drupalGetSettings();
     $personalize_elements_settings = $settings['personalize_elements'];
-    $this->assertEqual(PERSONALIZE_ELEMENTS_CONTROL_OPTION_ID, $personalize_elements_settings['controlOptionName']);
     $this->assertEqual($expected, $personalize_elements_settings['elements']);
+
+    // Check for the contextual settings for a few of the variation types.
+    $this->assertEqual(t("Add CSS class"), $personalize_elements_settings['contextualVariationTypes']['addClass']['name']);
+    $this->assertFalse(isset($personalize_elements['contextualVariationTypes']['runJS']));
+  }
+
+  function testPersonalizeElementsCompletedCampaign() {
+    $admin_user = $this->drupalCreateUser(array('access administration pages', 'administer site configuration', 'access content', 'manage personalized content'));
+    $this->drupalLogin($admin_user);
+    $selector = '#my-id .my-class';
+    $variation_type = 'addClass';
+    $option_set = $this->createPersonalizedElement(array('selector' => $selector, 'variation_type' => $variation_type));
+    personalize_agent_set_status($option_set->agent, PERSONALIZE_STATUS_RUNNING);
+    $this->resetAll();
+    $this->drupalGet('');
+    // Make sure the expected js settings are there.
+    $settings = $this->drupalGetSettings();
+    $personalize_elements_settings = $settings['personalize_elements'];
+    $personalize_settings = $settings['personalize'];
+    $js_id = $js_id = personalize_stringify_osid($option_set->osid);
+    $expected = array(
+      $js_id => array(
+        'selector' => $selector,
+        'variation_type' => $variation_type,
+        'previewable' => TRUE,
+      )
+    );
+    $this->assertEqual($expected, $personalize_elements_settings['elements']);
+    // Assert that the option set settings are there.
+    $this->assertOptionSetSettings($personalize_settings, $js_id, $js_id, $js_id, $option_set->agent, 2, $option_set->options);
+    $this->assertTrue($personalize_settings['agent_map'][$option_set->agent]['active']);
+
+    // Now set the campaign's status to completed and confirm that the js settings are still there.
+    personalize_agent_set_status($option_set->agent, PERSONALIZE_STATUS_COMPLETED);
+    $this->resetAll();
+    $this->drupalGet('');
+    // Make sure the expected js settings are still there.
+    $settings = $this->drupalGetSettings();
+    $personalize_elements_settings = $settings['personalize_elements'];
+    $personalize_settings = $settings['personalize'];
+    $this->assertEqual($expected, $personalize_elements_settings['elements']);
+    // Assert that the option set settings are there.
+    $this->assertOptionSetSettings($personalize_settings, $js_id, $js_id, $js_id, $option_set->agent, 2, $option_set->options);
+    $this->assertTrue(isset($personalize_settings['agent_map'][$option_set->agent]['active']));
+    $this->assertFalse($personalize_settings['agent_map'][$option_set->agent]['active']);
   }
 
   /**
@@ -386,7 +500,7 @@ class PersonalizeElementsTest extends DrupalWebTestCase {
       'agent_select' => 'test-agent',
       'title' => $this->randomName(),
       'selector' => '#some-id',
-      'variation_type' => 'replaceHtml',
+      'variation_type' => 'appendHtml',
       'add_control_option' => TRUE,
       'pages' => '',
       'options[1][option_label]' => personalize_generate_option_label(1),
@@ -421,7 +535,7 @@ class PersonalizeElementsTest extends DrupalWebTestCase {
    * @return string
    *   The text of the button
    */
-  protected function getButton($type) {
+  protected function getButton($type = '') {
     switch ($type) {
       case 'add_another':
         return t('Add variation');
@@ -431,4 +545,7 @@ class PersonalizeElementsTest extends DrupalWebTestCase {
         return $type;
     }
   }
+
+
+
 }

@@ -69,6 +69,7 @@ function visitor_actions_ui_page_build(&$page) {
     if (visitor_actions_ui_nav_message_is_set()) {
       drupal_set_message(visitor_actions_ui_edit_mode_action_in_context(), 'visitor-actions-ui');
     }
+    $ignore = visitor_actions_ui_get_selector_ignore();
 
     $page['page_top']['visitor_actions_ui'] = array(
       '#access' => user_access('administer visitor actions'),
@@ -84,6 +85,8 @@ function visitor_actions_ui_page_build(&$page) {
               'visitor_actions' => array(
                 // @todo make this per-theme configurable.
                 'content_wrapper' => variable_get('visitor_actions_controls_selector', '#page-wrapper'),
+                'ignoreClasses' => $ignore['classes'],
+                'ignoreIds' => $ignore['ids'],
               ),
             ),
           ),
@@ -174,23 +177,78 @@ function visitor_actions_ui_library() {
     'title' => 'Personalization in-place action editor',
     'version' => VERSION,
     'js' => array(
-      // Monkey-patch in jQuery UI 1.10 Position at $.fn.position_visitor_actions_ui.
-      $path . '/js/jquery/ducktape.position.js' => array('group' => JS_LIBRARY),
       $path . '/js/visitor_actions_ui.editor.js' => $options,
     ),
     'css' => array(
-      $path . '/css/visitor_actions_ui.module.css',
       $path . '/css/visitor_actions_ui.theme.css',
     ),
     'dependencies' => array(
       array('system', 'jquery'),
       array('system', 'jquery.once'),
-      array('system', 'jquery.form'),
-      array('system', 'ui.position'),
-      array('system', 'drupal.form'),
-      array('system', 'drupal.ajax'),
+      array('visitor_actions_ui', 'ui.element_dialog'),
+      array('visitor_actions_ui', 'utilities.element_selector'),
       array('visitor_actions_ui', 'underscore'),
       array('visitor_actions_ui', 'backbone'),
+    ),
+  );
+
+  $libraries['ui.element_dialog'] = array(
+    'title' => 'A dialog solution that is anchored to a DOM element',
+    'version' => VERSION,
+    'js' => array(
+      $path . '/js/visitor_actions_ui.dialog.js' => $options,
+    ),
+    'css' => array(
+      $path . '/css/visitor_actions_ui.dialog.css',
+      $path . '/css/visitor_actions_ui.dialog.theme.css',
+    ),
+    'dependencies' => array(
+      array('system', 'jquery'),
+      array('system', 'jquery.once'),
+      array('system', 'jquery.form'),
+      array('system', 'drupal.form'),
+      array('system', 'drupal.ajax'),
+      array('visitor_actions_ui', 'ui.position.patched'),
+      array('visitor_actions_ui', 'utilities.backbone_parent'),
+      array('visitor_actions_ui', 'underscore'),
+      array('visitor_actions_ui', 'backbone'),
+    ),
+  );
+
+  $libraries['ui.position.patched'] = array(
+    'title' => 'Monkey-patched jQeuery UI position',
+    'version' => VERSION,
+    'js' => array(
+      // Monkey-patch in jQuery UI 1.10 Position at $.fn.position_visitor_actions_ui.
+      $path . '/js/jquery/ducktape.position.js' => array('group' => JS_LIBRARY),
+    ),
+    'dependencies' => array(
+      array('system', 'jquery'),
+      array('system', 'ui.position'),
+    ),
+  );
+
+  $libraries['utilities.element_selector'] = array(
+    'title' => 'Utility to generate the selector for an element',
+    'version' => VERSION,
+    'js' => array(
+      $path . '/js/visitor_actions_ui.selector.js' => array('group' => JS_LIBRARY),
+    ),
+    'dependencies' => array(
+      array('system', 'jquery'),
+    ),
+  );
+
+  $libraries['utilities.backbone_parent'] = array(
+    'title' => 'Utility to add simplified inheritance to Backbone objects.',
+    'version' => VERSION,
+    'js' => array(
+      $path . '/js/visitor_actions_ui.backbone_parent.js' => array('group' => JS_LIBRARY),
+    ),
+    'dependencies' => array(
+      array('system', 'jquery'),
+      array('visitor_actions_ui', 'backbone'),
+      array('visitor_actions_ui', 'underscore'),
     ),
   );
 
@@ -217,11 +275,14 @@ function visitor_actions_ui_library() {
  */
 function visitor_actions_ui_library_alter(&$libraries, $module) {
   $jquery_version = &drupal_static(__FUNCTION__, NULL);
+  $path = drupal_get_path('module', 'visitor_actions_ui');
   if ($module == 'system') {
     $jquery_version = $libraries['jquery']['version'];
+
+    // Tack on an additional JS file to noConflict mode jQuery into a variable.
+    $libraries['jquery']['js'][$path . '/js/jquery/alias.js'] = array('group' => JS_LIBRARY);
   }
   if ($jquery_version && $module == 'visitor_actions_ui') {
-    $path = drupal_get_path('module', 'visitor_actions_ui');
     // If the version of jQuery is old, we need to add `on` and `off`.
     if ($jquery_version < '1.7') {
       $libraries['action.editor']['js'][$path . '/js/jquery/ducktape.events.js'] = array('group' => JS_LIBRARY);
@@ -270,6 +331,7 @@ function visitor_actions_ui_libraries_info() {
         'minified' => array(
           'file' => 'underscore-min.js',
           'pattern' => '#VERSION *\W *[\'\"]{1}(.*?)[\'\"]{1}#',
+          'cols' => 2000,
         ),
       ),
     ),
@@ -505,6 +567,26 @@ function _visitor_actions_ui_libraries_get_preferred_variant_name($library) {
 }
 
 /**
+ * Implements hook_visitor_actions_selector_ignore().
+ */
+function visitor_actions_ui_visitor_actions_ui_selector_ignore() {
+  return array(
+    'classes' => array(
+      '[a-zA-Z0-9\_\-]*-processed',
+      'quickedit-[a-zA-Z0-9\_]*',
+      'visitor-actions-ui[a-zA-Z0-9\_\-]*',
+      'messages',
+      'contextual-links-[a-zA-Z/-/_]*'
+    ),
+    'ids' => array(
+      '^visitorActionsUI-',
+      '^visitorActionsUIDialog-',
+      '^panels-ipe-'
+    ),
+  );
+}
+
+/**
  * =======================================================================
  *  E N D  O F  C O N T R I B   M O D U L E   H O O K S
  * =======================================================================
@@ -706,6 +788,27 @@ function visitor_actions_ui_add_form_ajax_callback($form, &$form_state) {
   }
 
   return array('#type' => 'ajax', '#commands' => $commands);
+}
+
+/**
+ * Generates the ignore regular expressions for use when selecting elements.
+ *
+ * @return array
+ *   An array of two keys:
+ *   - classes: The regular expression to use for ignoring classes.
+ *   - ids: The regular expression to use for ignoring ids.
+ */
+function visitor_actions_ui_get_selector_ignore() {
+  $ignore = module_invoke_all('visitor_actions_ui_selector_ignore');
+  $parsed = array();
+  $parsed['classes'] = $parsed['ids'] = '';
+  foreach ($ignore as $type => $expressions) {
+    array_walk($expressions, function(&$expression) {
+      $expression = '(' . $expression . ')';
+    });
+    $parsed[$type] = implode('|', $expressions);
+  }
+  return $parsed;
 }
 
 /**

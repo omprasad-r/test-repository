@@ -4,7 +4,7 @@
  * Provides an agent type for testing purposes.
  */
 
-class PersonalizeTestAgent extends PersonalizeAgentBase implements PersonalizeAgentGoalInterface {
+class PersonalizeTestAgent extends PersonalizeAgentBase implements PersonalizeAgentGoalInterface, PersonalizeAgentReportInterface {
 
   public $goals_received = array();
 
@@ -12,7 +12,8 @@ class PersonalizeTestAgent extends PersonalizeAgentBase implements PersonalizeAg
    * Implements PersonalizeAgentInterface::create().
    */
   public static function create($agent_data) {
-    return new self($agent_data->machine_name, $agent_data->label, $agent_data->data, $agent_data->status, !empty($agent_data->started) ? $agent_data->started : NULL);
+    $status = personalize_agent_get_status($agent_data->machine_name);
+    return new self($agent_data->machine_name, $agent_data->label, $agent_data->data, $status, !empty($agent_data->started) ? $agent_data->started : NULL);
   }
 
   /**
@@ -42,7 +43,7 @@ class PersonalizeTestAgent extends PersonalizeAgentBase implements PersonalizeAg
   /**
    * Implements PersonalizeAgentInterface::optionsForm().
    */
-  public static function optionsForm($agent_data) {
+  public static function optionsForm($agent_data, $option_parents = array()) {
     $form = array();
     $form['use_client_side_goal_processing'] = array(
       '#type' => 'checkbox',
@@ -61,6 +62,22 @@ class PersonalizeTestAgent extends PersonalizeAgentBase implements PersonalizeAg
       'js' => array(
         drupal_get_path('module', 'personalize_test') . '/personalize_test.js' => array('type' => 'file', 'scope' => 'footer', 'defer' => TRUE),
       )
+    );
+  }
+
+  /**
+   * Implements PersonalizeAgentReportInterface::renderStatsforOptionSet().
+   */
+  public function renderStatsForOptionSet($option_set, $date_from, $date_to = NULL) {
+    return NULL;
+  }
+
+  /**
+   * Implements PersonalizeAgentReportInterface::buildCampaignReports().
+   */
+  public function buildCampaignReports($options) {
+    return array(
+      'report' => NULL,
     );
   }
 }

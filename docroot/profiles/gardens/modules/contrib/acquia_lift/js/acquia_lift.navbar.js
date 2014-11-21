@@ -3,7 +3,7 @@
  * personalize_ui.navbar.js
  */
 
-(function (Drupal, $) {
+(function ($, Drupal) {
 
 "use strict";
 
@@ -23,8 +23,8 @@ Drupal.behaviors.acquiaLiftNavbarMenu = {
             }
           },
           findItemElement: function ($item, $menu) {
-            var $campaigns = $item.children('div').children('a.acquia-lift-campaign')
-            var $contentVariations = $item.children('.acquia-lift-preview-option-set').children('span');
+            var $campaigns = $item.children('div.acquia-lift-menu-item');
+            var $contentVariations = $item.children('.acquia-lift-content-variation');
             var $handle = $campaigns.add($contentVariations);
             if ($handle.length) {
               return $handle;
@@ -43,4 +43,4 @@ Drupal.behaviors.acquiaLiftNavbarMenu = {
   }
 };
 
-}(Drupal, jQuery));
+}(Drupal.jQuery, Drupal));

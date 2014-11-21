@@ -56,11 +56,12 @@ class QuerystringContext extends PersonalizeContextBase {
   }
 
   /**
-   * Implements PersonalizeAgentInterface::getPossibleValues().
+   * Implements PersonalizeContextInterface::getPossibleValues().
    */
-  public function getPossibleValues() {
+  public function getPossibleValues($limit = FALSE) {
     $possible_values = array();
-    foreach ($this->selectedContext as $name) {
+    $options = $this->getOptions();
+    foreach ($options as $name => $info) {
       $possible_values[$name] = array(
         'value type' => 'string',
       );
@@ -74,6 +75,9 @@ class QuerystringContext extends PersonalizeContextBase {
       'value type' => 'string',
       'friendly name' => t('First referrer'),
     );
+    if ($limit) {
+      $possible_values = array_intersect_key($possible_values, array_flip($this->selectedContext));
+    }
     return $possible_values;
   }
 }

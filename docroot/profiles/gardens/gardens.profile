@@ -182,7 +182,7 @@ function gardens_installer_custom_submit($form, &$form_state) {
     variable_set('cache', 0);
     // Also make it so CSS and JS aggregation don't turn themselves back on;
     // see gardens_misc_cron().
-    variable_set('acquia_gardens_keep_js_css_caching_off', TRUE);
+    variable_set('acsf_disable_automatic_aggregation', TRUE);
   }
 
   // Syslog settings.

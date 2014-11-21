@@ -47,12 +47,21 @@
   padding-right: 0; /* LTR */
 }
 
+/* Menu wrapper container */
+#navbar-administration .navbar-tray-vertical .navbar-twisty > .menu-wrapper {
+  display: none;
+}
+#navbar-administration .navbar-tray-vertical .navbar-twisty.open > .menu-wrapper {
+  display: block;
+}
+
 /* Horizontal dropdowns */
 
 #navbar-administration .navbar-tray-acquia-lift.navbar-tray-horizontal .menu li:hover ul {
   display: block;
 }
-#navbar-administration .navbar-tray-acquia-lift.navbar-tray-horizontal .navbar-level-1 > ul {
+#navbar-administration .navbar-tray-acquia-lift.navbar-tray-horizontal .navbar-level-1 > ul,
+#navbar-administration .navbar-tray-acquia-lift.navbar-tray-horizontal .navbar-level-1 > .menu-wrapper {
   border-color: #dddddd;
   border-style: solid;
   border-width: 0 1px 1px;
@@ -60,6 +69,11 @@
   margin-left: -1px;
   position: absolute;
   top: 100%;
+}
+#navbar-administration .navbar-tray-acquia-lift.navbar-tray-horizontal .acquia-lift-scrollable {
+  max-height: 70vh;
+  overflow-y: auto;
+  padding-bottom: .3em;
 }
 #navbar-administration .navbar-tray-acquia-lift.navbar-tray-horizontal .menu ul ul {
   border-bottom: 1px solid #dddddd;
@@ -85,6 +99,82 @@
 #navbar-administration .navbar-tray-acquia-lift.navbar-tray-horizontal .acquia-lift-personalize-type-count.acquia-lift-empty span {
   background-color: gray;
 }
-#navbar-administration .acquia-lift-campaigns .navbar-level-2 > * > *:last-child {
-  padding-right: 1.667em;
+
+/* Campaign drop-down */
+#navbar-administration .acquia-lift-menu-item .acquia-lift-campaign {
+  float: left;
+}
+#navbar-administration .acquia-lift-menu-item .acquia-lift-campaign-edit {
+  float: right;
+  margin-left: 1.667em;
+}
+
+/* Page variation links */
+#navbar-administration .acquia-lift-menu-item .acquia-lift-preview-option {
+  float: left;
+}
+#navbar-administration .acquia-lift-menu-item .acquia-lift-variation-rename {
+  float: right;
+  margin-left: 1.667em;
+}
+#navbar-administration .acquia-lift-menu-item .acquia-lift-variation-delete {
+  float: right;
+  margin-left: .667em;
+}
+
+/* Displayed as links within menus */
+#navbar-administration .navbar-tray .acquia-lift-menu-link,
+#navbar-administration .menu .menu a.acquia-lift-menu-link {
+  color: #29aae1;
+}
+#navbar-administration .navbar-tray .acquia-lift-menu-link:hover,
+#navbar-administration .navbar-tray .acquia-lift-menu-link:active,
+#navbar-administration .menu .menu a.acquia-lift-menu-link:hover,
+#navbar-administration .menu .menu a.acquia-lift-menu-link:active {
+  color: #007ec0;
+}
+
+/** Create links */
+#navbar-administration .navbar-tray-horizontal .acquia-lift-menu-create {
+  border-top: 1px solid #ddd;
+  padding: .2em 1.3333em 1em 1.3333em;
+}
+#navbar-administration .navbar-tray-horizontal .menu ul li.last {
+  padding-top: .6em;
+}
+#navbar-administration .acquia-lift-menu-create:before {
+  content: '+';
+  font-weight: bold;
+  font-size: 1.667em;
+  padding-right: 0.2em;
+  vertical-align: text-bottom;
+}
+#navbar-administration .navbar-tray-acquia-lift.navbar-tray-horizontal .menu ul ul:last-child {
+  border-bottom: none;
+}
+
+/* General text */
+#navbar-administration .navbar-tray .acquia-lift-menu-disabled {
+  color: #c6c6c6;
+}
+#navbar-administration .navbar-tray a.acquia-lift-menu-disabled {
+  pointer-events: none;
+  cursor: default;
+}
+#navbar-administration .navbar-tray a.acquia-lift-menu-disabled:hover,
+#navbar-administration .navbar-tray a.acquia-lift-menu-disabled:active {
+  color: #c6c6c6;
+}
+
+/* Nested menu uls for data grouping (rather than visual grouping) */
+#navbar-administration .navbar-tray-acquia-lift.navbar-tray-horizontal .menu ul ul.innerMenuList {
+  border: none;
+}
+
+/* Additional edit links are only available in horizontal view */
+#navbar-administration .navbar-tray-vertical .acquia-lift-campaign-edit,
+#navbar-administration .navbar-tray-vertical .acquia-lift-variation-delete,
+#navbar-administration .navbar-tray-vertical .acquia-lift-variation-rename,
+#navbar-administration .navbar-tray-vertical .acquia-lift-page-variation-toggle {
+  display: none !important;
 }

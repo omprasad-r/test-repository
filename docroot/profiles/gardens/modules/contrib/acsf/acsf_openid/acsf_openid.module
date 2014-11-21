@@ -359,6 +359,8 @@ function acsf_openid_ax_uri_mapping() {
     'http://axschema.org/media/image/default' => array('picture', 'account'),
     // Date of the picture's last modification, so we can avoid downloading it.
     'http://drupalgardens.com/axschema/picture_time' => array('picture_time'),
+    // Role to be granted on the site.
+    'http://drupalgardens.com/axschema/role_name' => array('role_name'),
   );
 }
 
@@ -399,6 +401,7 @@ function acsf_openid_update_ax_data(array $response, $account) {
   $edit = array();
   $picture_uri = '';
   $picture_time = 0;
+  $role_name = NULL;
 
   foreach ($mapping as $ax_uri => $local_ax_field) {
     // The response has values for some fields we requested. We assume the
@@ -415,6 +418,10 @@ function acsf_openid_update_ax_data(array $response, $account) {
 
         case 'picture_time':
           $picture_time = $response['openid.ax.value.picture_time'];
+          break;
+
+        case 'role_name':
+          $role_name = $response['openid.ax.value.role_name'];
           break;
 
         default:
@@ -474,6 +481,25 @@ function acsf_openid_update_ax_data(array $response, $account) {
     // include this, the picture is removed in user_save(), until the issue in
     // http://drupal.org/node/935592 is fixed.
     $edit['account']['picture'] = $account->picture;
+  }
+
+  // Grant the role to the account.
+  if ($role_name) {
+    $role = user_role_load_by_name($role_name);
+    if ($role && !isset($account->roles[$role->rid])) {
+      $new_roles = $account->roles;
+      $new_roles[$role->rid] = $role->rid;
+      $edit['account']['roles'] = $new_roles;
+      drupal_set_message(t('Site Factory assigned the "@role_name" role to the account.', array(
+        '@role_name' => $role_name,
+      )));
+      watchdog('acsf_openid', 'Site Factory assigned the "@role" role to the account.', array('@role' => $role->name));
+    }
+    elseif (!$role) {
+      drupal_set_message(t('Automatic role assignment failed because the website does not have a "@role_name" role.', array(
+        '@role_name' => $role_name,
+      )), 'warning');
+    }
   }
 
   // Yes, we need to save the fields in each category in an individual

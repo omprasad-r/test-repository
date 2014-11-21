@@ -221,7 +221,7 @@ function personalize_blocks_build_personalized_block($osid) {
       $renderable['#first_option'] = $renderable['default_block'];
     }
     $renderable['#personalize_option_set'] = $option_set;
-    personalize_element_with_option_set($renderable, $option_set);
+    personalize_element_with_option_set($renderable, $option_set, TRUE);
     $renderable['#attached']['css'][] = drupal_get_path('module', 'personalize_blocks') . '/personalize-blocks.css';
 
     return $renderable;

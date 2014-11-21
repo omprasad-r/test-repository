@@ -47,6 +47,7 @@ input[type="submit"].personalize-add-link {
   padding: 0;
   margin: 0;
   height: 2em;
+  font-size: 1em;
   line-height: 2em;
   -moz-border-radius: 0;
   -webkit-border-radius: 0;
@@ -55,6 +56,9 @@ input[type="submit"].personalize-add-link {
 button.personalize-add-link:hover,
 input[type="submit"].personalize-add-link:hover {
   background: transparent;
+}
+.personalize-admin-content-header input.personalize-add-link {
+  font-size: inherit;
 }
 /* The + before the Add Goals button */
 /* Link look alike styling for add a goal button */

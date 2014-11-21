@@ -53,9 +53,10 @@ function personalize_test_menu() {
  * This enables testing scenarios with multiple things related to personal-
  * ization happening on the same page.
  *
- * @param string $option_sets
+ * @param string $personalized_content
  *   A string of comma separated integer values, each representing an option
- *   set to be output with that number of options.
+ *   set to be output with that number of options, or a simple string representing
+ *   the name of a multi-variate test whose option sets should be output.
  * @param string $goal_names
  *   A string of comma-separated goal names, each representing a goal to be
  *   set on the test-agent.
@@ -66,12 +67,12 @@ function personalize_test_menu() {
  *
  * @see PersonalizeTest::testPersonalizePage()
  */
-function personalize_test_personalized_page($option_sets = NULL, $goal_names = NULL, $use_multiple_agents = FALSE, $mvt = NULL, $mvt_num = NULL) {
-  if ($option_sets !== NULL) {
-    $option_sets = explode(',', $option_sets);
+function personalize_test_personalized_page($personalized_content = NULL, $goal_names = NULL, $use_multiple_agents = FALSE) {
+  if ($personalized_content !== NULL) {
+    $personalized_content = explode(',', $personalized_content);
   }
   else {
-    $option_sets = array(0 => 2);
+    $personalized_content = array(0 => 2);
   }
   $renderable = array(
     'content_link' => array(
@@ -79,23 +80,23 @@ function personalize_test_personalized_page($option_sets = NULL, $goal_names = N
     )
   );
   $loaded_option_sets = array();
-  foreach ($option_sets as $i => $num_options) {
-    $test_agent = $i == 0 ? 'test-agent' : ($use_multiple_agents ? 'test-agent-2' : 'test-agent');
-    $osid = 'test-os-' . ($i + 1);
-    // Don't use the mvt value if we have exceeded the number of Option Sets to
-    // be added to the MVT.
-    if ($mvt && $mvt_num && ($mvt_num <= $i)) {
-      $mvt = NULL;
+  foreach ($personalized_content as $i => $value) {
+    if (!is_numeric($value)) {
+      // This is an MVT machine name
+      $mvt = personalize_mvt_load($value);
+      foreach ($mvt->option_sets as $osid => $option_set) {
+        $loaded_option_sets[$osid] = $option_set;
+      }
     }
-    $option_set = create_dummy_option_set($osid, $test_agent, $num_options, $mvt);
-    $loaded_option_sets[$osid] = $option_set;
+    else {
+      $test_agent = $i == 0 ? 'test-agent' : ($use_multiple_agents ? 'test-agent-2' : 'test-agent');
+      $osid = 'test-os-' . ($i + 1);
+
+      $option_set = create_dummy_option_set($osid, $test_agent, $value, NULL, NULL);
+      $loaded_option_sets[$osid] = $option_set;
+    }
   }
   if (!empty($loaded_option_sets)) {
-    // We need to trick the personalize_option_set_load_multiple() function because
-    // our test Option Sets are not actually in the db - we'll just stick them in
-    // the static cache.
-    $static_cache = &drupal_static('personalize_option_set_load_multiple');
-    $static_cache = $loaded_option_sets;
     foreach ($loaded_option_sets as $osid => $option_set) {
       $renderable['content_' . $osid] = create_renderable_from_option_set($option_set);
     }
@@ -127,16 +128,19 @@ function personalize_test_personalized_page($option_sets = NULL, $goal_names = N
  * @return
  *   A stdClass object representing an option set.
  */
-function create_dummy_option_set($osid, $agent, $num_options, $mvt = NULL, $decision_name = NULL) {
+function create_dummy_option_set($osid, $agent, $num_options, $decision_name = NULL, $decision_point = NULL) {
+  $winner = variable_get('personalize_test_os_winner_' . $osid, NULL);
+
   $option_set = array(
     'osid' => $osid,
     'plugin' => 'test',
     'label' => 'Option Set ' . $osid,
     'agent' => $agent,
-    'mvt' => $mvt ? $mvt : '',
-    'decision_name' => $decision_name ? $decision_name : '',
+    'decision_name' => $decision_name ? $decision_name : $osid,
+    'decision_point' => $decision_point ? $decision_point : $osid,
     'executor' => 'show',
     'stateful' => 1,
+    'winner' => $winner
   );
   $options = array();
   for ($i = 0; $i < $num_options; $i++) {
@@ -172,7 +176,7 @@ function create_renderable_from_option_set($option_set) {
 
   $renderable['#personalize_option_set'] = $option_set;
   $renderable['#theme_wrappers'] = array('personalize_options_wrapper');
-  personalize_element_with_option_set($renderable, $option_set);
+  personalize_element_with_option_set($renderable, $option_set, TRUE);
   return $renderable;
 }
 /**
@@ -306,7 +310,6 @@ function personalize_test_personalize_default_agents() {
   $personalize_agent->plugin = 'test_agent';
   $personalize_agent->label = 'My Test Agent';
   $personalize_agent->data = array('use_client_side_goal_processing' => TRUE);
-  $personalize_agent->status = PERSONALIZE_STATUS_RUNNING;
   $items["test-agent"] = $personalize_agent;
 
   $personalize_agent = new stdClass();
@@ -316,7 +319,6 @@ function personalize_test_personalize_default_agents() {
   $personalize_agent->plugin = 'test_agent';
   $personalize_agent->label = 'My Second Test Agent';
   $personalize_agent->data = array('use_client_side_goal_processing' => TRUE);
-  $personalize_agent->status = PERSONALIZE_STATUS_RUNNING;
   $items["test-agent-2"] = $personalize_agent;
 
   $personalize_agent = new stdClass();
@@ -326,7 +328,6 @@ function personalize_test_personalize_default_agents() {
   $personalize_agent->plugin = 'test_agent';
   $personalize_agent->label = 'My Third Test Agent';
   $personalize_agent->data = array('use_client_side_goal_processing' => FALSE);
-  $personalize_agent->status = PERSONALIZE_STATUS_RUNNING;
   $items["test-agent-3"] = $personalize_agent;
   return $items;
 }

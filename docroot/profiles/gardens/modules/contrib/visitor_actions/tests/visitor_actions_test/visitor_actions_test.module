@@ -145,3 +145,33 @@ function visitor_actions_test_subscriber($name, $context) {
     drupal_set_message('Test action "form_submit" subscriber was fired!');
   };
 }
+
+/**
+ * Implements hook_ctools_plugin_api().
+ */
+function visitor_actions_test_ctools_plugin_api($owner, $api) {
+  if ($owner == 'visitor_actions' && $api == 'visitor_actions') {
+    return array('version' => 1);
+  }
+}
+
+/**
+ * Implements hook_visitor_actions_default_actions().
+ */
+function visitor_actions_test_visitor_actions_default_actions() {
+  $items = array();
+  $action = new stdClass();
+  $action->disabled = FALSE;
+  $action->api_version = 1;
+  $action->machine_name = 'test_action';
+  $action->plugin = 'link';
+  $action->label = 'My Test Action';
+  $action->identifier = 'div.some-class';
+  $action->event = 'click';
+  $action->client_side = 1;
+  $action->pages = '<front>';
+  $action->data = array();
+  $items["test_action"] = $action;
+
+  return $items;
+}

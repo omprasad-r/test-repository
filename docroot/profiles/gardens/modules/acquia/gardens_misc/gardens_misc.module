@@ -911,7 +911,7 @@ function gardens_misc_system_performance_settings_submit($form, &$form_state) {
   // in Gardens.
   $preprocess_css_turned_off = variable_get('preprocess_css') && empty($form_state['values']['preprocess_css']);
   $preprocess_js_turned_off = variable_get('preprocess_js') && empty($form_state['values']['preprocess_js']);
-  if ($preprocess_css_turned_off || $preprocess_js_turned_off) {
+  if (($preprocess_css_turned_off || $preprocess_js_turned_off) && !variable_get('acsf_disable_automatic_aggregation', FALSE)) {
     drupal_set_message(t('CSS and JavaScript aggregation can only be turned off temporarily in Drupal Gardens (for testing site changes). For performance reasons, they will be turned back on automatically after a few hours.'), 'warning');
   }
 }
@@ -2031,7 +2031,7 @@ function gardens_misc_fix_block_everything_dismiss_warning() {
 function gardens_misc_cron() {
   // Allow developers to bypass this behavior; see e.g.
   // gardens_installer_custom_submit().
-  if (!variable_get('acquia_gardens_keep_js_css_caching_off', FALSE) && scarecrow_is_enabled()) {
+  if (!variable_get('acsf_disable_automatic_aggregation', FALSE) && scarecrow_is_enabled()) {
     gardens_misc_verify_css_aggregation();
     gardens_misc_verify_javascript_aggregation();
   }

@@ -20,7 +20,7 @@ Drupal.personalize.agents.test_agent = {
     if (!session_id) {
       session_id = "anonymous";
     }
-    var callback = Drupal.visitorActions.preventDefaultCallback(jsEvent);
+    var callback = null;
     $.ajax({
       "url": '/personalize-test/send-goal/ajax/' + agent_name + '/' + session_id + '/' + goal_name + '/' + value,
       "complete": function(jqXHR, status) {
