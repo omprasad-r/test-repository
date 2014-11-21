@@ -36,14 +36,6 @@ function personalize_schema() {
         'not null' => TRUE,
         'default' => '',
       ),
-      'status' => array(
-        'description' => 'Integer representing the status of this agent.',
-        'type' => 'int',
-        'size' => 'tiny',
-        'unsigned' => TRUE,
-        'not null' => TRUE,
-        'default' => PERSONALIZE_STATUS_NOT_STARTED,
-      ),
       'started' => array(
         'description' => 'The Unix timestamp of when the agent was first activated.',
         'type' => 'int',
@@ -151,6 +143,12 @@ function personalize_schema() {
         'not null' => FALSE,
         'description' => 'The path to a local preview page for the option set.',
       ),
+      'uuid' => array(
+        'type' => 'char',
+        'length' => 36,
+        'default' => '',
+        'description' => 'The Universally Unique Identifier.',
+      ),
     ),
     'primary key' => array('osid'),
     'foreign keys' => array(
@@ -233,6 +231,12 @@ function personalize_schema() {
         'not null' => TRUE,
         'default' => 0,
       ),
+      'uuid' => array(
+        'type' => 'char',
+        'length' => 36,
+        'default' => '',
+        'description' => 'The Universally Unique Identifier.',
+      ),
     ),
     'primary key' => array('id'),
     'indexes' => array(
@@ -272,6 +276,14 @@ function personalize_uninstall() {
   variable_del('personalize_local_caching_storage');
   variable_del('personalize_use_admin_mode');
   variable_del('personalize_visitor_context_disabled');
+
+  // Delete the campaign status variables.
+  $result = db_select('personalize_agent', 'a')
+    ->fields('a')
+    ->execute();
+  foreach ($result as $row) {
+    variable_del("personalize_campaign_{$row->machine_name}_status");
+  }
 }
 
 /**
@@ -289,6 +301,7 @@ function rebuild_subscribers_for_goal_actions() {
  * Add a database column for specifying an agent's status.
  */
 function personalize_update_7001() {
+  drupal_load('module', 'personalize');
   db_add_field('personalize_agent', 'status', array(
     'description' => 'Integer representing the status of this agent.',
     'type' => 'int',
@@ -438,6 +451,7 @@ function personalize_update_7008() {
  * Rename personalize element control fields.
  */
 function personalize_update_7009() {
+  drupal_load('module', 'personalize');
   // Update the option id and label for any control options in personalize
   // elements option sets.
   $result = db_select('personalize_option_sets', 'o')
@@ -447,10 +461,10 @@ function personalize_update_7009() {
   foreach ($result as $row) {
     $options = unserialize($row->options);
     if ($options[0]['option_label'] === 'Control Option') {
-      $options[0]['option_label'] = PERSONALIZE_ELEMENTS_CONTROL_OPTION_LABEL;
+      $options[0]['option_label'] = PERSONALIZE_CONTROL_OPTION_LABEL;
     }
     if ($options[0]['option_id'] === 'control-option') {
-      $options[0]['option_id'] = PERSONALIZE_ELEMENTS_CONTROL_OPTION_ID;
+      $options[0]['option_id'] = PERSONALIZE_CONTROL_OPTION_ID;
     }
     db_update('personalize_option_sets')
       ->condition('osid', $row->osid)
@@ -463,6 +477,7 @@ function personalize_update_7009() {
  * Delete any goals that belong to campaigns that no longer exist.
  */
 function personalize_update_7010() {
+  drupal_load('module', 'personalize');
   // Get all the current campaigns.
   $all_agents = personalize_agent_load_multiple();
   $agents = array_keys($all_agents);
@@ -480,6 +495,102 @@ function personalize_update_7010() {
   }
 }
 
+/**
+ * Update fixed targeting rules to reference the origin context plugin.
+ */
+function personalize_update_7011() {
+  if (!module_exists('personalize')) {
+    $plugin_options = array();
+  }
+  else {
+    // Get all possible targeting values for all context plugins.
+    ctools_include('plugins');
+    $contexts = personalize_get_visitor_contexts();
+    $plugin_options = array();
+    foreach ($contexts as $plugin_name => $info) {
+      if ($class = ctools_plugin_load_class('personalize', 'visitor_context', $plugin_name, 'handler')) {
+        $context_options = call_user_func(array($class, 'getOptions'));
+        $plugin_options = array_merge($plugin_options, array_fill_keys(array_keys($context_options), $plugin_name));
+      }
+    }
+    // Add all targeting values from Lift that are allowed for fixed targeting selections.
+    $lift_values = array("c-cen","c-geo-c3","c-geo-cont","c-geo-usr","c-geo-wrg","c-time-gwp","c-time-ldp","c-time-lwp","c-time-tz","c-ua-bb","c-ua-mo","c-ua-os","c-usr-tld","c-wea-cw");
+    $plugin_options = array_merge($plugin_options, array_fill_keys(array_values($lift_values), 'acquia_lift_context'));
+  }
+
+  // Update any existing fixed targeting rules with the plugin name.
+  $result = db_select('personalize_option_sets', 'o')
+    ->fields('o', array('osid', 'options'))
+    ->execute();
+  foreach ($result as $row) {
+    $options = unserialize($row->options);
+    foreach ($options as &$option) {
+      if (!empty($option['fixed_targeting_rules'])) {
+        foreach ($option['fixed_targeting_rules'] as $key => &$rule) {
+          // There is a rule without a plugin defined here.
+          // Update the plugin if it can be found.  If it cannot be found that
+          // indicates a targeting value that is no longer available.
+          if (isset($plugin_options[$rule['context']])) {
+            $rule['plugin'] = $plugin_options[$rule['context']];
+          }
+          else {
+            // Remove this from the list of fixed_targeting features used.
+            $feature_index = array_search($key, $option['fixed_targeting']);
+            unset($option['fixed_targeting'][$feature_index]);
+            // Also remove the rule.
+            unset($option['fixed_targeting_rules'][$key]);
+          }
+        }
+      }
+    }
+    // Save the updated options back to the database.
+    db_update('personalize_option_sets')
+      ->condition('osid', $row->osid)
+      ->fields(array('options' => serialize($options)))
+      ->execute();
+  }
+}
+
+/**
+ * Remove campaign status from exportable configuration data.
+ */
+function personalize_update_7012() {
+  drupal_load('module', 'personalize');
+  // Set the status for all existing campaigns into variables if not already
+  // done so via UI.
+  $result = db_select('personalize_agent', 'a')
+    ->fields('a')
+    ->execute();
+  foreach ($result as $row) {
+    $varname = _personalize_agent_get_status_variable($row->machine_name);
+    $already_set = variable_get($varname, NULL);
+    if (empty($already_set)) {
+      variable_set('personalize_campaign_' . $row->machine_name . '_status', $row->status);
+    }
+  }
+  // Delete the column in the database.
+  db_drop_field('personalize_agent', 'status');
+}
+
+/**
+ * Add UUID support.
+ */
+function personalize_update_7013() {
+  // Make sure to add UUID field
+  if (!db_field_exists('personalize_option_sets', 'uuid')) {
+    db_add_field('personalize_option_sets', 'uuid', array('type' => 'char', 'length' => 36, 'default' => '', 'description' => 'The Universally Unique Identifier.'));
+  }
+}
+
+/**
+ * Add UUID support for campaign goals.
+ */
+function personalize_update_7014() {
+  // Make sure to add UUID field
+  if (!db_field_exists('personalize_campaign_goals', 'uuid')) {
+    db_add_field('personalize_campaign_goals', 'uuid', array('type' => 'char', 'length' => 36, 'default' => '', 'description' => 'The Universally Unique Identifier.'));
+  }
+}
 
 /**
  * Converts a feature string to an array with 'key' and 'value' elements.

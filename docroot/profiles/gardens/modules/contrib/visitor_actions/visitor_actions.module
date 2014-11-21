@@ -105,7 +105,10 @@ function visitor_actions_user_insert(&$edit, $account, $category) {
  * Implements hook_form_alter().
  */
 function visitor_actions_form_alter(&$form, &$form_state, $form_id) {
-  // Put callback at the top of stack to be sure that it will be called
+  // Add the current url into form storage for page comparison.  This allows
+  // accurate comparisons even when the form is submitted via AJAX.
+  $form_state['visitor_actions']['internal_path'] = current_path();
+  // Put callback at the top of stack to be sure that it will be called.
   array_unshift($form['#submit'], 'visitor_actions_form_submit_callback');
 }
 
@@ -151,7 +154,7 @@ function visitor_actions_form_submit_callback($form, &$form_state) {
       if (empty($action['pages'])) {
         $trigger = TRUE;
       }
-      elseif (visitor_actions_match_page($action['pages'])) {
+      elseif (visitor_actions_match_page($action['pages'], $form_state['visitor_actions']['internal_path'])) {
         $trigger = TRUE;
       }
       if ($trigger) {
@@ -245,16 +248,18 @@ function visitor_actions_page_build(&$page) {
 
 /**
  * Returns whether the supplied list of pages includes a match for
- * the current page.
+ * the current comparison page.
  *
  * @param $pages
  *   String containing a set of pages separated by \n, \r or \r\n.
+ * @param string $compare_path
+ *   The internal page path for comparison if different than the current path.
  * @return bool
  *   Returns TRUE if the current path is matched, FALSE otherwise.
  */
-function visitor_actions_match_page($pages) {
+function visitor_actions_match_page($pages, $compare_path = NULL) {
   // Convert the Drupal path to lowercase
-  $path = drupal_strtolower(drupal_get_path_alias($_GET['q']));
+  $path = empty($compare_path) ? drupal_strtolower(drupal_get_path_alias($_GET['q'])) : $compare_path;
   // Compare the lowercase internal and lowercase path alias (if any).
   $page_match = drupal_match_path($path, $pages);
   if ($path != $_GET['q']) {
@@ -289,7 +294,7 @@ function visitor_actions_get_actions() {
       $actions += visitor_actions_get_rules();
     }
     // Get all custom actions from the database.
-    $actions += visitor_actions_get_custom_actions();
+    $actions += visitor_actions_custom_load_multiple();
   }
 
   return $actions;
@@ -341,13 +346,18 @@ function visitor_actions_visitor_actions_info() {
 /**
  * Retrieves all custom actions that have been set up.
  */
-function visitor_actions_get_custom_actions() {
+function visitor_actions_custom_load_multiple($names = array()) {
   $custom_actions = array();
-  $result = db_select('visitor_actions_actions', 'a')
-    ->fields('a')
-    ->execute();
-  foreach ($result as $record) {
-    $custom_actions[$record->machine_name] = visitor_actions_unpack_action($record);
+  ctools_include('export');
+  if (empty($names)) {
+    $defaults = ctools_export_load_object('visitor_actions_actions', 'all');
+  }
+  else {
+    $defaults = ctools_export_load_object('visitor_actions_actions', 'names', $names);
+  }
+
+  foreach ($defaults as $action_name => $action) {
+    $custom_actions[$action_name] = (array) $action;
   }
   return $custom_actions;
 }
@@ -362,13 +372,8 @@ function visitor_actions_get_custom_actions() {
  *   An array representing the action or NULL if none was found.
  */
 function visitor_actions_custom_load($name) {
-  $result = db_select('visitor_actions_actions', 'a')
-    ->fields('a')
-    ->condition('machine_name', $name)
-    ->execute();
-  if ($record = $result->fetchObject()) {
-    return visitor_actions_unpack_action($record);
-  }
+  $actions = visitor_actions_custom_load_multiple(array($name));
+  return isset($actions[$name]) ? $actions[$name] : NULL;
 }
 
 /**
@@ -399,10 +404,29 @@ function visitor_actions_save_action($action) {
   if (is_array($fields['data'])) {
     $fields['data'] = serialize($fields['data']);
   }
-  db_merge('visitor_actions_actions')
-    ->key(array('machine_name' => $action['machine_name']))
-    ->fields($fields)
-    ->execute();
+  try {
+    db_merge('visitor_actions_actions')
+      ->key(array('machine_name' => $action['machine_name']))
+      ->fields($fields)
+      ->execute();
+  }
+  catch (Exception $e) {
+    drupal_set_message(t('There was a problem saving the visitor action @action_name', array('@action_name' => $action['machine_name'])), 'error');
+    return FALSE;
+  }
+  return TRUE;
+}
+
+/**
+ * Returns whether a machine name is already taken by an existing action.
+ *
+ * @param $machine_name
+ *   The machine name to check.
+ * @return boolean
+ */
+function visitor_actions_machine_name_exists($machine_name) {
+  $action = visitor_actions_custom_load($machine_name);
+  return !empty($action);
 }
 
 /**

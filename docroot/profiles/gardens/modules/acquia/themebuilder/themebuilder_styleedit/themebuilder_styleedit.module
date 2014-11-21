@@ -137,7 +137,9 @@ function themebuilder_styleedit_upload($image_type = FALSE) {
   if ($file && $image_type === 'favicon') {
     $favicon = themebuilder_styleedit_convert_to_favicon($file);
     if ($favicon) {
-      $file = $favicon;
+      // If $favicon->fid is set, file_save() will only update the file,
+      // instead of adding a new record.
+      $file = file_save($favicon);
     }
   }
 
@@ -184,6 +186,10 @@ function themebuilder_styleedit_convert_to_favicon($file) {
     $new_file->uri      = 'temporary://' . basename($filepath);
     $new_file->filemime = file_get_mimetype($new_file->filename);
     $new_file->filesize = filesize($filepath);
+    // Use old file id (fid), if available.
+    if ($file->fid) {
+      $new_file->fid = $file->fid;
+    }
     return $new_file;
   }
   return FALSE;

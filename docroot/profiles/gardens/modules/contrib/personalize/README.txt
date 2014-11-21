@@ -108,4 +108,5 @@ module.
 Current maintainers:
 -------------------------------------------------------------------------------
  * Katherine Bailey (katbailey) - http://drupal.org/user/172987
+ * Lisa Backer (eshta) - http://drupal.org/user/1951462
  * Dave Ingram (Dave.Ingram) - http://drupal.org/user/352282

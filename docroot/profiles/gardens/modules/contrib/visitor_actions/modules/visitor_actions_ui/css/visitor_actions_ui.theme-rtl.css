@@ -1,8 +1,3 @@
 /**
  * @file visitor_actions_ui.theme-rtl.css
  */
-
-.visitor-actions-ui-dialog > .visitor-actions-ui-dialog-pointer {
-  left: auto;
-  right: 18px;
-}

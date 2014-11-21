@@ -69,9 +69,19 @@ function acquia_lift_disable() {
  * Implements hook_uninstall().
  */
 function acquia_lift_uninstall() {
-  variable_del('acquia_lift_account_info');
-  variable_del('acquia_lift_client_side_goals');
-  variable_del('queue_class_acquia_lift_sync');
+  $vars = array(
+    'acquia_lift_account_info',
+    'acquia_lift_client_side_goals',
+    'acquia_lift_batch_decisions',
+    'acquia_lift_confidence_measure',
+    'queue_class_acquia_lift_sync',
+    'acquia_lift_min_runtime_num',
+    'acquia_lift_min_runtime_unit',
+    'acquia_lift_min_decisions',
+  );
+  foreach ($vars as $var) {
+    variable_del($var);
+  }
 
   if ($menu = menu_load('acquia-lift-controls')) {
     // Delete the menu items.
@@ -90,8 +100,21 @@ function acquia_lift_uninstall() {
     // Update the menu router information.
     menu_rebuild();
   }
+  // Delete any variables used to store report data sources for agents.
+  foreach (personalize_agent_load_multiple() as $agent) {
+    $variable_name = "acquia_lift_report_source_{$agent->machine_name}";
+    variable_del($variable_name);
+  }
 }
 
+/**
+ * Implements hook_schema().
+ */
+function acquia_lift_schema() {
+  return array(
+    'cache_acquia_lift_reports' => acquia_lift_get_report_cache_table_schema()
+  );
+}
 
 /**
  * Implements hook_requirements().
@@ -100,22 +123,8 @@ function acquia_lift_requirements($phase) {
   $requirements = array();
 
   if ($phase == 'runtime') {
-    $requirements['acquia_lift_chosen'] = array(
-      'title' => t('Acquia Lift: Chosen library'),
-      'value' => t('The chosen library is not present'),
-      'severity' => REQUIREMENT_ERROR,
-    );
-    if (function_exists('libraries_detect')) {
-      if (($library = libraries_detect('chosen')) && !empty($library['installed'])) {
-        $requirements['acquia_lift_chosen']['value'] = $library['version'];
-        $requirements['acquia_lift_chosen']['severity'] = REQUIREMENT_OK;
-      }
-      else if (!empty($library['error'])) {
-        $requirements['acquia_lift_chosen']['value'] = $library['error message'];
-      }
-    }
-    // Underscore and Backbone.
-    $libraries = array('underscore', 'backbone');
+    // Required JavaScript libraries.
+    $libraries = array('underscore', 'backbone', 'modernizr', 'chosen', 'qtip', 'd3', 'rickshaw');
     foreach ($libraries as $lib) {
       $requirements['acquia_lift_' . $lib] = array(
         'title' => t('Acquia Lift: @library', array('@library' => $lib)),
@@ -146,13 +155,14 @@ function acquia_lift_requirements($phase) {
 function _acquia_lift_build_menu($menu_name) {
   // Create a link for attaching option set preview triggers.
   $item = array(
-    'link_title' => 'All campaigns',
+    'link_title' => 'Campaigns',
     'link_path' => 'admin/structure/personalize',
     'menu_name' => $menu_name,
     'options' => array(
       'attributes' => array(
         'data-acquia-lift-personalize' => 'campaigns',
         'class' => array('acquia-lift-campaign-list', 'visitor-actions-ui-ignore'),
+        'id' => 'acquia-lift-menu-campaigns',
       ),
       'html' => FALSE,
     ),
@@ -164,14 +174,15 @@ function _acquia_lift_build_menu($menu_name) {
   // Create a new campaign link.
   $item = array(
     'link_title' => 'Add campaign',
-    'link_path' => 'admin/structure/personalize/add',
+    'link_path' => 'admin/structure/personalize/add/nojs',
     'menu_name' => $menu_name,
     'options' => array(
       'attributes' => array(
         'data-acquia-lift-personalize-mode' => 'campaign',
         'aria-role' => 'button',
         'aria-pressed' => 'false',
-        'class' => array('acquia-lift-campaign-new', 'visitor-actions-ui-ignore'),
+        'class' => array('acquia-lift-campaign-new', 'visitor-actions-ui-ignore', 'ctools-use-modal', 'ctools-modal-acquia-lift-style', 'acquia-lift-menu-create', 'acquia-lift-menu-link', 'overlay-exclude'),
+        'id' => 'acquia-lift-menu-campaign-add',
       ),
       'html' => FALSE,
     ),
@@ -183,13 +194,14 @@ function _acquia_lift_build_menu($menu_name) {
 
   // Create a link for attaching option sets.
   $item = array(
-    'link_title' => 'Content variations',
+    'link_title' => 'Variation sets',
     'link_path' => 'admin/structure/personalize/variations',
     'menu_name' => $menu_name,
     'options' => array(
       'attributes' => array(
         'data-acquia-lift-personalize' => 'option_sets',
-        'class' => array('acquia-lift-option-sets-list', 'visitor-actions-ui-ignore'),
+        'class' => array('acquia-lift-option-sets-list', 'visitor-actions-ui-ignore', 'overlay-exclude'),
+        'id' => 'acquia-lift-menu-option-sets'
       ),
       'html' => FALSE,
     ),
@@ -200,7 +212,7 @@ function _acquia_lift_build_menu($menu_name) {
 
   // Create a link for attaching option set preview triggers.
   $item = array(
-    'link_title' => 'Add content variation',
+    'link_title' => 'Create a variation set',
     'link_path' => 'admin/structure/personalize/variations',
     'menu_name' => $menu_name,
     'options' => array(
@@ -208,7 +220,8 @@ function _acquia_lift_build_menu($menu_name) {
         'data-acquia-lift-personalize-mode' => 'content-variation',
         'role' => 'button',
         'aria-pressed' => 'false',
-        'class' => array('acquia-lift-option-sets-new', 'visitor-actions-ui-ignore'),
+        'class' => array('acquia-lift-option-sets-new', 'visitor-actions-ui-ignore', 'acquia-lift-menu-create', 'acquia-lift-menu-link', 'overlay-exclude'),
+        'id' => 'acquia-lift-menu-option-set-add',
       ),
       'html' => FALSE,
       'fragment' => 'content-variations',
@@ -227,7 +240,8 @@ function _acquia_lift_build_menu($menu_name) {
     'options' => array(
       'attributes' => array(
         'data-acquia-lift-personalize' => 'goals',
-        'class' => array('acquia-lift-goals-list', 'visitor-actions-ui-ignore'),
+        'class' => array('acquia-lift-goals-list', 'visitor-actions-ui-ignore', 'overlay-exclude'),
+        'id' => 'acquia-lift-menu-goals',
       ),
       'html' => FALSE,
     ),
@@ -238,13 +252,14 @@ function _acquia_lift_build_menu($menu_name) {
 
   // Create a link for attaching Goals.
   $item = array(
-    'link_title' => 'Add goal',
-    'link_path' => 'admin/structure/visitor_actions/add',
+    'link_title' => 'Add a goal',
+    'link_path' => 'admin/structure/acquia_lift/goal/add/nojs',
     'menu_name' => $menu_name,
     'options' => array(
       'attributes' => array(
         'data-acquia-lift-personalize-mode' => 'goals',
-        'class' => array('acquia-lift-goals-new', 'visitor-actions-ui-ignore'),
+        'class' => array('acquia-lift-goals-new', 'visitor-actions-ui-ignore', 'acquia-lift-menu-create', 'acquia-lift-menu-link', 'ctools-use-modal', 'ctools-modal-acquia-lift-style', 'overlay-exclude'),
+        'id' => 'acquia-lift-menu-goal-add',
       ),
       'html' => FALSE,
     ),
@@ -255,7 +270,7 @@ function _acquia_lift_build_menu($menu_name) {
   menu_link_save($item);
 
 
-  // Create a link to the results page.
+  // Create a link to the reports page.
   $item = array(
     'link_title' => 'Reports',
     'link_path' => 'admin/structure/personalize/manage/acquia-lift-placeholder/report',
@@ -263,11 +278,29 @@ function _acquia_lift_build_menu($menu_name) {
     'options' => array(
       'attributes' => array(
         'class' => array('acquia-lift-results-list', 'visitor-actions-ui-ignore'),
+        'id' => 'acquia-lift-menu-reports',
       ),
       'html' => FALSE,
     ),
     'expanded' => 1,
     'weight' => 20,
+  );
+  menu_link_save($item);
+
+  // Create a link to toggle the agent status.
+  $item = array(
+    'link_title' => 'Status',
+    'link_path' => 'admin/structure/personalize/manage/acquia-lift-placeholder/status',
+    'menu_name' => $menu_name,
+    'options' => array(
+      'attributes' => array(
+        'class' => array('acquia-lift-menu-status', 'acquia-lift-menu-link', 'visitor-actions-ui-ignore', 'overlay-exclude'),
+        'id' => 'acquia-lift-menu-status',
+      ),
+      'html' => FALSE,
+    ),
+    'expanded' => 1,
+    'weight' => 30,
   );
   menu_link_save($item);
 
@@ -347,4 +380,91 @@ function acquia_lift_update_7004() {
 function acquia_lift_update_7005() {
   menu_delete_links('acquia-lift-controls');
   _acquia_lift_build_menu('acquia-lift-controls');
+}
+
+/**
+ * Update Acquia Lift links for usability.
+ */
+function acquia_lift_update_7006() {
+  menu_delete_links('acquia-lift-controls');
+  _acquia_lift_build_menu('acquia-lift-controls');
+}
+
+/**
+ * Update the campaigns menu to use simplified campaign modal process.
+ */
+function acquia_lift_update_7007() {
+  menu_delete_links('acquia-lift-controls');
+  _acquia_lift_build_menu('acquia-lift-controls');
+}
+
+/**
+ * Add a cache table for reporting data.
+ */
+function acquia_lift_update_7008() {
+  $schema = acquia_lift_get_report_cache_table_schema();
+  db_create_table('cache_acquia_lift_reports', $schema);
+}
+/**
+ * Update the goals menu to use simplified campaign modal process.
+ */
+function acquia_lift_update_7009() {
+  menu_delete_links('acquia-lift-controls');
+  _acquia_lift_build_menu('acquia-lift-controls');
+}
+
+/**
+ * Update the goals menu to take advantage of dynamically resized modals.
+ */
+function acquia_lift_update_7010() {
+  menu_delete_links('acquia-lift-controls');
+  _acquia_lift_build_menu('acquia-lift-controls');
+}
+
+/**
+ * Update goals to the visitor actions machine name specification.
+ */
+function acquia_lift_update_7011() {
+  $result = db_select('personalize_campaign_goals', 'g')
+    ->fields('g', array('id', 'action'))
+    ->execute();
+  foreach ($result as $row) {
+    $updated = str_replace('-', '_', $row->action);
+    if ($updated == $row->action) {
+      continue;
+    }
+    db_update('personalize_campaign_goals')
+      ->condition('id', $row->id)
+      ->fields(array('action' => $updated))
+      ->execute();
+    db_update('visitor_actions_actions')
+      ->condition('machine_name', $row->action)
+      ->fields(array('machine_name' => $updated))
+      ->execute();
+  }
+}
+
+/**
+ * Update Acquia Lift menu bar with id selectors.
+ */
+function acquia_lift_update_7012() {
+  menu_delete_links('acquia-lift-controls');
+  _acquia_lift_build_menu('acquia-lift-controls');
+}
+
+/**
+ * Update Acquia Lift menu bar to add 'overlay-exclude' class.
+ */
+function acquia_lift_update_7013() {
+  menu_delete_links('acquia-lift-controls');
+  _acquia_lift_build_menu('acquia-lift-controls');
+}
+
+/**
+ * Helper to get the schema for the cache table.
+ */
+function acquia_lift_get_report_cache_table_schema() {
+  $table_schema = drupal_get_schema_unprocessed('system', 'cache');
+  $table_schema['description'] = 'Cache table for Acquia Lift to store reporting data.';
+  return $table_schema;
 }

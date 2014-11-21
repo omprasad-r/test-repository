@@ -92,14 +92,67 @@ function personalize_admin_form_submit($form, &$form_state) {
  *     if no context options are available to show
  */
 function personalize_admin_build_visitor_context_select($settings, $exclude_disallowed = TRUE, $agent_data = NULL) {
-  $disallowed = $exclude_disallowed ? variable_get('personalize_visitor_context_disabled', array()) : array();
-  $contexts = personalize_get_visitor_contexts();
-  $groups = array('Miscellaneous' => array());
+  $groups = personalize_get_grouped_context_options($agent_data, $exclude_disallowed);
+  // We'll need an array of default values.
   $selected = array();
+  // Count the number of items in total so we can determine the correct size of
+  // the multi-select element.
+  $group_count = 0;
+  foreach ($groups as $group) {
+    $group_count++;
+    if (is_array($group)) {
+      $group_count = $group_count + count($group);
+      foreach ($group as $option_name => $friendly_name) {
+        list($plugin_name, $code) = explode(PERSONALIZE_TARGETING_ADMIN_SEPARATOR, $option_name);
+        // Build up our default values based on the settings passed in.
+        if (isset($settings[$plugin_name][$code])) {
+          $selected[$option_name] = $option_name;
+        }
+      }
+    }
+  }
+  if ($group_count === 0) {
+    return FALSE;
+  }
+  $element = array(
+    '#type' => 'select',
+    '#title' => t('Visitor contexts to use for automatic targeting'),
+    '#options' => $groups,
+    '#multiple' => TRUE,
+    '#default_value' => $selected,
+    '#size' => $group_count > 0 ? $group_count : 1,
+  );
+  return $element;
+}
+
+/**
+ * Returns the available context options, sorted into groups.
+ *
+ * The array returned is suitable for use in a select element.
+ *
+ * @param null $agent
+ *   An object representing an agent, if these settings apply to an agent.
+ * @param bool $exclude_disallowed
+ *   Whether to exclude any contexts that have been set as disallowed.
+ * @param array $exclude_plugins
+ *   An array of plugins to be excluded from the list.
+ * @return array
+ *   An associative array of available contexts where the keys are group names
+ *   and each value is an associative array  of contexts with context name and
+ *   friendly name as key and value respectively.
+ */
+function personalize_get_grouped_context_options($agent = NULL, $exclude_disallowed = TRUE, $exclude_plugins = array()) {
+  ctools_include('plugins');
+  $disallowed = $exclude_disallowed ? variable_get('personalize_visitor_context_disabled', array()) : array();
+  $groups = array('Miscellaneous' => array());
+  $contexts = personalize_get_visitor_contexts();
   foreach ($contexts as $plugin_name => $plugin_info) {
+    if (in_array($plugin_name, $exclude_plugins)) {
+      continue;
+    }
     if ($class = ctools_plugin_load_class('personalize', 'visitor_context', $plugin_name, 'handler')) {
-      if (!empty($agent_data)) {
-        if (!call_user_func(array($class, 'allowedFromAgent'), $agent_data)) {
+      if (!empty($agent)) {
+        if (!call_user_func(array($class, 'allowedFromAgent'), $agent)) {
           continue;
         }
       }
@@ -109,7 +162,7 @@ function personalize_admin_build_visitor_context_select($settings, $exclude_disa
         if (isset($disallowed[$plugin_name][$code])) {
           continue;
         }
-        $option_name = $plugin_name . '__' . $code;
+        $option_name = $plugin_name . PERSONALIZE_TARGETING_ADMIN_SEPARATOR . $code;
         if (isset($info['group'])) {
           $group = $info['group'];
           if (!isset($groups[$group])) {
@@ -120,9 +173,6 @@ function personalize_admin_build_visitor_context_select($settings, $exclude_disa
         else {
           $groups['Miscellaneous'][$option_name] = $info['name'];
         }
-        if (isset($settings[$plugin_name][$code])) {
-          $selected[$option_name] = $option_name;
-        }
       }
     }
   }
@@ -132,26 +182,7 @@ function personalize_admin_build_visitor_context_select($settings, $exclude_disa
   if (!empty($misc)) {
     $groups['Miscellaneous'] = $misc;
   }
-  // Get the number of items in the select element.
-  $group_count = 0;
-  foreach ($groups as $group) {
-    $group_count++;
-    if (is_array($group)) {
-      $group_count = $group_count + count($group);
-    }
-  }
-  if ($group_count === 0) {
-    return FALSE;
-  }
-  $element = array(
-    '#type' => 'select',
-    '#title' => t('Visitor contexts'),
-    '#options' => $groups,
-    '#multiple' => TRUE,
-    '#default_value' => $selected,
-    '#size' => $group_count > 0 ? $group_count : 1,
-  );
-  return $element;
+  return $groups;
 }
 
 /**
@@ -169,7 +200,7 @@ function personalize_admin_convert_visitor_context_form_values($values) {
   $selected = array_filter($values);
   foreach ($selected as $name => $value) {
     // Element names are in the form {$plugin_name}__{$element_name}
-    list($plugin_name, $element_name) = explode('__', $name);
+    list($plugin_name, $element_name) = explode(PERSONALIZE_TARGETING_ADMIN_SEPARATOR, $name);
     if (!isset($visitor_context[$plugin_name])) {
       $visitor_context[$plugin_name] = array();
     }
@@ -188,64 +219,88 @@ function personalize_agent_list() {
   $header = array(
     array('data' => t('Campaign name')),
     array('data' => t('Type')),
-    array('data' => t('Status')),
-    array('data' => t('Start/stop')),
+    array('data' => t('Start/pause')),
     array('data' => t('Operations'), 'colspan' => 4),
   );
-  $rows = array();
-
-  foreach (personalize_agent_load_multiple(array(), array(), FALSE, TRUE, 'label') as $agent) {
-    // The ability to delete depends on the storage type and on whether the campaign has started
-    // or contains option sets.
-    $can_delete = personalize_delete_agent_access($agent);
-    $delete_link = '';
-    // Determine storage
-    switch ($agent->export_type) {
-      case EXPORT_IN_DATABASE | EXPORT_IN_CODE:
-        $storage = t('Overridden');
-        if ($can_delete) {
-          $delete_link = l(t('Revert'), 'admin/structure/personalize/manage/'. $agent->machine_name .'/delete');
-        }
-        break;
-      case EXPORT_IN_DATABASE:
-        $storage = t('Normal');
-        if ($can_delete) {
-          $delete_link = l(t('Delete'), 'admin/structure/personalize/manage/'. $agent->machine_name .'/delete');
-        }
-        break;
-      case EXPORT_IN_CODE:
-        $storage = t('Default');
-        break;
-    }
-    $status_toggle_form = drupal_get_form("personalize_toggle_status_{$agent->machine_name}_form", $agent->machine_name, $agent->status);
-    // @todo We are ignoring the "storage" info and the clone/export functionality
-    //   for now. Revisit once we can provide full support for clone/export.
-    $plugin = personalize_agent_load_agent($agent->machine_name);
-    $tablerow = array(
-      array('data' => check_plain($agent->label)),
-      array('data' => $agent->plugin),
-      array('data' => $status_map[$agent->status]),
-      array('data' => drupal_render($status_toggle_form)),
-      //array('data' => $storage),
-      array('data' => l(t('Edit'), 'admin/structure/personalize/manage/'. $agent->machine_name .'/edit')),
-      array('data' => $plugin instanceof PersonalizeAgentReportInterface ? l(t('View reports'), 'admin/structure/personalize/manage/'. $agent->machine_name .'/report') : ''),
-      //array('data' => l(t('Export'), 'admin/structure/personalize/manage/'. $agent->machine_name .'/export')),
-      //array('data' => l(t('Clone'), 'admin/structure/personalize/manage/'. $agent->machine_name .'/clone')),
-      array('data' => $delete_link),
+  $agents = personalize_agent_load_multiple(array(), array(), FALSE, TRUE, 'label');
+  if (empty($agents)) {
+    return array(
+      'no_agents' => array(
+        '#markup' => '<div>' . t('No agents available.') . '</div>'
+      )
     );
-    $rows[] = $tablerow;
   }
-
-  if (empty($rows)) {
-    $rows[] = array(array('data' => t('No agents available.'), 'colspan' => 6));
-  }
-
-  $build = array(
-    '#theme' => 'table',
-    '#header' => $header,
-    '#rows' => $rows,
-    '#attributes' => array('id' => 'personalize'),
+  $sorted_agents = array(
+    PERSONALIZE_STATUS_NOT_STARTED => array(),
+    PERSONALIZE_STATUS_RUNNING => array(),
+    PERSONALIZE_STATUS_PAUSED => array(),
+    PERSONALIZE_STATUS_COMPLETED => array()
   );
+
+  foreach ($agents as $agent) {
+    $agent_status = personalize_agent_get_status($agent->machine_name);
+    $sorted_agents[$agent_status][] = $agent;
+  }
+
+  $build = array();
+  foreach ($sorted_agents as $status => $agents) {
+    if (empty($agents)) {
+      continue;
+    }
+    $build['status_' . $status] = array(
+      '#markup' => '<h2>' . $status_map[$status] . '</h2>'
+    );
+    $rows = array();
+    foreach ($agents as $agent) {
+      // The ability to delete depends on the storage type and on whether the campaign has started
+      // or contains option sets.
+      $can_delete = personalize_delete_agent_access($agent);
+      $delete_link = '';
+      // Determine storage
+      switch ($agent->export_type) {
+        case EXPORT_IN_DATABASE | EXPORT_IN_CODE:
+          $storage = t('Overridden');
+          if ($can_delete) {
+            $delete_link = l(t('Revert'), 'admin/structure/personalize/manage/'. $agent->machine_name .'/delete');
+          }
+          break;
+        case EXPORT_IN_DATABASE:
+          $storage = t('Normal');
+          if ($can_delete) {
+            $delete_link = l(t('Delete'), 'admin/structure/personalize/manage/'. $agent->machine_name .'/delete');
+          }
+          break;
+        case EXPORT_IN_CODE:
+          $storage = t('Default');
+          break;
+      }
+      $agent_status = personalize_agent_get_status($agent->machine_name);
+      $status_toggle_form = drupal_get_form("personalize_toggle_status_{$agent->machine_name}_form", $agent->machine_name, $agent_status);
+      // @todo We are ignoring the "storage" info and the clone/export functionality
+      //   for now. Revisit once we can provide full support for clone/export.
+      $plugin = personalize_agent_load_agent($agent->machine_name);
+      $tablerow = array(
+        array('data' => check_plain($agent->label)),
+        array('data' => $agent->plugin),
+        array('data' => drupal_render($status_toggle_form)),
+        //array('data' => $storage),
+        array('data' => l(t('Edit'), 'admin/structure/personalize/manage/'. $agent->machine_name .'/edit')),
+        array('data' => $plugin instanceof PersonalizeAgentReportInterface && ($agent_status > PERSONALIZE_STATUS_NOT_STARTED) ? l(t('View reports'), 'admin/structure/personalize/manage/'. $agent->machine_name .'/report') : ''),
+        //array('data' => l(t('Export'), 'admin/structure/personalize/manage/'. $agent->machine_name .'/export')),
+        //array('data' => l(t('Clone'), 'admin/structure/personalize/manage/'. $agent->machine_name .'/clone')),
+        array('data' => $delete_link),
+      );
+      $rows[] = $tablerow;
+    }
+
+    $build['table_' . $status] = array(
+      '#theme' => 'table',
+      '#header' => $header,
+      '#rows' => $rows,
+      '#attributes' => array('id' => 'personalize'),
+    );
+  }
+
   return $build;
 }
 
@@ -276,7 +331,7 @@ function personalize_option_set_list($form, &$form_state) {
     $delete_link = module_hook($option_set_plugin['module'], 'personalize_delete_link') ? module_invoke($option_set_plugin['module'], 'personalize_delete_link', $option_set) : '';
     $campaign = personalize_agent_load($option_set->agent);
     $rows[] = array(
-      $option_set->label,
+      check_plain($option_set->label),
       $option_set->plugin,
       l($campaign->label, 'admin/structure/personalize/manage/' . $option_set->agent),
       !empty($edit_link) ? l(t('edit'), $edit_link) : '',
@@ -327,7 +382,7 @@ function personalize_option_set_list_ajax_callback($form, &$form_state) {
  * Menu callback for displaying a list of campaign goals.
  */
 function personalize_goals_list($form, &$form_state) {
-  $goals = personalize_goal_load_by_conditions();
+  $goals = personalize_goal_load_multiple();
   $actions = personalize_goals_options();
 
   $header = array(
@@ -340,13 +395,13 @@ function personalize_goals_list($form, &$form_state) {
 
   $rows = array();
   foreach($goals as $goal) {
-    $campaign = personalize_agent_load($goal['agent']);
+    $campaign = personalize_agent_load($goal->agent);
     $rows[] = array(
-      $actions[$goal['action']],
-      $campaign->label,
-      $goal['value'],
-      l(t('edit'), 'admin/structure/personalize/manage/' . $goal['agent'], array('query' => array('goal' => $goal['id']))),
-      l(t('delete'), 'admin/structure/personalize/goals/' . $goal['id'] . '/delete'),
+      $actions[$goal->action],
+      check_plain($campaign->label),
+      $goal->value,
+      l(t('edit'), 'admin/structure/personalize/manage/' . $goal->agent, array('query' => array('goal' => $goal->id))),
+      l(t('delete'), 'admin/structure/personalize/goals/' . $goal->id . '/delete'),
     );
   }
 
@@ -370,17 +425,17 @@ function personalize_goals_list($form, &$form_state) {
  */
 function personalize_admin_goal_delete($form, &$form_state, $goal) {
   $options = personalize_goals_options();
-  $campaign = personalize_agent_load($goal['agent']);
-  if ($campaign->status == PERSONALIZE_STATUS_RUNNING) {
+  $campaign = personalize_agent_load($goal->agent);
+  if (personalize_agent_get_status($campaign->machine_name) == PERSONALIZE_STATUS_RUNNING) {
     $description = t('The %goal goal will no longer be tracked in the currently running %campaign campaign.', array(
       '%campaign' => $campaign->label,
-      '%goal' => $options[$goal['action']]
+      '%goal' => $options[$goal->action]
     ));
   }
   else {
     $description = t('The %goal goal will no longer be tracked when the %campaign campaign is started.', array(
       '%campaign' => $campaign->label,
-      '%goal' => $options[$goal['action']]
+      '%goal' => $options[$goal->action]
     ));
   }
   $form['goal'] = array(
@@ -388,7 +443,7 @@ function personalize_admin_goal_delete($form, &$form_state, $goal) {
     '#value' => $goal,
   );
   return confirm_form($form, t('Are you sure you want to delete %goal from %campaign?', array(
-    '%goal' => $options[$goal['action']],
+    '%goal' => $options[$goal->action],
     '%campaign' => $campaign->label,
   )), 'admin/structure/personalize/goals', $description);
 }
@@ -397,7 +452,7 @@ function personalize_admin_goal_delete($form, &$form_state, $goal) {
  * Form submission handler to delete a specific goal.
  */
 function personalize_admin_goal_delete_submit($form, &$form_state) {
-  personalize_goal_delete($form_state['values']['goal']['id']);
+  personalize_goal_delete($form_state['values']['goal']->id);
   $form_state['redirect'] = 'admin/structure/personalize/goals';
 }
 
@@ -415,7 +470,7 @@ function personalize_status_toggle_form($form, &$form_state, $agent_name, $curre
   // If called via Ajax, then retrieve the new status values from the previous submit.
   if (!empty($form_state['values']['agent'])) {
     $agent_data = personalize_agent_load($agent_name);
-    $current_status = $agent_data->status;
+    $current_status = personalize_agent_get_status($agent_data->machine_name);
   }
   $form = personalize_status_toggle_form_definition($agent_name, $current_status, FALSE, $ajax_callback);
   return $form;
@@ -439,22 +494,7 @@ function personalize_status_toggle_form_definition($agent_name, $current_status,
   $form['#prefix'] = '<div id="personalize-status-toggle-form">';
   $form['#suffix'] = '</div>';
 
-  switch ($current_status) {
-    case PERSONALIZE_STATUS_NOT_STARTED:
-      $new_status = PERSONALIZE_STATUS_RUNNING;
-      $button_text = t('Start');
-      break;
-    case PERSONALIZE_STATUS_PAUSED:
-      $new_status = PERSONALIZE_STATUS_RUNNING;
-      $button_text = t('Resume');
-      break;
-    case PERSONALIZE_STATUS_RUNNING:
-      $new_status = PERSONALIZE_STATUS_PAUSED;
-      $button_text = t('Pause');
-      break;
-    default:
-      $new_status = FALSE;
-  }
+  list($new_status, $button_text) = _personalize_status_toggle_next($current_status);
   if (!$new_status) {
     return array();
   }
@@ -548,6 +588,7 @@ function personalize_status_toggle_message($agent_name, $current_status) {
     'option_sets' => array(),
     'option_message' => '',
     'alert_message' => '',
+    'agent_name' => $agent_name,
   );
   $option_sets = personalize_option_set_load_by_agent($agent_name);
   foreach($option_sets as $option_set) {
@@ -570,7 +611,7 @@ function personalize_status_toggle_message($agent_name, $current_status) {
     }
     // Generate the message shown for each 'winning' option.
     $theme_variables['option_sets'][] = array(
-      'label' => (isset($option_set->label) ? $option_set->label : t('Option @id', array('@id' => $option_set->osid))),
+      'label' => (isset($option_set->label) ? check_plain($option_set->label) : t('Option @id', array('@id' => $option_set->osid))),
       'counter' => 'V' . $v,
       'winner_label' => $winner['option_label'],
       'alert' => (!empty($winner['fixed_targeting']) ? t('Show @v to specific users will not apply when paused.', array('@v' => 'V' . $v)) : ''),
@@ -609,6 +650,7 @@ function personalize_agent_page($agent_data) {
     $build['goals'] = drupal_get_form('personalize_agent_goals_form', $agent_data);
   }
   $build['mvt'] = drupal_get_form('personalize_agent_mvt_form', $agent_data);
+  drupal_alter('personalize_agent_page', $build, $agent_data);
   return $build;
 }
 
@@ -634,12 +676,12 @@ function personalize_agent_form($form, &$form_state, $agent_data = NULL) {
     '#collapsible' => !empty($agent_data->machine_name),
     '#collapsed' => !empty($agent_data->machine_name),
     '#tree' => FALSE,
-    '#title' => !empty($agent_data->label) ? $agent_data->label : t('New Campaign'),
+    '#title' => !empty($agent_data->label) ? check_plain($agent_data->label) : t('New Campaign'),
     '#theme_wrappers' => array('personalize_admin_content'),
   );
 
   if (!empty($agent_data->machine_name)) {
-    $toggle_form = personalize_status_toggle_form_definition($agent_data->machine_name, $agent_data->status, TRUE, 'personalize_agent_page_status_toggle_ajax_callback');
+    $toggle_form = personalize_status_toggle_form_definition($agent_data->machine_name, personalize_agent_get_status($agent_data->machine_name), TRUE, 'personalize_agent_page_status_toggle_ajax_callback');
     $form['agent_form']['agent_fieldset']['header'] = array(
       '#type' => 'container',
       '#attributes' => array(
@@ -655,13 +697,21 @@ function personalize_agent_form($form, &$form_state, $agent_data = NULL) {
   }
   $form['agent_form']['agent_fieldset']['agent_basic'] = $basic_form;
 
-  // Add visitor context items to the form.
+  // Add visitor context items to the form for agents that support automatic
+  // targeting.
   if (!empty($agent_data->machine_name)) {
-    $visitor_context = isset($agent_data->data['visitor_context']) ? $agent_data->data['visitor_context'] : array();
-    if ($context_element = personalize_admin_build_visitor_context_select($visitor_context, TRUE, $agent_data)) {
-      $form['agent_form']['agent_fieldset']['visitor_context'] = $context_element;
+    $agent_instance = personalize_agent_load_agent($agent_data->machine_name);
+    if ($agent_instance instanceof PersonalizeAutoTargetingInterface) {
+      $visitor_context = isset($agent_data->data['visitor_context']) ? $agent_data->data['visitor_context'] : array();
+      if ($context_element = personalize_admin_build_visitor_context_select($visitor_context, TRUE, $agent_data)) {
+        $form['agent_form']['agent_fieldset']['visitor_context'] = $context_element;
+      }
     }
   }
+
+  // Allow the campaign end date to be set.
+  $form['agent_form']['agent_fieldset']['campaign_end'] = personalize_agent_end_date_form(!empty($agent_data->machine_name) ? $agent_data->machine_name : NULL);
+
   $form['agent_form']['agent_fieldset']['advanced'] = array(
     '#type' => 'fieldset',
     '#title' => t('Advanced'),
@@ -680,10 +730,15 @@ function personalize_agent_form($form, &$form_state, $agent_data = NULL) {
   $form['#suffix'] = !empty($form['#suffix']) ? $form['#suffix'] . '</div>' : '</div>';
 
   $form['agent_form']['agent_fieldset']['actions'] = array('#type' => 'actions');
+  $classes = array('action-item-primary-active');
+  if (!empty($agent_data->machine_name)) {
+    // Triggers warning when editing an active campaign.
+    $classes[] = 'personalize-admin-warn';
+  }
   $form['agent_form']['agent_fieldset']['actions']['submit_form'] = array(
     '#type' => 'submit',
     '#attributes' => array(
-      'class' => array('action-item-primary-active', 'personalize-admin-warn'),
+      'class' => $classes,
     ),
     '#value' => t('Save campaign settings'),
   );
@@ -704,6 +759,89 @@ function personalize_agent_form($form, &$form_state, $agent_data = NULL) {
   );
 
   return $form;
+}
+
+/**
+ * Generate the form array to set a campaign end date.
+ *
+ * @param $agent_name
+ *   (optional) The machine name for the campaign.
+ * @return array
+ *   The renderable form array for the end date form fields.
+ */
+function personalize_agent_end_date_form($agent_name = NULL) {
+  if (!empty($agent_name)) {
+    $end_variable = _personalize_agent_get_stoptime_variable($agent_name);
+    $agent_end = $default_end = variable_get($end_variable, 0);
+  }
+  else {
+    $agent_end = 0;
+  }
+  // Default the end date to one month if the campaign is new or does not yet
+  // have an end date set.
+  if ($agent_end == 0) {
+    $default_end = strtotime('+1 month');
+  }
+
+  $agent_end_date = array('year' => date('Y', $default_end), 'month' => intval(date('m', $default_end)), 'day' => date('d', $default_end));
+  $form['campaign_end'] = array(
+    '#type' => 'radios',
+    '#title' => t('Campaign end date'),
+    '#options' => array(
+      'none' => t('Run until I stop campaign'),
+      'specified' => t('Select date'),
+    ),
+    '#default_value' => $agent_end == 0 ? 'none' : 'specified',
+  );
+  $form['campaign_end_date'] = array(
+    '#type' => 'date',
+    '#default_value' => $agent_end_date,
+    '#states' => array(
+      'visible' => array(
+        ':input[name="campaign_end"]' => array('value' => 'specified'),
+      ),
+    ),
+  );
+  drupal_alter('personalize_agent_end_date_form', $form, $agent_name);
+  return $form;
+}
+
+/**
+ * Validate the campaign end date form values.
+ *
+ * @param $values
+ *   An array of values to validate.
+ */
+function personalize_agent_end_date_form_validate($values) {
+  if (isset($values['campaign_end']) && $values['campaign_end'] === 'specified') {
+    $end_date = strtotime($values['campaign_end_date']['year'] . '-' . $values['campaign_end_date']['month'] . '-' . $values['campaign_end_date']['day']);
+    if ($end_date < time()) {
+      form_set_error('campaign_end_date', t('When provided, the end date for the campaign must be in the future.'));
+    }
+  }
+}
+
+/**
+ * Save an agent campaign end date values.
+ *
+ * @param $agent_name
+ *   The name of the campaign.
+ * @param $values
+ *   An array of campaign end date values.
+ */
+function personalize_agent_end_date_form_submit($agent_name, $values) {
+  if (empty($values['campaign_end'])) {
+    return;
+  }
+  // Set the end date.
+  if ($values['campaign_end'] === 'specified') {
+    $end_date = strtotime($values['campaign_end_date']['year'] . '-' . $values['campaign_end_date']['month'] . '-' . $values['campaign_end_date']['day']);
+  }
+  else {
+    $end_date = 0;
+  }
+  $varname = _personalize_agent_get_stoptime_variable($agent_name);
+  variable_set($varname, $end_date);
 }
 
 /**
@@ -755,7 +893,7 @@ function personalize_agent_form_ajax_submit($form, $form_state) {
       'personalize' => array(
         'campaigns' => array(
           $agent_data->machine_name => array(
-            'status' => $agent_data->status,
+            'status' => personalize_agent_get_status($agent_data->machine_name),
           ),
         ),
       ),
@@ -777,10 +915,7 @@ function personalize_agent_form_ajax_submit($form, $form_state) {
   // do so asynchronously. They can implement this hook to sync the changes during
   // ajax submit of these forms, so they don't have to wait for a new page load.
   module_invoke_all('personalize_form_ajax_submit', $agent_data);
-  return array(
-    '#type' => 'ajax',
-    '#commands' => $commands,
-  );
+  return personalize_ajax_commands_deliver($commands, TRUE);
 }
 
 /**
@@ -938,7 +1073,10 @@ function personalize_agent_goals_form($form, &$form_state, $agent_data) {
     }
   }
   else {
-    $goals = personalize_goal_load_by_conditions(array('agent' => $agent_data->machine_name));
+    $goal_entities = personalize_goal_load_by_conditions(array('agent' => $agent_data->machine_name));
+    foreach ($goal_entities as $obj) {
+      $goals[] = (array) $obj;
+    }
   }
 
   // If the "Remove" button was clicked for a goal, we need to remove that goal
@@ -1146,7 +1284,7 @@ function personalize_agent_option_sets_form($form, &$form_state, $agent_data, $a
   // Load the data used throughout form.
   $option_sets = personalize_option_set_load_by_agent($agent_data->machine_name);
   $campaign_page = "admin/structure/personalize/manage/{$agent_data->machine_name}/edit";
-  $is_running = $agent_data->status == PERSONALIZE_STATUS_RUNNING;
+  $is_running = personalize_agent_get_status($agent_data->machine_name) == PERSONALIZE_STATUS_RUNNING;
 
   $form = array();
   $form['#agent'] = $agent_data;
@@ -1177,7 +1315,7 @@ function personalize_agent_option_sets_form($form, &$form_state, $agent_data, $a
   foreach($option_sets as $option_set) {
     $option_sets_labels[$option_set->osid] = theme('personalize_admin_enumerated_item', array(
       'enum' => t('Set @delta', array('@delta' => $counter)),
-      'title' => isset($option_set->label) ? $option_set->label : t('Option Set @id', array('@id' => $option_set->osid)),
+      'title' => isset($option_set->label) ? check_plain($option_set->label) : t('Option Set @id', array('@id' => $option_set->osid)),
     ));
     $collapsed .= $option_sets_labels[$option_set->osid];
     $counter++;
@@ -1212,7 +1350,7 @@ function personalize_agent_option_sets_form($form, &$form_state, $agent_data, $a
   if ($agent_instance instanceof PersonalizeExplicitTargetingInterface) {
     $targeting_support = $agent_instance->explicitTargetingSupportMultiple();
     // Build up a list of targeting values so we can map options to them.
-    $targeting_values = personalize_get_targeting_values_for_agent($agent_instance);
+    $targeting_values = personalize_get_fixed_targeting_values_for_agent($agent_data);
   }
 
   foreach ($option_sets as $option_set) {
@@ -1302,7 +1440,7 @@ function personalize_agent_option_sets_form($form, &$form_state, $agent_data, $a
 
       $heading = theme('personalize_admin_enumerated_item', array(
         'enum' => t('V@delta', array('@delta' => $variant_number)),
-        'title' => filter_xss($option['option_label']),
+        'title' => check_plain($option['option_label']),
         'title_prefix' => '"',
         'title_suffix' => $suffix,
       ));
@@ -1389,9 +1527,6 @@ function personalize_agent_option_sets_form($form, &$form_state, $agent_data, $a
       '#description' => 'Shown in the menu when you are viewing content variations on a page.',
       '#default_value' => isset($option_set->label) ? $option_set->label : '',
     );
-    // @todo Once we want to provide support for using the same decision name across
-    //   option sets we'll need to allow setting the decision name here, but it must
-    //   be a machine name.
     $section['option_set_' . $option_set->osid]['advanced']['decision_name'] = array(
       '#type' => 'textfield',
       '#title' => 'Decision Name',
@@ -1523,9 +1658,10 @@ function personalize_targeting_support_form_elements($option_set, $option, $targ
     )
   );
   foreach ($targeting_values as  $key => $info) {
+    $option_key = $info['visitor_context'] . PERSONALIZE_TARGETING_ADMIN_SEPARATOR . $key;
     $key_label = isset($info['friendly name']) ? $info['friendly name'] : $key;
-    $context_options[$key] = $key_label;
-    $value_types[$key] = $info['value type'];
+    $context_options[$option_key] = $key_label;
+    $value_types[$option_key] = $info['value type'];
   }
 
   // This is the portion of the form that will be replace when the "add new" or "remove
@@ -1550,10 +1686,12 @@ function personalize_targeting_support_form_elements($option_set, $option, $targ
   $mappings = array();
   if (isset($form_state['values']['option_sets']['option_set_' . $osid]['options'][$option['option_id']]['explicit_targeting']['mapping']['contexts'])) {
     foreach($form_state['values']['option_sets']['option_set_' . $osid]['options'][$option['option_id']]['explicit_targeting']['mapping']['contexts'] as $delta => $context) {
+      list($plugin_name, $context_option) = explode(PERSONALIZE_TARGETING_ADMIN_SEPARATOR, $context['context']);
       // Important: preserve the delta passed through the form as it is used
       // to determine the item to delete when "remove" is clicked.
       $mappings[$delta] = array(
-        'context' => $context['context'],
+        'plugin' => $plugin_name,
+        'context' => $context_option,
         'operator' => $context['value']['operator'],
         'match' => $context['value']['match'],
       );
@@ -1581,6 +1719,7 @@ function personalize_targeting_support_form_elements($option_set, $option, $targ
       'context' => '',
       'operator' => 'equals',
       'match' => '',
+      'plugin' => '',
     );
   }
 
@@ -1593,6 +1732,7 @@ function personalize_targeting_support_form_elements($option_set, $option, $targ
         'context' => '',
         'operator' => 'equals',
         'match' => '',
+        'plugin' => '',
       );
       $num_contexts++;
     }
@@ -1601,6 +1741,7 @@ function personalize_targeting_support_form_elements($option_set, $option, $targ
   $form_state['num_contexts']['option_set_' . $osid][$option['option_id']] = count($mappings);
   foreach ($mappings as $delta => $mapping) {
     $wrapper_id = 'operator-dropdown-replace-' . $osid . '-' . $option['option_id'] . '-' . $delta;
+    $selected_plugin_context = $mapping['plugin'] . PERSONALIZE_TARGETING_ADMIN_SEPARATOR . $mapping['context'];
     $selected_context = $mapping['context'];
     $selected_operator = $mapping['operator'];
     $selected_match = $mapping['match'];
@@ -1611,7 +1752,7 @@ function personalize_targeting_support_form_elements($option_set, $option, $targ
         '#type' => 'select',
         '#title' => t('Context'),
         '#options' => $context_options,
-        '#default_value' => empty($selected_context) ? '' : $selected_context,
+        '#default_value' => empty($selected_plugin_context) ? '' : $selected_plugin_context,
         '#ajax' => array(
           'event' => 'change',
           'callback' => 'personalize_explicit_targeting_context_callback',
@@ -1627,34 +1768,50 @@ function personalize_targeting_support_form_elements($option_set, $option, $targ
       '#prefix' => '<div id="' . $wrapper_id. '">',
       '#suffix' => '</div>'
     );
-    $value_type = isset($value_types[$selected_context]) ? $value_types[$selected_context] : 'string';
+    $value_type = isset($value_types[$selected_plugin_context]) ? $value_types[$selected_plugin_context] : 'string';
     // We use different form elements depending on whether there is a predefined list
     // of possible values or not.
-    if ($value_type == 'predefined') {
-      $form['mapping']['contexts'][$delta]['value']['operator'] = array(
-        '#type' => 'value',
-        '#value' => 'equals',
-      );
-      $form['mapping']['contexts'][$delta]['value']['match'] = array(
-        '#type' => 'select',
-        '#options' => $targeting_values[$selected_context]['values'],
-        '#title' => 'Value',
-        '#default_value' => $selected_match,
-      );
-    }
-    else {
-      $form['mapping']['contexts'][$delta]['value']['operator'] = array(
-        '#type' => 'select',
-        '#title' => t('Operator'),
-        '#options' => $operator_options[$value_type],
-        '#default_value' => $selected_operator
-      );
-      $form['mapping']['contexts'][$delta]['value']['match'] = array(
-        '#type' => 'textfield',
-        '#title' => 'Value',
-        '#size' => $value_type == 'number' ? 6 : 30,
-        '#default_value' => $selected_match,
-      );
+    switch ($value_type) {
+      case 'predefined':
+        $form['mapping']['contexts'][$delta]['value']['operator'] = array(
+          '#type' => 'value',
+          '#value' => 'equals',
+        );
+        $form['mapping']['contexts'][$delta]['value']['match'] = array(
+          '#type' => 'select',
+          '#options' => $targeting_values[$selected_context]['values'],
+          '#title' => 'Value',
+          '#default_value' => $selected_match,
+        );
+       break;
+      case 'boolean':
+        $form['mapping']['contexts'][$delta]['value']['operator'] = array(
+          '#type' => 'value',
+          '#value' => 'equals',
+        );
+        $off_label = isset($targeting_values[$selected_context]['off_label']) ? $targeting_values[$selected_context]['off_label'] : 'No';
+        $on_label = isset($targeting_values[$selected_context]['on_label']) ? $targeting_values[$selected_context]['on_label'] : 'Yes';
+        $form['mapping']['contexts'][$delta]['value']['match'] = array(
+          '#type' => 'select',
+          '#options' => array(0 => $off_label, 1 => $on_label),
+          '#title' => 'Value',
+          '#default_value' => $selected_match,
+        );
+        break;
+      default:
+        $form['mapping']['contexts'][$delta]['value']['operator'] = array(
+          '#type' => 'select',
+          '#title' => t('Operator'),
+          '#options' => $operator_options[$value_type],
+          '#default_value' => $selected_operator
+        );
+        $form['mapping']['contexts'][$delta]['value']['match'] = array(
+          '#type' => 'textfield',
+          '#title' => 'Value',
+          '#size' => $value_type == 'number' ? 6 : 30,
+          '#default_value' => $selected_match,
+        );
+        break;
     }
 
     // Add a "remove" button for this context.
@@ -1804,10 +1961,18 @@ function personalize_explicit_targeting_context_callback($form, &$form_state) {
 }
 
 /**
- * Extracts the available targeting values from contexts set up on the agent.
+ * Helper function to return targeting values for a particular visitor context
+ * plugin and agent.
  *
- * @param PersonalizeAgentInterface $agent_instance
- *   The agent to retrieve available targeting values for.
+ * This function returns the results in an array suitable for fixed targeting.
+ *
+ * @param string $plugin_name
+ *   The name of the plugin to get targeting values from.
+ * @param stdClass $agent_data
+ *   The agent data for the current campaign.
+ * @param array $selected_context
+ *   (Optional) An array of pre-selected contexts for the agent in order to
+ *   limit the returned values.  Only pass if limit is desired.
  * @return array
  *   An associative array keyed by context name, with an array of information about the
  *   possible values for that context. The 'value type' key in this array indicates what
@@ -1817,11 +1982,13 @@ function personalize_explicit_targeting_context_callback($form, &$form_state) {
  *     array(
  *       'some_context' => array(
  *         'label' => 'Some Context',
- *         'type' => 'string'
+ *         'type' => 'string',
+ *         'visitor_context' => 'Plugin name',
  *        ),
  *       'some_other_context' => array(
  *         'label' => 'Some Other Context',
  *         'type' => 'predefined',
+ *         'visitor_context' => 'Plugin name',
  *         'values' => array(
  *           'some_value' => 'Some Value',
  *           'some_other_value' => 'Some Other Value',
@@ -1829,22 +1996,76 @@ function personalize_explicit_targeting_context_callback($form, &$form_state) {
  *       ),
  *     )
  */
-function personalize_get_targeting_values_for_agent($agent_instance) {
+function _personalize_get_targeting_values($plugin_name, $agent_data, $limit_to_context = NULL) {
   ctools_include('plugins');
-  $value_options = array();
-  // Predefined values will be options in a multi-select field. For non-predefined
-  // values we need to build form elements allowing new values to be specified
-  // based on certain criteria.
-  $data = $agent_instance->getData();
-  if (!empty($data['visitor_context'])) {
-    foreach ($data['visitor_context'] as $name => $contexts) {
-      $selected_context = array_filter($contexts);
-      if (!empty($selected_context) && $class = ctools_plugin_load_class('personalize', 'visitor_context', $name, 'handler')) {
-        if ($plugin = call_user_func_array(array($class, 'create'), array($agent_instance, array_keys($selected_context)))) {
-          $value_options = array_merge($value_options, $plugin->getPossibleValues());
+  $values = array();
+  $agent_instance = personalize_agent_load_agent($agent_data->machine_name);
+  $limit = TRUE;
+  if (!isset($limit_to_context)) {
+    $limit = FALSE;
+    $limit_to_context = array();
+  }
+
+  if ($class = ctools_plugin_load_class('personalize', 'visitor_context', $plugin_name, 'handler')) {
+    // Make sure this agent is allowed to use this context.
+    if (!call_user_func(array($class, 'allowedFromAgent'), $agent_data)) {
+      return $values;
+    }
+    if ($plugin = call_user_func_array(array($class, 'create'), array($agent_instance, array_keys($limit_to_context)))) {
+      // Get the values and add in the source visitor context plugin name.
+      $values = $plugin->getPossibleValues($limit);
+
+      array_walk($values, function (&$item, $key, $visitor_context_plugin) {
+        $item['visitor_context'] = $visitor_context_plugin;
+      }, $plugin_name);
+    }
+  }
+  return $values;
+}
+
+/**
+ * Extracts targeting values from those set up on the agent available for fixed
+ * targeting.
+ *
+ * @param stdClass $agent_data
+ *   The personalize agent plugin data.
+ * @return array
+ *   An associative array keyed by context name, with an array of information
+ *   about the possible values for that context.
+ */
+function personalize_get_fixed_targeting_values_for_agent($agent_data) {
+  $agent_instance = personalize_agent_load_agent($agent_data->machine_name);
+  if ($agent_instance instanceof PersonalizeAutoTargetingInterface && $agent_instance::constrainExplicitTargetingContexts()) {
+    $value_options = array();
+    if (!empty($agent_data->data['visitor_context'])) {
+      foreach ($agent_data->data['visitor_context'] as $name => $contexts) {
+        $selected_context = array_filter($contexts);
+        if (!empty($selected_context)) {
+          $value_options = array_merge($value_options, _personalize_get_targeting_values($name, $agent_data, $selected_context));
         }
       }
     }
+    return $value_options;
+  }
+  // Otherwise the targeting values for an agent are the same as the options
+  // available.
+  return personalize_get_targeting_options_for_agent($agent_data);
+}
+
+/**
+ * Gets all targeting options that can be selected for an agent.
+ *
+ * @param stdClass $agent_data
+ *   The personalize agent plugin data.
+ * @return array
+ *   An associative array keyed by context name, with an array of information
+ *   about the possible values for that context.
+ */
+function personalize_get_targeting_options_for_agent($agent_data) {
+  $contexts = personalize_get_visitor_contexts();
+  $value_options = array();
+  foreach ($contexts as $plugin_name => $plugin_info) {
+    $value_options = array_merge($value_options, _personalize_get_targeting_values($plugin_name, $agent_data));
   }
   return $value_options;
 }
@@ -1872,7 +2093,7 @@ function personalize_agent_mvt_form($form, &$form_state, $agent_data) {
   foreach($mvts as $delta => &$mvt) {
     $mvt->display_label = theme('personalize_admin_enumerated_item', array(
       'enum' => t('Test @delta', array('@delta' => ($delta + 1))),
-      'title' => $mvt->label,
+      'title' => check_plain($mvt->label),
     ));
     $collapsed .= $mvt->display_label;
   }
@@ -1894,7 +2115,7 @@ function personalize_agent_mvt_form($form, &$form_state, $agent_data) {
     foreach ($mvts as $delta => $existing) {
       $os_names = array();
       foreach ($existing->option_sets as $os) {
-        $os_names[] = $os->label;
+        $os_names[] = check_plain($os->label);
       }
       $label = $existing->display_label;
       if (!empty($os_names)) {
@@ -2007,6 +2228,7 @@ function personalize_agent_form_validate($form, &$form_state) {
     // Call the validation callback for the agent type.
     $class::optionsFormValidate($form, $form_state);
   }
+  personalize_agent_end_date_form_validate($form_state['values']);
 }
 
 /**
@@ -2024,16 +2246,17 @@ function personalize_agent_form_submit($form, &$form_state) {
   $agent->data['cache_decisions'] = $form_state['values']['cache_decisions'];
   $exists = personalize_agent_load($agent->machine_name);
   if (personalize_agent_save($agent)) {
-    drupal_set_message(t('The agent has been @saved.', array('@saved' => $exists ? 'updated' : 'created')));
+    drupal_set_message(t('The campaign has been @saved.', array('@saved' => $exists ? 'updated' : 'created')));
     personalize_set_campaign_context($agent->machine_name);
     if (personalize_agent_get_status($agent->machine_name) == PERSONALIZE_STATUS_RUNNING) {
       personalize_agent_set_status($agent->machine_name, PERSONALIZE_STATUS_PAUSED);
       personalize_status_toggle_message($agent->machine_name, PERSONALIZE_STATUS_PAUSED);
     }
+    personalize_agent_end_date_form_submit($agent->machine_name, $form_state['values']);
     $form_state['redirect'] = "admin/structure/personalize/manage/{$agent->machine_name}/edit";
   }
   else {
-    drupal_set_message(t('There was a problem saving the agent'));
+    drupal_set_message(t('There was a problem saving the campaign.'));
     $form_state['redirect'] = "admin/structure/personalize";
   }
 }
@@ -2052,15 +2275,21 @@ function personalize_agent_goals_form_submit($form, &$form_state) {
   foreach (personalize_goal_load_by_conditions(array('agent' => $agent_name)) as $goal) {
     // We can only have one goal with a given action per agent, so
     // we key the array of existing goals by action name.
-    $existing_goals[$goal['action']] = $goal['id'];
+    $existing_goals[$goal->action] = $goal->id;
   }
   foreach ($form_values as $goal) {
     if (!empty($goal['action_name'])) {
-      personalize_goal_save($agent_name, $goal['action_name'], $goal['value']);
-      // Add this to the array of saved goals so that at the end
-      // we know that anything in $existing_goals but not in $saved_goals
-      // needs to be deleted.
-      $saved_goals[$goal['action_name']] = isset($existing_goals[$goal['action_name']]) ? $existing_goals[$goal['action_name']] : 'new';
+      try {
+        personalize_goal_save($agent_name, $goal['action_name'], $goal['value']);
+
+        // Add this to the array of saved goals so that at the end
+        // we know that anything in $existing_goals but not in $saved_goals
+        // needs to be deleted.
+        $saved_goals[$goal['action_name']] = isset($existing_goals[$goal['action_name']]) ? $existing_goals[$goal['action_name']] : 'new';
+      }
+      catch (Exception $e) {
+        drupal_set_message($e->getMessage(), 'error');
+      }
     }
   }
   // The difference between existing goals and saved goals are the ones
@@ -2146,6 +2375,9 @@ function personalize_agent_option_sets_form_submit($form, &$form_state) {
       if (isset($values['advanced']['preview_link'])) {
         $option_set->preview_link = $values['advanced']['preview_link'];
       }
+      if (isset($values['winner'])) {
+        $option_set->winner = $values['winner'];
+      }
       if (!isset($values['options'])) {
         personalize_option_set_save($option_set);
         continue;
@@ -2156,7 +2388,7 @@ function personalize_agent_option_sets_form_submit($form, &$form_state) {
       $agent = personalize_agent_load_agent($agent_name);
       // Keep track of feature strings that have already been designated to options,
       // which options they have been designated to, and whether there's a rule
-      // assocatiated with each feature.
+      // associated with each feature.
       $designated_features = $option_features = $feature_rules = array();
       foreach ($values['options'] as $option_id => $settings) {
         $option_features[$option_id] = $feature_rules[$option_id] = array();
@@ -2166,6 +2398,7 @@ function personalize_agent_option_sets_form_submit($form, &$form_state) {
             if ($context_values['context'] == '') {
               continue;
             }
+            list($plugin_name, $context_name) = explode(PERSONALIZE_TARGETING_ADMIN_SEPARATOR, $context_values['context']);
             $context_values['match'] = $context_values['value']['match'];
             $context_values['operator'] = $context_values['value']['operator'];
             unset($context_values['value'], $context_values['remove']);
@@ -2173,11 +2406,14 @@ function personalize_agent_option_sets_form_submit($form, &$form_state) {
             $value = personalize_targeting_generate_value_code($context_values['match'], $context_values['operator']);
             // Create a feature string for this context value that can be consumed
             // by the agent that will be using it.
-            $feature_string = $agent->convertContextToFeatureString($context_values['context'], $value);
+            $feature_string = $agent->convertContextToFeatureString($context_name, $value);
             $feature_values[] = $feature_string;
             // Save the actual rule information as this is what will be used
             // for evaluating it.
             $rules[$feature_string] = $context_values;
+            // Override the context to split it into plugin and context parts.
+            $rules[$feature_string]['context'] = $context_name;
+            $rules[$feature_string]['plugin'] = $plugin_name;
           }
           foreach ($feature_values as $feature) {
             $option_features[$option_id][] = $feature;
@@ -2435,7 +2671,7 @@ function personalize_mvt_form_elements($mvt = NULL, $agent) {
   $form['mvt_basic_info']['label'] = array(
     '#title' => t('Administrative title'),
     '#type' => 'textfield',
-    '#default_value' => isset($mvt->label) ? $mvt->label : '',
+    '#default_value' => isset($mvt->label) ? check_plain($mvt->label) : '',
     '#weight' => -9,
     '#required' => TRUE,
   );
@@ -2455,7 +2691,7 @@ function personalize_mvt_form_elements($mvt = NULL, $agent) {
   $option_sets = personalize_option_set_load_by_agent($agent);
   $option_set_options = array();
   foreach ($option_sets as $osid => $option_set) {
-    $option_set_options[$osid] = $option_set->label;
+    $option_set_options[$osid] = check_plain($option_set->label);
   }
   $default = isset($mvt->option_sets) ? array_keys($mvt->option_sets) : array();
   $form['mvt_basic_info']['option_sets'] = array(
@@ -2566,7 +2802,7 @@ function personalize_goals_options() {
   $actions = visitor_actions_get_actions();
   $options = array();
   foreach($actions as $name => $info) {
-    $options[$name] = isset($info['label']) ? $info['label'] : $name;
+    $options[$name] = isset($info['label']) ? check_plain($info['label']) : $name;
   }
   return $options;
 }

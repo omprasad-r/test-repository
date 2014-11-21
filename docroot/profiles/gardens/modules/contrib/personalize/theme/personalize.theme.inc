@@ -30,11 +30,29 @@ function theme_personalize_options_wrapper($variables) {
   }
 
   $option_set = $variables['element']['#personalize_option_set'];
-  $js_id = personalize_stringify_osid($option_set->osid);
-  $prefix = '<div class="' . PERSONALIZE_OPTION_SET_CLASS . '" id="personalize-' . $js_id . '">';
-  if (isset($variables['element']['#first_option'])) {
-    $prefix .= '<noscript>' . drupal_render($variables['element']['#first_option']) . '</noscript>';
+  if (personalize_agent_get_status($option_set->agent) === PERSONALIZE_STATUS_COMPLETED) {
+    if (isset($option_set->winner)) {
+      return drupal_render($variables['element']['#personalize_options'][$option_set->winner]);
+    }
+    elseif (isset($variables['element']['#first_option'])) {
+      return drupal_render($variables['element']['#first_option']);
+    }
+    else {
+      $first_option = reset($variables['element']['#personalize_options']);
+      return drupal_render($first_option);
+    }
   }
+  $js_id = personalize_stringify_osid($option_set->osid);
+  $prefix = '<div class="' . PERSONALIZE_OPTION_SET_CLASS . '" data-personalize="' . $js_id . '">';
+  if (isset($variables['element']['#first_option'])) {
+    $no_script_content = drupal_render($variables['element']['#first_option']);
+    // Strip any noscript tags from the content so we don't end up with nested
+    // noscript tags.
+    $pattern = '/\<noscript\>(.*)\<\/noscript\>/';
+    $no_script_content = preg_replace($pattern, '', $no_script_content);
+    $prefix .= '<noscript>' . $no_script_content . '</noscript>';
+  }
+
   $prefix .= '<script type="text/template">';
   $suffix = '</script></div>';
 
@@ -69,6 +87,8 @@ function theme_personalize_options_callback_wrapper($variables) {
  *
  * @param $variables
  *   Associative array of information to display about the status alert.
+ *   - agent_name: The machine name of the campaign that is being updated.
+ *   - alert_message: An overall alert message to display.
  *   - option_message: A message to show to introduce the winning options.
  *   - option_sets: An associative array of options sets within this campaign.
  *     - label: The label of the option set
@@ -81,7 +101,7 @@ function theme_personalize_campaign_status_update($variables) {
   $option_message = $variables['option_message'];
   $option_sets = $variables['option_sets'];
 
-  $update_message = '';
+  $update_message = empty($variables['alert_message']) ? '' : $variables['alert_message'];
   if (!empty($option_sets)) {
     if (!empty($option_message)) {
       $update_message .= ' ' . $option_message;

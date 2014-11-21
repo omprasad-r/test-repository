@@ -72,7 +72,7 @@ interface PersonalizeAgentInterface {
    * @return array
    *   A FAPI array.
    */
-  public static function optionsForm($agent_data);
+  public static function optionsForm($agent_data, $option_parents = array());
 
   /**
    * Validates the form data.
@@ -113,6 +113,19 @@ interface PersonalizeAgentInterface {
    *   the agent failed the check.
    */
   public function errors();
+
+  /**
+   * Whether this agent should be paused now.
+   *
+   * An agent class can implement some logic to determine whether or not the agent
+   * in question should be set to the "paused" status. For example, an agent type
+   * might have some notion of having a "winner", and once it has found this winner
+   * the agent should pause on that.
+   *
+   * @return boolean
+   *   TRUE if the agent should be paused, FALSE otherwise.
+   */
+  public function stopNow();
 }
 
 interface PersonalizeAgentGoalInterface {
@@ -137,6 +150,11 @@ interface PersonalizeAgentGoalInterface {
   public function sendGoal($goal_name, $value = NULL);
 }
 
+/**
+ * Exceptions specific to personalize functionality.
+ */
+class PersonalizeException extends Exception {};
+
 interface PersonalizeAgentReportInterface {
 
   /**
@@ -158,16 +176,22 @@ interface PersonalizeAgentReportInterface {
    *
    * Each report is returned as a render array.
    *
-   * @param $decision_name
-   *   A optionally preselected decision to display.
-   * @param $date_from
-   *   The start date of the report, if empty then the start date of the agent.
-   * @param $date_to
-   *   The end date of the report, if empty then current date.
+   * @param $options
+   * An array of report filter options.
+   * - decision: Preselected decision to display.
+   * - start: The start date of the report.
+   * - from: The end date of the report.
+   * - goal: (optional) A selected goal for reporting; defaults to all.
+   * - conversion_metric: (optional) Metric to display within the conversion report.  One
+   *   of 'rate' (conversion rate) or 'value' (conversion value).
    */
-  public function buildCampaignReports($decision_name = NULL, $date_from = NULL, $date_to = NULL);
+  public function buildCampaignReports($options);
 }
 
+/**
+ * An interface to implement when an agent supports explicit targeting for
+ * content variations.
+ */
 interface PersonalizeExplicitTargetingInterface extends PersonalizeAgentInterface {
 
   const EXPLICIT_TARGETING_MULTIPLE_OR = 1;
@@ -176,13 +200,32 @@ interface PersonalizeExplicitTargetingInterface extends PersonalizeAgentInterfac
 
   /**
    * Returns how this agent supports explicit targeting
-   * with muliple features.
+   * with multiple features.
    *
    * @return int
    *   Returns one of the above constants.
    */
   public static function explicitTargetingSupportMultiple();
 
+}
+
+/**
+ * An interface to implement when an agent supports automatic targeting of
+ * results based on campaign-specific targeting options.
+ */
+interface PersonalizeAutoTargetingInterface extends PersonalizeAgentInterface {
+
+  /**
+   * Indicates if explicit targeting options are dependent on the auto targeting
+   * context options selected for the campaign.
+   *
+   * @return boolean
+   *   True to indicate that explicit targeting values are dependent upon
+   *   campaign auto-targeting options selected.  False to indicate that
+   *   explicit targeting options are selected independently of campaign
+   *   auto-targeting context options.
+   */
+  public static function constrainExplicitTargetingContexts();
 }
 
 /**
@@ -301,7 +344,7 @@ abstract class PersonalizeAgentBase implements PersonalizeAgentInterface, Person
   /**
    * Implements PersonalizeAgentInterface::optionsForm().
    */
-  public static function optionsForm($agent_data) {
+  public static function optionsForm($agent_data, $option_parents = array()) {
     return array();
   }
 
@@ -328,10 +371,17 @@ abstract class PersonalizeAgentBase implements PersonalizeAgentInterface, Person
   }
 
   /**
-   * Implements PersonalizeAgentInterface::verify().
+   * Implements PersonalizeAgentInterface::errors().
    */
   public function errors() {
     return array();
+  }
+
+  /**
+   * Implements PersonalizeAgentInterface::stopNow().
+   */
+  public function stopNow() {
+    return FALSE;
   }
 
   /**
@@ -405,15 +455,17 @@ interface PersonalizeContextInterface {
    */
   public static function allowedFromAgent(StdClass $agent);
 
-/**
+  /**
    * Returns the possible values that this context plugin could send as
    * feature strings.
-   *
+   * @param $limit
+   *   True if values should be limited by the selected context; false to
+   *   return all possible values regardless of selected context.
    * @return array
    *   An associative array of values with feature strings as keys and
    *   human-readable names as values.
    */
-  public function getPossibleValues();
+  public function getPossibleValues($limit = FALSE);
 
   /**
    * Returns the assets required for this context object to work.
@@ -485,7 +537,7 @@ abstract class PersonalizeContextBase implements PersonalizeContextInterface, Pe
   /**
    * Implements PersonalizeContextInterface::getPossibleValues().
    */
-  public function getPossibleValues() {
+  public function getPossibleValues($limit = FALSE) {
     return array();
   }
 }

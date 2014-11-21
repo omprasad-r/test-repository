@@ -15,8 +15,9 @@ Drupal.behaviors.initColorbox = {
     }
 
     $('.colorbox', context)
-      .once('init-colorbox')
-      .colorbox(settings.colorbox);
+      .once('init-colorbox').each(function(){
+        $(this).colorbox(settings.colorbox);
+      });
   }
 };
 

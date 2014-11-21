@@ -34,7 +34,7 @@ function visitor_actions_list() {
   );
   $rows = array();
 
-  foreach (visitor_actions_get_custom_actions() as $action) {
+  foreach (visitor_actions_custom_load_multiple() as $action) {
     $tablerow = array(
       array('data' => check_plain($action['label'])),
       array('data' => l(t('Edit'), 'admin/structure/visitor_actions/manage/'. $action['machine_name'] . '/edit')),
@@ -198,6 +198,7 @@ function visitor_actions_get_form_options($actionable_element, &$form, $needs_st
       $form['identifier'][$actionable_element] = array(
         '#title' => call_user_func(array($class, 'getIdentifierLabel')),
         '#type' => 'textfield',
+        '#maxlength' => 500,
       );
       if ($needs_states) {
         $form['identifier'][$actionable_element]['#states'] = array_merge($visible_state, $required_state);
@@ -246,10 +247,34 @@ function visitor_actions_form_validate($form, &$form_state) {
   $op = isset($form_state['values']['op']) ? $form_state['values']['op'] : '';
 
   if ($op == t('Save')) {
+    $plugin = $form_state['values']['actionable_element'];
     // Allow the plugin to validate the form values.
     ctools_include('plugins');
-    if ($class = ctools_plugin_load_class('visitor_actions', 'actionable_element', $form_state['values']['actionable_element'], 'handler')) {
+    if ($class = ctools_plugin_load_class('visitor_actions', 'actionable_element', $plugin, 'handler')) {
       call_user_func_array(array($class, 'validate'), array($form_state['values']));
+    }
+
+    if (isset($form_state['values']['identifier'][$plugin])) {
+      // Validating a CSS selector is generally beyond what REGEX can handle,
+      // and using the Drupal cleaning scripts all update < > to entities
+      // so just make sure that there are no tags.
+      $re = "/<\\/?[a-z][a-z0-9]*[^<>]*>|<!--.*?-->/im";
+      $matches = array();
+      $matched = preg_match_all($re, $form_state['values']['identifier'][$plugin], $matches);
+      if ($matched > 0) {
+        form_set_error('identifier[' . $plugin . ']', t('The selector cannot contain tags.'));
+      }
+    }
+
+    // Validate any page limits.
+    foreach(preg_split('~[\r\n]+~', $form_state['values']['pages']) as $line){
+      if(empty($line)) {
+        continue;
+      }
+      if (!valid_url($line) && $line !== '<front>') {
+        form_set_error('pages', t('The selected pages must contain valid paths.'));
+        break;
+      }
     }
   }
 }

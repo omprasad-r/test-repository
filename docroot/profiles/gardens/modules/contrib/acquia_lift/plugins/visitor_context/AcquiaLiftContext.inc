@@ -27,6 +27,9 @@ class AcquiaLiftContext extends PersonalizeContextBase {
     $options = array();
     try {
       $transform_options = AcquiaLiftAPI::getInstance(variable_get('acquia_lift_account_info', array()))->getTransformOptions();
+      if (empty($transform_options)) {
+        return $transform_options;
+      }
       // @todo Once more visitor_context plugins have been developed it may
       //   make sense to define some of these categories at a higher
       //   level and have multiple plugins add to them. We could define
@@ -76,7 +79,7 @@ class AcquiaLiftContext extends PersonalizeContextBase {
    * Implements PersonalizeContextInterface::allowedFromAgent().
    */
   public static function allowedFromAgent(StdClass $agent) {
-    return !empty($agent->plugin) && $agent->plugin === 'acquia_lift';
+    return !empty($agent->plugin) && preg_match('/^acquia_lift/', $agent->plugin);
   }
 
 
@@ -93,8 +96,11 @@ class AcquiaLiftContext extends PersonalizeContextBase {
 
   /**
    * Implements PersonalizeAgentInterface::getPossibleValues().
+   *
+   * The Acquia Lift API does not allow values that aren't already selected
+   * for agent context.  Therefore $limit is always treated as true.
    */
-  public function getPossibleValues() {
+  public function getPossibleValues($limit = FALSE) {
     if ($this->agent->getType() != 'acquia_lift') {
       return array();
     }

@@ -6,7 +6,7 @@
   function init() {
     for (var name in Drupal.settings.personalize_url_context.querystring_params) {
       if (Drupal.settings.personalize_url_context.querystring_params.hasOwnProperty(name)) {
-        Drupal.personalize.visitor_context_write(name, Drupal.settings.personalize_url_context.querystring_params[name]);
+        Drupal.personalize.visitor_context_write(name, context, Drupal.settings.personalize_url_context.querystring_params[name]);
       }
     }
     var baseUrl = Drupal.settings.personalize_url_context.base_url, referrer = document.referrer;
