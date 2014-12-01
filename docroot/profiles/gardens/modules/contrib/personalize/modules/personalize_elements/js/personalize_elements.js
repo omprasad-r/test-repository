@@ -17,17 +17,38 @@
           document.location.href = base + path + '?' + param + '=' + osid + '--' + choice_name;
         }
         else {
-          var choices = Drupal.settings.personalize.option_sets[osid].options,  choiceNames = Drupal.settings.personalize.option_sets[osid].option_names, choiceIndex = choiceNames.indexOf(choice_name);
-          // Option Sets of type Personalize Elements have the concept of a control option,
-          // where no change should be made to the selector. We need to pass in whether this
-          // is the control option.
-          var isControl = choice_name == Drupal.settings.personalize_elements.controlOptionName;
-          var selectedContent = choices[choiceIndex]['personalize_elements_content'];
-          if ($option_set.length == 0 && element.variation_type != 'runJS') {
-            // Only the runJS can do something with an empty Option Set.
+          // Add the personalize data attribute for the option set.
+          if ($option_set.length > 0) {
+            $option_set.attr('data-personalize', osid);
+          }
+          var choices = Drupal.settings.personalize.option_sets[osid].options,  selectedChoice = null, selectedContent = null, isControl = false, choiceIndex = null, choice = null;
+          if (choice_name) {
+            for (choiceIndex in choices) {
+              choice = choices[choiceIndex];
+              if (choice.option_id == choice_name) {
+                selectedChoice = choice;
+                break;
+              }
+            }
+          }
+          // This might be a "do nothing" option, either because it is the control option
+          // or because it is an option with no content, in which case we treat is as the
+          // control option.
+          if (choice_name == Drupal.settings.personalize.controlOptionName || !selectedChoice || !selectedChoice.hasOwnProperty('personalize_elements_content')) {
+            isControl = true;
+          }
+          else {
+            selectedContent = selectedChoice.personalize_elements_content;
+          }
+          // runJS does not require a selector and editHtml can result in an
+          // empty option set if the new html alters the DOM structure.
+          if ($option_set.length == 0 && ['runJS','editHtml'].indexOf(element.variation_type) == -1) {
+            return;
+          } else if ($option_set.length > 1) {
+            // Cannot perform personalization on sets of matched elements.
             return;
           }
-          Drupal.personalizeElements[element.variation_type].execute($option_set, selectedContent, isControl, osid, choice_name, preview);
+          Drupal.personalizeElements[element.variation_type].execute($option_set, selectedContent, isControl, osid);
           Drupal.personalize.executorCompleted($option_set, choice_name, osid);
         }
       }
@@ -52,7 +73,7 @@
     execute : function($selector, selectedContent, isControl, osid) {
       // We need to keep track of how we've changed the element, if only
       // to support previewing different options.
-      if (!this.controlContent.hasOwnProperty(osid)) {
+      if (isControl && !this.controlContent.hasOwnProperty(osid)) {
         this.controlContent[osid] = $selector.html();
       }
       if (isControl) {
@@ -60,8 +81,107 @@
       }
       else {
         $selector.html(selectedContent);
+        Drupal.attachBehaviors($selector);
       }
 
+    }
+  };
+
+  Drupal.personalizeElements.editHtml = {
+    controlContent: {},
+    getOuterHtml: function ($element) {
+      if ($element.length > 1) {
+        $element = $element.first();
+      }
+      // jQuery doesn't have an outerHTML so we need to clone the child and
+      // give it a parent so that we can call that parent's html function.
+      // This ensures we get only the html of the $selector and not siblings.
+      var $element = $element.clone().wrap('<div>').parent();
+
+      // Now return the child html of our wrapper parent tag.
+      return $element.html();
+    },
+    // JQuery does not provide a public way to find events so we have to resort
+    // to semi-documented structures.
+    // http://blog.jquery.com/2011/11/08/building-a-slimmer-jquery/
+    getElementEvents: function ($element) {
+      if ($element.length === 0) return {};
+      if ($._data) {
+        // jQuery 1.8 and higher.
+        return $._data($element.get(0), "events");
+      } else if ($element.data) {
+        // Older jQuery version.
+        return $element.data('events');
+      }
+      return {};
+    },
+    addElementEvents: function($element, events) {
+      for (var type in events) {
+        var i, num = events[type].length;
+        for (i = 0; i < num;  i++) {
+          var event = events[type][i];
+          if (event.handler) {
+            var eventBind = (event.namespace && event.namespace.length > 0) ? type + '.' + event.namespace : type;
+            var dataBind = event.data ? event.data : {};
+            $element.bind(eventBind, dataBind, event.handler);
+          }
+        }
+      }
+    },
+    addElementData: function($element, data) {
+      for (var key in data) {
+        $.data($element.get(0), key, data[key]);
+      }
+      return $element;
+    },
+    getElement: function (osid) {
+      return $('[data-personalize="' + osid + '"]');
+    },
+    execute : function($selector, selectedContent, isControl, osid) {
+      // Keep track of how the element has been changed in order to preview
+      // different options.
+      if (isControl && !this.controlContent.hasOwnProperty(osid)) {
+        this.controlContent[osid] = this.getOuterHtml($selector);
+      }
+      if ($selector.length === 0) {
+        $selector = this.getElement(osid);
+      }
+      var events = this.getElementEvents($selector);
+      var data = $selector.data();
+      if (isControl) {
+        $selector.replaceWith(this.controlContent[osid]);
+        // Reset the $selector variable to the new element.
+        $selector = this.getElement(osid);
+        this.addElementEvents($selector, events);
+        this.addElementData($selector, data);
+      } else {
+        if (selectedContent.charAt(0) != '<') {
+          // We need this content to be wrapped in a tag so that it can be
+          // marked with the osid for later selection.
+          selectedContent = '<span>' + selectedContent + '</span>';
+        }
+        var $newContent = $(selectedContent).replaceAll($selector);
+        // Add the data attribute to the new content.
+        $newContent.attr('data-personalize', osid);
+        this.addElementEvents($newContent, events);
+        this.addElementData($newContent, data);
+      }
+    }
+  };
+
+  Drupal.personalizeElements.editText = {
+    controlContent: {},
+    execute : function($selector, selectedContent, isControl, osid) {
+      // Keep track of how the element has been changed in order to preview
+      // different options.
+      if (isControl && !this.controlContent.hasOwnProperty(osid)) {
+        this.controlContent[osid] = $selector.text();
+      }
+      if (isControl) {
+        $selector.text(this.controlContent[osid]);
+      } else {
+        $selector.text(selectedContent);
+      }
     }
   };
 
@@ -91,6 +211,7 @@
       $('#' + id).remove();
       if (!isControl) {
         $selector.append('<span id="' + id + '">' + selectedContent + '</span>');
+        Drupal.attachBehaviors($selector);
       }
     }
   };
@@ -101,6 +222,7 @@
       $('#' + id).remove();
       if (!isControl) {
         $selector.prepend('<span id="' + id + '">' + selectedContent + '</span>');
+        Drupal.attachBehaviors($selector);
       }
     }
   };

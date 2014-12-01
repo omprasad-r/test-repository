@@ -46,13 +46,16 @@ class TestVisitorContext extends PersonalizeContextBase {
   /**
    * Implements PersonalizeAgentInterface::getPossibleValues().
    */
-  public function getPossibleValues() {
+  public function getPossibleValues($limit = FALSE) {
     $options = $this->getOptions();
     $possible_values = array();
     foreach ($options as $option_name => $option) {
       $possible_values[$option_name] = array(
         'value type' => 'string',
       );
+    }
+    if ($limit) {
+      $possible_values = array_intersect_key($possible_values, array_flip($this->selectedContext));
     }
     return $possible_values;
   }

@@ -496,4 +496,4 @@ $.ui.position_visitor_actions_ui = {
   testElementParent.removeChild( testElement );
 })();
 
-}( jQuery ) );
+}( Drupal.jQuery ) );

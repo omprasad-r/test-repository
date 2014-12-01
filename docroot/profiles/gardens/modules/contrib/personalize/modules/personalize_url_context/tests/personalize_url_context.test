@@ -20,13 +20,13 @@ class PersonalizeUrlContextTest extends DrupalWebTestCase {
 
   function setUp() {
     parent::setUp(array('ctools', 'personalize', 'personalize_test', 'personalize_url_context'));
+    $this->adminUser = $this->drupalCreateUser(array('administer personalize configuration', 'access administration pages', 'manage personalized content'));
   }
 
-  function testConfiguration() {
-    $admin_user = $this->drupalCreateUser(array('administer personalize configuration', 'access administration pages'));
-    $this->drupalLogin($admin_user);
+  function testQuerystringConfiguration() {
+   $this->drupalLogin($this->adminUser);
 
-    $this->drupalPost('admin/config/content/personalize/url_context', array(), t('Save'));
+    $this->drupalPost('admin/config/content/personalize/browser_context', array(), t('Save'));
     $params = variable_get('personalize_url_querystring_contexts', array());
     $expected = array(
       'utm_campaign',
@@ -36,7 +36,7 @@ class PersonalizeUrlContextTest extends DrupalWebTestCase {
       'utm_term',
     );
     $this->assertEqual($expected, $params);
-    $this->drupalPost('admin/config/content/personalize/url_context', array('contexts' => "some-param"), t('Save'));
+    $this->drupalPost('admin/config/content/personalize/browser_context', array('querystring_contexts' => "some-param"), t('Save'));
     $params = variable_get('personalize_url_querystring_contexts', array());
     $expected = array(
       'some-param'
@@ -45,7 +45,7 @@ class PersonalizeUrlContextTest extends DrupalWebTestCase {
 
     // Submit them all
     $edit = array(
-      'contexts' => "some-param\r\nparam2 \r\nparam3",
+      'querystring_contexts' => "some-param\r\nparam2 \r\nparam3",
     );
     $this->drupalPost(NULL, $edit, t('Save'));
     $params = variable_get('personalize_url_querystring_contexts', array());
@@ -81,7 +81,7 @@ class PersonalizeUrlContextTest extends DrupalWebTestCase {
     $agent = personalize_agent_load_agent('test-agent');
     $context_plugin = call_user_func_array(array($class, 'create'), array($agent, array('param2', 'param3')));
     $expected_values = array();
-    foreach (array('param2', 'param3') as $name) {
+    foreach (array('some-param', 'param2', 'param3') as $name) {
       $expected_values[$name] = array(
         'value type' => 'string'
       );
@@ -102,8 +102,7 @@ class PersonalizeUrlContextTest extends DrupalWebTestCase {
    * Test that url context options for a visitor contexts are passed to JS.
    */
   function testCacheExpiration() {
-    $admin_user = $this->drupalCreateUser(array('access administration pages', 'manage personalized content'));
-    $this->drupalLogin($admin_user);
+    $this->drupalLogin($this->adminUser);
 
     // Add visitor context to a test agent.
     $agent = personalize_agent_load('test-agent');
@@ -112,8 +111,7 @@ class PersonalizeUrlContextTest extends DrupalWebTestCase {
       'referrer_url' => 'referrer_url',
       'original_referrer_url' => 'original_referrer_url',
     );
-    $agent->status = PERSONALIZE_STATUS_RUNNING;
-    personalize_agent_save($agent);
+    personalize_agent_set_status($agent->machine_name, PERSONALIZE_STATUS_RUNNING);
 
     $this->resetAll();
     // Load a page and verify cache settings.
@@ -122,5 +120,61 @@ class PersonalizeUrlContextTest extends DrupalWebTestCase {
     $this->assertEqual('session', $settings['personalize']['cacheExpiration']['visitor_context:querystring_context:utm_campaign']);
     $this->assertEqual('session', $settings['personalize']['cacheExpiration']['visitor_context:querystring_context:referrer_url']);
     $this->assertEqual('none', $settings['personalize']['cacheExpiration']['visitor_context:querystring_context:original_referrer_url']);
+  }
+
+
+  function testCookieConfiguration() {
+    $this->drupalLogin($this->adminUser);
+
+    $this->drupalPost('admin/config/content/personalize/browser_context', array(), t('Save'));
+
+    $this->drupalPost('admin/config/content/personalize/browser_context', array('cookie_contexts' => "some-cookie"), t('Save'));
+    $params = variable_get('personalize_cookie_contexts', array());
+    $expected = array(
+      'some-cookie'
+    );
+    $this->assertEqual($expected, $params);
+
+    // Submit them all
+    $edit = array(
+      'cookie_contexts' => "some-cookie\r\ncookie2 \r\ncookie3",
+    );
+    $this->drupalPost(NULL, $edit, t('Save'));
+    $params = variable_get('personalize_cookie_contexts', array());
+    $expected = array('some-cookie', 'cookie2', 'cookie3');
+    $this->assertEqual($expected, $params);
+    $this->resetAll();
+    ctools_include('plugins');
+    $class = ctools_plugin_load_class('personalize', 'visitor_context', 'cookie_context', 'handler');
+
+    // Test that getOptions returns the right values.
+    $options = call_user_func(array($class, 'getOptions'));
+    $expected_param_names = array();
+    foreach (array('some-cookie', 'cookie2', 'cookie3') as $name) {
+      $expected_param_names[$name] = array(
+        'name' => $name,
+        'group' => 'Cookies',
+        'cache_type' => 'session',
+      );
+    }
+    $this->assertEqual($expected_param_names, $options);
+
+    // Test that getPossibleValues returns the right values. For this we
+    // need to instantiate the plugin, which requires an agent.
+    $agent = personalize_agent_load_agent('test-agent');
+    $context_plugin = call_user_func_array(array($class, 'create'), array($agent, array('cookie2', 'cookie3')));
+    $expected_values = array();
+    foreach (array('some-cookie', 'cookie2', 'cookie3') as $name) {
+      $expected_values[$name] = array(
+        'value type' => 'string'
+      );
+      $expected_values[PERSONALIZE_COOKIE_EXISTS_PREFIX . $name] = array(
+        'friendly name' => t('Cookie exists: @cookie', array('@cookie' => $name)),
+        'value type' => 'boolean',
+      );
+    }
+
+    $possible_values = $context_plugin->getPossibleValues();
+    $this->assertEqual($expected_values, $possible_values);
   }
 }

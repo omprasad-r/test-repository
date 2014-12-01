@@ -18,6 +18,13 @@ function personalize_test_extra_agent_personalize_agent_type() {
       'class' => 'PersonalizeTestExtraAgent',
     ),
   );
+  $info['test_invalid_agent'] = array(
+    'path' => $path . '/agent_types',
+    'handler' => array(
+      'file' => 'PersonalizeTestInvalidAgent.inc',
+      'class' => 'PersonalizeTestInvalidAgent',
+    ),
+  );
   return $info;
 }
 

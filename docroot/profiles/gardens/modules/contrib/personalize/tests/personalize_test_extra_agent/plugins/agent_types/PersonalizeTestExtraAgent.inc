@@ -4,7 +4,7 @@
  * Provides an extra test agent type for testing with multiple agent types.
  */
 
-class PersonalizeTestExtraAgent extends PersonalizeAgentBase implements PersonalizeExplicitTargetingInterface {
+class PersonalizeTestExtraAgent extends PersonalizeAgentBase implements PersonalizeExplicitTargetingInterface, PersonalizeAutoTargetingInterface {
 
   public $goals_received = array();
 
@@ -12,7 +12,8 @@ class PersonalizeTestExtraAgent extends PersonalizeAgentBase implements Personal
    * Implements PersonalizeAgentInterface::create().
    */
   public static function create($agent_data) {
-    return new self($agent_data->machine_name, $agent_data->label, $agent_data->data, $agent_data->status, !empty($agent_data->started) ? $agent_data->started : NULL);
+    $status = personalize_agent_get_status($agent_data->machine_name);
+    return new self($agent_data->machine_name, $agent_data->label, $agent_data->data, $status, !empty($agent_data->started) ? $agent_data->started : NULL);
   }
 
   /**
@@ -30,9 +31,21 @@ class PersonalizeTestExtraAgent extends PersonalizeAgentBase implements Personal
     return PersonalizeExplicitTargetingInterface::EXPLICIT_TARGETING_MULTIPLE_BOTH;
   }
 
+  /**
+   * Implements PersonalizeAutoTargetingInterface::constrainExplicitTargetingContexts
+   */
+  public static function constrainExplicitTargetingContexts() {
+    return FALSE;
+  }
+
+  /**
+   * Implements PersonalizeAgentInterface:errors().
+   */
   public function errors() {
-    return array(
-      'Agent is not valid.'
-    );
+    return array();
+  }
+
+  public function stopNow() {
+    return TRUE;
   }
 }

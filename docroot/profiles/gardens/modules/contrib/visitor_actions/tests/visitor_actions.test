@@ -27,8 +27,11 @@ class VisitorActionsTest extends DrupalWebTestCase {
    * Tests that actions defined in hook_visitor_actions_info are loaded.
    */
   public function testActionsLoad() {
-    $actions = module_invoke_all('visitor_actions_info');
+    $actions = visitor_actions_get_actions();
+    // Assert that an action defined using hook_visitor_actions_info() is loaded.
     $this->assertTrue(isset($actions['visitor_actions_test_form_click_test']));
+    // Assert that an action defined in a default hook is loaded.
+    $this->assertTrue(isset($actions['test_action']));
   }
 
   /**
@@ -41,20 +44,22 @@ class VisitorActionsTest extends DrupalWebTestCase {
     $va_settings = $settings['visitor_actions'];
     // Check that the currentPath setting has been set
     $this->assertEqual('node', $va_settings['currentPath']);
-    // On the home page we should only see settings for 3 client-side
-    // actions
+    // On the home page we should only see settings for those client-side
+    // actions that don't have pages specified, or specify the home page.
     $expected_actions = array(
       0 => 'scroll_to_bottom',
       1 => 'visitor_actions_test_form_click_test',
       2 => 'visitor_actions_test_form_hover_test',
       3 => 'visitor_actions_test_form_submit_client_side',
+      4 => 'test_action'
     );
     $this->assertEqual($expected_actions, array_keys($va_settings['actions']));
 
     $this->drupalGet('user');
     $settings = $this->drupalGetSettings();
     $va_settings = $settings['visitor_actions'];
-    // On the user page we should see the breadcrumb_link action as well.
+    // On the user page we should see the breadcrumb_link action as well, but not
+    // the test_action action which should only exist on the home page.
     $expected_actions = array(
       0 => 'scroll_to_bottom',
       1 => 'visitor_actions_test_form_click_test',
@@ -89,6 +94,19 @@ class VisitorActionsTest extends DrupalWebTestCase {
     $va_settings = $settings['visitor_actions'];
 
     $this->assertTrue(in_array($action_name, array_keys($va_settings['actions'])));
+
+    // Now edit the action and specify '<front>' as the path.
+    $edit = array(
+      'pages' => '<front>',
+    );
+    $this->drupalPost("admin/structure/visitor_actions/manage/$action_name/edit", $edit, t('Save'));
+    $this->assertNoText('The selected pages must contain valid paths.');
+    // Now edit the action and specify an invalid path.
+    $edit = array(
+      'pages' => 'some invalid url',
+    );
+    $this->drupalPost("admin/structure/visitor_actions/manage/$action_name/edit", $edit, t('Save'));
+    $this->assertText('The selected pages must contain valid paths.');
   }
 
   public function testFormServerSideAction() {

@@ -96,8 +96,36 @@ function drush_acsf_site_scrub() {
   // Ensure that we are testing the scrub cleanly.
   variable_del('acsf_site_scrubbed');
 
+  drush_print(dt('Preparing to scrub users ... '));
+
+  // Get a list of roles whose users should be preserved during staging
+  // scrubbing.  Both lists are implemented as "alters" for consistency with
+  // hook_acsf_duplication_scrub_preserved_users_alter.
+  $preserved_roles = array();
+  drupal_alter('acsf_staging_scrub_admin_roles', $preserved_roles);
+
+  if (!empty($preserved_roles)) {
+    drush_print(dt('Preserving roles: @rids', array('@rids' => implode(', ', $preserved_roles))));
+  }
+
+  // Get a list of UIDs to preserve during staging scrubbing.  UIDs are first
+  // obtained by the preserved roles, then can be altered to add or remove UIDs.
+  if (!empty($preserved_roles)) {
+    $preserved_users = array_keys(db_query('SELECT uid FROM {users_roles} WHERE rid IN (:rids)', array(':rids' => $preserved_roles))->fetchAllAssoc('uid'));
+  }
+  else {
+    $preserved_users = array();
+  }
+  drupal_alter('acsf_staging_scrub_preserved_users', $preserved_users);
+  // Always preserve the anonymous user.
+  $preserved_users[] = 0;
+  $preserved_users = array_unique($preserved_users);
+
+  // The anonymous user makes the size of this array always at least 1.
+  drush_print(dt('Preserving users: @uids', array('@uids' => implode(', ', $preserved_users))));
+
   // Avoid collisions between the Factory and site users when scubbing.
-  db_query("UPDATE {users} SET mail = CONCAT('user', uid, '@', MD5(mail), '.example.com'), init = CONCAT('user', uid, '@', MD5(init), '.example.com') WHERE uid > 0");
+  db_query("UPDATE {users} SET mail = CONCAT('user', uid, '@', MD5(mail), '.example.com'), init = CONCAT('user', uid, '@', MD5(init), '.example.com') WHERE uid NOT IN (:uids)", array(':uids' => $preserved_users));
 
   $factory_url = preg_replace('@^https?://@', '', $config->getUrl());
   $source_url = preg_replace('@^https?://@', '', $config->getSourceUrl());

@@ -17,6 +17,7 @@ class AcquiaLiftTest extends DrupalUnitTestCase {
 
   protected function setUp() {
     require_once(dirname(__FILE__) . '/../includes/acquia_lift.classes.inc');
+    require_once(dirname(__FILE__) . '/acquia_lift.test_classes.inc');
     parent::setUp();
   }
 
@@ -142,7 +143,14 @@ class AcquiaLiftTest extends DrupalUnitTestCase {
         'headers' => array('Accept' => 'application/json'),
         'options' => array(),
         'body' => NULL,
-      )
+      ),
+      array(
+        'type' => 'post',
+        'uri' => "{$lift_api->getApiUrl()}/{$lift_api->getOwnerCode()}/ping-test-agent/expire?apikey={$lift_api->getApiKey()}",
+        'headers' => array('Accept' => 'application/json'),
+        'options' => array(),
+        'body' => NULL,
+      ),
     );
     $this->assertAPIRequests($expected);
     // Now test with a broken connection.
@@ -181,7 +189,7 @@ class AcquiaLiftTest extends DrupalUnitTestCase {
     $logs = array(
       array(
         'level' => PersonalizeLogLevel::INFO,
-        'message' => 'The point {decpoint} was pushed to the Acquia Lift campaign {agent}'
+        'message' => "The point $pointName was pushed to the Acquia Lift campaign $agentName"
       )
     );
     $this->assertLogs($logs);
@@ -201,7 +209,7 @@ class AcquiaLiftTest extends DrupalUnitTestCase {
     $logs = array(
       array(
         'level' => PersonalizeLogLevel::ERROR,
-        'message' => 'Could not save the point {decpoint} to the Acquia Lift campaign {agent}'
+        'message' => "Could not save the point $pointName to the Acquia Lift campaign $agentName"
       )
     );
     $this->assertLogs($logs);
@@ -216,16 +224,16 @@ class AcquiaLiftTest extends DrupalUnitTestCase {
 
     $agentName = 'some-test-agent';
     $pointName = 'Some Test Point';
-    $decisiontName = 'Some Test Decision';
+    $decisionName = 'Some Test Decision';
 
-    $lift_api->saveDecision($agentName, $pointName, $decisiontName);
+    $lift_api->saveDecision($agentName, $pointName, $decisionName);
 
     // Define the requests we expect to have been made to our dummy http
     // client for this operation.
     $requests = array(
       array(
         'type' => 'put',
-        'uri' => "{$lift_api->getApiUrl()}/{$lift_api->getOwnerCode()}/agent-api/$agentName/points/$pointName/decisions/$decisiontName?apikey={$lift_api->getAdminKey()}",
+        'uri' => "{$lift_api->getApiUrl()}/{$lift_api->getOwnerCode()}/agent-api/$agentName/points/$pointName/decisions/$decisionName?apikey={$lift_api->getAdminKey()}",
         'headers' => array('Content-Type' => 'application/json; charset=utf-8', 'Accept' => 'application/json'),
         'options' => array(),
         'body' => NULL,
@@ -238,20 +246,20 @@ class AcquiaLiftTest extends DrupalUnitTestCase {
     $logs = array(
       array(
         'level' => PersonalizeLogLevel::INFO,
-        'message' => 'The decision {decname} for point {decpoint} was pushed to the Acquia Lift campaign {agent}'
+        'message' => "The decision $decisionName for point $pointName was pushed to the Acquia Lift campaign $agentName"
       )
     );
     $this->assertLogs($logs);
     $this->logger->clearLogs();
 
-    $lift_api->saveDecision($agentName, $pointName, $decisiontName, array('key' => 'data'));
+    $lift_api->saveDecision($agentName, $pointName, $decisionName, array('key' => 'data'));
 
     // Define the requests we expect to have been made to our dummy http
     // client for this operation.
     $requests = array(
       array(
         'type' => 'put',
-        'uri' => "{$lift_api->getApiUrl()}/{$lift_api->getOwnerCode()}/agent-api/$agentName/points/$pointName/decisions/$decisiontName?apikey={$lift_api->getAdminKey()}",
+        'uri' => "{$lift_api->getApiUrl()}/{$lift_api->getOwnerCode()}/agent-api/$agentName/points/$pointName/decisions/$decisionName?apikey={$lift_api->getAdminKey()}",
         'headers' => array('Content-Type' => 'application/json; charset=utf-8', 'Accept' => 'application/json'),
         'options' => array(),
         'body' => array('key' => 'data'),
@@ -264,7 +272,7 @@ class AcquiaLiftTest extends DrupalUnitTestCase {
     $logs = array(
       array(
         'level' => PersonalizeLogLevel::INFO,
-        'message' => 'The decision {decname} for point {decpoint} was pushed to the Acquia Lift campaign {agent}'
+        'message' => "The decision $decisionName for point $pointName was pushed to the Acquia Lift campaign $agentName"
       )
     );
 
@@ -273,7 +281,7 @@ class AcquiaLiftTest extends DrupalUnitTestCase {
 
     $lift_api = $this->getAcquiaLiftAPI(TRUE);
     try {
-      $lift_api->saveDecision($agentName, $pointName, $decisiontName, array('key' => 'data'));
+      $lift_api->saveDecision($agentName, $pointName, $decisionName, array('key' => 'data'));
     }
     catch (Exception $e) {
       $this->assertTrue($e instanceof AcquiaLiftException);
@@ -285,7 +293,7 @@ class AcquiaLiftTest extends DrupalUnitTestCase {
     $logs = array(
       array(
         'level' => PersonalizeLogLevel::ERROR,
-        'message' => 'Could not save decision {decname} for point {decpoint} to the Acquia Lift campaign {agent}'
+        'message' => "Could not save decision $decisionName for point $pointName to the Acquia Lift campaign $agentName"
       )
     );
     $this->assertLogs($logs);
@@ -300,17 +308,17 @@ class AcquiaLiftTest extends DrupalUnitTestCase {
 
     $agentName = 'some-test-agent';
     $pointName = 'Some Test Point';
-    $decisiontName = 'Some Test Decision';
+    $decisionName = 'Some Test Decision';
     $choiceName = 'Some Test Choice';
 
-    $lift_api->saveChoice($agentName, $pointName, $decisiontName, $choiceName);
+    $lift_api->saveChoice($agentName, $pointName, $decisionName, $choiceName);
 
     // Define the requests we expect to have been made to our dummy http
     // client for this operation.
     $requests = array(
       array(
         'type' => 'put',
-        'uri' => "{$lift_api->getApiUrl()}/{$lift_api->getOwnerCode()}/agent-api/$agentName/points/$pointName/decisions/$decisiontName/choices/$choiceName?apikey={$lift_api->getAdminKey()}",
+        'uri' => "{$lift_api->getApiUrl()}/{$lift_api->getOwnerCode()}/agent-api/$agentName/points/$pointName/decisions/$decisionName/choices/$choiceName?apikey={$lift_api->getAdminKey()}",
         'headers' => array('Content-Type' => 'application/json; charset=utf-8', 'Accept' => 'application/json'),
         'options' => array(),
         'body' => NULL,
@@ -323,20 +331,20 @@ class AcquiaLiftTest extends DrupalUnitTestCase {
     $logs = array(
       array(
         'level' => PersonalizeLogLevel::INFO,
-        'message' => 'The decision choice {choicename} for point {decpoint} was pushed to the Acquia Lift campaign {agent}',
+        'message' => "The decision choice $decisionName: $choiceName for point $pointName was pushed to the Acquia Lift campaign $agentName",
       )
     );
     $this->assertLogs($logs);
     $this->logger->clearLogs();
 
-    $lift_api->saveChoice($agentName, $pointName, $decisiontName, $choiceName, array('key' => 'data'));
+    $lift_api->saveChoice($agentName, $pointName, $decisionName, $choiceName, array('key' => 'data'));
 
     // Define the requests we expect to have been made to our dummy http
     // client for this operation.
     $requests = array(
       array(
         'type' => 'put',
-        'uri' => "{$lift_api->getApiUrl()}/{$lift_api->getOwnerCode()}/agent-api/$agentName/points/$pointName/decisions/$decisiontName/choices/$choiceName?apikey={$lift_api->getAdminKey()}",
+        'uri' => "{$lift_api->getApiUrl()}/{$lift_api->getOwnerCode()}/agent-api/$agentName/points/$pointName/decisions/$decisionName/choices/$choiceName?apikey={$lift_api->getAdminKey()}",
         'headers' => array('Content-Type' => 'application/json; charset=utf-8', 'Accept' => 'application/json'),
         'options' => array(),
         'body' => array('key' => 'data'),
@@ -349,7 +357,7 @@ class AcquiaLiftTest extends DrupalUnitTestCase {
     $logs = array(
       array(
         'level' => PersonalizeLogLevel::INFO,
-        'message' => 'The decision choice {choicename} for point {decpoint} was pushed to the Acquia Lift campaign {agent}',
+        'message' => "The decision choice $decisionName: $choiceName for point $pointName was pushed to the Acquia Lift campaign $agentName",
       )
     );
 
@@ -358,7 +366,7 @@ class AcquiaLiftTest extends DrupalUnitTestCase {
 
     $lift_api = $this->getAcquiaLiftAPI(TRUE);
     try {
-      $lift_api->saveChoice($agentName, $pointName, $decisiontName, $choiceName, array('key' => 'data'));
+      $lift_api->saveChoice($agentName, $pointName, $decisionName, $choiceName, array('key' => 'data'));
     }
     catch (Exception $e) {
       $this->assertTrue($e instanceof AcquiaLiftException);
@@ -370,7 +378,7 @@ class AcquiaLiftTest extends DrupalUnitTestCase {
     $logs = array(
       array(
         'level' => PersonalizeLogLevel::ERROR,
-        'message' => 'Could not save decision choice {choicename} for point {decpoint} to the Acquia Lift campaign {agent}'
+        'message' => "Could not save decision choice $decisionName: $choiceName for point $pointName to the Acquia Lift campaign $agentName"
       )
     );
     $this->assertLogs($logs);
@@ -406,7 +414,7 @@ class AcquiaLiftTest extends DrupalUnitTestCase {
     $logs = array(
       array(
         'level' => PersonalizeLogLevel::INFO,
-        'message' => 'The decision point {decpoint} was deleted from the Acquia Lift campaign {agent}',
+        'message' => "The decision point $pointName was deleted from the Acquia Lift campaign $agentName",
       )
     );
 
@@ -426,7 +434,7 @@ class AcquiaLiftTest extends DrupalUnitTestCase {
     $logs = array(
       array(
         'level' => PersonalizeLogLevel::ERROR,
-        'message' => 'Could not delete decision point {decpoint} from the Acquia Lift campaign {agent}',
+        'message' => "Could not delete decision point $pointName from the Acquia Lift campaign $agentName",
       )
     );
 
@@ -441,16 +449,16 @@ class AcquiaLiftTest extends DrupalUnitTestCase {
 
     $agentName = 'some-test-agent';
     $pointName = 'Some Test Point';
-    $decisiontName = 'Some Test Decision';
+    $decisionName = 'Some Test Decision';
 
-    $lift_api->deleteDecision($agentName, $pointName, $decisiontName);
+    $lift_api->deleteDecision($agentName, $pointName, $decisionName);
 
     // Define the requests we expect to have been made to our dummy http
     // client for this operation.
     $requests = array(
       array(
         'type' => 'delete',
-        'uri' => "{$lift_api->getApiUrl()}/{$lift_api->getOwnerCode()}/agent-api/$agentName/points/$pointName/decisions/$decisiontName?apikey={$lift_api->getAdminKey()}",
+        'uri' => "{$lift_api->getApiUrl()}/{$lift_api->getOwnerCode()}/agent-api/$agentName/points/$pointName/decisions/$decisionName?apikey={$lift_api->getAdminKey()}",
         'headers' => NULL,
         'options' => array(),
         'body' => NULL,
@@ -463,7 +471,7 @@ class AcquiaLiftTest extends DrupalUnitTestCase {
     $logs = array(
       array(
         'level' => PersonalizeLogLevel::INFO,
-        'message' => 'The decision {decname} for point {decpoint} was deleted from the Acquia Lift campaign {agent}',
+        'message' => "The decision $decisionName for point $pointName was deleted from the Acquia Lift campaign $agentName",
       )
     );
 
@@ -471,7 +479,7 @@ class AcquiaLiftTest extends DrupalUnitTestCase {
 
     $lift_api = $this->getAcquiaLiftAPI(TRUE);
     try {
-      $lift_api->deleteDecision($agentName, $pointName, $decisiontName);
+      $lift_api->deleteDecision($agentName, $pointName, $decisionName);
     }
     catch (Exception $e) {
       $this->assertTrue($e instanceof AcquiaLiftException);
@@ -483,7 +491,7 @@ class AcquiaLiftTest extends DrupalUnitTestCase {
     $logs = array(
       array(
         'level' => PersonalizeLogLevel::ERROR,
-        'message' => 'Could not delete decision {decname} for point {decpoint} from the Acquia Lift campaign {agent}',
+        'message' => "Could not delete decision $decisionName for point $pointName from the Acquia Lift campaign $agentName",
       )
     );
     $this->assertLogs($logs);
@@ -497,17 +505,17 @@ class AcquiaLiftTest extends DrupalUnitTestCase {
 
     $agentName = 'some-test-agent';
     $pointName = 'Some Test Point';
-    $decisiontName = 'Some Test Decision';
+    $decisionName = 'Some Test Decision';
     $choiceName = 'Some Test Choice';
 
-    $lift_api->deleteChoice($agentName, $pointName, $decisiontName, $choiceName);
+    $lift_api->deleteChoice($agentName, $pointName, $decisionName, $choiceName);
 
     // Define the requests we expect to have been made to our dummy http
     // client for this operation.
     $requests = array(
       array(
         'type' => 'delete',
-        'uri' => "{$lift_api->getApiUrl()}/{$lift_api->getOwnerCode()}/agent-api/$agentName/points/$pointName/decisions/$decisiontName/choices/$choiceName?apikey={$lift_api->getAdminKey()}",
+        'uri' => "{$lift_api->getApiUrl()}/{$lift_api->getOwnerCode()}/agent-api/$agentName/points/$pointName/decisions/$decisionName/choices/$choiceName?apikey={$lift_api->getAdminKey()}",
         'headers' => NULL,
         'options' => array(),
         'body' => NULL,
@@ -520,7 +528,7 @@ class AcquiaLiftTest extends DrupalUnitTestCase {
     $logs = array(
       array(
         'level' => PersonalizeLogLevel::INFO,
-        'message' => 'The decision choice {choicename} for point {decpoint} was deleted from the Acquia Lift campaign {agent}',
+        'message' => "The decision choice $decisionName: $choiceName for point $pointName was deleted from the Acquia Lift campaign $agentName",
       )
     );
 
@@ -528,7 +536,7 @@ class AcquiaLiftTest extends DrupalUnitTestCase {
 
     $lift_api = $this->getAcquiaLiftAPI(TRUE);
     try {
-      $lift_api->deleteChoice($agentName, $pointName, $decisiontName, $choiceName);
+      $lift_api->deleteChoice($agentName, $pointName, $decisionName, $choiceName);
     }
     catch (Exception $e) {
       $this->assertTrue($e instanceof AcquiaLiftException);
@@ -540,7 +548,7 @@ class AcquiaLiftTest extends DrupalUnitTestCase {
     $logs = array(
       array(
         'level' => PersonalizeLogLevel::ERROR,
-        'message' => 'Could not delete decision choice {choicename} for point {decpoint} from the Acquia Lift campaign {agent}',
+        'message' => "Could not delete decision choice $decisionName: $choiceName for point $pointName from the Acquia Lift campaign $agentName",
       )
     );
 
@@ -577,7 +585,7 @@ class AcquiaLiftTest extends DrupalUnitTestCase {
     $logs = array(
       array(
         'level' => PersonalizeLogLevel::INFO,
-        'message' => 'The goal {goal} was pushed to the Acquia Lift campaign {agent}',
+        'message' => "The goal $goalName was pushed to the Acquia Lift campaign $agentName",
       )
     );
 
@@ -602,7 +610,7 @@ class AcquiaLiftTest extends DrupalUnitTestCase {
     $logs = array(
       array(
         'level' => PersonalizeLogLevel::INFO,
-        'message' => 'The goal {goal} was pushed to the Acquia Lift campaign {agent}',
+        'message' => "The goal $goalName was pushed to the Acquia Lift campaign $agentName",
       )
     );
 
@@ -622,7 +630,64 @@ class AcquiaLiftTest extends DrupalUnitTestCase {
     $logs = array(
       array(
         'level' => PersonalizeLogLevel::ERROR,
-        'message' => 'Could not save the goal {goal} to the Acquia Lift campaign {agent}',
+        'message' => "Could not save the goal $goalName to the Acquia Lift campaign $agentName",
+      )
+    );
+
+    $this->assertLogs($logs);
+  }
+
+
+  /**
+   * Test AcquiaLiftAPI->deleteGoal()
+   */
+  public function testDeleteGoal() {
+    $lift_api = $this->getAcquiaLiftAPI();
+
+    $agentName = 'some-test-agent';
+    $goalName = 'goal-1';
+
+    $lift_api->deleteGoal($agentName, $goalName);
+
+    // Define the requests we expect to have been made to our dummy http
+    // client for this operation.
+    $requests = array(
+      array(
+        'type' => 'delete',
+        'uri' => "{$lift_api->getApiUrl()}/{$lift_api->getOwnerCode()}/agent-api/$agentName/goals/$goalName?apikey={$lift_api->getAdminKey()}",
+        'headers' => NULL,
+        'options' => array(),
+        'body' => NULL,
+      )
+    );
+
+    // Confirm the expected requests were made.
+    $this->assertAPIRequests($requests);
+
+    $logs = array(
+      array(
+        'level' => PersonalizeLogLevel::INFO,
+        'message' => "The goal $goalName was deleted from the Acquia Lift campaign $agentName",
+      )
+    );
+
+    $this->assertLogs($logs);
+
+    $lift_api = $this->getAcquiaLiftAPI(TRUE);
+    try {
+      $lift_api->deleteGoal($agentName, $goalName);
+    }
+    catch (Exception $e) {
+      $this->assertTrue($e instanceof AcquiaLiftException);
+    }
+
+    // Confirm the expected requests were made.
+    $this->assertAPIRequests($requests);
+
+    $logs = array(
+      array(
+        'level' => PersonalizeLogLevel::ERROR,
+        'message' => "Could not delete the goal $goalName from the Acquia Lift campaign $agentName",
       )
     );
 
@@ -646,25 +711,27 @@ class AcquiaLiftTest extends DrupalUnitTestCase {
         'type' => 'get',
         'uri' => "{$lift_api->getApiUrl()}/{$lift_api->getOwnerCode()}/agent-api/$machineName?apikey={$lift_api->getAdminKey()}",
         'headers' => array('Accept' => 'application/json'),
-        'options' => array('timeout' => AcquiaLiftAPI::GET_REQUEST_TIMEOUT_VALUE),
+        'options' => array(),
         'body' => NULL,
       )
     );
 
-    // Confirm the expected requests were made.
+    // Confirm the expected requests and logs.
     $this->assertAPIRequests($requests);
-
     $logs = array();
-
     $this->assertLogs($logs);
 
     $lift_api = $this->getAcquiaLiftAPI(TRUE);
-    $lift_api->getAgent($machineName);
-    // Confirm the expected requests were made.
+    try {
+      $lift_api->getAgent($machineName);
+      $this->fail('Should not reach here');
+    }
+    catch (AcquiaLiftException $e) {
+
+    }
+    // Confirm the expected requests and logs.
     $this->assertAPIRequests($requests);
-
     $logs = array();
-
     $this->assertLogs($logs);
   }
 
@@ -685,25 +752,28 @@ class AcquiaLiftTest extends DrupalUnitTestCase {
         'type' => 'get',
         'uri' => "{$lift_api->getApiUrl()}/{$lift_api->getOwnerCode()}/agent-api/$agentName/goals?apikey={$lift_api->getAdminKey()}",
         'headers' => array('Accept' => 'application/json'),
-        'options' => array('timeout' => AcquiaLiftAPI::GET_REQUEST_TIMEOUT_VALUE),
+        'options' => array(),
         'body' => NULL,
       )
     );
 
-    // Confirm the expected requests were made.
+    // Confirm the expected requests and logs.
     $this->assertAPIRequests($requests);
-
     $logs = array();
-
     $this->assertLogs($logs);
 
     $lift_api = $this->getAcquiaLiftAPI(TRUE);
-    $lift_api->getGoalsForAgent($agentName);
-    // Confirm the expected requests were made.
+    try {
+      $lift_api->getGoalsForAgent($agentName);
+      $this->fail('Should not reach here');
+    }
+    catch (AcquiaLiftException $e) {
+
+    }
+
+    // Confirm the expected requests and logs.
     $this->assertAPIRequests($requests);
-
     $logs = array();
-
     $this->assertLogs($logs);
   }
 
@@ -724,21 +794,25 @@ class AcquiaLiftTest extends DrupalUnitTestCase {
         'type' => 'get',
         'uri' => "{$lift_api->getApiUrl()}/{$lift_api->getOwnerCode()}/agent-api/$agentName/points?apikey={$lift_api->getAdminKey()}",
         'headers' => array('Accept' => 'application/json'),
-        'options' => array('timeout' => AcquiaLiftAPI::GET_REQUEST_TIMEOUT_VALUE),
+        'options' => array(),
         'body' => NULL,
       )
     );
 
-    // Confirm the expected requests were made.
+    // Confirm the expected requests and logs.
     $this->assertAPIRequests($requests);
-
     $logs = array();
-
     $this->assertLogs($logs);
 
     $lift_api = $this->getAcquiaLiftAPI(TRUE);
-    $lift_api->getPointsForAgent($agentName);
-    // Confirm the expected requests were made.
+    try {
+      $lift_api->getPointsForAgent($agentName);
+      $this->fail('Should not reach here');
+    }
+    catch (AcquiaLiftException $e) {
+
+    }
+    // Confirm the expected requests and logs.
     $this->assertAPIRequests($requests);
 
     $logs = array();
@@ -764,25 +838,27 @@ class AcquiaLiftTest extends DrupalUnitTestCase {
         'type' => 'get',
         'uri' => "{$lift_api->getApiUrl()}/{$lift_api->getOwnerCode()}/agent-api/$agentName/points/{$pointName}/decisions?apikey={$lift_api->getAdminKey()}",
         'headers' => array('Accept' => 'application/json'),
-        'options' => array('timeout' => AcquiaLiftAPI::GET_REQUEST_TIMEOUT_VALUE),
+        'options' => array(),
         'body' => NULL,
       )
     );
 
-    // Confirm the expected requests were made.
+    // Confirm the expected requests and logs.
     $this->assertAPIRequests($requests);
-
     $logs = array();
-
     $this->assertLogs($logs);
 
     $lift_api = $this->getAcquiaLiftAPI(TRUE);
-    $lift_api->getDecisionsForPoint($agentName, $pointName);
-    // Confirm the expected requests were made.
+    try {
+      $lift_api->getDecisionsForPoint($agentName, $pointName);
+      $this->fail('Should not reach here');
+    }
+    catch (AcquiaLiftException $e) {
+
+    }
+    // Confirm the expected requests and logs.
     $this->assertAPIRequests($requests);
-
     $logs = array();
-
     $this->assertLogs($logs);
   }
 
@@ -805,25 +881,27 @@ class AcquiaLiftTest extends DrupalUnitTestCase {
         'type' => 'get',
         'uri' => "{$lift_api->getApiUrl()}/{$lift_api->getOwnerCode()}/agent-api/$agentName/points/{$pointName}/decisions/{$decisionName}/choices?apikey={$lift_api->getAdminKey()}",
         'headers' => array('Accept' => 'application/json'),
-        'options' => array('timeout' => AcquiaLiftAPI::GET_REQUEST_TIMEOUT_VALUE),
+        'options' => array(),
         'body' => NULL,
       )
     );
 
-    // Confirm the expected requests were made.
+    // Confirm the expected requests and logs.
     $this->assertAPIRequests($requests);
-
     $logs = array();
-
     $this->assertLogs($logs);
 
     $lift_api = $this->getAcquiaLiftAPI(TRUE);
-    $lift_api->getChoicesForDecision($agentName, $pointName, $decisionName);
-    // Confirm the expected requests were made.
+    try {
+      $lift_api->getChoicesForDecision($agentName, $pointName, $decisionName);
+      $this->fail('Should not reach here');
+    }
+    catch (AcquiaLiftException $e) {
+
+    }
+    // Confirm the expected requests and logs.
     $this->assertAPIRequests($requests);
-
     $logs = array();
-
     $this->assertLogs($logs);
   }
 
@@ -842,16 +920,14 @@ class AcquiaLiftTest extends DrupalUnitTestCase {
         'type' => 'get',
         'uri' => "{$lift_api->getApiUrl()}/{$lift_api->getOwnerCode()}/list-agents?apikey={$lift_api->getAdminKey()}",
         'headers' => array('Accept' => 'application/json'),
-        'options' => array('timeout' => AcquiaLiftAPI::GET_REQUEST_TIMEOUT_VALUE),
+        'options' => array(),
         'body' => NULL,
       )
     );
 
-    // Confirm the expected requests were made.
+    // Confirm the expected requests and logs.
     $this->assertAPIRequests($requests);
-
     $logs = array();
-
     $this->assertLogs($logs);
 
     $lift_api = $this->getAcquiaLiftAPI(TRUE);
@@ -861,16 +937,14 @@ class AcquiaLiftTest extends DrupalUnitTestCase {
     catch (Exception $e) {
       $this->assertTrue($e instanceof AcquiaLiftException);
     }
-    // Confirm the expected requests were made.
+    // Confirm the expected requests and logs.
     $this->assertAPIRequests($requests);
-
     $logs = array(
       array(
         'level' => PersonalizeLogLevel::ERROR,
         'message' => 'Error retrieving agent list from Acquia Lift',
       )
     );
-
     $this->assertLogs($logs);
   }
 
@@ -889,7 +963,7 @@ class AcquiaLiftTest extends DrupalUnitTestCase {
         'type' => 'get',
         'uri' => "{$lift_api->getApiUrl()}/{$lift_api->getOwnerCode()}/transforms-options?apikey={$lift_api->getAdminKey()}",
         'headers' => array('Accept' => 'application/json'),
-        'options' => array('timeout' => AcquiaLiftAPI::GET_REQUEST_TIMEOUT_VALUE),
+        'options' => array(),
         'body' => NULL,
       )
     );
@@ -964,7 +1038,7 @@ class AcquiaLiftTest extends DrupalUnitTestCase {
     $logs = array(
       array(
         'level' => PersonalizeLogLevel::INFO,
-        'message' => 'The targeting rule for campaign {agent} was saved successfully',
+        'message' => "The targeting rule for campaign $agentName was saved successfully",
       )
     );
 
@@ -985,7 +1059,58 @@ class AcquiaLiftTest extends DrupalUnitTestCase {
     $logs = array(
       array(
         'level' => PersonalizeLogLevel::ERROR,
-        'message' => 'The targeting rule could not be saved for campaign {agent}',
+        'message' => "The targeting rule could not be saved for campaign $agentName",
+      )
+    );
+
+    $this->assertLogs($logs);
+  }
+
+  /**
+   * Test AcquiaLiftAPI->testHasAutoTargetingRule()
+   */
+  public function testHasAutoTargetingRule() {
+    $lift_api = $this->getAcquiaLiftAPI();
+    $agentName = 'some-agent-name';
+    $result = $lift_api->hasAutoTargetingRule($agentName);
+    // Define the requests we expect to have been made to our dummy http
+    // client for this operation.
+    $requests = array(
+      array(
+        'type' => 'get',
+        'uri' => "{$lift_api->getApiUrl()}/{$lift_api->getOwnerCode()}/transforms-list?apikey={$lift_api->getAdminKey()}",
+        'headers' => array('Accept' => 'application/json'),
+        'options' => array(),
+        'body' => NULL,
+      )
+    );
+
+    // Confirm the expected requests were made.
+    $this->assertAPIRequests($requests);
+    // Confirm that we received a boolean false as the result.
+    $this->assertTrue($result === FALSE);
+
+    $logs = array();
+    $this->assertLogs($logs);
+
+    $lift_api = $this->getAcquiaLiftAPI(TRUE);
+    $msg = 'Problem retrieving auto-targeting rules';
+    try {
+      $lift_api->hasAutoTargetingRule($agentName);
+      $this->fail("Should not reach here");
+    }
+    catch (Exception $e) {
+      $this->assertTrue($e instanceof AcquiaLiftException);
+      $this->assertEqual($msg, $e->getMessage());
+    }
+
+    // Confirm the expected requests were made.
+    $this->assertAPIRequests($requests);
+
+    $logs = array(
+      array(
+        'level' => PersonalizeLogLevel::ERROR,
+        'message' => $msg,
       )
     );
 
@@ -1009,7 +1134,7 @@ class AcquiaLiftTest extends DrupalUnitTestCase {
         'type' => 'get',
         'uri' => "{$lift_api->getApiUrl()}/{$lift_api->getOwnerCode()}/-/potential-targeting?agent={$agentName}&include-current=true&apikey={$lift_api->getAdminKey()}",
         'headers' => array('Accept' => 'application/json'),
-        'options' => array('timeout' => AcquiaLiftAPI::GET_REQUEST_TIMEOUT_VALUE),
+        'options' => array(),
         'body' => NULL,
       )
     );
@@ -1075,7 +1200,7 @@ class AcquiaLiftTest extends DrupalUnitTestCase {
     $logs = array(
       array(
         'level' => PersonalizeLogLevel::INFO,
-        'message' => 'The fixed targeting mapping for point {decpoint} was successfully saved for campaign {agent}'
+        'message' => "The fixed targeting mapping for point $pointName was successfully saved for campaign $agentName"
       ),
     );
 
@@ -1096,7 +1221,7 @@ class AcquiaLiftTest extends DrupalUnitTestCase {
     $logs = array(
       array(
         'level' => PersonalizeLogLevel::ERROR,
-        'message' => 'The fixed targeting mapping for point {decpoint} could not be saved for campaign {agent}',
+        'message' => "The fixed targeting mapping for point $pointName could not be saved for campaign $agentName",
       )
     );
 
@@ -1121,7 +1246,7 @@ class AcquiaLiftTest extends DrupalUnitTestCase {
         'type' => 'get',
         'uri' => "{$lift_api->getApiUrl()}/{$lift_api->getOwnerCode()}/{$agentName}/report/targeting-features/{$dateStr}?apikey={$lift_api->getAdminKey()}",
         'headers' => array('Accept' => 'application/json'),
-        'options' => array('timeout' => AcquiaLiftAPI::GET_REQUEST_TIMEOUT_VALUE),
+        'options' => array(),
         'body' => NULL,
       )
     );
@@ -1144,7 +1269,7 @@ class AcquiaLiftTest extends DrupalUnitTestCase {
         'type' => 'get',
         'uri' => "{$lift_api->getApiUrl()}/{$lift_api->getOwnerCode()}/{$agentName}/report/targeting-features/{$startDate}/$endDate?apikey={$lift_api->getAdminKey()}",
         'headers' => array('Accept' => 'application/json'),
-        'options' => array('timeout' => AcquiaLiftAPI::GET_REQUEST_TIMEOUT_VALUE),
+        'options' => array(),
         'body' => NULL,
       )
     );
@@ -1181,7 +1306,7 @@ class AcquiaLiftTest extends DrupalUnitTestCase {
   /**
    * Test AcquiaLiftAPI->getAgentStatusReport()
    */
-  public function testGetAgentStatusReportg() {
+  public function testGetAgentStatusReport() {
     $lift_api = $this->getAcquiaLiftAPI();
 
     $agentNamesArray = array('some-agent-name', 'some-another-name');
@@ -1197,7 +1322,7 @@ class AcquiaLiftTest extends DrupalUnitTestCase {
         'type' => 'get',
         'uri' => "{$lift_api->getApiUrl()}/{$lift_api->getOwnerCode()}/report/status?codes={$agentNames}&days={$dayNumber}&apikey={$lift_api->getAdminKey()}",
         'headers' => array('Accept' => 'application/json'),
-        'options' => array('timeout' => AcquiaLiftAPI::GET_REQUEST_TIMEOUT_VALUE),
+        'options' => array(),
         'body' => NULL,
       )
     );
@@ -1240,83 +1365,58 @@ class AcquiaLiftTest extends DrupalUnitTestCase {
     $test_request = array(
       'type' => 'get',
       'headers' => array('Accept' => 'application/json'),
-      'options' => array('timeout' => AcquiaLiftAPI::GET_REQUEST_TIMEOUT_VALUE),
+      'options' => array(),
       'body' => NULL,
     );
 
     $agentName = 'some-agent-name';
-    $lift_api->getConfidenceReport($agentName);
+    $params = array();
+    $params[] = $agentName;
 
     // Confirm the expected requests were made.
     $dateStr = date('Y-m-d');
-    $test_request['uri'] = "{$lift_api->getApiUrl()}/{$lift_api->getOwnerCode()}/{$agentName}/report/confidence/{$dateStr}?features=(none)&confidence-measure={$default_confidence}&apikey={$lift_api->getAdminKey()}";
-
-    $this->assertAPIRequests(array($test_request));
-    $logs = array();
-    $this->assertLogs($logs);
+    $test_request['uri'] = "{$lift_api->getApiUrl()}/{$lift_api->getOwnerCode()}/{$agentName}/report/confidence/{$dateStr}?features=(none)&apikey={$lift_api->getAdminKey()}&confidence-measure={$default_confidence}&aggregated-over-dates=true";
+    $this->assertConfidenceReportAPI($params, $test_request, $lift_api);
 
     // Test date range.
     $startDate = '2014-01-01';
     $endDate = '2014-01-02';
-    $lift_api->getConfidenceReport($agentName, $startDate, $endDate);
-
-    // Confirm the expected requests were made.
-    $test_request['uri'] = "{$lift_api->getApiUrl()}/{$lift_api->getOwnerCode()}/{$agentName}/report/confidence/{$startDate}/{$endDate}?features=(none)&confidence-measure={$default_confidence}&apikey={$lift_api->getAdminKey()}";
-    $this->assertAPIRequests(array($test_request));
-    $logs = array();
-    $this->assertLogs($logs);
+    $params[] = $startDate;
+    $params[] = $endDate;
+    $test_request['uri'] = "{$lift_api->getApiUrl()}/{$lift_api->getOwnerCode()}/{$agentName}/report/confidence/{$startDate}/{$endDate}?features=(none)&apikey={$lift_api->getAdminKey()}&confidence-measure={$default_confidence}&aggregated-over-dates=true";
+    $this->assertConfidenceReportAPI($params, $test_request, $lift_api);
 
     // Test sending point name.
     $point_name = 'decision_point';
-    $lift_api->getConfidenceReport($agentName, $startDate, $endDate, $point_name);
-
-    // Confirm the expected requests were made.
     $test_request['headers']['x-mpath-point'] = $point_name;
-    $this->assertAPIRequests(array($test_request));
-    $logs = array();
-    $this->assertLogs($logs);
+    $params[] = $point_name;
+    $this->assertConfidenceReportAPI($params, $test_request, $lift_api);
 
     // Send features.
     $features = array('feature1', 'feature2');
     $features_str = implode(',', $features);
-    $lift_api->getConfidenceReport($agentName, $startDate, $endDate, $point_name, $features);
-    $test_request['uri'] = "{$lift_api->getApiUrl()}/{$lift_api->getOwnerCode()}/{$agentName}/report/confidence/{$startDate}/{$endDate}?features={$features_str}&confidence-measure={$default_confidence}&apikey={$lift_api->getAdminKey()}";
-
-    // Confirm the expected requests were made.
-    $test_request['headers']['x-mpath-point'] = $point_name;
-    $this->assertAPIRequests(array($test_request));
-    $logs = array();
-    $this->assertLogs($logs);
+    $params[] = array('features' => $features);
+    $test_request['uri'] = "{$lift_api->getApiUrl()}/{$lift_api->getOwnerCode()}/{$agentName}/report/confidence/{$startDate}/{$endDate}?features={$features_str}&apikey={$lift_api->getAdminKey()}&confidence-measure={$default_confidence}&aggregated-over-dates=true";
+    $this->assertConfidenceReportAPI($params, $test_request, $lift_api);
 
     // Send confidence measure.
     $confidence_measure = .99;
-    $lift_api->getConfidenceReport($agentName, $startDate, $endDate, $point_name, $features, $confidence_measure);
+    $params[4]['confidence-measure'] = $confidence_measure;
+    $test_request['uri'] = "{$lift_api->getApiUrl()}/{$lift_api->getOwnerCode()}/{$agentName}/report/confidence/{$startDate}/{$endDate}?features={$features_str}&apikey={$lift_api->getAdminKey()}&confidence-measure={$confidence_measure}&aggregated-over-dates=true";
+    $this->assertConfidenceReportAPI($params, $test_request, $lift_api);
 
-    // Confirm the expected requests were made.
-    $test_request['uri'] = "{$lift_api->getApiUrl()}/{$lift_api->getOwnerCode()}/{$agentName}/report/confidence/{$startDate}/{$endDate}?features={$features_str}&confidence-measure={$confidence_measure}&apikey={$lift_api->getAdminKey()}";
-    $this->assertAPIRequests(array($test_request));
-    $logs = array();
-    $this->assertLogs($logs);
+    // Get detail report.
+    $params[4]['aggregated-over-dates'] = FALSE;
+    $test_request['uri'] = "{$lift_api->getApiUrl()}/{$lift_api->getOwnerCode()}/{$agentName}/report/confidence/{$startDate}/{$endDate}?features={$features_str}&apikey={$lift_api->getAdminKey()}&confidence-measure={$confidence_measure}&aggregated-over-dates=false";
+    $this->assertConfidenceReportAPI($params, $test_request, $lift_api);
+
+    // Get a detail report with a specific goal.
+    $params[4]['goal'] = 'some_goal';
+    $test_request['uri'] = "{$lift_api->getApiUrl()}/{$lift_api->getOwnerCode()}/{$agentName}/report/confidence/{$startDate}/{$endDate}?features={$features_str}&apikey={$lift_api->getAdminKey()}&confidence-measure={$confidence_measure}&aggregated-over-dates=false&goal=some_goal";
+    $this->assertConfidenceReportAPI($params, $test_request, $lift_api);
 
     $lift_api = $this->getAcquiaLiftAPI(TRUE);
-    try {
-      $lift_api->getConfidenceReport($agentName, $startDate, $endDate, $point_name, $features, $confidence_measure);
-    }
-    catch (Exception $e) {
-      $this->assertTrue($e instanceof AcquiaLiftException);
-    }
-
-    // Confirm the expected requests were made.
-    $this->assertAPIRequests(array($test_request));
-
-    $logs = array(
-      array(
-        'level' => PersonalizeLogLevel::ERROR,
-        'message' => 'Problem retrieving confidence report.',
-      )
-    );
-
-    $this->assertLogs($logs);
+    $this->assertConfidenceReportAPI($params, $test_request, $lift_api);
   }
 
   /**
@@ -1337,7 +1437,7 @@ class AcquiaLiftTest extends DrupalUnitTestCase {
         'type' => 'get',
         'uri' => "{$lift_api->getApiUrl()}/{$lift_api->getOwnerCode()}/{$agentName}/report/learning/{$dateStr}?apikey={$lift_api->getAdminKey()}",
         'headers' => array('Accept' => 'application/json'),
-        'options' => array('timeout' => AcquiaLiftAPI::GET_REQUEST_TIMEOUT_VALUE),
+        'options' => array(),
         'body' => NULL,
       )
     );
@@ -1360,7 +1460,7 @@ class AcquiaLiftTest extends DrupalUnitTestCase {
         'type' => 'get',
         'uri' => "{$lift_api->getApiUrl()}/{$lift_api->getOwnerCode()}/{$agentName}/report/learning/{$startDate}/$endDate?apikey={$lift_api->getAdminKey()}",
         'headers' => array('Accept' => 'application/json'),
-        'options' => array('timeout' => AcquiaLiftAPI::GET_REQUEST_TIMEOUT_VALUE),
+        'options' => array(),
         'body' => NULL,
       )
     );
@@ -1396,13 +1496,14 @@ class AcquiaLiftTest extends DrupalUnitTestCase {
 
   function testSaveAgent() {
     $lift_api = $this->getAcquiaLiftAPI();
-    $lift_api->saveAgent('some-test-agent', 'Some Test Agent', 'adaptive', 'enabled');
+    $agentName = 'some-test-agent';
+    $lift_api->saveAgent($agentName, 'Some Test Agent', 'adaptive', 'enabled');
     // Define the requests we expect to have been made to our dummy http
     // client for this operation.
     $requests = array(
       array(
         'type' => 'put',
-        'uri' => "http://api.lift.acquia.com/{$this->liftOwnerCode}/agent-api/some-test-agent?apikey={$this->liftAdminKey}",
+        'uri' => "http://api.lift.acquia.com/{$this->liftOwnerCode}/agent-api/$agentName?apikey={$this->liftAdminKey}",
         'headers' => array('Content-Type' => 'application/json; charset=utf-8', 'Accept' => 'application/json'),
         'options' => array(),
         'body' => array(
@@ -1411,6 +1512,7 @@ class AcquiaLiftTest extends DrupalUnitTestCase {
           'status' => 'enabled',
           'control-rate' => 0.1,
           'explore-rate' => 0.2,
+          'decision-stickiness' => 'session'
         )
       )
     );
@@ -1420,19 +1522,19 @@ class AcquiaLiftTest extends DrupalUnitTestCase {
     $logs = array(
       array(
         'level' => PersonalizeLogLevel::INFO,
-        'message' => 'The campaign {agent} was pushed to Acquia Lift',
+        'message' => "The campaign $agentName was pushed to Acquia Lift",
       )
     );
     $this->assertLogs($logs);
     $this->logger->clearLogs();
 
-    $lift_api->saveAgent('some-test-agent', 'Some Test Agent', 'adaptive', 'enabled', 0.1, 0.4);
+    $lift_api->saveAgent($agentName, 'Some Test Agent', 'adaptive', 'enabled', 0.1, 0.4);
     // Define the requests we expect to have been made to our dummy http
     // client for this operation.
     $requests = array(
       array(
         'type' => 'put',
-        'uri' => "http://api.lift.acquia.com/{$this->liftOwnerCode}/agent-api/some-test-agent?apikey={$this->liftAdminKey}",
+        'uri' => "http://api.lift.acquia.com/{$this->liftOwnerCode}/agent-api/$agentName?apikey={$this->liftAdminKey}",
         'headers' => array('Content-Type' => 'application/json; charset=utf-8', 'Accept' => 'application/json'),
         'options' => array(),
         'body' => array(
@@ -1441,6 +1543,7 @@ class AcquiaLiftTest extends DrupalUnitTestCase {
           'status' => 'enabled',
           'control-rate' => 0.1,
           'explore-rate' => 0.4,
+          'decision-stickiness' => 'session'
         )
       )
     );
@@ -1449,10 +1552,18 @@ class AcquiaLiftTest extends DrupalUnitTestCase {
     $this->assertLogs($logs);
     $this->logger->clearLogs();
 
+    // Save an agent without sticky decisions
+    $lift_api->saveAgent($agentName, 'Some Test Agent', 'adaptive', 'enabled', 0.1, 0.4, 0);
+    $requests[0]['body']['decision-stickiness'] = 'none';
+    // Confirm the expected requests were made.
+    $this->assertAPIRequests($requests);
+    $this->assertLogs($logs);
+    $this->logger->clearLogs();
+
     // Now try with a broken http client.
     $lift_api = $this->getAcquiaLiftAPI(TRUE);
     try {
-      $lift_api->saveAgent('some-test-agent', 'Some Test Agent', 'adaptive', 'enabled', 0.1, 0.4);
+      $lift_api->saveAgent('some-test-agent', 'Some Test Agent', 'adaptive', 'enabled', 0.1, 0.4, 0);
     }
     catch (Exception $e) {
       $this->assertTrue($e instanceof AcquiaLiftException);
@@ -1463,7 +1574,7 @@ class AcquiaLiftTest extends DrupalUnitTestCase {
     $logs = array(
       array(
         'level' => PersonalizeLogLevel::ERROR,
-        'message' => 'The campaign {agent} could not be pushed to Acquia Lift',
+        'message' => "The campaign $agentName could not be pushed to Acquia Lift",
       )
     );
     $this->assertLogs($logs);
@@ -1600,6 +1711,9 @@ class AcquiaLiftTest extends DrupalUnitTestCase {
    */
   public function testGetCallsForPreviousMonth() {
     $lift_api = $this->getAcquiaLiftAPI();
+    // Make sure we're starting off when a clean request log in our dummy
+    // http client.
+    DummyAcquiaLiftHttpClient::clearLoggedRequests();
     $timestamps = array(
       // Timestamp representing March 12th 2014
       1394652611 => array(
@@ -1631,7 +1745,7 @@ class AcquiaLiftTest extends DrupalUnitTestCase {
           'type' => 'get',
           'uri' => "http://api.lift.acquia.com/{$this->liftOwnerCode}/-/report/system-usage/{$expected_dates['start']}/{$expected_dates['end']}?apikey={$this->liftAdminKey}",
           'headers' => array('Accept' => 'application/json'),
-          'options' => array('timeout' => AcquiaLiftAPI::GET_REQUEST_TIMEOUT_VALUE),
+          'options' => array(),
           'body' => NULL,
         )
       );
@@ -1671,7 +1785,7 @@ class AcquiaLiftTest extends DrupalUnitTestCase {
           'type' => 'get',
           'uri' => "http://api.lift.acquia.com/{$this->liftOwnerCode}/-/report/system-usage/{$expected_dates['start']}/{$expected_dates['end']}?apikey={$this->liftAdminKey}",
           'headers' => array('Accept' => 'application/json'),
-          'options' => array('timeout' => AcquiaLiftAPI::GET_REQUEST_TIMEOUT_VALUE),
+          'options' => array(),
           'body' => NULL,
         )
       );
@@ -1695,7 +1809,7 @@ class AcquiaLiftTest extends DrupalUnitTestCase {
     $requests = array(
       array(
         'type' => 'delete',
-        'uri' => "http://api.lift.acquia.com/{$this->liftOwnerCode}/my-test-agent/data?apikey={$this->liftAdminKey}",
+        'uri' => "http://api.lift.acquia.com/{$this->liftOwnerCode}/$agent_name/data?apikey={$this->liftAdminKey}",
         'headers' => NULL,
         'options' => array(),
         'body' => NULL
@@ -1707,7 +1821,7 @@ class AcquiaLiftTest extends DrupalUnitTestCase {
     $logs = array(
       array(
         'level' => PersonalizeLogLevel::INFO,
-        'message' => 'The data for Acquia Lift campaign {agent} was reset',
+        'message' => "The data for Acquia Lift campaign $agent_name was reset",
       )
     );
     $this->assertLogs($logs);
@@ -1727,7 +1841,7 @@ class AcquiaLiftTest extends DrupalUnitTestCase {
     $logs = array(
       array(
         'level' => PersonalizeLogLevel::ERROR,
-        'message' => 'Could not reset data for Acquia Lift campaign {agent}',
+        'message' => "Could not reset data for Acquia Lift campaign $agent_name",
       )
     );
     $this->assertLogs($logs);
@@ -1802,8 +1916,43 @@ class AcquiaLiftTest extends DrupalUnitTestCase {
       // that we can retrieve for checking later.
       $this->logger = new AcquiaLiftTestLogger();
     }
+    else {
+      $this->logger->clearLogs();
+    }
     $lift_api->setLogger($this->logger);
     return $lift_api;
+  }
+
+  /**
+   * Helper function to call the confidence report endpoint and verify the API
+   * request.
+   *
+   * @param $params
+   *   The indexed parameter array to pass to the api call.
+   * @param $request
+   *   The expected request values.
+   * @param $lift_api
+   *   (Optional) the lift api instance to use for tests.
+   */
+  protected function assertConfidenceReportAPI($params, $request, $lift_api) {
+    $logs = array();
+    if (empty($lift_api)) {
+      $lift_api = $this->getAcquiaLiftAPI();
+    }
+    try {
+      call_user_func_array(array($lift_api, 'getConfidenceReport'), $params);
+    } catch (Exception $e) {
+      $logs = array(
+        array(
+          'level' => PersonalizeLogLevel::ERROR,
+          'message' => 'Problem retrieving confidence report.',
+        ),
+      );
+      $this->assertTrue($e instanceof AcquiaLiftException);
+    }
+
+    $this->assertAPIRequests(array($request));
+    $this->assertLogs($logs);
   }
 
   /**
@@ -1812,9 +1961,9 @@ class AcquiaLiftTest extends DrupalUnitTestCase {
    * @param $expected_requests
    */
   protected function assertAPIRequests($expected_requests) {
-    $logged_requests = $this->httpClient->getLoggedRequests();
+    $logged_requests = DummyAcquiaLiftHttpClient::getLoggedRequests();
     $this->assertEqual($expected_requests, $logged_requests);
-    $this->httpClient->removeLoggedRequests();
+    DummyAcquiaLiftHttpClient::clearLoggedRequests();
   }
 
   /**

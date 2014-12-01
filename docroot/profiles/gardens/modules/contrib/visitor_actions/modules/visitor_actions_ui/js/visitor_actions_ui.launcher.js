@@ -12,7 +12,7 @@ Drupal.behaviors.visitorActionsEditorLauncher = {
     // disabled, the JavaScript resources to build the edit mode will be
     // loaded.
     if (!getAppView()) {
-      var $triggers = $('[href="/admin/structure/visitor_actions/add"]')
+      var $triggers = $('[href="' + Drupal.settings.basePath + 'admin/structure/visitor_actions/add"]')
       var $placeholders = $triggers.once('visitor-actions-ui-launcher');
       // Filter out the triggers that have been processed and unbind them.
       if ($placeholders.length) {
@@ -193,4 +193,4 @@ function getAppView () {
   return Drupal.visitorActions && Drupal.visitorActions.ui && Drupal.visitorActions.ui.views && Drupal.visitorActions.ui.views.appView;
 }
 
-}(Drupal, jQuery));
+}(Drupal, Drupal.jQuery));

@@ -96,11 +96,12 @@ class UserProfileContext extends PersonalizeContextBase {
   /**
    * Implements PersonalizeAgentInterface::getPossibleValues().
    */
-  public function getPossibleValues() {
+  public function getPossibleValues($limit = FALSE) {
     $possible_values = array();
     $entity = new stdClass();
     $form = $form_state = array();
-    foreach ($this->selectedContext as $name) {
+    $options = $this->getOptions();
+    foreach ($options as $name => $info) {
 
       $field_name = 'field_' . $name;
       $field = field_info_field($field_name);
@@ -109,16 +110,17 @@ class UserProfileContext extends PersonalizeContextBase {
         'friendly name' => $instance['label']
       );
       if ($instance['widget']['module'] == 'options') {
-        $possible_values[$name]['value type'] = 'predefined';
-        // Build the form element that would be used to display the field
-        // for editing and pull the options list out of it. (There is no API
-        // function for getting the list of possible values from a field.)
-        $element = options_field_widget_form($form, $form_state, $field, $instance, LANGUAGE_NONE, array(), 0, array('#required' => FALSE, '#entity_type' => 'user', '#entity' => $entity));
         if ($instance['widget']['type'] === 'options_onoff') {
-          $possible_values[$name]['values']['#on_value'] = 'On';
-          $possible_values[$name]['values']['#off_value'] = 'Off';
+          $possible_values[$name]['value type'] = 'boolean';
+          $possible_values[$name]['on_label'] = 'On';
+          $possible_values[$name]['off_label'] = 'Off';
         }
         else {
+          $possible_values[$name]['value type'] = 'predefined';
+          // Build the form element that would be used to display the field
+          // for editing and pull the options list out of it. (There is no API
+          // function for getting the list of possible values from a field.)
+          $element = options_field_widget_form($form, $form_state, $field, $instance, LANGUAGE_NONE, array(), 0, array('#required' => FALSE, '#entity_type' => 'user', '#entity' => $entity));
           foreach ($element['#options'] as $key => $label) {
             if ($key != '_none') {
               $possible_values[$name]['values'][$key] = $label;
@@ -134,6 +136,9 @@ class UserProfileContext extends PersonalizeContextBase {
           $possible_values[$name]['value type'] = 'string';
         }
       }
+    }
+    if ($limit) {
+      $possible_values = array_intersect_key($possible_values, array_flip($this->selectedContext));
     }
     return $possible_values;
   }

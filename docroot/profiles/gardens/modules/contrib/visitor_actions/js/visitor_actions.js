@@ -106,46 +106,20 @@
       if (!alreadyExists) {
         this.subscribers.push(subscriber);
       }
+    },
+    /**
+     * Clears a publisher's subscribers.
+     *
+     * Used for testing purposes.
+     */
+    reset: function() {
+      this.subscribers = [];
     }
   };
 
   Drupal.visitorActions = Drupal.visitorActions || {};
   Drupal.visitorActions.publisher = new Publisher();
 
-  Drupal.visitorActions.preventDefaultCallback = function (jsEvent) {
-    var callback;
-    if (jsEvent !== undefined) {
-      switch (jsEvent.type) {
-        // We're going to be making an ajax call so we need to prevent the default
-        // behavior until our call has been made.
-        case 'click':
-          // Make sure we have an href to redirect to later.
-          var target = jsEvent.target;
-          while (target && target.nodeName !== 'A') {
-            target = target.parentNode;
-          }
-          if (target && target.href !== undefined) {
-            if (!jsEvent.isDefaultPrevented()) {
-              var redirectPath = target.href;
-              callback = function () {
-                window.location.href = redirectPath;
-              }
-            }
-            jsEvent.preventDefault();
-          }
-          break;
-        case 'submit':
-          if (jsEvent.hasOwnProperty('data') && jsEvent.data.hasOwnProperty('eventNamespace')) {
-            var form = jsEvent.currentTarget, submitEvent = 'submit.' + jsEvent.data.eventNamespace;
-            callback = function () {
-              $(form).unbind(submitEvent).submit();
-            };
-            jsEvent.preventDefault();
-          }
-      }
-    }
-    return callback;
-  }
   /**
    * Binds events to selectors for client-side visitor actions.
    */
@@ -199,8 +173,14 @@
 
   Drupal.visitorActions.link = {
     'bindEvent': function (name, action, context, callback) {
-      var $selector = $(action.identifier, context);
       var actionContext = Drupal.visitorActions.getPageContext();
+      // Make sure the selector is valid.
+      try {
+        var $selector = $(action.identifier, context);
+      } catch (error) {
+        // Can't add a bind event because the selector is invalid.
+        return;
+      }
       $selector
         .once('visitorActions-' + name)
         .bind(action.event + '.' + eventNamespace, {'eventNamespace' : eventNamespace}, function (event) {
@@ -232,7 +212,12 @@
       // Drupal form IDs get their underscores converted to hyphens when
       // output as element IDs in markup.
       var formId = action.identifier.replace(/_/g, '-');
-      var $selector = $('form#' + formId, context);
+      try {
+        var $selector = $('form#' + formId, context);
+      } catch (error) {
+        // Can't add a bind event because the selector is invalid.
+        return;
+      }
       var pageContext = Drupal.visitorActions.getPageContext();
       if ($selector.length == 0 || typeof callback !== 'function') {
         return;
@@ -324,6 +309,9 @@
       if (typeof(this[action.event]) === 'function') {
         this[action.event].call(this, name, action, context, callback);
       }
+    },
+    'reset': function() {
+      pageViewed = false;
     }
   };
 

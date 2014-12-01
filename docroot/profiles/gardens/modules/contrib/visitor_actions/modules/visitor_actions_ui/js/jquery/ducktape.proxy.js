@@ -13,7 +13,7 @@
 
 // Bind a function to a context, optionally partially applying any
 // arguments.
-jQuery.proxy_visitor_actions_ui = function( fn, context ) {
+Drupal.jQuery.proxy_visitor_actions_ui = function( fn, context ) {
   if ( typeof context === "string" ) {
     var tmp = fn[ context ];
     context = fn;

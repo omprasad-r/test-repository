@@ -1367,6 +1367,7 @@ function scarecrow_disallowed_modules_alter(&$modules) {
     $modules[] = 'acquia_search';
     // Likewise, acquia_lift-related modules are not for SMB.
     $modules[] = 'acquia_lift';
+    $modules[] = 'acquia_lift_profiles';
     $modules[] = 'personalize';
     $modules[] = 'personalize_blocks';
     $modules[] = 'personalize_elements';
