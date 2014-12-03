@@ -9,23 +9,23 @@
  * Definition of the import batch object needed by MailhandlerFetcher.
  */
 class MailhandlerFetcherResult extends FeedsFetcherResult {
-  protected $mailbox;
+  protected $mailbox_name;
   protected $filter;
 
   /**
    * Constructor.
    */
-  public function __construct($mailbox, $filter) {
-    $this->mailbox = $mailbox;
-    $this->filter = $filter;
+  public function __construct($mailbox_name, $filter) {
     parent::__construct('');
+    $this->mailbox_name = $mailbox_name;
+    $this->filter = $filter;
   }
 
   /**
    * Implementation of FeedsImportBatch::getRaw();
    */
   public function getRaw() {
-    $mailbox = mailhandler_mailbox_load($this->mailbox);
+    $mailbox = mailhandler_mailbox_load($this->mailbox_name);
     if ($class = mailhandler_plugin_load_class('mailhandler', $mailbox->settings['retrieve'], 'retrieve', 'handler')) {
       if ($messages = $class->retrieve($mailbox, $this->filter)) {
         return array('messages' => $messages, 'mailbox' => $mailbox);
@@ -34,6 +34,9 @@ class MailhandlerFetcherResult extends FeedsFetcherResult {
   }
 }
 
+/**
+ * Implementation of FeedsFetcher.
+ */
 class MailhandlerFetcher extends FeedsFetcher {
 
   /**
@@ -41,7 +44,7 @@ class MailhandlerFetcher extends FeedsFetcher {
    */
   public function fetch(FeedsSource $source) {
     $source_config = $source->getConfigFor($this);
-    return new MailhandlerFetcherResult($source_config['mailbox'], $this->config['filter']);
+    return new MailhandlerFetcherResult($source_config['source'], $this->config['filter']);
   }
 
   /**
@@ -49,11 +52,11 @@ class MailhandlerFetcher extends FeedsFetcher {
    */
   public function sourceForm($source_config) {
     $form = array();
-    $form['mailbox'] = array(
+    $form['source'] = array(
       '#type' => 'select',
       '#title' => t('Mailbox'),
       '#description' => t('Select a mailbox to use'),
-      '#default_value' => isset($source_config['mailbox']) ? $source_config['mailbox'] : '',
+      '#default_value' => isset($source_config['source']) ? $source_config['source'] : '',
       '#options' => _mailhandler_build_options(mailhandler_mailbox_load_all(FALSE), 'admin_title'),
     );
     return $form;
@@ -64,7 +67,7 @@ class MailhandlerFetcher extends FeedsFetcher {
    */
   public function sourceDefaults() {
     return array(
-      'mailbox' => '',
+      'source' => '',
     );
   }
 
@@ -86,7 +89,7 @@ class MailhandlerFetcher extends FeedsFetcher {
     $form['filter'] = array(
       '#type' => 'select',
       '#title' => t('Message filter'),
-      '#description' => t('Select which types of messages to import'),
+      '#description' => t('Select which types of messages to import. This is a heuristic filter, and may fail in some scenarios. For instance, messages from a mailing list will almost always look like comments. Thus, the safest setting is <em>all</em>.'),
       '#default_value' => $this->config['filter'],
       '#options' => _mailhandler_build_options(mailhandler_get_plugins('mailhandler', 'filters')),
     );

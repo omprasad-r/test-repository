@@ -16,6 +16,7 @@ class MailhandlerParser extends FeedsParser {
     return array(
       'available_commands' => 'status',
       'authenticate_plugin' => 'MailhandlerAuthenticateDefault',
+      'extended_headers' => NULL,
     );
   }
 
@@ -30,6 +31,9 @@ class MailhandlerParser extends FeedsParser {
     );
   }
 
+  /**
+   * Implements sourceForm().
+   */
   public function sourceForm($source_config) {
     $form['auth_required'] = array(
       '#type' => 'checkbox',
@@ -77,17 +81,17 @@ class MailhandlerParser extends FeedsParser {
     $mailbox = $fetched['mailbox'];
     $result = new FeedsParserResult();
     if (!empty($fetched['messages'])) {
-      foreach ($fetched['messages'] as $mid => &$message) {
+      foreach ($fetched['messages'] as &$message) {
         $this->authenticate($message, $mailbox);
         if ($class = mailhandler_plugin_load_class('mailhandler', $mailbox->settings['retrieve'], 'retrieve', 'handler')) {
           $class->purge_message($mailbox, $message);
         }
         if ($message['authenticated_uid'] == 0) {
-          // User was not authenticated
+          // User was not authenticated.
           module_invoke_all('mailhandler_auth_failed', $message);
           $source_config = $source->getConfigFor($this);
           if ($source_config['auth_required']) {
-            watchdog('mailhandler', 'User could not be authenticated. Please check your Mailhandler authentication plugin settings.');
+            mailhandler_report('warning', 'User could not be authenticated. Please check your Mailhandler authentication plugin settings.');
             continue;
           }
         }
@@ -98,7 +102,7 @@ class MailhandlerParser extends FeedsParser {
     return $result;
   }
 
-  /*
+  /**
    * This defines sources which user's can select to map values to.
    */
   public function getMappingSources() {
@@ -115,7 +119,7 @@ class MailhandlerParser extends FeedsParser {
     return $sources;
   }
 
-  /*
+  /**
    * Parse and apply commands.
    */
   public function commands(&$message, $source) {
@@ -128,7 +132,7 @@ class MailhandlerParser extends FeedsParser {
     }
   }
 
-  /*
+  /**
    * Authenticate the message and set $message['authenticated_uid'].
    */
   public function authenticate(&$message, $mailbox) {

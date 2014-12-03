@@ -12,18 +12,12 @@ abstract class MailhandlerRetrieve {
   /**
    * Connect to mailbox and run message retrieval.
    *
-   * @param $mailbox
+   * @param array $mailbox
    *   Array of mailbox configuration.
-   * @param $limit
-   *   Int - the maximim number of messages to fetch on retrieval, only for
-   *   'auto' mode.
-   * @param $encoding
-   *   Text encoding of messages.
-   * @param $filter_name
+   * @param string $filter_name
    *   Mailhandler filter to restrict what messages are retrieved.
    */
-  public function retrieve($mailbox, $limit = 0, $encoding = 'UTF-8', $filter_name = 'MailhandlerFilters') {
-    return;
+  public function retrieve($mailbox, $filter_name = 'MailhandlerFilters') {
   }
 
   /**
@@ -33,7 +27,9 @@ abstract class MailhandlerRetrieve {
     return array();
   }
 
+  /**
+   * Purge given message.
+   */
   public function purge_message($mailbox, $message) {
-    return;
   }
 }

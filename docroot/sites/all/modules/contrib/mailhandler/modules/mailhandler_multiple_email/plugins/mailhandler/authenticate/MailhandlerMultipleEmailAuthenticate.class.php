@@ -4,16 +4,20 @@
  * MailhandlerMultipleEmailAuthenticate  class.
  */
 
+/**
+ * Integrates with Multiple Email module.
+ */
 class MailhandlerMultipleEmailAuthenticate extends MailhandlerAuthenticate {
 
+  /**
+   * Implements authenticate().
+   */
   public function authenticate(&$message, $mailbox) {
-    list($fromaddress, $fromname) = _mailhandler_get_fromaddress($message['header'], $mailbox);
+    list($fromaddress,) = _mailhandler_get_fromaddress($message['header'], $mailbox);
+    $uid = 0;
     if ($address = multiple_email_find_address($fromaddress)) {
-      $message['authenticated_uid'] = $address->uid;
+      $uid = $address->uid;
     }
-    else {
-      // Authentication failed. Try as anonymous.
-      $message['authenticated_uid'] = 0;
-    }
+    return $uid;
   }
 }

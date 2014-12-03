@@ -1,7 +1,7 @@
 <?php
 /**
  * @file
- * Defines mailhandler_nodes importer.
+ * mailhandler_default.feeds_importer_default.inc
  */
 
 /**
@@ -10,7 +10,7 @@
 function mailhandler_default_feeds_importer_default() {
   $export = array();
 
-  $feeds_importer = new stdClass;
+  $feeds_importer = new stdClass();
   $feeds_importer->disabled = FALSE; /* Edit this to true to make a default feeds_importer disabled initially */
   $feeds_importer->api_version = 1;
   $feeds_importer->id = 'mailhandler_nodes';
@@ -33,7 +33,7 @@ function mailhandler_default_feeds_importer_default() {
     'processor' => array(
       'plugin_key' => 'FeedsNodeProcessor',
       'config' => array(
-        'content_type' => 'article',
+        'bundle' => 'article',
         'expire' => '-1',
         'author' => 0,
         'mappings' => array(

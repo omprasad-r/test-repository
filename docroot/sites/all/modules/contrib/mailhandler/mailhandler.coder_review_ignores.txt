@@ -17,3 +17,7 @@ modules/mailhandler_php_imap/plugins/mailhandler/retrieve/MailhandlerPhpImapRetr
 mailhandler.install:133:coder_tough_love
 mailhandler.install:134:coder_tough_love
 mailhandler.install:165:coder_tough_love
+
+; Filtered text warning
+mailhandler.module:195:security
+

@@ -13,7 +13,7 @@ REQUIREMENTS
 
 You will need to have access to a dedicated mailbox (IMAP or POP3) to receive
 posts via email. You must also have the PHP IMAP library installed- see the
-documentation referenced at the bottom of this file for more information.
+documentation at https://drupal.org/node/300794.
 
 Dependencies:
 - ctools
@@ -56,12 +56,14 @@ and a Source content type. Try to import this test message now:
 
 Now that you've verified that the basic features are working, it's time to
 customize them to suit your own needs:
-- Send a test email to an IMAP or POP3 mailbox.
+- Send a test email to an IMAP or POP3 mailbox. If you are using the default
+  authentication options, you must send the email from the same address
+  as your Drupal user account.
 - Go to $base_url/admin/structure/mailhandler/add
 - Fill in the details for your IMAP/POP3 mailbox. Mailhandler will report how
   many messages are in the mailbox if it is able to connect. Click "Save".
 - Follow the steps for 'Import a test message' (above) to import messages from
-  the mailbox.
+  the mailbox. Note that only unread messages will be imported.
 
 Note that new emails will be imported on cron runs. If you'd prefer that new
 messages NOT be imported automatically, you will need to edit the default

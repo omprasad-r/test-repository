@@ -8,7 +8,7 @@ $plugin = array(
   'schema' => 'mailhandler_mailbox',
   'access' => 'administer mailhandler',
   'menu' => array(
-    'menu prefix' => 'admin/structure',
+    'menu prefix' => MAILHANDLER_MENU_PREFIX,
     'menu item' => 'mailhandler',
     'menu title' => 'Mailhandler Mailboxes',
     'menu description' => 'Administer mailhandler mailboxes.',
@@ -24,7 +24,7 @@ $plugin = array(
         'access arguments' => array('administer mailhandler'),
         'type' => MENU_CALLBACK,
       ),
-    )
+    ),
   ),
   'title singular' => t('mailhandler mailbox'),
   'title singular proper' => t('Mailhandler Mailbox'),
