@@ -231,10 +231,6 @@ function warner_misc_disallowed_modules_alter(&$modules) {
   $extra_disallowed_modules = array(
     'bulk_email',
     'coppa_lite',
-    'feeds',
-    'feeds_import',
-    'feeds_news',
-    'feeds_ui',
     'mailhandler',
     'mailhandler_default',
     'mailhandler_php_imap',
