@@ -50,7 +50,19 @@ class FeedsJSONPathParser extends FeedsParser {
       $all_items = $this->jsonPath($array, $source_config['context']);
       $this->debug($all_items, 'context');
       unset($array);
+      // Batch.
+      $state = $source->state(FEEDS_PARSE);
+      if (!$state->total) {
+        $state->total = count($all_items);
+      }
 
+      $start = (int) $state->pointer;
+      $state->pointer = $start + $source->importer->getLimit();
+      $all_items = array_slice($all_items, $start, $source->importer->getLimit());
+     
+      // Set progress state.
+      $state->progress($state->total, $state->pointer);
+      
       foreach ($all_items as $item) {
         $parsed_item = $variables = array();
         foreach ($source_config['sources'] as $source => $query) {
