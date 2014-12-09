@@ -26,6 +26,10 @@ class FeedsJSONPathParser extends FeedsParser {
     $this->debug = array_keys(array_filter($source_config['debug']['options']));
 
     $raw = trim($fetcher_result->getRaw());
+    
+    //remove everything except valid letters (from any language)
+    $raw = preg_replace('/(?:\\\\u[\pL\p{Zs}])+/', '', $raw);
+    
     $result = new FeedsParserResult();
     // Set link so we can set the result link attribute.
     $fetcher_config = $source->getConfigFor($source->importer->fetcher);
@@ -71,6 +75,7 @@ class FeedsJSONPathParser extends FeedsParser {
     }
     return $result;
   }
+
 
   /**
    * Utilizes the jsonPath function from jsonpath-0.8.1.php
