@@ -30,6 +30,17 @@ function gardens_misc_init() {
   // Force Node export code delivery to use files only.
   $conf['node_export_code'] = 'file';
 
+  // Allow block caching, even when node access modules are enabled so that
+  // block caching still works when taxonomy_access is enabled.  This is a
+  // conversion from a core patch that is no longer needed since D7.33.  See
+  // DG-2570 for the original feature request.
+  $node_access_modules = module_implements('node_grants');
+  // Only do this if the *only* node access module is TAC, as we know that our
+  // block cache code handles this.
+  if (count($node_access_modules) == 1 && reset($node_access_modules) == 'taxonomy_access') {
+    $conf['block_cache_bypass_node_grants'] = TRUE;
+  }
+
   gardens_misc_setlocale();
 
   // Allow gardens_misc to clear all caches on a page request.
