@@ -109,6 +109,97 @@ class VisitorActionsTest extends DrupalWebTestCase {
     $this->assertText('The selected pages must contain valid paths.');
   }
 
+  public function testActionCreationAPI() {
+    $action_name = $this->randomName();
+    $machine_name = preg_replace('/[^a-z0-9_]+/', '_', drupal_strtolower($action_name));
+    $action = array(
+      'plugin' => 'link',
+      'label' => $action_name,
+      'machine_name' => $machine_name,
+      'identifier' => '.some-class',
+      'event' => 'client::click',
+      'pages' => 'node',
+      'data' => array(),
+    );
+    $success = visitor_actions_save_action($action);
+    $this->assertTrue($success);
+    $saved = visitor_actions_custom_load($machine_name);
+
+    $this->assertEqual($saved['machine_name'], $machine_name);
+    $this->assertEqual($saved['label'], $action_name);
+    $this->assertEqual($saved['identifier'], '.some-class');
+    $this->assertEqual($saved['event'], 'client::click');
+    $this->assertEqual($saved['pages'], 'node');
+    $this->assertEqual($saved['plugin'], 'link');
+
+    $action_name = $this->randomName();
+    $action_name .= '-invalid$characters';
+    $machine_name_correct = preg_replace('/[^a-z0-9_]+/', '_', drupal_strtolower($action_name));
+
+    $action = array(
+      'plugin' => 'link',
+      'label' => $action_name,
+      'machine_name' => $action_name,
+      'identifier' => '.some-class',
+      'event' => 'client::click',
+      'pages' => 'node',
+      'data' => array(),
+    );
+    $success = visitor_actions_save_action($action);
+    $this->assertTrue($success);
+    // There should be no action with the submitted machine name.
+    $saved = visitor_actions_custom_load($action_name);
+    $this->assertTrue(empty($saved));
+    // The machine name should have been corrected.
+    $saved = visitor_actions_custom_load($machine_name_correct);
+    $this->assertEqual($saved['machine_name'], $machine_name_correct);
+    $this->assertEqual($saved['label'], $action_name);
+    $this->assertEqual($saved['identifier'], '.some-class');
+    $this->assertEqual($saved['event'], 'client::click');
+    $this->assertEqual($saved['pages'], 'node');
+    $this->assertEqual($saved['plugin'], 'link');
+  }
+
+  function testLimitedUseAction() {
+    $this->drupalLogin($this->adminUser);
+    // Create a link action.
+    $action_name = strtolower($this->randomName());
+    $edit = array(
+      'machine_name' => $action_name,
+      'title' => $this->randomName(),
+      'identifier[link]' => '.some-class',
+      'event[link]' => 'client::click',
+      'pages' => 'node',
+    );
+    $this->drupalPost('admin/structure/visitor_actions/add/link', $edit, t('Save'));
+    $this->resetAll();
+    // The limited use property should be 0.
+    $action = visitor_actions_custom_load($action_name);
+    $this->assertTrue(isset($action['limited_use']));
+    $this->assertFalse($action['limited_use']);
+
+    // Get all actions, excluding limited use ones.
+    $actions = visitor_actions_custom_load_multiple(array(), TRUE);
+    // The action should show up in the list.
+    $this->assertTrue(isset($actions[$action_name]));
+
+    // Now uncheck the reusable checkbox.
+    $edit = array(
+      'reusable' => FALSE
+    );
+    $this->drupalPost("admin/structure/visitor_actions/manage/$action_name/edit", $edit, t('Save'));
+    $this->resetAll();
+    // The limited use property should be 1.
+    $action = visitor_actions_custom_load($action_name);
+    $this->assertTrue(isset($action['limited_use']));
+    $this->assertTrue($action['limited_use']);
+
+    // Get all actions, excluding limited use ones.
+    $actions = visitor_actions_custom_load_multiple(array(), TRUE);
+    // The action should not show up in the list.
+    $this->assertFalse(isset($actions[$action_name]));
+  }
+
   public function testFormServerSideAction() {
     $this->drupalPost('visitor-actions-test/form-action', array('test' => 'Test'), t('Save'));
     $this->assertText('Test action "base_form" subscriber was fired!');

@@ -5,6 +5,8 @@
    * Provides client side page personalization based on a user's context.
    */
   Drupal.personalize = Drupal.personalize || {};
+  // Timeout to retrieve visitor context values in milliseconds.
+  Drupal.personalize.contextTimeout = Drupal.personalize.contextTimeout || 5000;
 
   /**
    * Private variable: Session identifier for decision and goals.
@@ -57,12 +59,58 @@
       adminMode = Drupal.settings.personalize.hasOwnProperty('adminMode');
     }
     return adminMode;
-  }
+  };
+
+  var debugMode = null;
+  Drupal.personalize.isDebugMode = function() {
+    if (debugMode === null) {
+      debugMode = Drupal.settings.personalize.debugMode && (Drupal.personalize.isAdminMode() || $.cookie('personalizeDebugMode'));
+    }
+    return debugMode;
+  };
 
   /**
    * Private tracking variables across behavior attachments.
    */
   var processedDecisions = {}, decisionCallbacks = {}, processedOptionSets = {};
+
+  /**
+   * A decorator for a promise to implement an enforced timeout value.
+   *
+   * @param timeoutMS
+   *   The timeout value in milliseconds.
+   * @param promise
+   *   A JavaScript promise.
+   * @returns Promise
+   *   A promise that will respond with the original promises values
+   *   unless a time out error occurs.
+   */
+  var TimeoutPromise = function(timeoutMS, promise) {
+    var isTimedOut = false, isResolved = false;
+    return new Promise(function (resolve, reject) {
+      // Enforce a timeout error response.
+      setTimeout(function () {
+        isTimedOut = true;
+        if (!isResolved) {
+          reject(new Error("Promise timed out"));
+        }
+      }, timeoutMS);
+
+      // Respond with the wrapped promise's results as long as a time out
+      // has not occurred.
+      promise.then(function (response) {
+        isResolved = true;
+        if (!isTimedOut) {
+          resolve(response)
+        }
+      }, function (error) {
+        isResolved = true;
+        if (!isTimedOut) {
+          reject(error);
+        }
+      });
+    });
+  }
 
   Drupal.personalize.getVisitorContexts = function(contexts, callback) {
 
@@ -77,13 +125,20 @@
         var contextResult = getVisitorContext(plugin, contexts[plugin]);
         if (contextResult instanceof Promise) {
           promisePlugins.push(plugin);
-          contextPromises.push(contextResult);
+          contextPromises.push(new TimeoutPromise(Drupal.personalize.contextTimeout, contextResult));
         } else {
           contextValues[plugin] = contextResult;
         }
       }
     }
-    // Once all the contexts are loaded, evaluate them and load the decisions.
+    // Promise specification doesn't handle an empty array of promises
+    // as automatically completing.
+    if (contextPromises.length == 0) {
+      callback(contextValues);
+      return;
+    }
+    // If there are promises, then wait for them all to complete before calling
+    // back with the context values.
     Promise.all(contextPromises).then(function processLoadedVisitorContexts(loadedContexts) {
       // Results are in the same order as promises were.
       var num = loadedContexts.length;
@@ -98,6 +153,9 @@
       callback(contextValues);
     });
   };
+
+  // Keeps track of processed listeners so we don't subscribe them more than once.
+  var processedListeners = {};
 
   /**
    * Looks for personalized elements and calls the corresponding decision agent
@@ -125,10 +183,21 @@
 
       // Add an action listener for client-side goals.
       addActionListener(settings);
+
+      $(document).bind('visitorActionsBindActions', function(e, boundActions){
+        for (var action in boundActions) {
+          if (boundActions.hasOwnProperty(action) && processedListeners.hasOwnProperty(action)) {
+            if (boundActions[action] == null || (boundActions[action] instanceof jQuery && boundActions[action].length == 0)) {
+              Drupal.personalize.debug('Element goal ' + action + ' has no DOM element on this page.', 3001);
+            }
+          }
+        }
+      });
     }
   };
 
   Drupal.personalize.personalizePage = function(settings) {
+
     // Prepare MVTs and option sets for processing.
     var optionSets = prepareOptionSets(settings);
 
@@ -170,6 +239,13 @@
   };
 
   /**
+   * Helper function for sending a goal to the debugger.
+   */
+  function debugGoal(goal_name, agent_name, value) {
+    Drupal.personalize.debug('Sending goal ' + goal_name + ' to agent ' + agent_name + ' with value ' + value, 2010);
+  }
+
+  /**
    * Sends any goals that have been set server-side.
    */
   Drupal.personalize.sendGoals = function(settings) {
@@ -185,6 +261,7 @@
             if (settings.personalize.goals_attained[agent_name].hasOwnProperty(i) && !settings.personalize.goals_attained[agent_name][i].processed) {
               Drupal.personalize.agents[agent.type].sendGoalToAgent(agent_name, settings.personalize.goals_attained[agent_name][i].name, settings.personalize.goals_attained[agent_name][i].value);
               settings.personalize.goals_attained[agent_name][i].processed = 1;
+              debugGoal(settings.personalize.goals_attained[agent_name][i].name, agent_name, settings.personalize.goals_attained[agent_name][i].value)
               $(document).trigger('sentGoalToAgent', [agent_name, settings.personalize.goals_attained[agent_name][i].name, settings.personalize.goals_attained[agent_name][i].value ]);
             }
           }
@@ -661,6 +738,7 @@
               executeDecisionCallbacks(agent_name, point, decisions);
               return;
             }
+            Drupal.personalize.debug('Requesting decision for ' + agent_name + ' :' + point, 2000);
             decisionAgent.getDecisionsForPoint(agent_name, agent.visitorContext, agent.decisionPoints[point].choices, point, agent.decisionPoints[point].fallbacks, callback);
           }
         }
@@ -760,6 +838,7 @@
             }
             if (decisions != null) {
               // Execute the decision callbacks and skip processing this agent any further.
+              Drupal.personalize.debug('Reading decisions from storage: ' + agentName + ': ' + decisionPoint, 2001);
               executeDecisionCallbacks(agentName, decisionPoint, decisions);
               // Remove this from the decision points to be processed for this agent.
               delete agents[agentName].decisionPoints[decisionPoint];
@@ -803,6 +882,11 @@
       return;
     }
 
+    if (option_set.selector.length > 0 && $option_set.length == 0 && agent_info.active) {
+      // Add a debug message to say there's a decision happening for an option set with
+      // no DOM element on hte page.
+      Drupal.personalize.debug('No DOM element for the following selector in the ' + agent_name + ' campaign: "' + option_set.selector + '"', 3002);
+    }
     // Determine any pre-selected option to display.
     if (option_set.hasOwnProperty('winner') && option_set.winner !== null) {
       fallbackIndex = option_set.winner;
@@ -811,11 +895,13 @@
     // use that.
     if (selection = getPreselection(osid)) {
       chosenOption = selection;
+      Drupal.personalize.debug('Preselected option being shown for ' + agent_name, 2002);
     }
     // If we're in admin mode or the campaign is paused, just show the first option,
     // or, if available, the "winner" option.
     else if (Drupal.personalize.isAdminMode() || !agent_info.active) {
       chosenOption = choices[fallbackIndex];
+      Drupal.personalize.debug('Fallback option being shown for ' + agent_name, 2003);
     }
     // If we now have a chosen option, just call the executor and be done.
     if (chosenOption !== null) {
@@ -907,6 +993,7 @@
     // Define the callback function.
     var callback = (function(inner_executor, $inner_option_set, inner_osid, inner_agent_name) {
       return function(decision) {
+        Drupal.personalize.debug('Calling the executor for ' + inner_agent_name + ': ' + inner_osid, 2020);
         Drupal.personalize.executors[inner_executor].execute($inner_option_set, decision, inner_osid);
         // Fire an event so other code can respond to the decision.
         $(document).trigger('personalizeDecision', [$inner_option_set, decision, inner_osid, inner_agent_name ]);
@@ -956,14 +1043,12 @@
     }
   }
 
-  // Keeps track of processed listeners so we don't subscribe them more than once.
-  var processedListeners = {};
-
   /**
    * Add an action listener for client-side goal events.
    */
   function addActionListener(settings) {
-    if (Drupal.hasOwnProperty('visitorActions') && !Drupal.personalize.isAdminMode()) {
+    var adminMode = Drupal.personalize.isAdminMode();
+    if (Drupal.hasOwnProperty('visitorActions')) {
       var events = {}, new_events = 0;
       for (var eventName in settings.personalize.actionListeners) {
         if (settings.personalize.actionListeners.hasOwnProperty(eventName) && !processedListeners.hasOwnProperty(eventName)) {
@@ -972,7 +1057,7 @@
           new_events++;
         }
       }
-      if (new_events > 0) {
+      if (new_events > 0 && !adminMode) {
         var callback = function(eventName, jsEvent) {
           if (events.hasOwnProperty(eventName)) {
             var goals = events[eventName];
@@ -980,6 +1065,7 @@
               if (goals.hasOwnProperty(i)) {
                 var agent = settings.personalize.agent_map[goals[i].agent];
                 if (agent !== undefined) {
+                  debugGoal(eventName, goals[i].agent, goals[i].value);
                   Drupal.personalize.agents[agent.type].sendGoalToAgent(goals[i].agent, eventName, goals[i].value, jsEvent);
                   $(document).trigger('sentGoalToAgent', [goals[i].agent, eventName, goals[i].value, jsEvent ]);
 
@@ -1283,4 +1369,10 @@
     processedOptionSets = {};
     processedListeners = {};
   };
+
+  Drupal.personalize.debug = function(message, code) {
+    if (Drupal.personalize.isDebugMode() && Drupal.hasOwnProperty('personalizeDebug')) {
+      Drupal.personalizeDebug.log(message, code);
+    }
+  }
 })(jQuery);

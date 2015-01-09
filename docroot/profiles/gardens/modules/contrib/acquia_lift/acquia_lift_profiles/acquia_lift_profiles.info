@@ -1,5 +1,6 @@
 name = Acquia Lift Profiles
 description = The Acquia Lift Profiles module provides integration with the Acquia Lift Profiles service
+configure = admin/config/content/personalize/acquia_lift_profiles
 
 dependencies[] = acquia_lift
 dependencies[] = personalize
@@ -12,9 +13,9 @@ files[] = includes/acquia_lift_profiles.classes.inc
 files[] = tests/acquia_lift_profiles.test
 files[] = tests/acquia_lift_profiles_unit.test
 
-; Information added by Drupal.org packaging script on 2014-11-10
-version = "7.x-1.0-beta17"
+; Information added by Drupal.org packaging script on 2014-12-18
+version = "7.x-1.0-rc2"
 core = "7.x"
 project = "acquia_lift"
-datestamp = "1415655516"
+datestamp = "1418923082"
 

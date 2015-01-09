@@ -277,10 +277,12 @@ function visitor_actions_match_page($pages, $compare_path = NULL) {
 /**
  * Retrieves all defined actions.
  *
+ * @param boolean $exclude_limited_use
+ *   Whether to exclude custom actions that have been defined as limited use actions.
  * @return
  *   An array of actions.
  */
-function visitor_actions_get_actions() {
+function visitor_actions_get_actions($exclude_limited_use = FALSE) {
   static $drupal_static_fast;
   if (!isset($drupal_static_fast)) {
     $drupal_static_fast['actions'] = &drupal_static(__FUNCTION__, array());
@@ -294,7 +296,7 @@ function visitor_actions_get_actions() {
       $actions += visitor_actions_get_rules();
     }
     // Get all custom actions from the database.
-    $actions += visitor_actions_custom_load_multiple();
+    $actions += visitor_actions_custom_load_multiple(array(), $exclude_limited_use);
   }
 
   return $actions;
@@ -303,17 +305,19 @@ function visitor_actions_get_actions() {
 /**
  * Retrieves all client-side defined actions.
  *
+ * @param boolean $exclude_limited_use
+ *   Whether to exclude custom actions that have been defined as limited use actions.
  * @return
  *   An array of actions.
  */
-function visitor_actions_get_client_side_actions() {
+function visitor_actions_get_client_side_actions($exclude_limited_use = FALSE) {
   static $drupal_static_fast;
   if (!isset($drupal_static_fast)) {
     $drupal_static_fast['actions'] = &drupal_static(__FUNCTION__, array());
   }
   $actions = &$drupal_static_fast['actions'];
   if (empty($actions)) {
-    $all_actions = visitor_actions_get_actions();
+    $all_actions = visitor_actions_get_actions($exclude_limited_use);
     $actions = array_filter($all_actions, create_function('$a', 'return isset($a["client_side"]) && $a["client_side"];'));
   }
   return $actions;
@@ -345,12 +349,31 @@ function visitor_actions_visitor_actions_info() {
 
 /**
  * Retrieves all custom actions that have been set up.
+ *
+ * @param array $names
+ *   An array of action names to constrain the result to.
+ * @param boolean $exclude_limited_use
+ *   Whether to exclude those actions that have been defined as limited use actions.
+ * @param boolean $reset
+ *   Whether to reset the cache before loading.
  */
-function visitor_actions_custom_load_multiple($names = array()) {
+function visitor_actions_custom_load_multiple($names = array(), $exclude_limited_use = FALSE, $reset = FALSE) {
   $custom_actions = array();
   ctools_include('export');
+  if ($reset) {
+    // @todo No way to just reset the cache for actions specified in the $names
+    //   param?
+    ctools_export_load_object_reset('visitor_actions_actions');
+  }
   if (empty($names)) {
     $defaults = ctools_export_load_object('visitor_actions_actions', 'all');
+    if ($exclude_limited_use) {
+      foreach ($defaults as $action_name => $action) {
+        if (isset($action->limited_use) && $action->limited_use) {
+          unset($defaults[$action_name]);
+        }
+      }
+    }
   }
   else {
     $defaults = ctools_export_load_object('visitor_actions_actions', 'names', $names);
@@ -367,12 +390,14 @@ function visitor_actions_custom_load_multiple($names = array()) {
  *
  * @param $name
  *   The name of the action.
+ * @param boolean $reset
+ *   Whether to reset the cache before loading.
  *
  * @return array|null
  *   An array representing the action or NULL if none was found.
  */
-function visitor_actions_custom_load($name) {
-  $actions = visitor_actions_custom_load_multiple(array($name));
+function visitor_actions_custom_load($name, $reset = FALSE) {
+  $actions = visitor_actions_custom_load_multiple(array($name), FALSE, $reset);
   return isset($actions[$name]) ? $actions[$name] : NULL;
 }
 
@@ -398,6 +423,8 @@ function visitor_actions_unpack_action($record) {
  */
 function visitor_actions_save_action($action) {
   $fields = (array) $action;
+  // Ensure the machine name has only valid characters.
+  $fields['machine_name'] = preg_replace('/[^a-z0-9_]+/', '_', drupal_strtolower($fields['machine_name']));
   $fields += array(
     'module' => 'visitor_actions',
   );
@@ -441,6 +468,8 @@ function visitor_actions_delete_action($action_name) {
     ->execute();
   module_invoke_all('visitor_actions_delete_action', $action);
   visitor_actions_clear_subscribers($action_name);
+  // Clear the visitor action cache.
+  visitor_actions_custom_load($action_name, TRUE);
 }
 
 /**

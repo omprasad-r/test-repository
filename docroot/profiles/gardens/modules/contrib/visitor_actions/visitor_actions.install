@@ -78,6 +78,13 @@ function visitor_actions_schema() {
         'serialize' => TRUE,
         'description' => 'Everything else, serialized.',
       ),
+      'limited_use' => array(
+        'description' => 'Boolean indicating whether this action is of limited use, to be excluded from general lists of actions.',
+        'type' => 'int',
+        'size' => 'tiny',
+        'not null' => TRUE,
+        'default' => 0,
+      ),
     ),
     'primary key' => array('machine_name'),
     'indexes' => array(
@@ -107,4 +114,17 @@ function visitor_actions_update_7001() {
   db_drop_primary_key('visitor_actions_actions');
   db_drop_field('visitor_actions_actions', 'id');
   db_add_primary_key('visitor_actions_actions', array('machine_name'));
+}
+
+/**
+ * Add the 'limited_use' field to the visitor_actions_actions table.
+ */
+function visitor_actions_update_7002() {
+  db_add_field('visitor_actions_actions', 'limited_use', array(
+    'description' => 'Boolean indicating whether this action is of limited use, to be excluded from general lists of actions.',
+    'type' => 'int',
+    'size' => 'tiny',
+    'not null' => TRUE,
+    'default' => 0,
+  ));
 }

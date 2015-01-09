@@ -25,6 +25,30 @@ function personalize_test_extra_agent_personalize_agent_type() {
       'class' => 'PersonalizeTestInvalidAgent',
     ),
   );
+  // Add an agent plugin that does not support MVTs.
+  $info['test_agent_no_mvt'] = array(
+    'path' => $path . '/agent_types',
+    'handler' => array(
+      'file' => 'PersonalizeTestAgentNoMVT.inc',
+      'class' => 'PersonalizeTestAgentNoMVT',
+    ),
+  );
+  // Add an agent plugin that does not support multiple decision points.
+  $info['test_agent_no_multipoint'] = array(
+    'path' => $path . '/agent_types',
+    'handler' => array(
+      'file' => 'PersonalizeTestAgentNoMultiPoint.inc',
+      'class' => 'PersonalizeTestAgentNoMultiPoint',
+    ),
+  );
+  // Add an agent plugin that supports neither MVTs nor multiple decision points
+  $info['test_agent_no_mvt_no_mp'] = array(
+    'path' => $path . '/agent_types',
+    'handler' => array(
+      'file' => 'PersonalizeTestAgentNoMVTNoMP.inc',
+      'class' => 'PersonalizeTestAgentNoMVTNoMP',
+    ),
+  );
   return $info;
 }
 

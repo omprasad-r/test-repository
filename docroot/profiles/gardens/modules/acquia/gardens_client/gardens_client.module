@@ -783,14 +783,6 @@ class EmailVerifier {
 }
 
 /**
- * Implements hook_gardens_health_report();
- */
-function gardens_client_gardens_health_report() {
-  $client = new GardensClientHealthReport('Gardens Client XMLRPC');
-  return array($client);
-}
-
-/**
  * Retrieves the name of the stage this server is part of.
  */
 function gardens_client_stage_name_get() {

@@ -65,12 +65,28 @@ function acquia_lift_build_page(&$page) {
     $page['page_top']['#attached']['library'][] = array('acquia_lift', 'acquia_lift.modal');
     ctools_add_css('acquia_lift.ctools.modal', 'acquia_lift');
 
-    $settings['acquia_lift']['dom_selector_ignore'] = acquia_lift_generate_ignore_selector();
-    $pending_agents = acquia_lift_get_pending_agents();
+    // Load data about custom defined visitor actions.
+    $actions = visitor_actions_custom_load_multiple();
+    $settings['acquia_lift']['customActions'] = $actions;
 
+    $settings['acquia_lift']['dom_selector_ignore'] = acquia_lift_generate_ignore_selector();
+    $settings['acquia_lift']['edit_in_context_html_strip'] = variable_get('acquia_lift_html_context_strip', 1);
+
+    $pending_agents = acquia_lift_get_pending_agents();
     if (!empty($pending_agents)) {
-      $settings['acquia_lift']['pendingMessage'] = t('The following campaigns are being synced to Lift and will be started shortly: %agents', array('%agents' => implode(', ', $pending_agents)));
+      $settings['acquia_lift']['pendingMessage'][] = t('The following campaigns are being synced to Lift and will be started shortly: %agents', array('%agents' => implode(', ', $pending_agents)));
       $page['page_top']['#attached']['library'][] = array('acquia_lift', 'acquia_lift.messagebox');
+    }
+    // Add any pending messages from the query string.
+    $params = drupal_get_query_parameters();
+    if (!empty($params['liftpm']) && strstr($params['liftpm'], '|') !== FALSE) {
+      list($type, $details) = explode('|', $params['liftpm']);
+      if ($type === 'new_block') {
+        $settings['acquia_lift']['pendingMessage'][] = t('Created the new %block_title personalized block. The block will not appear on your website until you add the block to a region on the !blocks page.', array(
+          '%block_title' => $details,
+          '!blocks' => l('Structure > Blocks', 'admin/structure/blocks'),
+        ));
+      }
     }
     drupal_add_js($settings, 'setting');
   }

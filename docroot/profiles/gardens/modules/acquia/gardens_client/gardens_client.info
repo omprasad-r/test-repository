@@ -6,5 +6,4 @@ dependencies[] = scarecrow
 package = Drupal Gardens
 files[] = gardens_client.module
 files[] = gardens_client.pages.inc
-files[] = GardensClientHealthReport.class.inc
 hidden = TRUE

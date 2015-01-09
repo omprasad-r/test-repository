@@ -219,10 +219,10 @@ class PersonalizeElementsTest extends PersonalizeBaseTest {
       'option_label' => PERSONALIZE_CONTROL_OPTION_LABEL,
       'personalize_elements_content' => '',
     );
-
-    $admin_user = $this->drupalCreateUser(array('access administration pages', 'administer site configuration', 'access content', 'manage personalized content', 'use advanced personalize elements features'));
-    $this->drupalLogin($admin_user);
-
+    // Our marketer user's content should be filtered as they don't have the
+    // "advanced" permission.
+    $marketer_user = $this->drupalCreateUser(array('access administration pages', 'access content', 'manage personalized content'));
+    $this->drupalLogin($marketer_user);
     // Create an option set that should be filtered.
     $edit = array(
       'agent_select' => 'test-agent',
@@ -249,8 +249,40 @@ class PersonalizeElementsTest extends PersonalizeBaseTest {
     foreach ($expected as $i => $option) {
       $this->assertEqual($option, $option_set->options[$i]);
     }
+    $this->drupalLogout();
+    // The admin user should be able to create html content that does not get
+    // filtered at all.
+    $admin_user = $this->drupalCreateUser(array('access administration pages', 'administer site configuration', 'access content', 'manage personalized content', 'use advanced personalize elements features'));
+    $this->drupalLogin($admin_user);
 
-    // Create an option set that should NOT be filtered.
+    // Create an option set that should be filtered.
+    $edit = array(
+      'agent_select' => 'test-agent',
+      'title' => $this->randomName(),
+      'selector' => '#some-id',
+      'variation_type' => 'appendHtml',
+      'options[1][option_label]' => 'first-option',
+      'options[1][personalize_elements_content]' => '<script type="text/javascript">alert("xss");</script>',
+    );
+    $this->drupalPost('admin/structure/personalize/variations/personalize-elements/add', $edit, $this->getButton('save'));
+    $this->assertNoText(t('Disallowed HTML tags were removed from 1 variation.'));
+    $option_sets = personalize_option_set_load_multiple(FALSE, array(), TRUE);
+    $option_set = end($option_sets);
+    $option_set = personalize_option_set_load($option_set->osid, TRUE);
+    $expected = array(
+      0 => $control_option,
+      1 => array(
+        'option_id' => 'first-option',
+        'option_label' => 'first-option',
+        'personalize_elements_content' => '<script type="text/javascript">alert("xss");</script>',
+      ),
+    );
+    $this->assertEqual(count($expected), count($option_set->options));
+    foreach ($expected as $i => $option) {
+      $this->assertEqual($option, $option_set->options[$i]);
+    }
+
+    // JS should not be filtered either.
     $edit = array(
       'agent_select' => 'test-agent',
       'title' => $this->randomName(),
@@ -317,19 +349,25 @@ class PersonalizeElementsTest extends PersonalizeBaseTest {
   }
 
   function testPersonalizeElementsConfig() {
-    $advanced_user = $this->drupalCreateUser(array('access administration pages', 'administer site configuration', 'access content', 'manage personalized content', 'use advanced personalize elements features'));
-    $this->drupalLogin($advanced_user);
+    $marketer_user = $this->drupalCreateUser(array('access administration pages', 'access content', 'manage personalized content'));
+    $this->drupalLogin($marketer_user);
     $option_set = $this->createPersonalizedElement(array(
       'options[1][personalize_elements_content]' => '<div class="stuff">ohai</div>',
       'options[2][personalize_elements_content]' => '<a href="/">kthxbai</a>',
     ), FALSE);
     $this->assertEqual('<div class="stuff">ohai</div>', $option_set->options[1]['personalize_elements_content']);
     $this->assertEqual('<a href="/">kthxbai</a>', $option_set->options[2]['personalize_elements_content']);
-    // Now change the configuration to restrict the allowed tags.
+    $this->drupalLogout();
+    // Log in as an admin and change the allowed html tags.
+    $advanced_user = $this->drupalCreateUser(array('access administration pages', 'administer site configuration', 'access content', 'manage personalized content', 'use advanced personalize elements features'));
+    $this->drupalLogin($advanced_user);
     $this->drupalPost('admin/config/content/personalize/personalize-elements', array('personalize_elements_allowed_html' => '<a> <em>'), t('Save configuration'));
     $allowed_tags = variable_get('personalize_elements_allowed_html', array());
     $this->assertEqual('<a> <em>', $allowed_tags);
+    $this->drupalLogout();
 
+    // Log back in as the marketer user.
+    $this->drupalLogin($marketer_user);
     // Resave the personalized element and confirm that disallowed tags are stripped out.
     $this->drupalPost('admin/structure/personalize/variations/personalize-elements/manage/1/edit', array(), t('Save'));
     $option_set = personalize_option_set_load(1, TRUE);

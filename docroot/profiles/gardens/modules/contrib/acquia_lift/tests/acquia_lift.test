@@ -142,11 +142,12 @@ class AcquiaLiftWebTestBase extends DrupalWebTestCase
           $data['machine_name'],
           $data['name'],
           'adaptive',
-          'enabled',
+          PERSONALIZE_STATUS_NOT_STARTED,
           isset($data['control_rate']) ? $data['control_rate'] / 100 : .1,
           isset($data['explore_rate']) ? ($data['explore_rate'] / 100) : .2,
           isset($data['cache_decisions']) && $data['cache_decisions']
-        )
+        ),
+        'agent' => $data['machine_name']
       )
     );
     if ($assertResults) {
@@ -190,14 +191,20 @@ class AcquiaLiftWebTestBase extends DrupalWebTestCase
 
     $option_set['options'] = $options;
     $option_set = (object) $option_set;
-    personalize_option_set_save($option_set);
+    try {
+      personalize_option_set_save($option_set);
+    }
+    catch (PersonalizeException $e) {
+      $this->fail('Exception thrown with message: . ' . $e->getMessage());
+    }
 
     $expected_queue_items[] = array(
       'method' => 'savePoint',
       'args' => array(
         $optionData['agent'],
         personalize_get_decision_point_name_for_option_set($option_set),
-      )
+      ),
+      'agent' => $optionData['agent']
     );
     // An item will be added to the queue to save the decision.
     $expected_queue_items[] = array(
@@ -206,7 +213,8 @@ class AcquiaLiftWebTestBase extends DrupalWebTestCase
         $optionData['agent'],
         personalize_get_decision_point_name_for_option_set($option_set),
         personalize_get_decision_name_for_option_set($option_set)
-      )
+      ),
+      'agent' => $optionData['agent']
     );
     // An item will be added to teh queue to save each option.
     foreach ($choice_ids as $choice) {
@@ -217,7 +225,8 @@ class AcquiaLiftWebTestBase extends DrupalWebTestCase
           personalize_get_decision_point_name_for_option_set($option_set),
           personalize_get_decision_name_for_option_set($option_set),
           $choice
-        )
+        ),
+        'agent' => $optionData['agent']
       );
     }
 
@@ -356,8 +365,7 @@ class AcquiaLiftWebTestConfig extends AcquiaLiftWebTestBase {
   }
 
 
-  public function testConfigForm()
-  {
+  public function testConfigForm() {
     $this->drupalLogin($this->adminUser);
     // Try entering an invalid owner code.
     $edit = array(
@@ -377,7 +385,7 @@ class AcquiaLiftWebTestConfig extends AcquiaLiftWebTestBase {
     $this->assertEqual($account_info['owner_code'], $this->liftAOwnerCode);
     $this->assertEqual($account_info['api_key'], $this->liftAPIKey);
     $this->assertEqual($account_info['admin_key'], $this->liftAdminKey);
-    $this->assertEqual($account_info['api_url'], 'http://some.valid.url');
+    $this->assertEqual($account_info['api_url'], 'some.valid.url');
     // Try entering an invalid API url.
     $edit['acquia_lift_account_info[api_url]'] = 'some\\invalid\\url';
     $this->drupalPost('admin/config/content/personalize/acquia_lift', $edit, $this->getButton('config'));
@@ -392,7 +400,8 @@ class AcquiaLiftWebTestConfig extends AcquiaLiftWebTestBase {
     $this->assertNoText('You must enter a valid URL');
     $this->resetAll();
     $account_info = variable_get('acquia_lift_account_info', array());
-    $this->assertEqual($account_info['api_url'], 'https://some.valid.url');
+    // The scheme should have been stripped out before saving.
+    $this->assertEqual($account_info['api_url'], 'some.valid.url');
 
     // Submit bogus confidence measures.
     $bad_measures = array(
@@ -420,6 +429,39 @@ class AcquiaLiftWebTestConfig extends AcquiaLiftWebTestBase {
     $this->assertNoText(t('A minimum confidence measure of 95% is recommended to ensure proper evaluation of test results.'));
     $this->assertText(t('The configuration options have been saved.'));
   }
+
+  function testPersonalizeElementsConfigurationIntegration() {
+    $fullAdminUser = $this->drupalCreateUser(array('access administration pages', 'administer personalize configuration', 'use advanced personalize elements features'));
+    $this->drupalLogin($fullAdminUser);
+
+    // Test edit in context settings added to personalize elements configuration form.
+    $this->drupalGet('admin/config/content/personalize/personalize-elements');
+    // Should be initially set to 1.
+    $this->assertFieldChecked('edit-acquia-lift-html-context-strip');
+    $edit = array(
+      'acquia_lift_html_context_strip' => FALSE,
+    );
+    $this->drupalPost(NULL, $edit, $this->getButton('config'));
+
+    // Check the javascript setting.
+    $this->drupalLogin($this->managerUser);
+    $this->drupalGet('');
+    $settings = $this->drupalGetSettings();
+    $this->assertEqual($settings['acquia_lift']['edit_in_context_html_strip'], 0);
+
+    // Set it back.
+    $this->drupalLogin($fullAdminUser);
+    $edit = array(
+      'acquia_lift_html_context_strip' => TRUE,
+    );
+    $this->drupalPost('admin/config/content/personalize/personalize-elements', $edit, $this->getButton('config'));
+
+    // Check that the JavaScript settings changed.
+    $this->drupalLogin($this->managerUser);
+    $this->drupalGet('');
+    $settings = $this->drupalGetSettings();
+    $this->assertEqual($settings['acquia_lift']['edit_in_context_html_strip'], 1);
+  }
 }
 class AcquiaLiftWebTestVariationSets extends AcquiaLiftWebTestBase {
 
@@ -432,7 +474,7 @@ class AcquiaLiftWebTestVariationSets extends AcquiaLiftWebTestBase {
   }
 
   function testPersonalizeElementsVariationSets() {
-    module_load_include('inc', 'acquia_lift', 'acquia_lift.admin');
+    module_load_include('inc', 'acquia_lift', 'acquia_lift.page_variations');
 
     $agent_name = 'test-agent';
     // Variation 1 (only one element).
@@ -500,17 +542,17 @@ class AcquiaLiftWebTestVariationSets extends AcquiaLiftWebTestBase {
    */
   function testVariationSets()
   {
-    module_load_include('inc', 'acquia_lift', 'acquia_lift.admin');
+    module_load_include('inc', 'acquia_lift', 'acquia_lift.page_variations');
 
     $admin_user = $this->drupalCreateUser(array('access administration pages', 'manage personalized content', 'administer blocks'));
     $this->drupalLogin($admin_user);
 
     // Create a new agent via the UI.
-    $agent_name = $this->randomName();
-    $machine_name = personalize_generate_machine_name($agent_name, 'personalize_agent_machine_name_exists');
+    $agent_title = $this->randomName();
+    $agent_name = personalize_generate_machine_name($agent_title, 'personalize_agent_machine_name_exists');
     $edit = array(
-      'agent_basic_info[title]' => $agent_name,
-      'agent_basic_info[machine_name]' => $machine_name,
+      'agent_basic_info[title]' => $agent_title,
+      'agent_basic_info[machine_name]' => $agent_name,
       'agent_basic_info[agent_type]' => 'test_agent',
     );
     $this->drupalPost('admin/structure/personalize/add', $edit, $this->getButton('agent'));
@@ -699,6 +741,35 @@ class AcquiaLiftWebTestVariationSets extends AcquiaLiftWebTestBase {
     $option_sets = personalize_option_set_load_multiple(array(), array('decision_name' => 'first_variation_set', 'agent' => $agent_name), TRUE);
     $this->assertTrue(count($option_sets) === 0);
   }
+
+  function testPersonalizeBlockRedirection() {
+    // Create a new agent
+    $agent = $this->createTestAgent();
+
+    // Create a personalized block from the form with a destination in the
+    // url query string.
+    $this->drupalGet('/admin/structure/personalize/variations/personalize-blocks/add', array('query' => array('destination' => 'node')));
+    $edit = array(
+      'agent_select' => $agent->getMachineName(),
+      'title' => 'My test block',
+      'blocks[0][option_label]' =>  'Option A',
+      'blocks[0][block][bid]' => 'comment_delta_recent',
+      'blocks[1][option_label]' =>  'Option B',
+      'blocks[1][block][bid]' => 'system_delta_main',
+    );
+    $this->drupalPost(NULL, $edit, t('Save'));
+
+    // Verify that the user is redirected to the original page with a custom
+    // URL query parameter.
+    $this->assertUrl('node', array('query' => array('liftpm' => 'new_block|My test block')));
+
+    // Verify that the pending message has been added to the settings.
+    $expected_message = t('Created the new <em class="placeholder">My test block</em> personalized block. The block will not appear on your website until you add the block to a region on the !blocks page.', array(
+      '!blocks' => l('Structure > Blocks', 'admin/structure/blocks'),
+    ));
+    $settings = $this->drupalGetSettings();
+    $this->assertEqual($settings['acquia_lift']['pendingMessage'], array($expected_message));
+  }
 }
 
 class AcquiaLiftWebTestAgentAdmin extends AcquiaLiftWebTestBase {
@@ -732,14 +803,7 @@ class AcquiaLiftWebTestAgentAdmin extends AcquiaLiftWebTestBase {
       // queue separately from the other items as we need them again later.
       // Dirty way to avoid 'saveAgent' method be included to $option_set_queue_items
       $option_set_queue_items = array_merge($option_set_queue_items, $new_queues);
-      $expected_queue_items[] = array(
-        'method' => 'saveFixedTargetingMapping',
-        'args' => array(
-          $machine_name,
-          personalize_get_decision_point_name_for_option_set($option_set),
-          array()
-        )
-      );
+
       if ($i == 0) {
         $expected_queue_items[] = array(
           'method' => 'saveAgent',
@@ -747,13 +811,23 @@ class AcquiaLiftWebTestAgentAdmin extends AcquiaLiftWebTestBase {
             $machine_name,
             $agent_name,
             'adaptive',
-            'enabled',
+            PERSONALIZE_STATUS_NOT_STARTED,
             0.1,
             0.3,
             1
-          )
+          ),
+          'agent' => $machine_name
         );
       }
+      $expected_queue_items[] = array(
+        'method' => 'saveFixedTargetingMapping',
+        'args' => array(
+          $machine_name,
+          personalize_get_decision_point_name_for_option_set($option_set),
+          array()
+        ),
+        'agent' => $machine_name
+      );
     }
 
     $this->assertQueueItems($expected_queue_items);
@@ -767,7 +841,8 @@ class AcquiaLiftWebTestAgentAdmin extends AcquiaLiftWebTestBase {
       'args' => array(
         $machine_name,
         $goal_name
-      )
+      ),
+      'agent' => $machine_name
     );
     $expected_queue_items[] = array(
       'method' => 'saveAgent',
@@ -775,11 +850,12 @@ class AcquiaLiftWebTestAgentAdmin extends AcquiaLiftWebTestBase {
         $machine_name,
         $agent_name,
         'adaptive',
-        'enabled',
+        PERSONALIZE_STATUS_NOT_STARTED,
         0.1,
         0.3,
         1
-      )
+      ),
+      'agent' => $machine_name
     );
     $this->assertQueueItems($expected_queue_items);
     $this->personalizedQueue->deleteQueue();
@@ -792,11 +868,12 @@ class AcquiaLiftWebTestAgentAdmin extends AcquiaLiftWebTestBase {
           $machine_name,
           $agent_name,
           'adaptive',
-          'enabled',
+          PERSONALIZE_STATUS_NOT_STARTED,
           0.1,
           0.3,
           1
-        )
+        ),
+        'agent' => $machine_name
       )
     );
     $this->assertQueueItems($expected_queue_items);
@@ -811,11 +888,12 @@ class AcquiaLiftWebTestAgentAdmin extends AcquiaLiftWebTestBase {
         $machine_name,
         $agent_name,
         'adaptive',
-        'enabled',
+        PERSONALIZE_STATUS_NOT_STARTED,
         0.1,
         0.3,
         1
-      )
+      ),
+      'agent' => $machine_name
     );
     $this->assertQueueItems($expected_queue_items);
     $this->personalizedQueue->deleteQueue();
@@ -876,11 +954,12 @@ class AcquiaLiftWebTestAgentAdmin extends AcquiaLiftWebTestBase {
           $agent->getMachineName(),
           $agent->getTitle(),
           $agentData['decision_style'],
-          'enabled',
+          PERSONALIZE_STATUS_NOT_STARTED,
           0.1,
           0.2,
           1
         ),
+        'agent' => $agent->getMachineName()
       ),
       array(
         'method' => 'saveAutoTargetingRule',
@@ -888,6 +967,7 @@ class AcquiaLiftWebTestAgentAdmin extends AcquiaLiftWebTestBase {
           $agent->getMachineName(),
           array_keys(array_filter($agentData['visitor_context']['acquia_lift_context']))
         ),
+        'agent' => $agent->getMachineName()
       ),
     );
 
@@ -913,17 +993,19 @@ class AcquiaLiftWebTestAgentAdmin extends AcquiaLiftWebTestBase {
           $agent->getMachineName(),
           $agent->getTitle(),
           $agentData['decision_style'],
-          'enabled',
+          PERSONALIZE_STATUS_NOT_STARTED,
           0.1,
           0.2,
           1
         ),
+        'agent' => $agent->getMachineName()
       ),
       array(
         'method' => 'deleteAutoTargetingRule',
         'args' => array(
           $agent->getMachineName(),
         ),
+        'agent' => $agent->getMachineName()
       ),
     );
 
@@ -970,11 +1052,12 @@ class AcquiaLiftWebTestAgentAdmin extends AcquiaLiftWebTestBase {
         $agent->getMachineName(),
         $agent->getTitle(),
         $agentData['decision_style'],
-        'enabled',
+        PERSONALIZE_STATUS_NOT_STARTED,
         ($agentData['control_rate'] / 100),
         ($agentData['explore_rate'] / 100),
         isset($agentData['cache_decisions']) && $agentData['cache_decisions']
       ),
+      'agent' => $agent->getMachineName()
     );
     $expected_queues = array(
       $agent_queue_item,
@@ -1036,7 +1119,8 @@ class AcquiaLiftWebTestAgentAdmin extends AcquiaLiftWebTestBase {
       'args' => array(
         $agent->getMachineName(),
         $point_name,
-      )
+      ),
+      'agent' => $agent->getMachineName()
     );
     $expected_queue_items['decision'] = array(
       'method' => 'saveDecision',
@@ -1044,7 +1128,8 @@ class AcquiaLiftWebTestAgentAdmin extends AcquiaLiftWebTestBase {
         $agent->getMachineName(),
         $point_name,
         $decision_name
-      )
+      ),
+      'agent' => $agent->getMachineName()
     );
     foreach ($option_set->options as $key => $option) {
       $expected_queue_items[$option['option_id']] = array(
@@ -1054,18 +1139,20 @@ class AcquiaLiftWebTestAgentAdmin extends AcquiaLiftWebTestBase {
           $point_name,
           $decision_name,
           personalize_generate_option_id($key)
-        )
+        ),
+        'agent' => $agent->getMachineName()
       );
     }
+    $expected_queue_items['agent'] = $agent_queue_item;
     $expected_queue_items['targeting'] = array(
       'method' => 'saveFixedTargetingMapping',
       'args' => array(
         $agent->getMachineName(),
         $point_name,
         array()
-      )
+      ),
+      'agent' => $agent->getMachineName()
     );
-    $expected_queue_items['agent'] = $agent_queue_item;
 
     $this->assertQueueItems(array_values($expected_queue_items));
     $this->personalizedQueue->deleteQueue();
@@ -1124,8 +1211,12 @@ class AcquiaLiftWebTestAgentAdmin extends AcquiaLiftWebTestBase {
         'decision' => $decision_name . ':option-A'
       ),
     );
-
-    $this->assertQueueItems(array_values($expected_queue_items));
+    // Because the decision structure has not changed only the agent and targeting
+    // should be sync'd.
+    $this->assertQueueItems(array(
+      $expected_queue_items['agent'],
+      $expected_queue_items['targeting']
+    ));
     $this->personalizedQueue->deleteQueue();
 
     // Change the fixed targeting strategy to AND the features together.
@@ -1143,7 +1234,10 @@ class AcquiaLiftWebTestAgentAdmin extends AcquiaLiftWebTestBase {
         'decision' => $decision_name . ':option-A'
       ),
     );
-    $this->assertQueueItems(array_values($expected_queue_items));
+    $this->assertQueueItems(array(
+      $expected_queue_items['agent'],
+      $expected_queue_items['targeting']
+    ));
     $this->personalizedQueue->deleteQueue();
 
     // Remove Option B
@@ -1158,9 +1252,10 @@ class AcquiaLiftWebTestAgentAdmin extends AcquiaLiftWebTestBase {
         $decision_name,
         'option-B',
       ),
+      'agent' => $agent->getMachineName()
     );
     $new_queue_items = array();
-    $expected_order = array('point', 'decision', 'option-A', 'option-C', 'delete-B', 'targeting', 'agent');
+    $expected_order = array('point', 'decision', 'option-A', 'option-C', 'delete-B', 'agent', 'targeting');
     foreach ($expected_order as $key) {
       $new_queue_items[$key] = $expected_queue_items[$key];
     }
@@ -1186,6 +1281,7 @@ class AcquiaLiftWebTestAgentAdmin extends AcquiaLiftWebTestBase {
           $agent->getMachineName(),
           'form_submit',
         ),
+        'agent' => $agent->getMachineName()
       ),
       array(
         'method' => 'saveAgent',
@@ -1193,11 +1289,12 @@ class AcquiaLiftWebTestAgentAdmin extends AcquiaLiftWebTestBase {
           $agent->getMachineName(),
           $agent->getTitle(),
           'adaptive',
-          'enabled',
+          PERSONALIZE_STATUS_NOT_STARTED,
           0.1,
           0.2,
           1
         ),
+        'agent' => $agent->getMachineName()
       ),
     );
 
@@ -1267,6 +1364,7 @@ class AcquiaLiftWebTestAgentAdmin extends AcquiaLiftWebTestBase {
           $agent->getMachineName(),
           $actionMachineName,
         ),
+        'agent' => $agent->getMachineName()
       ),
       array(
         'method' => 'saveAgent',
@@ -1274,12 +1372,13 @@ class AcquiaLiftWebTestAgentAdmin extends AcquiaLiftWebTestBase {
           $agent->getMachineName(),
           $agent->getTitle(),
           'adaptive',
-          'enabled',
+          PERSONALIZE_STATUS_NOT_STARTED,
           0.1,
           0.2,
           1
         ),
-      ),
+        'agent' => $agent->getMachineName()
+      )
     );
 
     $this->assertQueueItems($expected_queues);
@@ -1308,6 +1407,7 @@ class AcquiaLiftWebTestAgentAdmin extends AcquiaLiftWebTestBase {
           $agent->getMachineName(),
           $actionMachineName,
         ),
+        'agent' => $agent->getMachineName()
       ),
       array(
         'method' => 'saveAgent',
@@ -1315,11 +1415,12 @@ class AcquiaLiftWebTestAgentAdmin extends AcquiaLiftWebTestBase {
           $agent->getMachineName(),
           $agent->getTitle(),
           'adaptive',
-          'enabled',
+          PERSONALIZE_STATUS_NOT_STARTED,
           0.1,
           0.2,
           1
         ),
+        'agent' => $agent->getMachineName()
       ),
     );
 
@@ -1335,21 +1436,29 @@ class AcquiaLiftWebTestAgentAdmin extends AcquiaLiftWebTestBase {
     // Try to delete goal that connected to Agent from Visitor Action UI
     $this->drupalPost('admin/structure/visitor_actions/manage/' . $actionMachineName . '/delete', array(), t('Delete'));
 
-    $expected_queues = array();
-
-    // @todo uncomment or remove it after goal deletion decision
-//    $expected_queues = array(
-//      array(
-//        'method' => 'saveAgent',
-//        'args' => array(
-//          $agent->getMachineName(),
-//          $agent->getTitle(),
-//          'adaptive',
-//          'enabled',
-//           0,
-//        ),
-//      ),
-//    );
+    $expected_queues = array(
+      array(
+        'method' => 'deleteGoal',
+        'args' => array(
+          $agent->getMachineName(),
+          $actionMachineName,
+        ),
+        'agent' => $agent->getMachineName()
+      ),
+      array(
+        'method' => 'saveAgent',
+        'args' => array(
+          $agent->getMachineName(),
+          $agent->getTitle(),
+          'adaptive',
+          PERSONALIZE_STATUS_NOT_STARTED,
+          0.1,
+          0.2,
+          1
+        ),
+        'agent' => $agent->getMachineName()
+      ),
+    );
 
     $this->assertQueueItems($expected_queues);
     $this->personalizedQueue->deleteQueue();
@@ -1361,7 +1470,190 @@ class AcquiaLiftWebTestAgentAdmin extends AcquiaLiftWebTestBase {
   }
 
   public function testDeleteAgentGoals() {
-    // @todo implement or remove it after goal deletion decision
+    $agent = $this->createTestAgent();
+    $agent_name = $agent->getMachineName();
+    // Add goals.
+    personalize_goal_save($agent_name, 'first-goal', 1);
+    personalize_goal_save($agent_name, 'second-goal', 1);
+    $this->resetAll();
+    // Clear the queue as we're just testing goal deletion.
+    $this->personalizedQueue->deleteQueue();
+
+    $goals = personalize_goal_load_by_conditions(array('agent' => $agent_name));
+    debug($goals);
+    $this->assertEqual(2, count($goals));
+    $goal_ids = array_keys($goals);
+    $first_goal_id = $goal_ids[0];
+    $second_goal_id = $goal_ids[1];
+    // Delete one of the goals.
+    personalize_goal_delete($first_goal_id);
+    $expected_queues = array(
+      array(
+        'method' => 'saveGoal',
+        'args' => array(
+          $agent_name,
+          $goals[$second_goal_id]->action,
+        ),
+        'agent' => $agent_name
+      ),
+      array(
+        'method' => 'deleteGoal',
+        'args' => array(
+          $agent_name,
+          $goals[$first_goal_id]->action,
+        ),
+        'agent' => $agent_name
+      ),
+      array(
+        'method' => 'saveAgent',
+        'args' => array(
+          $agent_name,
+          $agent->getTitle(),
+          'adaptive',
+          PERSONALIZE_STATUS_NOT_STARTED,
+          0.1,
+          0.2,
+          1
+        ),
+        'agent' => $agent_name
+      ),
+    );
+    $this->assertQueueItems($expected_queues);
+  }
+
+  public function testUpdateAgentStatus() {
+    $agent = $this->createTestAgent();
+    $agent_name = $agent->getMachineName();
+    // Manually set the agent's status to running, bypassing the verification check.
+    variable_set(_personalize_agent_get_status_variable($agent_name), PERSONALIZE_STATUS_RUNNING);
+    $this->resetAll();
+    // Now use the API function to update the status.
+    personalize_agent_set_status($agent_name, PERSONALIZE_STATUS_PAUSED);
+
+    $expected_queues = array(
+      array(
+        'method' => 'updateAgentStatus',
+        'args' => array(
+          $agent_name,
+          PERSONALIZE_STATUS_PAUSED,
+        ),
+        'agent' => $agent_name
+      ),
+    );
+
+    $this->assertQueueItems($expected_queues);
+    $this->personalizedQueue->deleteQueue();
+
+  }
+
+  /**
+   * Tests that agents are paused when they need to be paused.
+   */
+  function testPauseAgents() {
+    // Create an agent with a couple of option sets and a couple of goals.
+    $control_rate = 10;
+    $explore_rate = 30;
+    $agent_name = 'my-test-lift-agent';
+    $this->createTestAgent(array(
+      'name' => $agent_name,
+      'control_rate' => $control_rate,
+      'explore_rate' => $explore_rate
+    ));
+    $option_set_values = array(
+      array(
+        'agent' => $agent_name,
+        'plugin' => 'type1',
+        'option_ids' => array('option-1', 'option-2')
+      ),
+      array(
+        'agent' => $agent_name,
+        'plugin' => 'type2',
+        'option_ids' => array('option-a', 'option-b', 'option-c')
+      ),
+    );
+    $option_sets = array();
+    foreach ($option_set_values as $i => $values) {
+      list($option_set, $new_queue_items) = $this->createOptionSet($i, $values);
+      $option_sets[] = $option_set;
+    }
+    $first_osid = $option_sets[0]->osid;
+    $second_osid = $option_sets[1]->osid;
+
+    // Add goals.
+    personalize_goal_save($agent_name, 'first-goal', 1);
+    personalize_goal_save($agent_name, 'second-goal', 1);
+    $this->resetAll();
+    $goals = array();
+    foreach (personalize_goal_load_by_conditions(array('agent' => $agent_name)) as $goal) {
+      $goals[] = $goal;
+    }
+
+    // We need to bypass the personalize_agent_set_status() function because it
+    // does the verification check, which would fail.
+    variable_set(_personalize_agent_get_status_variable($agent_name), PERSONALIZE_STATUS_RUNNING);
+
+    // Delete a goal - this should not pause the agent.
+    personalize_goal_delete($goals[0]->id);
+    $this->resetAll();
+    $status = personalize_agent_get_status($agent_name);
+    $this->assertEqual($status, PERSONALIZE_STATUS_RUNNING);
+
+    // Now delete the remaining goal - this should pause the agent.
+    personalize_goal_delete($goals[1]->id);
+    $this->resetAll();
+    $status = personalize_agent_get_status($agent_name);
+    $this->assertEqual($status, PERSONALIZE_STATUS_PAUSED);
+
+    // Add a goal back and set it to running again.
+    personalize_goal_save($agent_name, 'third-goal', 1);
+    variable_set(_personalize_agent_get_status_variable($agent_name), PERSONALIZE_STATUS_RUNNING);
+
+    // Delete an option set - this should not pause the agent.
+    personalize_option_set_delete($first_osid);
+    $this->resetAll();
+    $status = personalize_agent_get_status($agent_name);
+    $this->assertEqual($status, PERSONALIZE_STATUS_RUNNING);
+    // Delete an option from the remaining option set, it should remain running
+    $option_set = personalize_option_set_load($second_osid);
+    unset($option_set->options[2]);
+    $option_set = personalize_option_set_save($option_set);
+    $this->resetAll();
+    $status = personalize_agent_get_status($agent_name);
+    $this->assertEqual($status, PERSONALIZE_STATUS_RUNNING);
+    // Delete another option, it should be paused.
+    unset($option_set->options[1]);
+    $option_set = personalize_option_set_save($option_set);
+    $this->resetAll();
+    $status = personalize_agent_get_status($agent_name);
+    $this->assertEqual($status, PERSONALIZE_STATUS_PAUSED);
+
+    // Clear the queue.
+    $this->personalizedQueue->deleteQueue();
+    // Add the option back and start the campaign again.
+    $option_set->options[1] = array(
+      'option_id' => 'new-option',
+      'option_label' => 'New Option'
+    );
+    $option_set = personalize_option_set_save($option_set);
+    $this->resetAll();
+    variable_set(_personalize_agent_get_status_variable($agent_name), PERSONALIZE_STATUS_RUNNING);
+
+    // Cause the queue to fail based on a bad request.
+    AcquiaLiftAPI::setTestInstance(TRUE, TRUE);
+    // Run the queue - the 400 error will abort the queue and the handleFailedItem() method
+    // should pause the agent.
+    $_SESSION['acquia_lift_queue_trigger'] = true;
+    acquia_lift_process_queue(FALSE);
+    $this->resetAll();
+    $status = personalize_agent_get_status($agent_name);
+    $this->assertEqual($status, PERSONALIZE_STATUS_PAUSED);
+
+    // Set it to running again and delete that last remaining option set.
+    variable_set(_personalize_agent_get_status_variable($agent_name), PERSONALIZE_STATUS_RUNNING);
+    personalize_option_set_delete($second_osid);
+    $this->resetAll();
+    $status = personalize_agent_get_status($agent_name);
+    $this->assertEqual($status, PERSONALIZE_STATUS_PAUSED);
   }
 }
 class AcquiaLiftWebTestFundamentals extends AcquiaLiftWebTestBase {
@@ -1392,11 +1684,12 @@ class AcquiaLiftWebTestFundamentals extends AcquiaLiftWebTestBase {
         $machine_name,
         $agent_name,
         'adaptive',
-        'enabled',
+        PERSONALIZE_STATUS_NOT_STARTED,
         0.1,
         0.2,
         1
-      )
+      ),
+      'agent' => $machine_name
     );
     $expected_queue_items[] = $queued_agent_item;
     $this->assertQueueItems($expected_queue_items);
@@ -1420,7 +1713,8 @@ class AcquiaLiftWebTestFundamentals extends AcquiaLiftWebTestBase {
       'args' => array(
         $machine_name,
         $goal_name
-      )
+      ),
+      'agent' => $machine_name
     );
     $expected_queue_items[] = $queued_agent_item;
     $this->assertQueueItems($expected_queue_items);
@@ -1465,6 +1759,42 @@ class AcquiaLiftWebTestFundamentals extends AcquiaLiftWebTestBase {
       );
     }
     $test_logger = new AcquiaLiftTestLogger(FALSE);
+    $logs = $test_logger->getLogs();
+    $this->assertEqual($expected_logs, $logs);
+    // Item should be removed after final attempt.
+    $this->assertQueueItems(array());
+    $test_logger->clearLogs();
+
+    // Edit the agent again.
+    $edit = array(
+      'cache_decisions' => FALSE
+    );
+    $this->drupalPost("admin/structure/personalize/manage/$machine_name/edit", $edit, $this->getButton('agent'));
+    personalize_agent_set_status($machine_name, PERSONALIZE_STATUS_PAUSED);
+    $this->resetAll();
+    $queued_agent_item['args'][6] = FALSE;
+    $expected_queue_items = array($queued_agent_item);
+    $expected_queue_items[] = array(
+      'method' => 'updateAgentStatus',
+      'args' => array(
+        $machine_name,
+        PERSONALIZE_STATUS_PAUSED,
+      ),
+      'agent' => $machine_name
+    );
+    $this->assertQueueItems($expected_queue_items);
+    $this->resetAll();
+    // Cause the queue to fail based on a bad request. There should not be any retries,
+    // it should just be aborted.
+    AcquiaLiftAPI::setTestInstance(TRUE, TRUE); // 2nd param specifies simulating client-side error, i.e. 400 error.
+    // Run the queue.
+    $_SESSION['acquia_lift_queue_trigger'] = true;
+    acquia_lift_process_queue(FALSE);
+    $expected_logs = array();
+    $expected_logs[] = array(
+      'level' => 'error',
+      'message' => "The campaign $machine_name could not be pushed to Acquia Lift",
+    );
     $logs = $test_logger->getLogs();
     $this->assertEqual($expected_logs, $logs);
     // Item should be removed after final attempt.
@@ -1619,7 +1949,7 @@ class AcquiaLiftWebTestFundamentals extends AcquiaLiftWebTestBase {
             'first-existing-agent',
             'first-existing-agent',
             'adaptive',
-            'enabled',
+            PERSONALIZE_STATUS_NOT_STARTED,
             $control_rate / 100,
             $explore_rate / 100,
             TRUE,
@@ -2158,6 +2488,7 @@ class AcquiaLiftWebTestWorkflow extends AcquiaLiftWebTestBase {
     $action_name = personalize_generate_machine_name(t('Clicks @option_set', array('@option_set' => $option_set->label)), NULL, '_');
 
     $this->assertEqual($action_name, $action['machine_name']);
+    $this->assertTrue($action['limited_use']);
     $expected_queue_items = array(
       array(
         'method' => 'saveAgent',
@@ -2165,11 +2496,12 @@ class AcquiaLiftWebTestWorkflow extends AcquiaLiftWebTestBase {
           'article-personalizable-headline',
           'Article: Personalizable Headline 1',
           'adaptive',
-          'enabled',
+          PERSONALIZE_STATUS_NOT_STARTED,
           10/100,
           25/100,
           true
-        )
+        ),
+        'agent' => 'article-personalizable-headline'
       ),
       array (
         'method' => 'savePoint',
@@ -2178,6 +2510,7 @@ class AcquiaLiftWebTestWorkflow extends AcquiaLiftWebTestBase {
             'article-personalizable-headline',
             $first_osid,
           ),
+        'agent' => 'article-personalizable-headline'
       ),
       array (
         'method' => 'saveDecision',
@@ -2187,6 +2520,7 @@ class AcquiaLiftWebTestWorkflow extends AcquiaLiftWebTestBase {
             $first_osid,
             $first_osid,
           ),
+        'agent' => 'article-personalizable-headline'
       ),
       array (
         'method' => 'saveChoice',
@@ -2197,6 +2531,7 @@ class AcquiaLiftWebTestWorkflow extends AcquiaLiftWebTestBase {
             $first_osid,
             'first-value',
           ),
+        'agent' => 'article-personalizable-headline'
       ),
       array (
         'method' => 'saveChoice',
@@ -2207,6 +2542,7 @@ class AcquiaLiftWebTestWorkflow extends AcquiaLiftWebTestBase {
             $first_osid,
             'second-value',
           ),
+        'agent' => 'article-personalizable-headline'
       ),
       array (
         'method' => 'saveFixedTargetingMapping',
@@ -2216,6 +2552,7 @@ class AcquiaLiftWebTestWorkflow extends AcquiaLiftWebTestBase {
             $first_osid,
             array(),
           ),
+        'agent' => 'article-personalizable-headline'
       ),
       array (
         'method' => 'saveGoal',
@@ -2224,6 +2561,7 @@ class AcquiaLiftWebTestWorkflow extends AcquiaLiftWebTestBase {
             'article-personalizable-headline',
             $action_name,
           ),
+        'agent' => 'article-personalizable-headline'
       ),
       array (
         'callback' => 'personalize_agent_set_status',
@@ -2287,11 +2625,12 @@ class AcquiaLiftWebTestWorkflow extends AcquiaLiftWebTestBase {
           'article-personalizable-headline-2',
           'Article: Personalizable Headline 2',
           'adaptive',
-          'enabled',
+          PERSONALIZE_STATUS_NOT_STARTED,
           10/100,
           25/100,
           true
-        )
+        ),
+        'agent' => 'article-personalizable-headline-2'
       ),
       array (
         'method' => 'savePoint',
@@ -2300,6 +2639,7 @@ class AcquiaLiftWebTestWorkflow extends AcquiaLiftWebTestBase {
             $second_agent,
             $second_osid,
           ),
+        'agent' => 'article-personalizable-headline-2'
       ),
       array (
         'method' => 'saveDecision',
@@ -2309,6 +2649,7 @@ class AcquiaLiftWebTestWorkflow extends AcquiaLiftWebTestBase {
             $second_osid,
             $second_osid,
           ),
+        'agent' => 'article-personalizable-headline-2'
       ),
       array (
         'method' => 'saveChoice',
@@ -2319,6 +2660,7 @@ class AcquiaLiftWebTestWorkflow extends AcquiaLiftWebTestBase {
             $second_osid,
             'first-value',
           ),
+        'agent' => 'article-personalizable-headline-2'
       ),
       array (
         'method' => 'saveChoice',
@@ -2329,6 +2671,7 @@ class AcquiaLiftWebTestWorkflow extends AcquiaLiftWebTestBase {
             $second_osid,
             'second-value',
           ),
+        'agent' => 'article-personalizable-headline-2'
       ),
       array (
         'method' => 'saveFixedTargetingMapping',
@@ -2338,111 +2681,10 @@ class AcquiaLiftWebTestWorkflow extends AcquiaLiftWebTestBase {
             $second_osid,
             array(),
           ),
+        'agent' => 'article-personalizable-headline-2'
       ),
     );
     $this->assertQueueItems($expected_queue_items);
-  }
-
-  /**
-   * Tests automatic restart of a fields-based campaign after editing.
-   */
-  public function testFieldUpdateAutoRestart() {
-    $this->resetAll();
-    module_enable(array('personalize_fields'));
-    $this->resetAll();
-    $admin_user = $this->drupalCreateUser(array('access administration pages', 'administer site configuration', 'access content', 'administer content types', 'administer nodes', 'bypass node access', 'manage personalized content'));
-    $this->drupalLogin($admin_user);
-    // Add personalizable field to the article node type.
-    $field = array(
-      'type' => 'text',
-      'field_name' => 'article_headline',
-      'cardinality' => -1,
-      'settings' => array(
-        'personalize' => array(
-          'enabled' => 1,
-          'agent_type' => 'acquia_lift',
-          'options' => array(
-            'acquia_lift' => array(
-              'control_rate' => 10,
-              'decision_style' => 'adaptive',
-              'explore_rate' => 25,
-            ),
-          ),
-          'create_goal' => 1,
-          'auto_start' => 1
-        ),
-      ),
-    );
-    field_create_field($field);
-    $instance = array(
-      'field_name' => 'article_headline',
-      'entity_type' => 'node',
-      'label' => 'Personalizable Headline',
-      'bundle' => 'article',
-      'required' => FALSE
-    );
-    field_create_instance($instance);
-
-    // Create a node which we will attach a fields-based option set to. We can't
-    // do this via the form because of the way we alter the form, which makes the
-    // "Add an option" button not findable by simpletest.
-    $node = new stdClass();
-    $node->type = 'article';
-    $node->language = LANGUAGE_NONE;
-    node_object_prepare($node);
-    $node->title = $this->randomName();
-    $node->article_headline['und'][0] = array('value' => 'first value');
-    $node->article_headline['und'][1] = array('value' => 'second value');
-    node_save($node);
-    $nid = $node->nid;
-    // Now create the option set.
-    $option_set = new stdClass();
-    $option_set->is_new = TRUE;
-    $option_set->data = array();
-    $option_set->options = array();
-    $option_set->plugin = 'fields';
-    $option_set->new_agent_title = 'Article: Personalizable Headline';
-    $option_set->options = array(
-      array(
-        'option_label' => personalize_fields_generate_option_label(0, array('value' => 'first value'))
-      ),
-      array(
-        'option_label' => personalize_fields_generate_option_label(1, array('value' => 'second value'))
-      )
-    );
-    personalize_fields_option_set_save($option_set, 'node', $node, 'article_headline');
-    $first_osid = 'osid-' . $option_set->osid;
-    $this->resetAll();
-    // We'll just delete the queue and manually set the campaign to running as we are
-    // testing the restart after editing the field.
-    $this->personalizedQueue->deleteQueue();
-    $agent_name = 'article-personalizable-headline';
-    // Need to set the variable directly as it would not pass the verification check.
-    $var = _personalize_agent_get_status_variable($agent_name);
-    variable_set($var, PERSONALIZE_STATUS_RUNNING);
-
-    // Edit the node and change the field values.
-    $edit = array(
-      'article_headline[und][0][value]' => 'altered first value',
-      'article_headline[und][1][value]' => 'altered second value'
-    );
-
-    $this->drupalPost("node/$nid/edit", $edit, t('Save'));
-    $this->resetAll();
-    $status = personalize_agent_get_status($agent_name);
-    $this->assertEqual(PERSONALIZE_STATUS_PAUSED, $status);
-    $queue_callback = array(
-      'callback' => 'personalize_agent_set_status',
-      'args' =>
-        array(
-          'article-personalizable-headline',
-          PERSONALIZE_STATUS_RUNNING,
-        ),
-    );
-    // Confirm that the start campaign callback is the last item in the queue.
-    $result = db_query('SELECT data FROM {queue} q WHERE name = \'acquia_lift_sync\' ORDER BY item_id DESC')->fetchField();
-    $item = unserialize($result);
-    $this->assertEqual($queue_callback, $item);
   }
 
   /**

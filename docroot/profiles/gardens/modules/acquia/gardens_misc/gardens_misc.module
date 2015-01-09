@@ -2127,14 +2127,18 @@ function gardens_misc_field_widget_info_alter(&$info) {
 /**
  * Implements hook_field_info_alter()
  *
- * Unset the Unix and ISO Date module formatters for Gardens.
+ * Unset the Unix and ISO Date module formatters for non-PaaS Gardens customers.
  */
 function gardens_misc_field_info_alter(&$info) {
-  if (isset($info['date'])) {
-    unset($info['date']);
-  }
-  if (isset($info['datestamp'])) {
-    unset($info['datestamp']);
+  $site = acsf_get_acsf_site();
+  // PaaS customers do not have the service_type info sent.
+  if (isset($site->gardens_signup['service_type']) && $site->gardens_signup['service_type'] != 'paas') {
+    if (isset($info['date'])) {
+      unset($info['date']);
+    }
+    if (isset($info['datestamp'])) {
+      unset($info['datestamp']);
+    }
   }
 }
 

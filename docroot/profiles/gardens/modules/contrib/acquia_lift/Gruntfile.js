@@ -2,9 +2,6 @@ module.exports = function(grunt) {
   require('time-grunt')(grunt);
 
   var reportjs = [
-        // Disable this plugin due to formatting errors.
-        // @see https://www.drupal.org/node/2354455
-        // 'src/js/reports/Rickshaw.Graph.Axis.TimeElement.js',
         'src/js/reports/Rickshaw.Graph.Axis.LabeledY.js',
         'src/js/reports/Rickshaw.Graph.ClickDetail.js',
         'src/js/reports/Rickshaw.Graph.TableLegend.js',
@@ -14,13 +11,29 @@ module.exports = function(grunt) {
 
   var flowjs = [
         'src/js/flow/acquia_lift.modal.js',
-        'src/js/flow/acquia_lift.page_variations.js',
+        'src/js/flow/acquia_lift.variations.js',
+        'src/js/flow/acquia_lift.variations.models.js',
+        'src/js/flow/acquia_lift.variations.collections.js',
+        'src/js/flow/acquia_lift.variations.theme.js',
+        'src/js/flow/acquia_lift.variations.views.js',
+        'src/js/flow/acquia_lift.variations.editInContext.js',
         'src/js/flow/acquia_lift.ctools.modal.js'
       ];
 
   var goalqueuejs = [
         'src/js/agent/acquia_lift.utility.queue.js',
         'src/js/agent/acquia_lift.agent.goal_queue.js',
+      ];
+
+  var unibarjs = [
+        'src/js/menu/acquia_lift.personalize.theme.js',
+        'src/js/menu/acquia_lift.personalize.js',
+        'src/js/menu/acquia_lift.personalize.models.js',
+        'src/js/menu/acquia_lift.personalize.collections.js',
+        'src/js/menu/acquia_lift.personalize.views.js',
+        'src/js/menu/acquia_lift.personalize.factories.js',
+        'src/js/menu/acquia_lift.personalize.commands.js',
+        'src/js/menu/acquia_lift.personalize.behaviors.js'
       ];
 
   // Project configuration.
@@ -51,6 +64,10 @@ module.exports = function(grunt) {
       agent: {
         src: goalqueuejs,
         dest: 'js/acquia_lift.goals_queue.js'
+      },
+      unibar: {
+        src: unibarjs,
+        dest: 'js/acquia_lift.personalize.js'
       }
     },
     concurrent: {

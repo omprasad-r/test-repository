@@ -6,7 +6,7 @@
     'attach': function(context, settings) {
       // If any messages have been set to display on page load, show them.
       if (!pendingMessagesShown && settings.acquia_lift.pendingMessage && settings.acquia_lift.pendingMessage.length > 0) {
-        showMessageBox(settings.acquia_lift.pendingMessage, 0);
+        showMessageBox(settings.acquia_lift.pendingMessage.join('<br />'), 0);
         pendingMessagesShown = true;
       }
     }
@@ -27,7 +27,7 @@
     var $messageBox = getMessageBox();
     if ($messageBox.length == 0) {
       $messageBox = $('<div id="acquia-lift-message-box"><div class="close">' + Drupal.t('Close') + '</div><p class="message"></p></div>');
-      $('.region-page-top').append($messageBox);
+      $('body').prepend($messageBox);
       $messageBox.find('.close').on('click', closeMessageBox);
       // Don't close the message box if you click on it (other than close).
       $messageBox.on('click', function(e) {

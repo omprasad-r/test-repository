@@ -197,7 +197,6 @@ class PersonalizeFieldsTest extends PersonalizeBaseTest {
     $edit = array();
     $edit['article_headline[und][2][value]'] = 'third option';
     $this->drupalPost(NULL, $edit, t('Save'));
-    $this->assertText(t('The campaign has been paused because you have made changes.'));
 
     $option_set = personalize_option_set_load($osid1, TRUE);
     $options[] = array(
@@ -214,7 +213,6 @@ class PersonalizeFieldsTest extends PersonalizeBaseTest {
     $edit = array();
     $edit['article_headline[und][2][value]'] = '';
     $this->drupalPost(NULL, $edit, t('Save'));
-    $this->assertText(t('The campaign has been paused because you have made changes.'));
     unset($edit['article_headline[und][2][value]']);
 
     unset($options[2]);
@@ -229,7 +227,6 @@ class PersonalizeFieldsTest extends PersonalizeBaseTest {
     $edit['article_headline[und][1][value]'] = '';
     $edit['article_headline[und][2][value]'] = $this->randomName();
     $this->drupalPost(NULL, $edit, t('Save'));
-    $this->assertText(t('The campaign has been paused because you have made changes.'));
 
     $edit['article_headline[und][1][value]'] = $edit['article_headline[und][2][value]'];
     unset($edit['article_headline[und][2][value]']);
@@ -250,7 +247,6 @@ class PersonalizeFieldsTest extends PersonalizeBaseTest {
     $edit['article_headline[und][0][value]'] = 'first option: edited';
 
     $this->drupalPost(NULL, $edit, t('Save'));
-    $this->assertText(t('The campaign has been paused because you have made changes.'));
 
     $option_set = personalize_option_set_load($osid1, TRUE);
     $options[0]['option_label'] = 'first option: edited';
@@ -330,13 +326,10 @@ class PersonalizeFieldsTest extends PersonalizeBaseTest {
     $edit['article_headline[und][1][value]'] = '';
     $edit['article_headline[und][2][value]'] = '';
     $this->drupalPost("node/$nid4/edit", $edit, t('Save'));
-    $this->assertText(t('The campaign has been paused because you have made changes.'));
+
     // Confirm that the Option Set has been deleted.
     $option_set = personalize_option_set_load($osid3, TRUE);
     $this->assertFalse($option_set);
-    // Confirm that the campaign has indeed been paused.
-    $status = personalize_agent_get_status($third_agent);
-    $this->assertEqual(PERSONALIZE_STATUS_PAUSED, $status);
 
     // Now delete the field instance from the article content type.
     $instance = field_info_instance('node', 'article_headline', 'article');
@@ -358,6 +351,7 @@ class PersonalizeFieldsTest extends PersonalizeBaseTest {
   function testPersonalizeFieldsMultiple() {
     // Enable our other test module that provides an extra agent type.
     module_enable(array('personalize_test_extra_agent'));
+    $this->resetAll();
     $this->resetAll();
     $admin_user = $this->drupalCreateUser(array('access administration pages', 'administer site configuration', 'access content', 'administer content types', 'administer nodes', 'bypass node access', 'manage personalized content'));
     $this->drupalLogin($admin_user);
@@ -715,7 +709,6 @@ class PersonalizeFieldsTest extends PersonalizeBaseTest {
     $this->drupalGet('node/' . $nid);
     $settings = $this->drupalGetSettings();
     $personalize_settings = $settings['personalize'];
-    debug($personalize_settings);
     $this->assertFalse(isset($personalize_settings['agent_map']));
 
     // Assert that the js for the agent has not been loaded.
