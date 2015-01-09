@@ -375,17 +375,11 @@ function personalize_elements_form_validate($form, &$form_state) {
     // we need to count how many non-empty options there are.
     $non_empty_options = 0;
 
-    $allowed_html = variable_get('personalize_elements_allowed_html', _personalize_elements_get_default_allowed_tags());
-    $allowed_tags = preg_split('/\s+|<|>/', $allowed_html, -1, PREG_SPLIT_NO_EMPTY);
     $changed = 0;
     // Remove empty options.
     foreach ($values['options'] as $i => &$option) {
       // First, filter out any disallowed html tags.
-      // @todo Do this in a more generic manner.
-      $filtered = $option['personalize_elements_content'];
-      if ($values['variation_type'] !== 'runJS') {
-        $filtered = filter_xss($filtered, $allowed_tags);
-      }
+      $filtered = personalize_elements_filter_personalize_element_option($values['variation_type'], $option['personalize_elements_content']);
       if ($filtered !== $option['personalize_elements_content']) {
         $changed++;
       }
@@ -403,25 +397,11 @@ function personalize_elements_form_validate($form, &$form_state) {
     if ($changed) {
       drupal_set_message(t('Disallowed HTML tags were removed from @variations.', array('@variations' => format_plural($changed, '1 variation', '@count variations', array('@count' => $changed)))), 'warning');
     }
-    if ($values['pages_all'] == 0) {
-      foreach(preg_split('~[\r\n]+~', $values['pages']) as $line){
-        if(empty($line)) {
-          continue;
-        }
-        if (!valid_url($line) && $line !== '<front>') {
-          form_set_error('pages', t('The selected pages must contain valid paths.'));
-          break;
-        }
-      }
+    if ($values['pages_all'] == 0 && !personalize_elements_pages_validate($values['pages'])) {
+      form_set_error('pages', t('The selected pages must contain valid paths.'));
     }
 
-    // Validating a CSS selector is generally beyond what REGEX can handle,
-    // and using the Drupal cleaning scripts all update < > to entities
-    // so just make sure that there are no tags.
-    $re = "/<\\/?[a-z][a-z0-9]*[^<>]*>|<!--.*?-->/im";
-    $matches = array();
-    $matched = preg_match_all($re, $form_state['values']['selector'], $matches);
-    if ($matched > 0) {
+    if (!personalize_elements_selector_validate($form_state['values']['selector'])) {
       form_set_error('selector', t('The selector cannot contain tags.'));
     }
 
@@ -560,4 +540,67 @@ function personalize_elements_configuration_form($form, &$form_state) {
  */
 function _personalize_elements_get_default_allowed_tags() {
   return '<p> <div> <img> <a> <br> <caption> <col> <em> <strong> <cite> <blockquote> <code> <ul> <ol> <li> <dl> <dt> <dd> <h1> <h2> <h3> <h4> <h5> <h6> <pre> <span> <table> <tbody> <th> <tr>';
+}
+
+/**
+ * Filters out any invalid content from a personalize elements option.
+ *
+ * @param string $variation_type
+ *   The type of variation for the option's option set.
+ * @param string $option_content
+ *   The user-entered option content to be filtered.
+ * @return string
+ *   The filtered option content.
+ */
+function personalize_elements_filter_personalize_element_option($variation_type, $option_content) {
+  if (user_access('use advanced personalize elements features')) {
+    return $option_content;
+  }
+  $allowed_html = variable_get('personalize_elements_allowed_html', _personalize_elements_get_default_allowed_tags());
+  $allowed_tags = preg_split('/\s+|<|>/', $allowed_html, -1, PREG_SPLIT_NO_EMPTY);
+
+  $filtered = $option_content;
+    if ($variation_type !== 'runJS') {
+      $filtered = filter_xss($filtered, $allowed_tags);
+    }
+  return $filtered;
+}
+
+/**
+ * Validate the selector for a personalized element.
+ *
+ * Validating a CSS selector is generally beyond what REGEX can handle,
+ * and using the Drupal cleaning scripts all update < > to entities
+ * so just make sure that there are no tags.
+ *
+ * @param string $selector
+ *   The selector string to validate
+ * @return boolean
+ *   True if the selector validates successfully, false if error.
+ */
+function personalize_elements_selector_validate($selector) {
+  $re = "/<\\/?[a-z][a-z0-9]*[^<>]*>|<!--.*?-->/im";
+  $matches = array();
+  $matched = preg_match_all($re, $selector, $matches);
+  return $matched == 0;
+}
+
+/**
+ * Validates the pages entered for a personalized element.
+ *
+ * @param $pages
+ *   The list of pages to validate separated by line breaks.
+ * @return boolean
+ *   True if the pages validate successfully, false if error.
+ */
+function personalize_elements_pages_validate($pages) {
+  foreach(preg_split('~[\r\n]+~', $pages) as $line){
+    if(empty($line)) {
+      continue;
+    }
+    if (!valid_url($line) && $line !== '<front>') {
+      return FALSE;
+    }
+  }
+  return TRUE;
 }

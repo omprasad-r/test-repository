@@ -104,19 +104,21 @@ Drupal.behaviors.visitorActionsEditorLauncher = {
       });
 
       // Allow other modules to shut down in-place visitor action definition.
-      $(document).bind('visitorActionsUIShutdown', function (event) {
-        var appView = getAppView();
-        if (appView) {
-          var model = appView.model;
-          if (model.get('editMode')) {
-            // Make sure the toggle click handlers have been bound. This is not
-            // ideal, but loading order of JS files dictates that we be very
-            // conservative here.
-            attachVisitorActionsToggleEditMode();
-            // Find one of the triggers and click it.
-            $('[href="/admin/structure/visitor_actions/add"]').eq(0).trigger('click.visitorActionsUI');
+      $('body').once('visitorActionsUIShutdown').each(function() {
+        $(document).bind('visitorActionsUIShutdown', function (event) {
+          var appView = getAppView();
+          if (appView) {
+            var model = appView.model;
+            if (model.get('editMode')) {
+              // Make sure the toggle click handlers have been bound. This is not
+              // ideal, but loading order of JS files dictates that we be very
+              // conservative here.
+              attachVisitorActionsToggleEditMode();
+              // Find one of the triggers and click it.
+              $('[href="/admin/structure/visitor_actions/add"]').eq(0).trigger('click.visitorActionsUI');
+            }
           }
-        }
+        });
       });
 
     }

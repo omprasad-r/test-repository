@@ -62,9 +62,14 @@ if (empty($url_suffix)) {
 // Create a new standard domain name.
 $new_domain = "$site_name.$url_suffix";
 
+// Create a cache directory for drush.
+$cache_directory = sprintf('/mnt/tmp/%s.%s/drush_tmp_cache/%s', $site, $env, md5($new_domain));
+shell_exec(sprintf('mkdir -p %s', escapeshellarg($cache_directory)));
+
 // Execute the scrub.
 $command = sprintf(
-  'drush5 @%s.%s -r /var/www/html/%s.%s/docroot -l %s -y acsf-site-scrub',
+  'CACHE_PREFIX=%s \drush5 @%s.%s -r /var/www/html/%s.%s/docroot -l %s -y acsf-site-scrub',
+  escapeshellarg($cache_directory),
   escapeshellarg($site),
   escapeshellarg($env),
   escapeshellarg($site),
@@ -74,6 +79,9 @@ $command = sprintf(
 fwrite(STDERR, "Executing: $command;\n");
 $result = shell_exec($command);
 print $result;
+
+// Clean up the drush cache directory.
+shell_exec(sprintf('rm -rf %s', escapeshellarg($cache_directory)));
 
 // @todo Exit with an error status code if scrubbing failed.
 

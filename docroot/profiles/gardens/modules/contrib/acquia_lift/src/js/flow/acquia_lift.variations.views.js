@@ -1,151 +1,14 @@
 /**
- * @file acquia_lift.elements.js
+ * @file acquia_lift.variations.views.js
+ * 
+ * Backbone views for the variations application.
  */
 (function($, Drupal, Dialog, Backbone, _) {
 
-  /**
-   * Gets a jQuery element array of all elements available for the DOM
-   * selector.
-   */
-  function getAvailableElements() {
-    var ignoreRegions = Drupal.settings.acquia_lift.dom_selector_ignore;
-
-    // Reduce the ignore region class list to a selector that includes
-    // each region and all of its children, for example:
-    // .page-top, .page-top *, .page-bottom, .page-bottom *
-    var ignoreSelector = _.reduce(ignoreRegions, function (memo, current) {
-      if (memo.length > 0) {
-        memo += ', ';
-      }
-      return memo + '.' + current + ', .' + current + ' *';
-    }, '');
-    var $available = $('body').find('*').not(ignoreSelector).not('script, br, wbr, noscript').filter(function () {
-      var el = this;
-      var id = el.id || '';
-      var className = typeof this.className === 'string' && this.className || '';
-      var href = this.attributes['href'] && this.attributes['href'].value || '';
-      // Eliminate any visitor actions components.
-      var rVA = /^visitor-actions/;
-      // Eliminate local tasks and contextual links.
-      var rTask = /local-task|contextual/;
-      // Eliminate admin links.
-      var rAdmin = /^\/?admin/;
-      // Eliminate node action links.
-      var rNode = /^\/?node(\/)?(\d)*(?=\/add|\/edit|\/delete)/;
-      // Reject the element if any tests match.
-      if (rVA.test(id) || rTask.test(className) || rAdmin.test(href) || rNode.test(href)) {
-        return false;
-      }
-      // Keep the element as the default.
-      return true;
-    })
-    return $available;
-  }
-
-
-  Drupal.acquiaLiftPageVariations = Drupal.acquiaLiftPageVariations || {};
-  Drupal.acquiaLiftPageVariations.app = Drupal.acquiaLiftPageVariations.app || {};
-
-  /*******************************************************************
-   * M O D E L S
-   *******************************************************************/
-  Drupal.acquiaLiftPageVariations.models = Drupal.acquiaLiftPageVariations.models || {
-    /**
-     * Backbone model for the page variation process.
-     */
-    AppModel: Backbone.Model.extend({
-      defaults: {
-        // If this app is being loaded, it is because it is being launched into
-        // an edit mode.
-        editMode: true,
-        variationIndex: -1
-      },
-
-      /**
-       * {@inheritdoc}
-       */
-      destroy: function (options) {
-        this.trigger('destroy', this, this.collection, options);
-      }
-    }),
+  Drupal.acquiaLiftVariations.views = Drupal.acquiaLiftVariations.views || {
 
     /**
-     * Backbone model representing a single page element variation type
-     * that can be presented within a contextual menu.
-     */
-    ElementVariationModel: Backbone.Model.extend({
-      defaults: {
-        limitByChildrenType: ''
-      }
-    }),
-
-
-    /**
-     * Backbone model for a variation type form.
-     */
-    VariationTypeFormModel: Dialog.models.DialogModel.extend({
-      defaults: _.extend({}, Dialog.models.DialogModel.prototype.defaults,
-        {
-          // A type of variation, e.g. 'editHTML', 'prependHTML'
-          type: null,
-          // The label for the variation type.
-          typeLabel: null,
-          selector: null,
-          variationIndex: -1
-        }
-      )
-    })
-  };
-
-  /*******************************************************************
-   * C O L L E C T I O N S
-   *******************************************************************/
-  Drupal.acquiaLiftPageVariations.collections = Drupal.acquiaLiftPageVariations.collections || {
-    ElementVariationCollection: Backbone.Collection.extend({
-      model: Drupal.acquiaLiftPageVariations.models.ElementVariationModel,
-
-      applicableToElement: function ($element) {
-        // Get all the node types of the children for the element.
-        var childrenNodeTypes = _.pluck($element.find('*'), 'nodeType');
-
-        return _(this.filter(function(data) {
-          var limitByChildrenType = data.get('limitByChildrenType');
-
-          // If there is a limit on the children type, make sure that every
-          // child passes the test.
-          if (limitByChildrenType && !isNaN(limitByChildrenType)) {
-            var childMatch = _.every(childrenNodeTypes, function(type) {return type == limitByChildrenType});
-            // Special limitations by node type.
-            switch (parseInt(limitByChildrenType)) {
-              case 3: {
-                // Text nodes only - check for text within the parent element
-                // if no child elements.
-                return childrenNodeTypes.length == 0 ? $element.get(0).textContent.length > 0 : childMatch;
-                break;
-              }
-              default: {
-                return childMatch;
-              }
-            }
-          }
-          // No limits in place so include by default.
-          return true;
-        }))
-      },
-      currentStatus : function(status){
-        return _(this.filter(function(data) {
-          return data.get("completed") == status;
-        }));
-      }
-    })
-  };
-
-  /*******************************************************************
-   * V I E W S
-   *******************************************************************/
-  Drupal.acquiaLiftPageVariations.views = Drupal.acquiaLiftPageVariations.views || {
-    /**
-     * Backbone View for the full page variation flow.
+     * Backbone View for the full variation flow.
      */
     AppView: Backbone.View.extend({
       contextualMenuModel: null,
@@ -163,7 +26,7 @@
             that.onElementSelected(element, selector);
           }
         });
-        Backbone.on('acquiaLiftPageVariationType', this.createVariationTypeDialog, this);
+        Backbone.on('acquiaLiftVariationType', this.createVariationTypeDialog, this);
         this.listenTo(this.model, 'change:editMode', this.render);
         this.listenTo(this.model, 'change:editMode', this.updateEditMode);
         this.render(this.model, this.model.get('editMode'));
@@ -176,7 +39,7 @@
         if (editMode) {
           // Must update the watched elements as the page DOM structure can
           // be changed in between each call.
-          this.$watchElements = getAvailableElements();
+          this.$watchElements = Drupal.acquiaLiftVariations.getAvailableElements();
           this.$el.DOMSelector("updateElements", this.$watchElements);
           this.$el.DOMSelector("startWatching");
         } else {
@@ -261,7 +124,7 @@
           selector: selector,
           id: 'acquia-lift-modal-variation-type-select'
         });
-        var dialogView = new Drupal.acquiaLiftPageVariations.views.PageVariationMenuView({
+        var dialogView = new Drupal.acquiaLiftVariations.views.PageVariationMenuView({
           el: element,
           model: this.contextualMenuModel
         });
@@ -278,9 +141,9 @@
        */
       createVariationTypeDialog: function(event) {
         var formPath = Drupal.settings.basePath +
-          'admin/structure/acquia_lift/pagevariation/' +
+          'admin/structure/acquia_lift/variation/' +
           Drupal.encodePath(event.data.id);
-        this.variationTypeFormModel = new Drupal.acquiaLiftPageVariations.models.VariationTypeFormModel({
+        this.variationTypeFormModel = new Drupal.acquiaLiftVariations.models.VariationTypeFormModel({
           selector: event.data.selector,
           id: 'acquia-lift-modal-variation-type-' + event.data.id,
           formPath: formPath,
@@ -288,9 +151,10 @@
           typeLabel: event.data.name,
           variationIndex: this.model.get('variationIndex')
         });
-        var dialogView = new Drupal.acquiaLiftPageVariations.views.VariationTypeFormView({
+        var dialogView = new Drupal.acquiaLiftVariations.views.VariationTypeFormView({
           el: event.data.anchor,
-          model: this.variationTypeFormModel
+          model: this.variationTypeFormModel,
+          appModel: this.model
         });
         this.variationTypeFormModel.set('active', this.model.get('editMode'));
       },
@@ -299,13 +163,13 @@
        * Generates a page-level temporary unique identifier.
        */
       getTemporaryID: function() {
-        return 'acquiaLiftPageVariations-' + new Date().getTime();
+        return 'acquiaLiftVariations-' + new Date().getTime();
       }
     }),
 
     /**
      * Backbone view that displays the form to enter the value for a new
-     * page variation of a specific variation type.
+     * variation of a specific variation type.
      */
     VariationTypeFormView: Dialog.views.ElementDialogView.extend({
       className: 'acquia-lift-variation-type-form',
@@ -315,6 +179,7 @@
       initialize: function (options) {
         options.myVerticalEdge = 'top';
         options.anchorVerticalEdge = 'bottom';
+        this.appModel = options.appModel;
         this.parent('inherit', options);
       },
 
@@ -325,7 +190,7 @@
         var that = this;
         this.parent('render', model, active);
         // Add a title to this dialog.
-        var title = Drupal.theme('acquiaLiftPageVariationsTypeFormTitle', {
+        var title = Drupal.theme('acquiaLiftVariationsTypeFormTitle', {
           variationType: this.model.get('typeLabel'),
           elementType: this.anchor.nodeName
         });
@@ -342,6 +207,11 @@
         var type = this.model.get('type');
         var $input = this.$el.find('[name=personalize_elements_content]');
         var variationNumber = this.model.get('variationIndex');
+
+        // Don't show the title field for page variations.
+        if (this.appModel.isPageModelMode()) {
+          this.$el.find('[name="title"]').val(this.model.get('typeLabel')).closest('.form-item').hide();
+        }
 
         this.$el.find('[name="selector"]').val(selector);
         this.$el.find('[name="pages"]').val(Drupal.settings.visitor_actions.currentPath);
@@ -420,7 +290,7 @@
        */
       initialize: function (options) {
         this.parent('inherit', options);
-        Backbone.on('acquiaLiftPageVariationTypeSelected', this.onVariationTypeSelected, this);
+        Backbone.on('acquiaLiftVariationTypeSelected', this.onVariationTypeSelected, this);
         this.list = null;
       },
 
@@ -431,12 +301,12 @@
         var that = this;
         this.parent('render', model, active);
         // Generate the contextual menu HTML.
-        var titleHtml = Drupal.theme('acquiaLiftPageVariationsMenuTitle', {
+        var titleHtml = Drupal.theme('acquiaLiftVariationsMenuTitle', {
           elementType: this.anchor.nodeName
         });
 
         // Generate the collection of options.
-        var collection = new Drupal.acquiaLiftPageVariations.collections.ElementVariationCollection();
+        var collection = new Drupal.acquiaLiftVariations.collections.ElementVariationCollection();
         var modelAttributes = _.map(Drupal.settings.personalize_elements.contextualVariationTypes, function(data, type) {
           return {
             id: type,
@@ -445,7 +315,7 @@
           };
         });
         collection.add(modelAttributes);
-        this.list = new Drupal.acquiaLiftPageVariations.views.PageVariationMenuListView({collection: collection.applicableToElement($(this.anchor))});
+        this.list = new Drupal.acquiaLiftVariations.views.VariationTypeMenuListView({collection: collection.applicableToElement($(this.anchor))});
         this.list.render();
         this.$el.find('.visitor-actions-ui-dialog-content').html(titleHtml).append(this.list.el);
         this.position(function () {
@@ -464,7 +334,7 @@
         event.data.anchor = this.anchor;
         event.data.selector = this.model.get('selector');
         this.remove();
-        Backbone.trigger('acquiaLiftPageVariationType', {data: event.data});
+        Backbone.trigger('acquiaLiftVariationType', {data: event.data});
       },
 
       /**
@@ -474,7 +344,7 @@
         if (this.list) {
           this.list.remove();
         }
-        Backbone.off('acquiaLiftPageVariationTypeSelected');
+        Backbone.off('acquiaLiftVariationTypeSelected');
         this.unbind();
         Backbone.View.prototype.remove.call(this);
       }
@@ -484,7 +354,7 @@
      * A view for the list of variation options presented within the contextual
      * menu.
      */
-    PageVariationMenuListView: Backbone.View.extend({
+    VariationTypeMenuListView: Backbone.View.extend({
       tagName: 'ul',
       className: 'acquia-lift-page-variation-list',
 
@@ -500,7 +370,7 @@
        * Renders a single page variation menu item.
        */
       renderItem: function (model) {
-        var itemView = new Drupal.acquiaLiftPageVariations.views.PageVariationMenuListItemView({model: model});
+        var itemView = new Drupal.acquiaLiftVariations.views.VariationTypeMenuListItemView({model: model});
         itemView.render();
         this.$el.append(itemView.el);
         this.subviews.push(itemView);
@@ -527,7 +397,7 @@
      * Backbone view for a single variation option presented within the
      * contextual menu.
      */
-    PageVariationMenuListItemView: Backbone.View.extend({
+    VariationTypeMenuListItemView: Backbone.View.extend({
       tagName: 'li',
 
       /**
@@ -551,14 +421,14 @@
        */
       clicked: function (e){
         e.preventDefault();
-        Backbone.trigger('acquiaLiftPageVariationTypeSelected', {data: this.model.toJSON()});
+        Backbone.trigger('acquiaLiftVariationTypeSelected', {data: this.model.toJSON()});
       },
 
       /**
        * {@inheritDoc}
        */
       render: function(){
-        var html = Drupal.theme('acquiaLiftPageVariationsMenuItem', this.model.toJSON());
+        var html = Drupal.theme('acquiaLiftVariationsMenuItem', this.model.toJSON());
         this.$el.append(html);
       },
 
@@ -571,153 +441,5 @@
       }
     })
   }
-
-  /**
-   * Theme function to generate the title for a page variations contextual menu.
-   * @param options
-   *   An object of options with a key for elementType.
-   */
-  Drupal.theme.acquiaLiftPageVariationsMenuTitle = function (options) {
-    return '<h2>&lt;' + options.elementType + ' &gt;</h2>';
-  }
-
-  /**
-   * A theme function to generate the HTML for a single menu item link.
-   *
-   * @param object item
-   *   An object with the following keys:
-   *   - id: The type of menu option
-   *   - name:  The label to display for this menu option
-   */
-  Drupal.theme.acquiaLiftPageVariationsMenuItem = function (item) {
-    return '<a href="#" data-id="' + item.id + '">' + item.name + '</a>';
-  }
-
-  /**
-   * Theme function to generate the title element for a variation type form.
-   *
-   * @param object item
-   *   An object with the following keys:
-   *   - elementType: the type of element that is being action on.
-   *   - variationType: the type of variation to apply to the element.
-   */
-  Drupal.theme.acquiaLiftPageVariationsTypeFormTitle = function (item) {
-    return '<h2>' + item.variationType + ': ' + '&lt;' + item.elementType + '&gt;</h2>';
-  }
-
-  /**
-   * Define editInContext behaviors to define what happens when creating
-   * a particular persaonlize_element page variation in context.
-   */
-  Drupal.acquiaLiftPageVariations.personalizeElements = Drupal.acquiaLiftPageVariations.personalizeElements || {};
-  Drupal.acquiaLiftPageVariations.personalizeElements.editHtml = {
-    getOuterHtml: function($element) {
-      if ($element.length > 1) {
-        $element = $element.first();
-      }
-      // jQuery doesn't have an outerHTML so we need to clone the child and
-      // give it a parent so that we can call that parent's html function.
-      // This ensures we get only the html of the $selector and not siblings.
-      var $element = $element.clone().wrap('<div>').parent();
-      // Remove any extraneous acquia lift / visitor actions stuff.
-      var removeClasses = new RegExp(Drupal.settings.visitor_actions.ignoreClasses, 'g');
-      var removeId = new RegExp(Drupal.settings.visitor_actions.ignoreIds);
-      var removeTags = 'script';
-
-      // Remove any invalid ids.
-      $element.find('[id]').filter(function() {
-        return removeId.test(this.id);
-      }).removeAttr('id');
-
-      // Remove any classes that are marked for ignore.
-      $element.find('[class]').each(function() {
-        var stripClasses = this.className.match(removeClasses) || [];
-        $(this).removeClass(stripClasses.join(' '));
-        if (this.className.length == 0) {
-          $(this).removeAttr('class');
-        }
-      });
-      // Remove any styling added directly from jQuery.
-      $element.find('[style]').removeAttr('style');
-      // Remove any inappropriate tags
-      $element.find(removeTags).remove();
-
-      // Now return the cleaned up html.
-      return $element.html();
-    },
-    editInContext : function(selector, $contentInput) {
-      var editString = this.getOuterHtml($(selector));
-      $contentInput.val(editString);
-    }
-  };
-
-  Drupal.acquiaLiftPageVariations.personalizeElements.editText = {
-    editInContext : function(selector, $contentInput) {
-      var editString = $(selector).text();
-      $contentInput.val(editString);
-    }
-  };
-
-  /**
-   * A command to trigger the page element selection process.
-   *
-   * The response should include a data object with the following keys:
-   * - start: Boolean indicating if page variation mode should be on (true)
-   *   or off (false).
-   * - variationIndex: The variation index to edit.  This can be an existing
-   *   variation index to edit, or -1 to create a new variation.
-   */
-  Drupal.ajax.prototype.commands.acquia_lift_page_variation_toggle = function (ajax, response, status) {
-    if (response.data.start) {
-      if (!Drupal.acquiaLiftPageVariations.app.appModel) {
-        Drupal.acquiaLiftPageVariations.app.appModel = new Drupal.acquiaLiftPageVariations.models.AppModel();
-      }
-      if (!Drupal.acquiaLiftPageVariations.app.appView) {
-        Drupal.acquiaLiftPageVariations.app.appView = new Drupal.acquiaLiftPageVariations.views.AppView({
-          model: Drupal.acquiaLiftPageVariations.app.appModel,
-          $el: $('body')
-        });
-      }
-      var editVariation = response.data.variationIndex || -1;
-      Drupal.acquiaLiftPageVariations.app.appModel.set('variationIndex', editVariation);
-      Drupal.acquiaLiftPageVariations.app.appModel.set('editMode', true);
-      // Notify that the mode has actually been changed.
-      response.data.variationIndex = editVariation;
-    } else {
-      if (Drupal.acquiaLiftPageVariations.app.appModel) {
-        Drupal.acquiaLiftPageVariations.app.appModel.set('editMode', false);
-      }
-    }
-    response.data.campaign = Drupal.settings.personalize.activeCampaign;
-    // Let the other menu stuff clear out before we set a new variation mode.
-    _.defer(function () {
-      $(document).trigger('acquiaLiftPageVariationMode', [response.data]);
-    });
-  };
-
-  /**
-   * Add an event listener for a page variation mode trigger request.
-   *
-   * This utilizes the custom toggle command in order to allow front-end and
-   * back-end requests for the functionality to be handled the same way.
-   */
-  $(document).on('acquiaLiftPageVariationModeTrigger', function(e, data) {
-    var response = {
-      data: data
-    };
-    Drupal.ajax.prototype.commands.acquia_lift_page_variation_toggle(Drupal.ajax, response, 200);
-  });
-
-  /**
-   * Whenever a variation type form is complete, call the personalize elements
-   * editInContext callbacks.
-   */
-  $(document).on('acquiaLiftVariationTypeForm', function(e, type, selector, $input) {
-    if (Drupal.acquiaLiftPageVariations.personalizeElements.hasOwnProperty(type)
-      && Drupal.acquiaLiftPageVariations.personalizeElements[type].hasOwnProperty('editInContext')
-      && typeof Drupal.acquiaLiftPageVariations.personalizeElements[type].editInContext === 'function') {
-      Drupal.acquiaLiftPageVariations.personalizeElements[type].editInContext(selector, $input);
-    }
-  });
 
 }(Drupal.jQuery, Drupal, Drupal.visitorActions.ui.dialog, Backbone, _));

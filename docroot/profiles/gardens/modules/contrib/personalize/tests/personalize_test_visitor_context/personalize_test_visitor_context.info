@@ -5,9 +5,9 @@ package = Testing
 core = 7.x
 hidden = TRUE
 
-; Information added by Drupal.org packaging script on 2014-11-07
-version = "7.x-1.0-beta17"
+; Information added by Drupal.org packaging script on 2014-12-18
+version = "7.x-1.0-rc1"
 core = "7.x"
 project = "personalize"
-datestamp = "1415383997"
+datestamp = "1418922183"
 

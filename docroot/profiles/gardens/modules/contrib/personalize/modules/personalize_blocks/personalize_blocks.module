@@ -165,8 +165,10 @@ function personalize_blocks_contextual_links_view_alter(&$element, $items) {
   }
   if (isset($element['#element']['#block']) && $element['#element']['#block']->module != 'personalize_blocks' && !isset($element['#element']['#block']->personalized)) {
     $block = $element['#element']['#block'];
-    $links = &$element['#links'];
-    personalize_add_personalize_this_contextual_link($links, 'admin/structure/personalize/variations/personalize-blocks/add', array('query' => array('original_block' => $block->bid)));
+    if (isset($block->bid)) {
+      $links = &$element['#links'];
+      personalize_add_personalize_this_contextual_link($links, 'admin/structure/personalize/variations/personalize-blocks/add', array('query' => array('original_block' => $block->bid)));
+    }
   }
 }
 

@@ -232,7 +232,7 @@ function personalize_test_goal_ajax($agent_name, $session, $goal_name, $goal_val
  * Provides a form that has the agent selection/creation form embedded in it.
  */
 function personalize_test_embedded_agent_creation_form() {
-  $form = personalize_get_agent_selection_form();
+  $form = personalize_get_agent_selection_form('', TRUE, TRUE);
   $form['some_other_field'] = array(
     '#type' => 'textfield',
     '#title' => 'Test field'

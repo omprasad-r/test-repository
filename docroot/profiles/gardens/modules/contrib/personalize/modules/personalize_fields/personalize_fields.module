@@ -281,17 +281,6 @@ function personalize_fields_add_personalized_fields(&$form, &$form_state, $entit
             }
 
             $collection[$field_name]['#attributes']['class'][] = 'personalize-fields-personalized';
-            foreach (element_children($collection[$field_name][$collection['#language']]) as $subfield_child) {
-              // Ajax is required for each personalized field. The "add more"
-              // buttons in the form enable ajax, which forces the whole form to
-              // be cached, which has the side effect of forcing the values of
-              // these fields into cache also, which in turn overwrites any user
-              // input. This workaround ensures that the cached form is
-              // refreshed by any update to these fields.
-              $collection[$field_name][$collection['#language']][$subfield_child]['value']['#ajax'] = array(
-                'callback' => 'personalize_fields_ajax'
-              );
-            }
             drupal_alter('personalize_fields_form_element', $collection[$field_name], $collection['#language']);
             $personalized_collection_fields[$key][$field_name][$child] = $collection[$field_name];
           }
@@ -306,7 +295,6 @@ function personalize_fields_add_personalized_fields(&$form, &$form_state, $entit
   }
 
   $path = drupal_get_path('module', 'personalize_fields');
-  $form['#attached']['js'][] = $path . '/js/personalize_fields.admin.js';
   $form['#attached']['css'][] = $path . '/css/personalize_fields.admin.theme.css';
 
   // Load the default agent if one is already set.
@@ -717,6 +705,7 @@ function personalize_fields_option_set_save($option_set, $entity_type, $entity, 
     if (isset($field['settings']['personalize']['options'][$agent_type])) {
       $agent_info['agent_basic_info']['options'][$agent_type] = $field['settings']['personalize']['options'][$agent_type];
     }
+    $agent_info['agent_basic_info']['options'][$agent_type]['auto_created'] = 1;
     if ($new_agent = personalize_save_agent_from_form_values($agent_info)) {
       $option_set->agent = $new_agent->machine_name;
     }

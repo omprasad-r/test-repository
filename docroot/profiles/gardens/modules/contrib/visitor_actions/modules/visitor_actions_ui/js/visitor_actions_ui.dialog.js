@@ -91,6 +91,13 @@
         that.position();
       });
 
+      // The rest of this processing is specific to AJAX forms within the
+      // dialog.
+      var formPath = this.model.get('formPath');
+      if (typeof formPath !== 'string' || formPath.length === 0) {
+        return;
+      }
+
       /**
        * Dismisses this instance of ElementDialogView
        */
@@ -136,21 +143,21 @@
         if (ajax.wrapper === '#visitor-actions-form') {
           ajax.wrapper = '#' + ajax.form[0].id;
         }
-        // Call the original insert command.
-        insert.call(this, ajax, response, status);
         // Call the position method.
         if (ajax.event === 'formAction.visitorActionsUI.elementDialogView') {
           that.position(function () {
             that.show();
           });
         }
+        // Call the original insert command.
+        insert.call(this, ajax, response, status);
         // Put the original insert command back.
         Drupal.ajax.prototype.commands.insert = insert;
       }
 
       // Perform an AJAX request to get a specific form.
       Drupal.ajax[this.anchor.id] = new Drupal.ajax(this.anchor.id, this.anchor, {
-        url: this.model.get('formPath'),
+        url: formPath,
         event: 'formAction.visitorActionsUI.elementDialogView',
         wrapper: that.model.id + '-dialog .visitor-actions-ui-placeholder',
         progress: {
@@ -168,10 +175,7 @@
       });
 
       // Trigger the form load after the dialog has rendered.
-      var formPath = this.model.get('formPath');
-      if (typeof formPath === 'string' && formPath.length > 0) {
-        $('#' + this.anchor.id).trigger('formAction.visitorActionsUI.elementDialogView');
-      }
+      $('#' + this.anchor.id).trigger('formAction.visitorActionsUI.elementDialogView');
     },
 
     /**
@@ -215,6 +219,11 @@
       clearTimeout(this.timer);
 
       var that = this;
+      if (typeof(that.callback) !== 'undefined') {
+        that.callback = callback ? callback : that.callback;
+      } else {
+        that.callback = callback;
+      }
 
       /**
        * Refines the positioning algorithm of jquery.ui.position().
@@ -272,7 +281,7 @@
        * @param function callback
        * (optional) A function to invoke after positioning has finished.
        */
-      function positionDialog (callback) {
+      function positionDialog () {
         that.$el.position_visitor_actions_ui({
           my: that.myHorizontalEdge + ' ' + that.myVerticalEdge,
           // Move the toolbar 1px towards the start edge of the 'of' element,
@@ -284,9 +293,11 @@
           using: refinePosition
         });
         // Invoke an optional callback after the positioning has finished.
-        if (callback) {
-          callback();
+        if (that.callback) {
+          that.callback();
         }
+        // Clear the callback reference now that it has been called.
+        delete that.callback;
       }
 
       // Uses the jQuery.ui.position() method. Use a timeout to move the toolbar
@@ -297,7 +308,7 @@
         // the field have time to process. This is not strictly speaking, a
         // guarantee that all animations will be finished, but it's a simple way
         // to get better positioning without too much additional code.
-        _.defer(positionDialog, callback);
+        _.defer(positionDialog);
       }, that.delay);
     },
 

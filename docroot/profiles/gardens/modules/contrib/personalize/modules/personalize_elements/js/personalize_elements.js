@@ -45,6 +45,8 @@
           if ($option_set.length == 0 && ['runJS','editHtml'].indexOf(element.variation_type) == -1) {
             return;
           } else if ($option_set.length > 1) {
+            var agent_name = Drupal.settings.personalize.option_sets[osid].agent;
+            Drupal.personalize.debug('Selector ' + element.selector + ' in campaign ' + agent_name + ' matches multiple DOM elements, cannot perform personalization', 5010);
             // Cannot perform personalization on sets of matched elements.
             return;
           }
