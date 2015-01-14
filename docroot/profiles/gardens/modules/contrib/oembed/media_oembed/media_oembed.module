@@ -146,16 +146,19 @@ function media_oembed_file_formatter_media_oembed_view($file, $display, $langcod
   if ($scheme == 'oembed') {
     $url = rawurldecode(substr($file->uri, 9));
 
-    // Strict sizing doesn't work reliably.
-    $options = array(
-      'width' => isset($file->override['width']) ? $file->override['width'] : $display['settings']['width'],
-      'height' => isset($file->override['height']) ? $file->override['height'] : $display['settings']['height'],
-      'wmode' => isset($file->override['wmode']) ? $file->override['wmode'] : $display['settings']['wmode'],
-      'add_source_link' => $display['settings']['add_source_link'],
-    );
-    if (empty($options['wmode'])) {
-      unset($options['wmode']);
+    // Build oEmbed options array. Prefer file-specific overrides to display settings.
+    $options = (isset($file->override) ? $file->override : array()) + $display['settings'];
+
+    // The oEmbed spec defines `maxwidth` and `maxheight` parameters, but some providers
+    // support `width` and `height`. Precise dimensions supercede maximums.
+    if (isset($options['width'])) {
+      $options['maxwidth'] = $options['width'];
     }
+    if (isset($options['height'])) {
+      $options['maxheight'] = $options['height'];
+    }
+
+    $options = array_filter($options);
 
     // Not a WYSIWYG editor instance.
     if (empty($file->override['wysiwyg'])) {

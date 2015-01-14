@@ -57,14 +57,15 @@ QUnit.test( "evaluate contexts test", function( assert ) {
 });
 
 QUnit.asyncTest( "get visitor contexts test", function( assert ) {
-  expect(6);
+  expect(7);
   // Set-up
   function assignDummyValues(contexts) {
     var values = {
       'some-context': 'some-value',
       'some-other-context': 'some-other-value',
       'ohai': 42,
-      'kthxbai': 0
+      'kthxbai': 0,
+      'mahna': 'dodoo'
     };
     var myValues = {};
     for (var i in contexts) {
@@ -75,6 +76,8 @@ QUnit.asyncTest( "get visitor contexts test", function( assert ) {
     return myValues;
   }
   Drupal.personalize = Drupal.personalize || {};
+  Drupal.personalize.contextTimeout = 3000;
+
   Drupal.personalize.visitor_context = Drupal.personalize.visitor_context || {};
   Drupal.personalize.visitor_context.my_first_plugin = {
     'getContext': function(contexts) {
@@ -86,6 +89,17 @@ QUnit.asyncTest( "get visitor contexts test", function( assert ) {
       return assignDummyValues(contexts);
     }
   };
+
+  Drupal.personalize.visitor_context.my_promise_plugin = {
+    'getContext': function(contexts) {
+      return new Promise(function(resolve, reject) {
+        setTimeout(function() {
+          resolve(assignDummyValues(contexts));
+          QUnit.start();
+        }, (Drupal.personalize.contextTimeout - 1000));
+      });
+    }
+  }
   // End of set-up.
 
   var contexts = {
@@ -96,6 +110,9 @@ QUnit.asyncTest( "get visitor contexts test", function( assert ) {
     'my_second_plugin': {
       'ohai': 'ohai',
       'kthxbai': 'kthxbai'
+    },
+    'my_promise_plugin': {
+      'mahna': 'mahna'
     },
     'my_nonexistent_plugin': {
       'foo': 'foo'
@@ -108,6 +125,64 @@ QUnit.asyncTest( "get visitor contexts test", function( assert ) {
     assert.equal(contextValues.my_second_plugin['ohai'], 42);
     assert.equal(contextValues.my_second_plugin['kthxbai'], 0);
     assert.equal(contextValues.my_nonexistent_plugin, null);
+    assert.equal(contextValues.my_promise_plugin['mahna'], 'dodoo');
+    QUnit.start();
+  };
+  QUnit.stop();
+  Drupal.personalize.getVisitorContexts(contexts, callback);
+});
+
+QUnit.asyncTest( "get visitor contexts timeout test", function( assert ) {
+  expect(3);
+  // Set-up
+  function assignDummyValues(contexts) {
+    var values = {
+      'some-context': 'some-value',
+      'some-other-context': 'some-other-value',
+      'mahna': 'dodoo'
+    };
+    var myValues = {};
+    for (var i in contexts) {
+      if (contexts.hasOwnProperty(i) && values.hasOwnProperty(i)) {
+        myValues[i] = values[i];
+      }
+    }
+    return myValues;
+  }
+  Drupal.personalize = Drupal.personalize || {};
+  Drupal.personalize.contextTimeout = 300;
+
+  Drupal.personalize.visitor_context = Drupal.personalize.visitor_context || {};
+  Drupal.personalize.visitor_context.my_first_plugin = {
+    'getContext': function(contexts) {
+      return assignDummyValues(contexts);
+    }
+  };
+  Drupal.personalize.visitor_context.my_promise_plugin = {
+    'getContext': function(contexts) {
+      return new Promise(function(resolve, reject) {
+        setTimeout(function() {
+          resolve(assignDummyValues(contexts));
+        }, (Drupal.personalize.contextTimeout+100));
+      });
+    }
+  }
+  // End of set-up.
+
+  var contexts = {
+    'my_first_plugin': {
+      'some-context': 'some-context',
+      'some-other-context': 'some-other-context'
+    },
+    'my_promise_plugin': {
+      'mahna': 'mahna'
+    }
+  };
+  var callback = function(contextValues) {
+    assert.ok(contextValues.hasOwnProperty('my_first_plugin'));
+    // Contexts should still be returned when there wasn't an error.
+    assert.equal(contextValues.my_first_plugin['some-context'], 'some-value');
+    assert.equal(contextValues.my_first_plugin['some-other-context'], 'some-other-value');
     QUnit.start();
   };
   Drupal.personalize.getVisitorContexts(contexts, callback);

@@ -37,6 +37,11 @@ interface PersonalizeAgentInterface {
    */
   public function getStatus();
 
+  /**
+   * Accessor for the type property.
+   *
+   * @return string
+   */
   public function getType();
 
   /**
@@ -58,7 +63,7 @@ interface PersonalizeAgentInterface {
    *
    * @param $agent_data
    *   The stored information about the agent.
-   * @return mixed
+   * @return PersonalizeAgentInterface
    *   An object implementing PersonalizeAgentInterface.
    */
   public static function create($agent_data);
@@ -126,6 +131,22 @@ interface PersonalizeAgentInterface {
    *   TRUE if the agent should be paused, FALSE otherwise.
    */
   public function stopNow();
+
+  /**
+   * Whether the agent supports multivariate tests.
+   *
+   * @return boolean
+   *   TRUE if the agent supports MVTs, FALSE otherwise.
+   */
+  public function supportsMVTs();
+
+  /**
+   * Whether the agent supports multiple decision points.
+   *
+   * @return boolean
+   *   TRUE if the agent supports multiple decision points, FALSE otherwise.
+   */
+  public function supportsMultipleDecisionPoints();
 }
 
 interface PersonalizeAgentGoalInterface {
@@ -382,6 +403,26 @@ abstract class PersonalizeAgentBase implements PersonalizeAgentInterface, Person
    */
   public function stopNow() {
     return FALSE;
+  }
+
+  /**
+   * Implements PersonalizeAgentInterface::supportsMVTs().
+   */
+  public function supportsMVTs() {
+    if (!empty($this->data['auto_created'])) {
+      return FALSE;
+    }
+    return TRUE;
+  }
+
+  /**
+   * Implements PersonalizeAgentInterface::supportsMultipleDecisionPoints().
+   */
+  public function supportsMultipleDecisionPoints() {
+    if (!empty($this->data['auto_created'])) {
+      return FALSE;
+    }
+    return TRUE;
   }
 
   /**

@@ -159,6 +159,43 @@ function personalize_fields_update_7003() {
 }
 
 /**
+ * All agents created automatically by personalize_fields module should be flagged as such.
+ */
+function personalize_fields_update_7004() {
+  drupal_load('module', 'personalize_fields');
+  $fields_option_sets = db_select('personalize_option_sets', 'o')
+    ->fields('o', array('osid', 'agent'))
+    ->condition('plugin', 'fields', '=')
+    ->execute();
+  foreach ($fields_option_sets as $os) {
+    // Ignore agents that already somehow have multiple option sets as these were likely
+    // not automatically created.
+    $result = db_select('personalize_option_sets', 'o')
+      ->fields('o', array('osid'))
+      ->condition('agent', $os->agent, '=')
+      ->execute();
+    if (count($result) > 1) {
+      continue;
+    }
+    $agent_result = db_select('personalize_agent', 'a')
+      ->fields('a')
+      ->condition('a.machine_name', $os->agent)
+      ->execute();
+    if ($agent_record = $agent_result->fetchObject()) {
+      $data = unserialize($agent_record->data);
+      if (!isset($data['auto_created'])) {
+        $data['auto_created'] = 1;
+      }
+      // Update the agent.
+      db_update('personalize_agent')
+        ->fields(array('data' => serialize($data)))
+        ->condition('machine_name', $os->agent)
+        ->execute();
+    }
+  }
+}
+
+/**
  * Helper to get the schema for the cache table.
  */
 function personalize_fields_get_cache_table_schema() {

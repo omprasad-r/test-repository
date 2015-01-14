@@ -125,7 +125,7 @@
    */
   Drupal.behaviors.visitorActions = {
     attach: function (context, settings) {
-      var name, action, callback;
+      var name, action, callback, boundActions = {};
       for (name in Drupal.settings.visitor_actions.actions) {
         if (Drupal.settings.visitor_actions.actions.hasOwnProperty(name)) {
           action = Drupal.settings.visitor_actions.actions[name];
@@ -135,10 +135,12 @@
                 Drupal.visitorActions.publisher.deliver(innerName, event, actionContext);
               }
             })(name);
-            Drupal.visitorActions[action.actionable_element].bindEvent(name, action, context, callback);
+            // Keep track of what we have bound actions to.
+            boundActions[name] = Drupal.visitorActions[action.actionable_element].bindEvent(name, action, context, callback);
           }
         }
       }
+      $(document).trigger('visitorActionsBindActions', [boundActions]);
     }
   };
 
@@ -169,7 +171,7 @@
     clientContext.Content = queryMap.hasOwnProperty('utm_content') ? queryMap.utm_content : '';
     actionContext['PageView']['TrafficSource'] = clientContext;
     return actionContext;
-  }
+  };
 
   Drupal.visitorActions.link = {
     'bindEvent': function (name, action, context, callback) {
@@ -204,6 +206,7 @@
             callback.call(null, event, actionContext)
           }
         });
+      return $selector;
     }
   };
 
@@ -216,11 +219,11 @@
         var $selector = $('form#' + formId, context);
       } catch (error) {
         // Can't add a bind event because the selector is invalid.
-        return;
+        return null;
       }
       var pageContext = Drupal.visitorActions.getPageContext();
       if ($selector.length == 0 || typeof callback !== 'function') {
-        return;
+        return null;
       }
       if (action.event === 'submit_client') {
         // If the selector is within a Drupal AJAX form then we have to
@@ -240,7 +243,7 @@
                 // Now invoke Drupal's event handling.
                 return this.drupalEventResponse(element, event);
               };
-              return;
+              return $selector;
             }
           }
         }
@@ -253,6 +256,7 @@
             callback.call(null, event, pageContext);
           });
       }
+      return $selector;
     }
   };
 
@@ -309,6 +313,7 @@
       if (typeof(this[action.event]) === 'function') {
         this[action.event].call(this, name, action, context, callback);
       }
+      return $(window);
     },
     'reset': function() {
       pageViewed = false;

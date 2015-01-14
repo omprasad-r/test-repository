@@ -19,7 +19,7 @@ var _tcwq = _tcwq || [];
     'attach': function (context, settings) {
       Drupal.acquia_lift_profiles.init(settings);
       Drupal.acquia_lift_profiles.addActionListener(settings);
-      processServerSideActions(settings);
+      Drupal.acquia_lift_profiles.processServerSideActions(settings);
       Drupal.acquia_lift_profiles.registerSegmentsCallback();
     }
   };
@@ -118,6 +118,22 @@ var _tcwq = _tcwq || [];
   var identityCaptured = false;
 
   /**
+   * Send a captureIdentity event to ContextDB
+   *
+   * @param identifier
+   *   The identifier to be sent.
+   * @param identityType
+   *   The type of identity to pass.
+   */
+  var pushCaptureIdentity = function(identifier, identityType) {
+    if (identityCaptured) {
+      return;
+    }
+    _tcaq.push( [ 'captureIdentity', identifier, identityType, {'evalSegments': true}] );
+    identityCaptured = true;
+  };
+
+  /**
    * Sends a captureIdentity event to TC using the email address from the
    * passed in context.
    *
@@ -129,11 +145,10 @@ var _tcwq = _tcwq || [];
   var pushCaptureEmail = function(DrupalSettings, context) {
     // Do nothing if identity has already been captured or should not be captured or
     // if we don't have an email address in the context.
-    if (identityCaptured || !(DrupalSettings.captureIdentity && context['mail'])) {
+    if (!(DrupalSettings.captureIdentity && context['mail'])) {
       return;
     }
-    _tcaq.push( [ 'captureIdentity', context['mail'], 'email', {'evalSegments': true}] );
-    identityCaptured = true;
+    pushCaptureIdentity(context['mail'], 'email');
   };
 
   /**
@@ -236,6 +251,10 @@ var _tcwq = _tcwq || [];
           }, settings.acquia_lift_profiles.pageContext, udfValues);
           _tcaq.push( [ 'captureView', 'Content View', pageInfo ] );
 
+          if(settings.acquia_lift_profiles.hasOwnProperty('identity')) {
+            pushCaptureIdentity(settings.acquia_lift_profiles.identity, settings.acquia_lift_profiles.identityType);
+          }
+
           initialized = true;
         };
         $(document).bind('personalizeDecision', this["processPersonalizeDecision"]);
@@ -283,12 +302,12 @@ var _tcwq = _tcwq || [];
           decision = 'Control';
         }
 
-        _tcaq.push(['capture', 'Campaign Action', {'campaignid':agent_name, 'campaignname':getAgentLabel(agent_name), 'offerid': decision, 'actionName':decision, 'evalSegments': true } ]);
+        _tcaq.push(['capture', 'Campaign Action', {'targetcampaignid':agent_name, 'targetcampaignname':getAgentLabel(agent_name), 'targetofferid': decision, 'targetactionname':decision, 'evalSegments': true } ]);
 
       },
 
       'processSentGoalToAgent':function(e, agent_name, goal_name, goal_value) {
-        _tcaq.push(['capture', goal_name, {'campaignid':agent_name, 'campaignname':getAgentLabel(agent_name), 'evalSegments': true}]);
+        _tcaq.push(['capture', goal_name, {'targetcampaignid':agent_name, 'targetcampaignname':getAgentLabel(agent_name), 'evalSegments': true}]);
       },
       /**
        * Add an action listener for client-side goal events.
@@ -316,6 +335,29 @@ var _tcwq = _tcwq || [];
         }
       },
 
+      /**
+       * Goes through the server-side actions and calls the appropriate function for
+       * each one, passing in the event context.
+       *
+       * @param settings
+       */
+      'processServerSideActions': function (settings) {
+        if (settings.acquia_lift_profiles.serverSideActions) {
+          for (var actionName in settings.acquia_lift_profiles.serverSideActions) {
+            if (settings.acquia_lift_profiles.serverSideActions.hasOwnProperty(actionName)) {
+              for (var i in settings.acquia_lift_profiles.serverSideActions[actionName]) {
+                if (settings.acquia_lift_profiles.serverSideActions[actionName].hasOwnProperty(i) && !settings.acquia_lift_profiles.serverSideActions[actionName][i].processed) {
+                  // Process the event.
+                  this.processEvent(actionName, settings, settings.acquia_lift_profiles.serverSideActions[actionName][i]);
+                  // Mark this event has having been processed so that it doesn't get sent again.
+                  settings.acquia_lift_profiles.serverSideActions[actionName][i].processed = 1;
+                }
+              }
+            }
+          }
+        }
+      },
+
       // Holds the functions that should be called for particular events.
       'specialEvents': {
         'user_login': pushCaptureEmail,
@@ -330,33 +372,11 @@ var _tcwq = _tcwq || [];
         initialized = false;
         initializing = false;
         agentNameToLabel = {};
+        identityCaptured = false;
         $(document).unbind('personalizeDecision', this["processPersonalizeDecision"]);
         $(document).unbind('sentGoalToAgent', this["processSentGoalToAgent"]);
       }
     }
   })();
-
-  /**
-   * Goes through the server-side actions and calls the appropriate function for
-   * each one, passing in the event context.
-   *
-   * @param settings
-   */
-  function processServerSideActions(settings) {
-    if (settings.acquia_lift_profiles.serverSideActions) {
-      for (var actionName in settings.acquia_lift_profiles.serverSideActions) {
-        if (settings.acquia_lift_profiles.serverSideActions.hasOwnProperty(actionName)) {
-          for (var i in settings.acquia_lift_profiles.serverSideActions[actionName]) {
-            if (settings.acquia_lift_profiles.serverSideActions[actionName].hasOwnProperty(i) && !settings.acquia_lift_profiles.serverSideActions[actionName][i].processed) {
-              // Process the event.
-              Drupal.acquia_lift_profiles.processEvent(actionName, settings, settings.acquia_lift_profiles.serverSideActions[actionName][i]);
-              // Mark this event has having been processed so that it doesn't get sent again.
-              settings.acquia_lift_profiles.serverSideActions[actionName][i].processed = 1;
-            }
-          }
-        }
-      }
-    }
-  }
 
 })(jQuery);

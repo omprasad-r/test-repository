@@ -80,7 +80,7 @@ function personalize_blocks_form($form, &$form_state, $formtype, $pblock = NULL)
   }
   else {
     $current_agent = isset($pblock->agent) ? $pblock->agent : '';
-    $form += personalize_get_agent_selection_form($current_agent);
+    $form += personalize_get_agent_selection_form($current_agent, TRUE, TRUE);
   }
 
   $path = drupal_get_path('module', 'personalize_blocks');
@@ -501,7 +501,7 @@ function personalize_blocks_form_submit($form, &$form_state) {
       personalize_blocks_replace_existing($form_state['values']['original_block'], $pblock);
     }
     else {
-      drupal_goto('admin/structure/personalize/variations/personalize-blocks');
+      $form_state['redirect'] = 'admin/structure/personalize/variations/personalize-blocks';
     }
   }
 }
