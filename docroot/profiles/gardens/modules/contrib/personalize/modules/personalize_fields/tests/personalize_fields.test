@@ -473,6 +473,27 @@ class PersonalizeFieldsTest extends PersonalizeBaseTest {
     $this->assertEqual(7, count($agents));
     $this->assertTrue(isset($agents['article-personalizable-headline-2']));
     $this->assertTrue(isset($agents['article-personalizable-abstract-2']));
+
+    // Enable personalize_fields_test module and test that the auto-generated name is altered
+    module_enable(array("personalize_fields_test"));
+    $this->resetAll();
+    $edit = array();
+    $edit['title'] = $this->randomName(8);
+    $edit['article_headline[und][0][value]'] = 'first headline option';
+    $edit['article_headline[und][1][value]'] = 'second headline option';
+    $edit['article_abstract[und][0][value]'] = 'first abstract option';
+    $edit['article_abstract[und][1][value]'] = 'second abstract option';
+    $this->drupalGet('node/add/article');
+    $this->drupalPost(NULL, NULL, t('Add another item'));
+    $this->drupalPost(NULL, $edit, t('Save'));
+    $nid = $this->getNidFromCurrentUrl();
+    $agents = personalize_agent_load_multiple(array(), array(), TRUE);
+    // There should now be 7 agents altogether.
+    $this->assertEqual(9, count($agents));
+    $this->assertTrue(isset($agents['article-personalizable-headline-3']));
+    $this->assertTrue(isset($agents['article-personalizable-abstract-3']));
+    $this->assertEqual('Altered article_headline' . $nid, $agents['article-personalizable-headline-3']->label);
+    $this->assertEqual('Altered article_abstract' . $nid, $agents['article-personalizable-abstract-3']->label);
   }
 
   /**

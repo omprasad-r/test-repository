@@ -14,7 +14,7 @@ class AcsfMessageRest extends AcsfMessage {
   /**
    * {@inheritdoc}
    */
-  public function __construct($method, $endpoint, array $parameters = NULL, AcsfConfig $config = NULL, $ah_site = NULL, $ah_env = NULL, Closure $callback = NULL) {
+  public function __construct($method, $endpoint, array $parameters = array(), AcsfConfig $config = NULL, $ah_site = NULL, $ah_env = NULL, Closure $callback = NULL) {
     if (empty($config)) {
       $config = new AcsfConfigRest($ah_site, $ah_env);
     }

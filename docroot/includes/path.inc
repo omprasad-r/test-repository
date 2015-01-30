@@ -247,16 +247,22 @@ function drupal_get_path_alias($path = NULL, $path_language = NULL) {
 /**
  * Given a path alias, return the internal path it represents.
  *
- * @param $path
+ * @param string $path
  *   A Drupal path alias.
- * @param $path_language
+ * @param string $path_language
  *   An optional language code to look up the path in.
  *
- * @return
+ * @return string
  *   The internal path represented by the alias, or the original alias if no
  *   internal path was found.
  */
 function drupal_get_normal_path($path, $path_language = NULL) {
+  // Ensure this is valid UTF-8 before continuing.
+  if (!drupal_validate_utf8($path)) {
+    // Oh nos! Invalid UTF-8. Now we fix it.
+    $path = drupal_convert_to_utf8($path, 'CP1252');
+  }
+
   $original_path = $path;
 
   // Lookup the path alias first.
