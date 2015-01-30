@@ -61,7 +61,34 @@
     return adminMode;
   };
 
+  var DNT = null;
+  /**
+   * Returns whether or not do-not-track is enabled.
+   *
+   * @return boolean
+   */
+  Drupal.personalize.DNTenabled = function() {
+    if (DNT == null) {
+      DNT = false;
+      // @todo We need a flexible way of allowing site owners to decide how to support the
+      //   idea of Do Not Track. The browser header is not a standard and many site owners
+      //   will prefer to use a custom cookie that they can allow visitors to set. Commenting
+      //   this out until we have a way of configuring how it works.
+/*      if (typeof window.navigator.doNotTrack != "undefined") {
+        if (window.navigator.doNotTrack == "yes" || window.navigator.doNotTrack == "1") {
+          DNT = true;
+        }
+      }*/
+    }
+    return DNT;
+  };
+
   var debugMode = null;
+  /**
+   * Returns whether or not debug mode is enabled.
+   *
+   * @return boolean
+   */
   Drupal.personalize.isDebugMode = function() {
     if (debugMode === null) {
       debugMode = Drupal.settings.personalize.debugMode && (Drupal.personalize.isAdminMode() || $.cookie('personalizeDebugMode'));
@@ -72,7 +99,7 @@
   /**
    * Private tracking variables across behavior attachments.
    */
-  var processedDecisions = {}, decisionCallbacks = {}, processedOptionSets = {};
+  var processedDecisions = {}, decisionCallbacks = {}, processedOptionSets = {}, processingOptionSets = {};
 
   /**
    * A decorator for a promise to implement an enforced timeout value.
@@ -556,6 +583,13 @@
    * on subsequent page loads.
    */
   Drupal.personalize.visitor_context = Drupal.personalize.visitor_context || {};
+
+  /**
+   * The User Profile context plugin.
+   *
+   * @todo This context plugin should really be in its own file which would only
+   *   be added when the plugin is being used.
+   */
   Drupal.personalize.visitor_context.user_profile_context = {
     'getContext': function(enabled) {
       if (!Drupal.settings.hasOwnProperty('personalize_user_profile_context')) {
@@ -798,13 +832,31 @@
    *   The combined agent data for all option sets on the page.
    */
   function processOptionSets (option_sets) {
-    var agents = {}, agentName, agentData, osid, decisionPoint, decisions;
+    var agents = {}, agentName, agentData, osid, decisionPoint, decisions, optionSetsToProcess = [];
+    // We need an initial loop to add this batch of option sets to the local
+    // optionSetsToProcess variable and to the processingOptionSets closure variable. If
+    // any option set is already in the processingOptionSets closure variable, then it
+    // will not be processed here.
     for(osid in option_sets) {
-      if (processedOptionSets.hasOwnProperty(osid)) {
-        continue;
-      }
-      processedOptionSets[osid] = true;
       if (option_sets.hasOwnProperty(osid)) {
+        if (!processingOptionSets.hasOwnProperty(osid)) {
+          optionSetsToProcess.push(osid);
+          processingOptionSets[osid] = true;
+        }
+      }
+    }
+    // This second loop does the actual processing of each option set, which could result
+    // in an executor being called with a decision (e.g. if the agent is paused), which
+    // would in turn result in processOptionSets being called again with the same batch
+    // of option sets due to the call to Drupal.attachBehaviors. This is why we need the
+    // closure and local variable keeping track of option sets to process.
+    for(osid in option_sets) {
+      if (option_sets.hasOwnProperty(osid)) {
+        if (optionSetsToProcess.indexOf(osid) == -1 || processedOptionSets.hasOwnProperty(osid)) {
+          continue;
+        }
+        processedOptionSets[osid] = true;
+
         agentData = processOptionSet(option_sets[osid]);
         // If agent data is not returned then the decision is not necessary for
         // this option set.
@@ -897,11 +949,20 @@
       chosenOption = selection;
       Drupal.personalize.debug('Preselected option being shown for ' + agent_name, 2002);
     }
-    // If we're in admin mode or the campaign is paused, just show the first option,
-    // or, if available, the "winner" option.
-    else if (Drupal.personalize.isAdminMode() || !agent_info.active) {
+    // If we're in admin mode just show the first option, or, if available, the "winner" option.
+    else if (Drupal.personalize.isAdminMode()) {
       chosenOption = choices[fallbackIndex];
-      Drupal.personalize.debug('Fallback option being shown for ' + agent_name, 2003);
+      Drupal.personalize.debug('Fallback option being shown for ' + agent_name + ' because admin mode is on.', 2003);
+    }
+    // Same for if do-not-track is enabled.
+    else if (Drupal.personalize.DNTenabled()) {
+      chosenOption = choices[fallbackIndex];
+      Drupal.personalize.debug('Fallback option being shown for ' + agent_name + ' because DNT is enabled.', 2004);
+    }
+    // ... or if the campaign is not running.
+    else if (!agent_info.active) {
+      chosenOption = choices[fallbackIndex];
+      Drupal.personalize.debug('Fallback option being shown for ' + agent_name + ' because the campaign is not running.', 2005);
     }
     // If we now have a chosen option, just call the executor and be done.
     if (chosenOption !== null) {
@@ -1367,6 +1428,7 @@
     processedDecisions = {};
     decisionCallbacks = {};
     processedOptionSets = {};
+    processingOptionSets = {};
     processedListeners = {};
   };
 

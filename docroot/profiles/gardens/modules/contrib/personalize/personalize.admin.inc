@@ -332,10 +332,13 @@ function personalize_option_set_list($form, &$form_state) {
     if (!empty($filter) && $filter != $option_set->plugin) {
       continue;
     }
+    $campaign = personalize_agent_load($option_set->agent);
+    if (empty($campaign)) {
+      continue;
+    }
     $option_set_plugin = personalize_get_option_set_type($option_set->plugin);
     $edit_link = module_hook($option_set_plugin['module'], 'personalize_edit_link') ? module_invoke($option_set_plugin['module'], 'personalize_edit_link', $option_set) : '';
     $delete_link = module_hook($option_set_plugin['module'], 'personalize_delete_link') ? module_invoke($option_set_plugin['module'], 'personalize_delete_link', $option_set) : '';
-    $campaign = personalize_agent_load($option_set->agent);
     $rows[] = array(
       check_plain($option_set->label),
       $option_set->plugin,
@@ -901,11 +904,17 @@ function personalize_agent_form_ajax_submit($form, $form_state) {
 
   // Update the current agent status.
   if (!empty($agent_data)) {
+    $current_status = personalize_agent_get_status($agent_data->machine_name);
+    list($next_status, $status_text) = _personalize_status_toggle_next($current_status);
     $settings = array(
       'personalize' => array(
         'campaigns' => array(
           $agent_data->machine_name => array(
-            'status' => personalize_agent_get_status($agent_data->machine_name),
+            'status' => $current_status,
+            'nextStatus' => array(
+              'status' => $next_status,
+              'text' => $status_text,
+            ),
           ),
         ),
       ),
@@ -981,8 +990,10 @@ function personalize_agent_build_basic_form($agent_data = NULL, $include_machine
     if ($class = ctools_plugin_load_class('personalize', 'agent_type', $name, 'handler')) {
       // Add this option to the options for the "agent type" dropdown.
       $agent_type_options[$name] = $name;
+      // Form structure for option parents in the current form.
+      $option_parents = array('agent_basic_info', 'options', $name);
       // Get the agent type's options form elements
-      $agent_type_form_options[$name] = call_user_func_array(array($class, 'optionsForm'), array($agent_data));
+      $agent_type_form_options[$name] = call_user_func_array(array($class, 'optionsForm'), array($agent_data, $option_parents));
     }
   }
   if (empty($agent_type_options)) {

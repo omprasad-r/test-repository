@@ -4,9 +4,9 @@ dependencies[] = personalize
 package = Personalization
 core = 7.x
 
-; Information added by Drupal.org packaging script on 2014-12-18
-version = "7.x-1.0-rc1"
+; Information added by Drupal.org packaging script on 2015-01-14
+version = "7.x-1.0-rc3"
 core = "7.x"
 project = "personalize"
-datestamp = "1418922183"
+datestamp = "1421248982"
 

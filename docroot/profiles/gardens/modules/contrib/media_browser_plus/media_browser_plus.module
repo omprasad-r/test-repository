@@ -161,7 +161,8 @@ function _media_browser_plus_metadata($provider) {
   elseif (is_callable(array($provider, 'getOEmbed')) && ($oembed = $provider->getOEmbed())) {
     foreach (array('title', 'description') as $key) {
       if (isset($oembed[$key])) {
-        $data['media_' . $key] = $oembed[$key];
+        // Title is limited to 255 characters.
+        $data['media_' . $key] = $key == 'title' ? truncate_utf8($oembed[$key], 255) : $oembed[$key];
       }
     }
   }

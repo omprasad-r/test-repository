@@ -13,8 +13,25 @@ function gardens_misc_drush_command() {
       'description' => 'Get from the Gardener and save mollom keys even if they already exist',
       'aliases' => array('mk-repl'),
     ),
+    'gather-image-dimensions' => array(
+      'description' => dt('Walk through image files, get their dimensions (width, height), and insert the data into the database.'),
+      'arguments' => array(
+        'limit' => dt('The number of image files to be processed at once.'),
+      ),
+      'aliases' => array('get-img-dim'),
+    ),
   );
   return $items;
+}
+
+/**
+ * Implements of hook_drush_help().
+ */
+function gardens_misc_drush_help($section) {
+  switch ($section) {
+    case 'drush:gather-image-dimensions':
+      return dt('Walk through image files, get their dimensions (width, height), and insert the data into the database.');
+  }
 }
 
 /**
@@ -94,3 +111,72 @@ function drush_gardens_misc_mollom_keys_replace() {
   }
 }
 
+/**
+ * Command callback. Gather image dimensions and insert them into the database.
+ */
+function drush_gardens_misc_gather_image_dimensions($limit = NULL) {
+  if (is_numeric($limit)) {
+    // Total files processed.
+    $processed = 0;
+    // Process records in chunks to cut down resource usage and prevent memory
+    // or time limit errors.
+    $position = 0;
+
+    do {
+      $sql = 'SELECT f.fid FROM {file_managed} f WHERE NOT EXISTS (SELECT * FROM {image_dimensions} i WHERE i.fid = f.fid) ORDER BY f.fid ASC';
+      $files = db_query_range($sql, ($position++ * $limit), $limit)->fetchAll();
+      if (empty($files)) {
+        // Output an error if there are no more items to process.
+        drush_set_error(NULL, dt('There are no more files to process.'));
+        break;
+      }
+      $processed += _gardens_misc_get_image_dimensions($files);
+    } while ($processed < $limit);
+
+    drush_log("Done gathering image dimensions. Image files processed: $processed.", 'ok');
+  }
+  else {
+    drush_set_error(NULL, dt('"@limit" is not a valid number.', array('@limit' => $limit)));
+  }
+}
+
+/**
+ * Helper function.
+ */
+function _gardens_misc_get_image_dimensions($files = array()) {
+  // Files processed.
+  $processed = 0;
+
+  foreach ($files as $key) {
+    if ($file = file_load($key->fid)) {
+      // Prevent PHP notices when trying to read empty files.
+      // @see http://drupal.org/node/681042
+      if (!$file->filesize) {
+        continue;
+      }
+
+      // Do not bother proceeding if this file does not have an image
+      // mime type.
+      if (strpos($file->filemime, 'image/') !== 0) {
+        continue;
+      }
+
+      // Get details about the image.
+      $image_info = image_get_info($file->uri);
+      if ($image_info) {
+        // Store dimensions.
+        db_merge('image_dimensions')
+          ->key(array('fid' => $file->fid))
+          ->fields(array(
+            'width' => $image_info['width'],
+            'height' => $image_info['height'],
+          ))
+          ->execute();
+
+        $processed++;
+      }
+    }
+  }
+
+  return $processed;
+}

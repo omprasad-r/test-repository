@@ -160,11 +160,18 @@ var Drupal = Drupal || parent.Drupal;
           Drupal.settings.themebuilderCurrentThemePath + "/" +
           ThemeBuilder.styles.BackgroundEditor.prototype.cleanImage(state.value);
       }
-      else {
-        // Put back the default favicon.
+      // Put back the default favicon for SMB only.
+      else if (Drupal.settings.gardensMisc.isSMB) {
         imagePath = Drupal.settings.basePath + 'misc/favicon.ico';
       }
-      // Update the favicon itself. This only works in Firefox.
+      // Otherwise use a transparent favicon. A transparent favicon is required
+      // so that when the user removes the favicon in the brand tab, the icon is
+      // visibly removed. Otherwise, the browser displays the favicon from its
+      // cache.
+      else {
+        imagePath = Drupal.settings.basePath + 'favicon.ico';
+      }
+      // Update the favicon itself.
       var link = document.createElement('link');
       link.type = 'image/x-icon';
       link.rel = 'shortcut icon';

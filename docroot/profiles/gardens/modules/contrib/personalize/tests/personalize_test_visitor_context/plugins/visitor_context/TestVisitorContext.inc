@@ -10,7 +10,7 @@ class TestVisitorContext extends PersonalizeContextBase {
   /**
    * Implements PersonalizeContextInterface::create().
    */
-  public static function create(PersonalizeAgentInterface $agent, $selected_context) {
+  public static function create(PersonalizeAgentInterface $agent = NULL, $selected_context = array()) {
     return new self($agent, $selected_context);
   }
 

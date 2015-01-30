@@ -13,9 +13,9 @@ files[] = includes/acquia_lift_profiles.classes.inc
 files[] = tests/acquia_lift_profiles.test
 files[] = tests/acquia_lift_profiles_unit.test
 
-; Information added by Drupal.org packaging script on 2014-12-18
-version = "7.x-1.0-rc2"
+; Information added by Drupal.org packaging script on 2015-01-14
+version = "7.x-1.0-rc4"
 core = "7.x"
 project = "acquia_lift"
-datestamp = "1418923082"
+datestamp = "1421248984"
 

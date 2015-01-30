@@ -1,6 +1,6 @@
 name = Campaign
 description = Designed for events, microsites.
-version = 1.30
+version = 1.31
 core = 7.x
 engine = phptemplate
 base_theme = campaign

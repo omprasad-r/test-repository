@@ -1676,3 +1676,70 @@ function scarecrow_update_11204() {
     variable_set('scarecrow_forbidden_permissions', $forbidden_permissions);
   }
 }
+
+/**
+ * Update poormanscron to run every 24 hours (DG-12743) for SaaS customers.
+ */
+function scarecrow_update_11205() {
+  $site = acsf_get_acsf_site();
+  // PaaS customers do not have the service_type info sent.
+  if (isset($site->gardens_signup['service_type']) && $site->gardens_signup['service_type'] != 'paas') {
+    // We can't use variable_get() because Drush overrides the value of
+    // cron_safe_threshold (https://github.com/drush-ops/drush/issues/833).
+    $threshold = unserialize(db_query("SELECT value FROM {variable} WHERE name = 'cron_safe_threshold'")->fetchField());
+
+    if ($threshold > 0 && $threshold < 86400) {
+      variable_set('cron_safe_threshold', 86400);
+    }
+  }
+}
+
+/**
+ * Pre-create the {image_dimensions} database table.
+ */
+function scarecrow_update_11206() {
+  // To fix some performance issues, Media module 7.x-1.4 introduces a new
+  // table, 'image_dimensions' to store the dimensions (width and height) of
+  // image files. @see https://www.drupal.org/node/1447790.
+  // In case of existing images, data will be inserted into the table when the
+  // files are being loaded. To prevent overloading the database on a high
+  // traffic site, we're pre-creating the table and fill it with data using a
+  // drush command.
+  if (module_exists('file_entity') && !db_table_exists('image_dimensions')) {
+    $schema = array();
+
+    $schema['image_dimensions'] = array(
+      'description' => 'Cache images dimensions.',
+      'fields' => array(
+        'fid' => array(
+          'description' => 'File ID.',
+          'type' => 'serial',
+          'unsigned' => TRUE,
+          'not null' => TRUE,
+        ),
+        'height' => array(
+          'description' => 'The height of the image in pixels.',
+          'type' => 'int',
+          'unsigned' => TRUE,
+          'not null' => TRUE,
+          'default' => 0,
+        ),
+        'width' => array(
+          'description' => 'The width of the image in pixels..',
+          'type' => 'int',
+          'unsigned' => TRUE,
+          'not null' => TRUE,
+          'default' => 0,
+        ),
+      ),
+      'primary key' => array('fid'),
+      'foreign keys' => array(
+        'file_managed' => array(
+          'table' => 'file_managed',
+          'columns' => array('fid' => 'fid'),
+        ),
+      ),
+    );
+    db_create_table('image_dimensions', $schema['image_dimensions']);
+  }
+}
