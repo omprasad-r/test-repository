@@ -240,7 +240,13 @@ function personalize_fields_add_personalized_fields(&$form, &$form_state, $entit
   $languages = array();
   foreach (element_children($form_state['field']) as $key) {
     $field = $form_state['field'][$key];
-    $languages[$key] = $field_lang = field_language($form['#entity_type'], $entity, $key);
+    $languages[$key] = $field_lang = LANGUAGE_NONE;
+    if ($lang = field_language($entity_type, $entity, $key)) {
+      $languages[$key] = $field_lang = $lang;
+    }
+    if (!isset($field[$field_lang])) {
+      continue;
+    }
     if (personalize_fields_field_is_personalizable($field[$field_lang]['field'])) {
       $personalized_fields[$key] = $field[$field_lang];
       $form[$key]['#attributes']['class'][] = 'personalize-fields-personalized';
@@ -695,12 +701,20 @@ function personalize_fields_option_set_save($option_set, $entity_type, $entity, 
       throw new PersonalizeFieldsException(t('The campaign type specified for this field does not exist. Please go to the field settings and choose an existing campaign type.'));
     }
     $agent_type = $field['settings']['personalize']['agent_type'];
+    $basic_info = array(
+      'title' => $agent_title,
+      'machine_name' => $machine_name,
+    );
+    // Allow other modules to alter the basic info.
+    $context = array(
+      'entity' => $entity,
+      'entity_type' => $entity_type,
+      'entity_id' => $entity_id,
+      'field_name' => $field_name
+    );
+    drupal_alter('personalize_fields_auto_agent_create', $basic_info, $context);
     $agent_info = array(
-      'agent_basic_info' => array(
-        'title' => $agent_title,
-        'machine_name' => $machine_name,
-        'agent_type' => $agent_type,
-      )
+      'agent_basic_info' =>  array_merge($basic_info, array('agent_type' => $agent_type))
     );
     if (isset($field['settings']['personalize']['options'][$agent_type])) {
       $agent_info['agent_basic_info']['options'][$agent_type] = $field['settings']['personalize']['options'][$agent_type];

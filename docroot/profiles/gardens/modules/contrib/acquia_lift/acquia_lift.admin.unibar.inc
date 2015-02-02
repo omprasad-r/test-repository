@@ -221,7 +221,7 @@ function acquia_lift_campaign_type_create_form_submit($form, &$form_state) {
 
 /***************************************************************
  *
- * V A R I A T I O N  C R E A T E
+ * V A R I A T I O N  C R E A T E / E D I T
  *
  ***************************************************************/
 
@@ -235,15 +235,25 @@ function acquia_lift_campaign_type_create_form_submit($form, &$form_state) {
  * @param string $variation_type
  *   The variation type that defines the type of details to include.  This
  *   is a key defined as a personalize_elements variation.
+ * @param string $osid
+ *   (Optional) The option set id when adding variations to an existing option
+ *   set.  If null, then create a new option set with the control and variation.
  * @see hook_personalize_elements_variation_types
  */
-function acquia_lift_element_variation_details_form($form, &$form_state, $variation_type) {
+function acquia_lift_element_variation_details_form($form, &$form_state, $variation_type, $osid = NULL) {
   $types = module_invoke_all('personalize_elements_variation_types');
   if (!isset($types[$variation_type]['contextual']['formitem'])) {
     $form['error'] = array(
       '#markup' => t('Invalid page variation type.  Please close this message and create a new variation.'),
     );
     return $form;
+  }
+  if (!empty($osid)) {
+    $osid = personalize_resolve_stringified_osid($osid);
+    $form['osid'] = array(
+      '#type' => 'value',
+      '#value' => $osid,
+    );
   }
   $form['variation_type'] = array(
     '#type' => 'value',
@@ -255,6 +265,7 @@ function acquia_lift_element_variation_details_form($form, &$form_state, $variat
     '#title' => t('Selector'),
     '#required' => TRUE,
     '#maxlength' => 500,
+    '#access' => empty($osid),
   );
   $form['pages'] = array(
     '#type' => 'hidden',
@@ -273,6 +284,7 @@ function acquia_lift_element_variation_details_form($form, &$form_state, $variat
     '#description' => t('Descriptive name for the variation set, used by Acquia Lift for administration and reporting.'),
     '#required' => TRUE,
     '#maxlength' => 255,
+    '#access' => empty($osid),
   );
   // Now include the details specific to this variation type.
   $form['personalize_elements_content'] = $types[$variation_type]['contextual']['formitem'];
@@ -380,28 +392,56 @@ function _acquia_lift_page_variation_details_form_submit($form, &$form_state) {
   module_load_include('inc', 'acquia_lift', 'acquia_lift.page_variations');
   $variation_number = acquia_lift_page_variation_create($variation_set_name, $option_set, array('personalize_elements_content' => $form_state['values']['personalize_elements_content']), $variation_number);
   // Save the updated option sets for use within the Ajax callback.
-  $form_state['storage']['option_sets'] = personalize_option_set_load_multiple(array(), array('decision_name' => $variation_set_name));
+  $form_state['storage']['option_sets'] = personalize_option_set_load_multiple(FALSE, array('decision_name' => $variation_set_name));
   $form_state['storage']['variation_number'] = $variation_number;
+  $form_state['storage']['confirmation_message'] = t('The variation has been created.');
 }
 
 /**
- * Submit handler to create a new personalize elements option set.
+ * Submit handler to create a new personalize elements option set or edit
+ * and existing option..
  */
 function _acquia_lift_personalize_element_variation_details_form_submit($form, &$form_state) {
   // Prepare the values to those expected by the personalize elements module.
   $values = $form_state['values'];
-  $values['options'] = array(
-    array(
-      'option_label' => t('Variation'),
-      'personalize_elements_content' => $values['personalize_elements_content'],
-    ),
-  );
-  $values['add_control_option'] = TRUE;
-  $values['agent_select'] = $values['agent'];
-  $values['pages_all'] = 0;
+  $message = '';
 
-  module_load_include('inc', 'personalize_elements', 'personalize_elements.admin');
-  $option_set = personalize_elements_convert_form_values_to_option_set($values);
+  if (empty($values['osid'])) {
+    // Creating a new option set and a new option within it.
+    $values['options'] = array(
+      array(
+        'option_label' => t('Variation #@num', array('@num' => 1)),
+        'personalize_elements_content' => $values['personalize_elements_content'],
+      ),
+    );
+    $values['add_control_option'] = TRUE;
+    $values['agent_select'] = $values['agent'];
+
+    module_load_include('inc', 'personalize_elements', 'personalize_elements.admin');
+    $option_set = personalize_elements_convert_form_values_to_option_set($values);
+    $message = t('The variation set has been created.');
+  }
+  else {
+    $option_set = personalize_option_set_load($values['osid']);
+    if (empty($values['variation_number'])) {
+      // Adding a variation to an existing option set.
+      $option_set->options[] = array(
+        'option_label' => t('Variation #@num', array('@num' => count($option_set->options))),
+        'personalize_elements_content' => $values['personalize_elements_content'],
+      );
+      $message = t('The variation has been created.');
+    }
+    else {
+      // Editing an existing option set option.
+      foreach ($option_set->options as &$option) {
+        if ($option['option_id'] === $values['variation_number']) {
+          $option['personalize_elements_content'] = $values['personalize_elements_content'];
+          break;
+        }
+      }
+      $message = t('The variation has been updated.');
+    }
+  }
   $option_set = personalize_option_set_save($option_set);
   // Now re-load the option set so that all hooks get run.
   // This is particularly important to set the selector property.
@@ -409,8 +449,17 @@ function _acquia_lift_personalize_element_variation_details_form_submit($form, &
   // Save the updated option sets for use within the Ajax callback.
   $form_state['storage']['option_sets'] = array($option_set);
   $form_state['storage']['osid'] = $option_set->osid;
-  $updated_option = end(array_values($option_set->options));
-  $form_state['storage']['option_id'] = $updated_option['option_id'];
+  // Determine the option set to preview after save.
+  if (!empty($values['variation_number'])) {
+    // Preview the edited variation.
+    $form_state['storage']['option_id'] = $values['variation_number'];
+  }
+  else {
+    // It was a new option, so preview the last one.
+    $updated_option = end(array_values($option_set->options));
+    $form_state['storage']['option_id'] = $updated_option['option_id'];
+  }
+  $form_state['storage']['confirmation_message'] = $message;
 }
 
 /**
@@ -456,16 +505,14 @@ function acquia_lift_element_variation_details_form_ajax_callback($form, &$form_
     $commands[] = acquia_lift_command_page_variation_toggle(FALSE);
     // Show a confirmation message.
     $current_status = personalize_agent_get_status($agent_name);
+    $message = $form_state['storage']['confirmation_message'];
     if ($current_status === PERSONALIZE_STATUS_NOT_STARTED) {
       if ($settings['personalize']['campaigns'][$agent_name]['verified']) {
-        $message = t('Variation added.  You can now start the campaign.');
+        $message .= ' ' . t('You can now start the campaign.');
       }
       else {
-        $message = t('The variation has been created. Add one or more goals by clicking Goals &gt; Add goal.');
+        $message .= ' ' . t('Add one or more goals by clicking Goals &gt; Add goal.');
       }
-    }
-    else {
-      $message = t('The variation has been created.');
     }
     $commands[] = acquia_lift_command_messagebox($message, 10);
     $commands[] = acquia_lift_command_process_queue();
@@ -566,7 +613,7 @@ function acquia_lift_page_variation_rename_modal_callback($agent_name, $variatio
  */
 function acquia_lift_page_variation_rename_complete_callback($form, $form_state) {
   $settings = array();
-  $option_sets = personalize_option_set_load_multiple(array(), array('decision_name' => $form_state['values']['variation_set_name']));
+  $option_sets = personalize_option_set_load_multiple(FALSE, array('decision_name' => $form_state['values']['variation_set_name']));
   $option_set_settings = array_map('_personalize_convert_option_set_to_js_setting', $option_sets);
   foreach($option_set_settings as $option_set_setting) {
     $settings[key($option_set_setting)] = reset($option_set_setting);
@@ -801,7 +848,7 @@ function acquia_lift_page_variation_delete_modal_callback($agent_name, $variatio
  */
 function acquia_lift_page_variation_delete_complete_callback($form, $form_state) {
   $settings = array();
-  $option_sets = personalize_option_set_load_multiple(array(), array('decision_name' => $form_state['values']['variation_set_name']));
+  $option_sets = personalize_option_set_load_multiple(FALSE, array('decision_name' => $form_state['values']['variation_set_name']));
   if (empty($option_sets)) {
     $settings['empty'] = $form_state['values']['agent_name'];
   }
@@ -1578,13 +1625,11 @@ function acquia_lift_campaign_start_form($form, &$form_state, $agent_data) {
     '#type' => 'value',
     '#value' => $agent_data,
   );
-  $form['decision_style'] = array(
-    '#type' => 'checkboxes',
+  $form['adaptive'] = array(
+    '#type' => 'checkbox',
     '#title' => t('Automatically determine a winner'),
-    '#options' => array(
-      'adaptive' => t('Acquia Lift will adapt to visitors to choose the best option over time.'),
-    ),
-    '#default_value' => array($agent_data->data['decision_style']),
+    '#description' => t('Acquia Lift will adapt to visitors to choose the best option over time.'),
+    '#default_value' => $agent_data->data['decision_style'] == 'adaptive',
   );
   module_load_include('inc', 'personalize', 'personalize.admin');
   $form['campaign_end'] = personalize_agent_end_date_form($agent_data->machine_name);
@@ -1598,7 +1643,8 @@ function acquia_lift_campaign_start_form($form, &$form_state, $agent_data) {
   );
   $form['actions']['reset'] = array(
     '#markup' => ctools_ajax_text_button(t('Cancel'), 'admin/structure/acquia_lift/cancel/nojs', t('Cancel'), 'acquia-lift-cancel-button'),
-  );  return $form;
+  );
+  return $form;
 }
 
 /**
@@ -1615,7 +1661,7 @@ function acquia_lift_campaign_start_form_validate($form, &$form_state) {
 function acquia_lift_campaign_start_form_submit($form, &$form_state) {
   // Set the decision style.
   $agent_data = $form_state['values']['agent'];
-  $agent_data->data['decision_style'] = empty($form_state['values']['decision_style']) ? 'random' : current($form_state['values']['decision_style']);
+  $agent_data->data['decision_style'] = empty($form_state['values']['adaptive']) ? 'random' : 'adaptive';
   personalize_agent_save($agent_data);
 
   // Set the end date.

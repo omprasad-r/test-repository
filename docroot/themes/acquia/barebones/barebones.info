@@ -1,6 +1,6 @@
 name = 'Bare Bones'
 description = 'Just the facts.'
-version = '1.32'
+version = '1.33'
 core = '7.x'
 engine = 'phptemplate'
 base_theme = 'barebones'

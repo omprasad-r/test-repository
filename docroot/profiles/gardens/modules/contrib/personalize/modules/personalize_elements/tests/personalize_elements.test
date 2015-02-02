@@ -548,7 +548,7 @@ class PersonalizeElementsTest extends PersonalizeBaseTest {
     );
 
     $this->drupalPost(NULL, $edit, $this->getButton('save'));
-    $option_sets = personalize_option_set_load_multiple(array(), array('label' => $edit['title']), TRUE);
+    $option_sets = personalize_option_set_load_multiple(FALSE, array('label' => $edit['title']), TRUE);
     $option_set = reset($option_sets);
     if ($assertResult) {
       $this->assertTRUE(!empty($option_set) && $option_set->label == $edit['title']);

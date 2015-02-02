@@ -348,7 +348,7 @@ function personalize_elements_personalize_elements_variation_types($filter_by_pe
  *   The page that the variation pertains to.
  */
 function personalize_elements_get_option_set_for_variation($title, $agent_name, $selector, $variation_type, $page) {
-  $option_sets = personalize_option_set_load_multiple(array(), array('plugin' => 'elements', 'agent' => $agent_name));
+  $option_sets = personalize_option_set_load_multiple(FALSE, array('plugin' => 'elements', 'agent' => $agent_name));
   foreach ($option_sets as $option_set) {
     if ($option_set->data['personalize_elements_selector'] == $selector && $option_set->data['personalize_elements_type'] == $variation_type) {
       // We only use this option set if the pages property has not been set or

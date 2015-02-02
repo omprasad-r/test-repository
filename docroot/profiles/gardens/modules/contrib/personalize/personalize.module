@@ -279,20 +279,26 @@ function personalize_entity_info() {
     'personalize_option_set' => array(
       'label' => t('Personalize Option Set'),
       'base table' => 'personalize_option_sets',
+      'controller class' => 'PersonalizeOptionSetController',
       'entity keys' => array(
         'id' => 'osid',
-        'uuid' => 'uuid',
       ),
-      'uuid' => TRUE,
     ),
     'personalize_campaign_goal' => array(
       'label' => t('Personalize Goals'),
       'base table' => 'personalize_campaign_goals',
+      'controller class' => 'PersonalizeCampaignGoalController',
       'entity keys' => array(
         'id' => 'id',
-        'uuid' => 'uuid',
       ),
-      'uuid' => TRUE,
+    ),
+    'personalize_agent' => array(
+      'label' => t('Personalize Agent'),
+      'base table' => 'personalize_agent',
+      'controller class' => 'PersonalizeAgentController',
+      'entity keys' => array(
+        'id' => 'machine_name',
+      ),
     ),
   );
 }
@@ -914,7 +920,7 @@ function personalize_element_with_option_set(&$element, $option_set, $skip_compl
     return;
   }
 
-  if (isset($option_set->mvt) && !in_array($option_set->mvt, $loaded_mvts) && $mvt = personalize_mvt_load($option_set->mvt)) {
+  if (!empty($option_set->mvt) && !in_array($option_set->mvt, $loaded_mvts) && $mvt = personalize_mvt_load($option_set->mvt)) {
     $loaded_mvts[] = $option_set->mvt;
     if (count($mvt->option_sets) > 1) {
       // Always use the agent specified in the MVT rather than the Option
@@ -1506,7 +1512,7 @@ function personalize_get_option_label_for_decision_and_choice($decision_name, $o
  *   The option set object or NULL if none can be found.
  */
 function personalize_get_option_set_for_decision($decision_name) {
-  $option_sets = personalize_option_set_load_multiple(array(), array('decision_name' => $decision_name));
+  $option_sets = personalize_option_set_load_multiple(FALSE, array('decision_name' => $decision_name));
   if (!empty($option_sets)) {
     return reset($option_sets);
   }
@@ -1978,20 +1984,8 @@ function personalize_agent_save($agent) {
     $agent_array['data'] += $prior_agent_array['data'];
     $agent = (object) $agent_array;
   }
-  module_invoke_all('personalize_agent_presave', $agent);
-  // Default to caching decisions if not specified.
-  if (!isset($agent->data['cache_decisions'])) {
-    $agent->data['cache_decisions'] = 1;
-  }
-  db_merge('personalize_agent')
-    ->key(array('machine_name' => $agent->machine_name))
-    ->fields(array(
-      'plugin' => $agent->plugin,
-      'label' => $agent->label,
-      'data' => serialize($agent->data),
-      'started' => isset($agent->started) ? $agent->started : 0,
-    ))
-    ->execute();
+
+  entity_save('personalize_agent', $agent);
 
   // Make sure the static cache for this agent is reset.
   personalize_agent_load($agent->machine_name, TRUE);
@@ -2065,7 +2059,7 @@ function personalize_option_set_save($option_set, $enforce_decision_match = TRUE
   if (!$agent_instance = personalize_agent_load_agent($option_set->agent)) {
     throw new PersonalizeException('Invalid agent for option set.');
   }
-  if (isset($option_set->mvt) && !$agent_instance->supportsMVTs()) {
+  if (!empty($option_set->mvt) && !$agent_instance->supportsMVTs()) {
     throw new PersonalizeException('This agent does not support MVTs.');
   }
   if (isset($option_set->osid)) {
@@ -2142,7 +2136,6 @@ function personalize_option_set_save($option_set, $enforce_decision_match = TRUE
   // Allow modules to alter an option set before it is saved.
   module_invoke_all('personalize_option_set_presave', $option_set);
 
-  $option_set->mvt = isset($option_set->mvt) ? $option_set->mvt : NULL;
   if (isset($option_set->decision_name)) {
     // Check that the number of options matches other option sets using this
     // decision name.
@@ -2155,35 +2148,15 @@ function personalize_option_set_save($option_set, $enforce_decision_match = TRUE
     $option_set->decision_name = '';
   }
 
-  $fields = array(
-    'plugin' => $option_set->plugin,
-    'agent' => $option_set->agent,
-    'label' => isset($option_set->label) ? $option_set->label : 'Untitled Option Set',
-    'mvt' => $option_set->mvt,
-    'decision_name' => $option_set->decision_name,
-    'stateful' => isset($option_set->stateful) ? $option_set->stateful : 0,
-    'executor' => isset($option_set->executor) ? $option_set->executor : 'show',
-    'options' => serialize($option_set->options),
-    'winner' => isset($option_set->winner) ? $option_set->winner : NULL,
-    'data' => serialize($option_set->data),
-    'preview_link' => isset($option_set->preview_link) ? $option_set->preview_link : NULL,
-  );
+  // The "is_new" property will get lost during entity_save so hang on to it and
+  // re-attach it afterwards.
+  $is_new = isset($option_set->is_new);
 
-  if (isset($option_set->osid)) {
-    db_update('personalize_option_sets')
-      ->condition('osid', $option_set->osid)
-      ->fields($fields)
-      ->execute();
-    module_invoke_all('entity_update', $option_set, 'personalize_option_set');
-  }
-  else {
-    // We don't use db_merge because it doesn't return the new ID if it's
-    // a new record.
-    $osid = db_insert('personalize_option_sets')
-      ->fields($fields)
-      ->execute();
-    $option_set->osid = $osid;
-    module_invoke_all('entity_insert', $option_set, 'personalize_option_set');
+  // Save entity.
+  entity_save('personalize_option_set', $option_set);
+
+  if ($is_new) {
+    $option_set->is_new = TRUE;
   }
   // Make sure both decision_point and decision_name are set.
   $option_set->decision_name = personalize_get_decision_name_for_option_set($option_set);
@@ -2207,7 +2180,7 @@ function personalize_option_set_save($option_set, $enforce_decision_match = TRUE
  * Load a single Option Set based on Option Set ID
  */
 function personalize_option_set_load($osid = NULL, $reset = FALSE){
-  $osids = (isset ($osid) ? array($osid) : array());
+  $osids = (isset ($osid) ? array($osid) : FALSE);
   $option_sets = personalize_option_set_load_multiple($osids, array(), $reset);
   return $option_sets ? reset ($option_sets) : FALSE;
 }
@@ -2224,7 +2197,7 @@ function personalize_option_set_load($osid = NULL, $reset = FALSE){
  * @return array
  *   An array of Option Set objects.
  */
-function personalize_option_set_load_multiple($osids = array(), $conditions = array(), $reset = FALSE){
+function personalize_option_set_load_multiple($osids = FALSE, $conditions = array(), $reset = FALSE){
   return entity_load('personalize_option_set', $osids, $conditions, $reset);
 }
 
@@ -2233,8 +2206,6 @@ function personalize_option_set_load_multiple($osids = array(), $conditions = ar
  */
 function personalize_personalize_option_set_load($option_sets) {
   foreach ($option_sets as $option_set) {
-    $option_set->options = unserialize($option_set->options);
-    $option_set->data = unserialize($option_set->data);
     $option_set->decision_name = personalize_get_decision_name_for_option_set($option_set);
     $option_set->decision_point = personalize_get_decision_point_name_for_option_set($option_set);
   }
@@ -2247,7 +2218,7 @@ function personalize_option_set_load_by_type($type, $sort = NULL) {
   $option_sets = &drupal_static(__FUNCTION__, array());
 
   if (!isset($option_sets[$type])) {
-    $option_sets[$type] = personalize_option_set_load_multiple(array(), array('plugin' => $type), FALSE, $sort);
+    $option_sets[$type] = personalize_option_set_load_multiple(FALSE, array('plugin' => $type), FALSE, $sort);
   }
 
   return $option_sets[$type];
@@ -2260,7 +2231,7 @@ function personalize_option_set_load_by_agent($agent_name, $reset = FALSE) {
   $option_sets = &drupal_static(__FUNCTION__, array());
 
   if ($reset || !isset($option_sets[$agent_name])) {
-    $option_sets[$agent_name] = personalize_option_set_load_multiple(array(), array('agent' => $agent_name), $reset);
+    $option_sets[$agent_name] = personalize_option_set_load_multiple(FALSE, array('agent' => $agent_name), $reset);
   }
 
   return $option_sets[$agent_name];
@@ -2318,9 +2289,7 @@ function personalize_option_set_ajax($decision_name, $choice_name) {
  */
 function personalize_option_set_delete($osid) {
   if ($option_set = personalize_option_set_load($osid)) {
-    db_delete('personalize_option_sets')
-      ->condition('osid', $osid)
-      ->execute();
+    entity_delete('personalize_option_set', $osid);
 
     // Clear the option set cache.
     personalize_option_set_load(NULL, TRUE);
@@ -2426,7 +2395,7 @@ function personalize_mvt_save($mvt) {
     ->execute();
   // Find all option sets that were previously set to this MVT. Passing TRUE
   // as the 3rd param ensures they are loaded fresh from the DB.
-  $option_sets = personalize_option_set_load_multiple(array(), array('mvt' => $mvt->machine_name), TRUE);
+  $option_sets = personalize_option_set_load_multiple(FALSE, array('mvt' => $mvt->machine_name), TRUE);
 
   // See if there are option sets we need to remove.
   foreach ($option_sets as $osid => $os) {
@@ -2495,7 +2464,7 @@ function personalize_mvt_load($name) {
       ->execute();
     if ($record = $result->fetchObject()) {
       // Get the Option Sets for this test.
-      $option_sets = personalize_option_set_load_multiple(array(), array('mvt' => $name));
+      $option_sets = personalize_option_set_load_multiple(FALSE, array('mvt' => $name));
       $record->option_sets = $option_sets;
       $loaded[$name] = $record;
     }
@@ -2519,7 +2488,7 @@ function personalize_mvt_load_all() {
       ->execute();
     foreach ($result as $record) {
       // Get the Option Sets for this test.
-      $option_sets = personalize_option_set_load_multiple(array(), array('mvt' => $record->machine_name));
+      $option_sets = personalize_option_set_load_multiple(FALSE, array('mvt' => $record->machine_name));
       $record->option_sets = $option_sets;
       $loaded[$record->machine_name] = $record;
     }
@@ -2545,7 +2514,7 @@ function personalize_mvt_load_all_by_agent($agent_name) {
       ->execute();
     foreach ($result as $record) {
       // Get the Option Sets for this test.
-      $option_sets = personalize_option_set_load_multiple(array(), array('mvt' => $record->machine_name));
+      $option_sets = personalize_option_set_load_multiple(FALSE, array('mvt' => $record->machine_name));
       $record->option_sets = $option_sets;
       $loaded[$record->machine_name] = $record;
     }
@@ -2792,7 +2761,7 @@ function personalize_process_goals(&$page) {
  * Load a single goal by ID
  */
 function personalize_goal_load($goal_id = NULL, $reset = FALSE){
-  $ids = (isset ($goal_id) ? array($goal_id) : array());
+  $ids = (isset ($goal_id) ? array($goal_id) : FALSE);
   $goals = personalize_goal_load_multiple($ids, array(), $reset);
   return $goals ? reset ($goals) : FALSE;
 }
@@ -2825,7 +2794,7 @@ function personalize_goal_load_multiple($ids = FALSE, $conditions = array(), $re
  *   An array of Goal objects.
  */
 function personalize_goal_load_by_conditions($conditions = array(), $reset = FALSE) {
-  return personalize_goal_load_multiple(array(), $conditions, $reset);
+  return personalize_goal_load_multiple(FALSE, $conditions, $reset);
 }
 
 /**
@@ -2889,10 +2858,8 @@ function personalize_goal_delete($goal_id, $rebuild_subscribers = TRUE) {
     ->execute()
     ->fetchAssoc();
 
-  // Delete the goal.
-  db_delete('personalize_campaign_goals')
-    ->condition('id', $goal_id)
-    ->execute();
+  // Delete entity.
+  entity_delete('personalize_campaign_goal', $goal_id);
 
   $action = visitor_actions_custom_load($goal['action']);
   if ($action) {
@@ -2915,7 +2882,7 @@ function personalize_goal_delete($goal_id, $rebuild_subscribers = TRUE) {
   }
   $goal_array = array(
     'agent' => $goal['agent'],
-    'name' => $goal['action'],
+    'action' => $goal['action'],
     'value' => $goal['value']
   );
   // Clear the agent's goals cache.
@@ -2958,31 +2925,23 @@ function personalize_goal_save($agent_name, $action_name, $goal_value) {
   if (!($agent instanceof PersonalizeAgentGoalInterface)) {
     throw new PersonalizeException(t('Goals are not supported by this campaign.'));
   }
-  // If this is the first campaign that uses this action as a goal, the
-  // action subscribers cache will need to be rebuilt.
-  $exists = db_select('personalize_campaign_goals', 'g')
-    ->fields('g', array('id'))
-    ->condition('action', $action_name)
-    ->execute()
-    ->fetchField();
-  db_merge('personalize_campaign_goals')
-    ->key(array('agent' => $agent_name, 'action' => $action_name))
-    ->fields(array('agent' => $agent_name, 'action' => $action_name, 'value' => $goal_value))
-    ->execute();
+
+  // Checks whether an action is being used before saving or updating.
+  $action_used = _personalize_is_action_used($action_name);
 
   $goal_array = array(
     'agent' => $agent_name,
-    'name' => $action_name,
+    'action' => $action_name,
     'value' => $goal_value
   );
   $goal_entity = (object) $goal_array;
-  if (!$exists) {
+
+  entity_save('personalize_campaign_goal', $goal_entity);
+
+  // If action wasn't used before this, the action subscribers cache will
+  // need to be rebuilt.
+  if (!$action_used) {
     visitor_actions_clear_subscribers($action_name);
-    module_invoke_all('entity_insert', $goal_entity, 'personalize_campaign_goal');
-  }
-  else {
-    $goal_entity->id = $exists;
-    module_invoke_all('entity_update', $goal_entity, 'personalize_campaign_goal');
   }
 
   module_invoke_all('personalize_goal_save', $goal_array);
@@ -3142,4 +3101,20 @@ function personalize_is_option_set_allowed($mp, $md, $new_p, $new_d) {
     // decision, like the Simple A/B test campaign in Acquia Lift.
     return ($md && !$new_p) || (!$mp && !$md && !$new_p && !$new_d);
   }
+}
+
+/**
+ * Returns whether a given action is being used by any campaign.
+ *
+ * @param $action_name
+ *   The name of the action.
+ *
+ * @return TRUE if action is being used, FALSE otherwise.
+ */
+function _personalize_is_action_used($action_name) {
+  $query = new EntityFieldQuery();
+  $query->entityCondition('entity_type', 'personalize_campaign_goal')
+    ->propertyCondition('action', $action_name);
+
+  return $query->count()->execute() > 0;
 }

@@ -17,18 +17,21 @@ function barebones_html_head_alter(&$head_elements) {
   if (($default_favicon_path = theme_get_setting('default_favicon_path')) && theme_get_setting('default_favicon')) {
     $favicon_url = file_create_url(path_to_theme() . '/' . $default_favicon_path);
   }
-  else {
-    if (module_exists('gardens_misc')) {
-      $favicon_url = file_create_url(drupal_get_path('module', 'gardens_misc') . '/images/gardens.ico');
-    }
+  // Display the flower favicon for SMB sites only.
+  elseif (module_exists('gardens_misc') && gardens_misc_is_smb()) {
+    $favicon_url = file_create_url(drupal_get_path('module', 'gardens_misc') . '/images/gardens.ico');
   }
-  if (!empty($favicon_url)) {
-    $favicon_mimetype = file_get_mimetype($favicon_url);
-    foreach ($head_elements as &$element) {
-      if (isset($element['#attributes']['rel']) && $element['#attributes']['rel'] == 'shortcut icon') {
-      	$element['#attributes']['href'] = $favicon_url;
-      	$element['#attributes']['type'] = $favicon_mimetype;
+  foreach ($head_elements as $key => &$element) {
+    if (isset($element['#attributes']['rel']) && $element['#attributes']['rel'] == 'shortcut icon') {
+      if (!empty($favicon_url)) {
+        $favicon_mimetype = file_get_mimetype($favicon_url);
+        $element['#attributes']['href'] = $favicon_url;
+        $element['#attributes']['type'] = $favicon_mimetype;
       }
+      else {
+        unset($head_elements[$key]);
+      }
+      break;
     }
   }
 }

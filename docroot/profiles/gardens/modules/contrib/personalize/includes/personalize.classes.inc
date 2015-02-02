@@ -465,7 +465,7 @@ interface PersonalizeContextInterface {
    * @return PersonalizeContextInterface
    *   An object implementing PersonalizeContextInterface.
    */
-  public static function create(PersonalizeAgentInterface $agent, $selected_context);
+  public static function create(PersonalizeAgentInterface $agent = NULL, $selected_context = array());
 
   /**
    * Returns the list of options that can be selected from.
@@ -536,7 +536,7 @@ abstract class PersonalizeContextBase implements PersonalizeContextInterface, Pe
   /**
    * Constructs a PersonalizeContextBase object.
    */
-  public function __construct(PersonalizeAgentInterface $agent, $selected_context) {
+  public function __construct(PersonalizeAgentInterface $agent = NULL, $selected_context = array()) {
     $this->agent = $agent;
     $this->selectedContext = $selected_context;
   }
