@@ -1,6 +1,6 @@
 name = Broadway
 description = A comfortable, dark theme with a clean layout and sophisticated typography.
-version = 1.31
+version = 1.32
 core = 7.x
 engine = phptemplate
 base_theme = broadway

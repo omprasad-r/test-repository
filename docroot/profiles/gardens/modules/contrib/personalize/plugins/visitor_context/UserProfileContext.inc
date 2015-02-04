@@ -17,7 +17,7 @@ class UserProfileContext extends PersonalizeContextBase {
   /**
    * Implements PersonalizeContextInterface::create().
    */
-  public static function create(PersonalizeAgentInterface $agent, $selected_context) {
+  public static function create(PersonalizeAgentInterface $agent = NULL, $selected_context = array()) {
     global $user;
     $account = $user->uid ? user_load($user->uid) : NULL;
     return new self($agent, $selected_context, $account);
@@ -26,7 +26,7 @@ class UserProfileContext extends PersonalizeContextBase {
   /**
    * Override the parent constructor to add the user account.
    */
-  public function __construct(PersonalizeAgentInterface $agent, $selected_context, $account) {
+  public function __construct(PersonalizeAgentInterface $agent = NULL, $selected_context, $account) {
     parent::__construct($agent, $selected_context);
     $this->account = $account;
   }
@@ -81,6 +81,7 @@ class UserProfileContext extends PersonalizeContextBase {
         $user_profile_settings[$name] = $value;
       }
     }
+
     return array(
       'js' => array(
         array(
@@ -89,6 +90,11 @@ class UserProfileContext extends PersonalizeContextBase {
             'personalize_user_profile_context' => $user_profile_settings
           )
         ),
+      ),
+      // @todo Once the js for the user profile context has been split off into its
+      //   own file where it belongs, we'll only need to load that here.
+      'library' => array(
+        array('personalize', 'personalize')
       )
     );
   }

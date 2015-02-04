@@ -129,7 +129,7 @@ class PersonalizeBlocksTest extends PersonalizeBaseTest {
 
     // Load the option set for this personalized block and verify that the two
     // new blocks are in it.
-    $option_sets = personalize_option_set_load_multiple(array(), array('label' => $pblock_label), TRUE);
+    $option_sets = personalize_option_set_load_multiple(FALSE, array('label' => $pblock_label), TRUE);
     $option_set = array_shift($option_sets);
     $this->assertEqual($option_set->options[0]['bid'], 'block_delta_' . $block2['bid']);
     $this->assertEqual($option_set->options[1]['bid'], 'block_delta_' . $block['bid']);
@@ -344,7 +344,7 @@ class PersonalizeBlocksTest extends PersonalizeBaseTest {
     }
     $this->drupalPost($path, $edit, t('Save'));
 
-    $pblocks = personalize_option_set_load_multiple(array(), array('label' => $edit['title']), TRUE);
+    $pblocks = personalize_option_set_load_multiple(FALSE, array('label' => $edit['title']), TRUE);
 
     $pblock = reset($pblocks);
 

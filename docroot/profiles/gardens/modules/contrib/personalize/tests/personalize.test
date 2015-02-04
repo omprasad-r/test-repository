@@ -2685,7 +2685,7 @@ class PersonalizeMVTAdminTest extends PersonalizeBaseTest {
         $this->assertEqual('test-mvt', $option_set->mvt);
       }
       else {
-        $this->assertNull($option_set->mvt);
+        $this->assertTrue(empty($option_set->mvt));
       }
     }
 
@@ -2696,7 +2696,7 @@ class PersonalizeMVTAdminTest extends PersonalizeBaseTest {
     drupal_static_reset();
     for ($i = 0; $i < 4; $i++) {
       $option_set = personalize_option_set_load($osids[$i]);
-      $this->assertNull($option_set->mvt);
+      $this->assertTrue(empty($option_set->mvt));
     }
   }
 }

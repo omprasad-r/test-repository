@@ -1,6 +1,6 @@
 name = 'Minima'
 description = 'Minimal and clean- excellent as-is, or as the starting point for your own creation.'
-version = '1.33'
+version = '1.34'
 core = '7.x'
 engine = 'phptemplate'
 base_theme = 'builderbase'

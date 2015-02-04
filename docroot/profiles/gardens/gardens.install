@@ -45,8 +45,8 @@ function gardens_install() {
     user_role_revoke_permissions($rid, scarecrow_forbidden_permissions());
   }
 
-  // Run poor man's cron every 1 hour.
-  variable_set('cron_safe_threshold', 3600);
+  // Run poormanscron every 24 hours.
+  variable_set('cron_safe_threshold', 86400);
 
   // Add taxonomy terms to every content type that may have been created during
   // the installer, except for articles (where the standard install profile

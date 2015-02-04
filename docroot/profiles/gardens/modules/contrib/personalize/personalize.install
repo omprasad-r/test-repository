@@ -143,12 +143,6 @@ function personalize_schema() {
         'not null' => FALSE,
         'description' => 'The path to a local preview page for the option set.',
       ),
-      'uuid' => array(
-        'type' => 'char',
-        'length' => 36,
-        'default' => '',
-        'description' => 'The Universally Unique Identifier.',
-      ),
     ),
     'primary key' => array('osid'),
     'foreign keys' => array(
@@ -230,12 +224,6 @@ function personalize_schema() {
         'type' => 'int',
         'not null' => TRUE,
         'default' => 0,
-      ),
-      'uuid' => array(
-        'type' => 'char',
-        'length' => 36,
-        'default' => '',
-        'description' => 'The Universally Unique Identifier.',
       ),
     ),
     'primary key' => array('id'),

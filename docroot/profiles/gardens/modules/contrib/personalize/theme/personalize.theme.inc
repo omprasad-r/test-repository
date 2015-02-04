@@ -31,7 +31,7 @@ function theme_personalize_options_wrapper($variables) {
 
   $option_set = $variables['element']['#personalize_option_set'];
   if (personalize_agent_get_status($option_set->agent) === PERSONALIZE_STATUS_COMPLETED) {
-    if (isset($option_set->winner)) {
+    if (!empty($option_set->winner)) {
       return drupal_render($variables['element']['#personalize_options'][$option_set->winner]);
     }
     elseif (isset($variables['element']['#first_option'])) {

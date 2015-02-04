@@ -63,8 +63,10 @@ abstract class AcsfMessage {
    *   (Optional) The Acquia Hosting environment.
    * @param Closure $callback
    *   (Optional) An anonymous callback function.
+   *
+   * @throws AcsfMessageMissingCredsException
    */
-  public function __construct($method, $endpoint, array $parameters = NULL, AcsfConfig $config = NULL, $ah_site = NULL, $ah_env = NULL, Closure $callback = NULL) {
+  public function __construct($method, $endpoint, array $parameters = array(), AcsfConfig $config = NULL, $ah_site = NULL, $ah_env = NULL, Closure $callback = NULL) {
 
     // Use our default config if not specified.
     if (empty($config)) {
