@@ -5,8 +5,11 @@
  * Basic COPPA compliance for user registration
  */
 
+define('COPPA_LITE_COOKIE_PER_EMAIL', 0);
+define('COPPA_LITE_COOKIE_PER_BROWSER', 1);
+
 /**
- * Implements hook_menu()
+ * Implements hook_menu().
  */
 function coppa_lite_menu() {
   $items = array();
@@ -22,14 +25,14 @@ function coppa_lite_menu() {
 }
 
 /**
- * Get all required date fields for an entity
+ * Get all required date fields for an entity.
  */
 function coppa_lite_get_required_date_fields() {
-  // Get all the fields belonging to the user entity
+  // Get all the fields belonging to the user entity.
   $fields = field_info_instances('user', 'user');
   $result = array();
 
-  // Initialize the array of all our date fields
+  // Initialize the array of all our date fields.
   foreach ($fields as $field) {
     if ($field['widget']['module'] == 'date' && $field['required']) {
       $result[$field['field_name']] = $field['label'];
@@ -45,7 +48,7 @@ function coppa_lite_get_required_date_fields() {
 }
 
 /**
- * The COPPA Lite administration form
+ * The COPPA Lite administration form.
  */
 function coppa_lite_admin_form() {
   $options = array();
@@ -59,49 +62,129 @@ function coppa_lite_admin_form() {
     }
   }
 
-  // If our field does not exist add create new field option
+  // If our field does not exist add create new field option.
   if (!isset($options['field_coppa_lite_dob'])) {
     $options['coppa_lite_create'] = t('Create new field');
   }
 
-  // Create the radio buttons
-  $form['fields'] = array(
+  // Create the radio buttons.
+  $form['coppa_lite_field'] = array(
     '#type' => 'radios',
-    '#title' => t('Fields'),
+    '#title' => t('COPPA date field'),
     '#options' => $options,
     '#required' => TRUE,
     '#default_value' => variable_get('coppa_lite_field', ''),
     '#description' => t('Select the field you wish to use as your COPPA date of birth. Only fields marked as <strong>Required</strong> will show on this list.'),
   );
 
-  // Form Submit
+  $options = array(
+    COPPA_LITE_COOKIE_PER_EMAIL => t('Deny email address'),
+    COPPA_LITE_COOKIE_PER_BROWSER => t('Deny all registration'),
+  );
+  $form['coppa_lite_cookie'] = array(
+    '#type' => 'radios',
+    '#title' => t('Denial of registration method'),
+    '#default_value' => variable_get('coppa_lite_cookie', COPPA_LITE_COOKIE_PER_EMAIL),
+    '#options' => $options,
+    '#description' => t('How a user is denied registration once they have failed COPPA validation. "Deny email address" will set a cookie on the browser preventing the same email address from attempting to register again. "Deny all registration" sets a cookie that prevents any subsequent registration attempts regardless of what information is entered.'),
+    '#required' => TRUE,
+  );
+
+  $form['coppa_lite_min_age'] = array(
+    '#type' => 'textfield',
+    '#title' => t('Minimum age (Years)'),
+    '#default_value' => variable_get('coppa_lite_min_age', 13),
+    '#description' => t('Minimum age the user must be to register.'),
+    '#required' => TRUE,
+  );
+
+  $form['coppa_lite_cookie_expire'] = array(
+    '#type' => 'textfield',
+    '#title' => t('Cookie expiration (days)'),
+    '#default_value' => variable_get('coppa_lite_cookie_expire', 1),
+    '#description' => t('Number of days before the COPPA cookie expires.'),
+    '#required' => TRUE,
+  );
+
+  $form['coppa_lite_denial_message'] = array(
+    '#type' => 'textfield',
+    '#title' => t('Registration denial message'),
+    '#default_value' => variable_get('coppa_lite_denial_message', t('We are unable to register you at this time.')),
+    '#description' => t('Message displayed when the user is denied registration.'),
+    '#required' => TRUE,
+  );
+
+  // Form Submit.
   $form['submit'] = array('#type' => 'submit', '#value' => t('Submit'));
 
   return $form;
 }
 
 /**
- * Submit handler for the coppa_lite_admin_form
+ * Validation handler for the coppa_lite_admin_form.
  */
-function coppa_lite_admin_form_submit($form, &$form_state) {
-  if ($form_state['values']['fields'] != variable_get('coppa_lite_field')) {
-    $url = 'admin/config/people/accounts/fields';
-    drupal_set_message(t('You have changed the field you wish to use for checking COPPA compliance. Please ensure you do not have any unnecessary fields in your user profile by visiting the !link page', array('!link' => l('manage fields', $url))));
+function coppa_lite_admin_form_validate($form, &$form_state) {
+  // Validate choice of date field.
+  if (empty($form_state['values']['coppa_lite_cookie_expire'])) {
+    form_set_error('coppa_lite_field', t('A date field must be chosen.'));
   }
-
-  // Check if the user is creating a new field or assigning an existing field
-  if ($form_state['values']['fields'] == 'coppa_lite_create')  {
-    coppa_lite_create_field();
-    drupal_set_message("The COPPA date of birth field has been created and assigned for use.");
+  // Validate cookie expiry.
+  if (!empty($form_state['values']['coppa_lite_cookie_expire'])) {
+    $val = $form_state['values']['coppa_lite_cookie_expire'];
+    if (!is_numeric($val) || $val < 0 || $val != round($val)) {
+      form_set_error('coppa_lite_cookie_expire', t('Expiry time must be a positive integer'));
+    }
   }
-  elseif ($form_state['values']['fields']) {
-    variable_set('coppa_lite_field', $form_state['values']['fields']);
-    drupal_set_message("Saved");
+  else {
+    form_set_error('coppa_lite_cookie_expire', t('Expiry time cannot be empty'));
+  }
+  // Validate minimum age.
+  if (!empty($form_state['values']['coppa_lite_min_age'])) {
+    $val = $form_state['values']['coppa_lite_min_age'];
+    if (!is_numeric($val) || $val < 0 || $val != round($val)) {
+      form_set_error('coppa_lite_min_age', t('Minimum age must be a positive integer'));
+    }
+  }
+  else {
+    form_set_error('coppa_lite_min_age', t('Minimum age cannot be empty'));
   }
 }
 
 /**
- * Programatically create a field (field_coppa_lite_dob) on the User entity
+ * Submit handler for the coppa_lite_admin_form.
+ */
+function coppa_lite_admin_form_submit($form, &$form_state) {
+  if ($form_state['values']['coppa_lite_field'] != variable_get('coppa_lite_field')) {
+    $url = 'admin/config/people/accounts/fields';
+    drupal_set_message(t('You have changed the field you wish to use for checking COPPA compliance. Please ensure you do not have any unnecessary fields in your user profile by visiting the !link page', array('!link' => l(t('manage fields'), $url))));
+  }
+
+  // Check if the user is creating a new field or assigning an existing field.
+  if ($form_state['values']['coppa_lite_field'] == 'coppa_lite_create') {
+    coppa_lite_create_field();
+    drupal_set_message("The COPPA date of birth field has been created and assigned for use.");
+  }
+  elseif ($form_state['values']['coppa_lite_field']) {
+    variable_set('coppa_lite_field', $form_state['values']['coppa_lite_field']);
+  }
+
+  // Set the variable for the cookie dinial method.
+  variable_set('coppa_lite_cookie', $form_state['values']['coppa_lite_cookie']);
+
+  // Set the variable for the cookie expiration.
+  variable_set('coppa_lite_cookie_expire', $form_state['values']['coppa_lite_cookie_expire']);
+
+  // Set the variable for the minimum age.
+  variable_set('coppa_lite_min_age', $form_state['values']['coppa_lite_min_age']);
+
+  // Set the variable for denial message.
+  variable_set('coppa_lite_denial_message', $form_state['values']['coppa_lite_denial_message']);
+
+  drupal_set_message(t("Settings have been saved"));
+}
+
+/**
+ * Programatically create a field (field_coppa_lite_dob) on the User entity.
  */
 function coppa_lite_create_field() {
   // Check if our field is not already created.
@@ -121,13 +204,14 @@ function coppa_lite_create_field() {
     $instance = array(
       'field_name' => 'field_coppa_lite_dob',
       'entity_type' => 'user',
-      'label' => 'Date of birth',
+      'label' => 'Date of Birth',
       'bundle' => 'user',
       'required' => TRUE,
       'settings' => array(
-          'user_register_form' => 1,
-          'default_value' => 'blank', // No initial value
-          'default_value_code' => '',
+        'user_register_form' => 1,
+        // No initial value.
+        'default_value' => 'blank',
+        'default_value_code' => '',
       ),
       'widget' => array(
         'type' => 'date_select',
@@ -144,50 +228,62 @@ function coppa_lite_create_field() {
 }
 
 /**
- * Custom validation function for user registration
+ * Custom validation function for user registration.
  */
 function coppa_lite_user_validate($form, &$form_state) {
-  // Get the machine name of the DOB field we want to check
+  // Get the machine name of the DOB field we want to check.
   $field = variable_get('coppa_lite_field');
 
-  // make sure we all necessary feilds are available
-  if(!isset($field) || !isset($form_state['values']['mail'])
-  || !isset($form_state['values'][$field]['und'][0]['value'])) {
+  // Make sure we all necessary feilds are available.
+  if (empty($field) || empty($form_state['values']['mail'])
+    || empty($form_state['values'][$field][LANGUAGE_NONE][0]['value'])) {
     return;
   }
 
-  // populate necessary variables
-  $cookie_index = md5("coppa_lite_" . trim($form_state['values']['mail']));
-  $warning_message = t('We are unable to register you at this time.');
+  // Instantiate needed variables.
+  $deny_method = variable_get('coppa_lite_cookie', COPPA_LITE_COOKIE_PER_EMAIL);
+  $warning_message = variable_get('coppa_lite_denial_message', t('We are unable to register you at this time.'));
 
-  // check to see if there was a cookie set for this email address
-  if(isset($_COOKIE[$cookie_index])) {
+  // Populate the cookie index based on denial type.
+  switch ($deny_method) {
+    case COPPA_LITE_COOKIE_PER_EMAIL:
+      $cookie_index = md5("coppa_lite_" . trim($form_state['values']['mail']));
+      break;
+
+    case COPPA_LITE_COOKIE_PER_BROWSER:
+      $cookie_index = md5("coppa_lite");
+      break;
+  }
+
+  // Check to see if there was a cookie set for this email address.
+  if (isset($_COOKIE[$cookie_index])) {
     form_set_error('', $warning_message);
     // don't need to create another one, so bounce out.
     return;
   }
 
-  // Get the time difference in years between now and the entered date
-  $dob_field = $form_state['values'][$field]['und'][0]['value'];
+  // Get the time difference in years between now and the entered date.
+  $dob_field = $form_state['values'][$field][LANGUAGE_NONE][0]['value'];
   $diff = coppa_lite_calculate_age_in_years($dob_field);
 
-  // Check the age entered and set a cookie if under the minimum age
+  // Check the age entered and set a cookie if under the minimum age.
   if ($diff <= variable_get('coppa_lite_min_age', 13) - 1) {
-    $expire = time() + (60 * 60 * 24 * variable_get('coppa_lite_cookie_expire', 1)); // Cookie age
+    // Set Cookie age.
+    $expire = time() + (60 * 60 * 24 * variable_get('coppa_lite_cookie_expire', 1));
     setcookie($cookie_index, date("G:i - m/d/y"), $expire);
     form_set_error('', $warning_message);
   }
 }
 
 /**
- * Calculates the difference measured in years between the specified date and
- * right now.
+ * Calculates the difference in years between the specified date and now.
  *
  * This is effectively floor($now - $date_str); it returns the number of
  * complete years between the specified date and now.
  *
  * @param {String} $date_str
  *   The string form of the date.  Example: "1999-01-31"
+ *
  * @return {int}
  *   The number of complete years between the specified date and today.
  */
@@ -199,7 +295,7 @@ function coppa_lite_calculate_age_in_years($date_str) {
   $delta = array(
     'days' => ($now['mday'] - $dob['day']),
     'months' => ($now['mon'] - $dob['month']),
-    'years' => ($now['year'] - $dob['year'])
+    'years' => ($now['year'] - $dob['year']),
   );
   if ($delta['days'] < 0) {
     // Offset the month.
@@ -213,11 +309,11 @@ function coppa_lite_calculate_age_in_years($date_str) {
 }
 
 /**
- * Implements hook_form_alter()
+ * Implements hook_form_alter().
  */
 function coppa_lite_form_alter(&$form, &$form_state, $form_id) {
   // Set our custom validation handler for the registration form.
-  // Reverse the order of the years in the date form
+  // Reverse the order of the years in the date form.
   if ($form_id == 'user_register_form') {
     $form['#validate'][] = 'coppa_lite_user_validate';
     if ($field_name = variable_get('coppa_lite_field', '')) {
@@ -225,7 +321,7 @@ function coppa_lite_form_alter(&$form, &$form_state, $form_id) {
     }
   }
 
-  // Make the "Required" field un-editable if the field is set as the COPPA field
+  // Make "Required" field un-editable if the field is set as the COPPA field.
   if ($form_id == 'field_ui_field_edit_form') {
     $field_name = variable_get('coppa_lite_field', '');
     if ($form['#field']['field_name'] == $field_name) {
@@ -235,14 +331,14 @@ function coppa_lite_form_alter(&$form, &$form_state, $form_id) {
 }
 
 /**
- * Reverse the years in a date field
+ * Reverse the years in a date field.
  */
 function _coppa_lite_reverse_years($element, &$form_state) {
   $options = &$element[0]['value']['year']['#options'];
   $label = array();
   $slice_position = 0;
-  // Check if the first option is blank and pull it out of the array
-  if(!is_numeric(current($options))) {
+  // Check if the first option is blank and pull it out of the array.
+  if (!is_numeric(current($options))) {
     $label = array_slice($options, 0, 1, TRUE);
     $slice_position++;
   }
