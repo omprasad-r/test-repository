@@ -1,0 +1,13 @@
+diff --git a/coppa_lite.module b/coppa_lite/coppa_lite.module
+index ca4cef2..4895dbe 100644
+--- a/coppa_lite.module
++++ b/coppa_lite.module
+@@ -270,7 +270,7 @@ function coppa_lite_user_validate($form, &$form_state) {
+   if ($diff <= variable_get('coppa_lite_min_age', 13) - 1) {
+     // Set Cookie age.
+     $expire = time() + (60 * 60 * 24 * variable_get('coppa_lite_cookie_expire', 1));
+-    setcookie($cookie_index, date("G:i - m/d/y"), $expire);
++    setcookie($cookie_index, date("G:i - m/d/y"), $expire, '/');
+     form_set_error('', $warning_message);
+   }
+ }
