@@ -31,7 +31,7 @@ function coppa_lite_enable() {
   }
 
   $url = 'admin/config/people/coppa_lite';
-  drupal_set_message(t('The COPPA Lite module has been enabled please visit the !link page to make configuration changes.', array('!link' => l(t('settings'), $url))));
+  drupal_set_message(t('The COPPA Lite module has been enabled please visit the @link page to make configuration changes.', array('@link' => l(t('settings'), $url))));
 }
 
 /**

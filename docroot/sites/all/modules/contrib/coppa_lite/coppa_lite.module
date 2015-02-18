@@ -156,13 +156,13 @@ function coppa_lite_admin_form_validate($form, &$form_state) {
 function coppa_lite_admin_form_submit($form, &$form_state) {
   if ($form_state['values']['coppa_lite_field'] != variable_get('coppa_lite_field')) {
     $url = 'admin/config/people/accounts/fields';
-    drupal_set_message(t('You have changed the field you wish to use for checking COPPA compliance. Please ensure you do not have any unnecessary fields in your user profile by visiting the !link page', array('!link' => l(t('manage fields'), $url))));
+    drupal_set_message(t('You have changed the field you wish to use for checking COPPA compliance. Please ensure you do not have any unnecessary fields in your user profile by visiting the @link page', array('@link' => l(t('manage fields'), $url))));
   }
 
   // Check if the user is creating a new field or assigning an existing field.
   if ($form_state['values']['coppa_lite_field'] == 'coppa_lite_create') {
     coppa_lite_create_field();
-    drupal_set_message("The COPPA date of birth field has been created and assigned for use.");
+    drupal_set_message(t("The COPPA date of birth field has been created and assigned for use."));
   }
   elseif ($form_state['values']['coppa_lite_field']) {
     variable_set('coppa_lite_field', $form_state['values']['coppa_lite_field']);
@@ -257,7 +257,7 @@ function coppa_lite_user_validate($form, &$form_state) {
 
   // Check to see if there was a cookie set for this email address.
   if (isset($_COOKIE[$cookie_index])) {
-    form_set_error('', $warning_message);
+    form_set_error('', check_plain($warning_message));
     // don't need to create another one, so bounce out.
     return;
   }
@@ -271,7 +271,7 @@ function coppa_lite_user_validate($form, &$form_state) {
     // Set Cookie age.
     $expire = time() + (60 * 60 * 24 * variable_get('coppa_lite_cookie_expire', 1));
     setcookie($cookie_index, date("G:i - m/d/y"), $expire);
-    form_set_error('', $warning_message);
+    form_set_error('', check_plain($warning_message));
   }
 }
 
