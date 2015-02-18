@@ -1,0 +1,14 @@
+<?php
+
+/**
+ * @file
+ * Enahancement in Warner SF package.
+ */
+/**
+ * Implements hook_user_insert().
+ */
+function warner_utils_user_insert(&$edit, $account, $category) {
+  watchdog('Registered Users', 'Successful registration: %username/%email/%ipaddr',
+      array('%username' => $account->name, '%email' => $account->mail, 
+      '%ipaddr' => $account->hostname), WATCHDOG_INFO);
+}
