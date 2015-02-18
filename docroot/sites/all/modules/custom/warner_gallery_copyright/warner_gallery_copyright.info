@@ -1,0 +1,5 @@
+name = Warner Gallery Copyright field
+description = "Warner Copyright field for Gallery content type"
+core = 7.x
+package = Drupal Gardens 
+dependencies[] = media_gallery
