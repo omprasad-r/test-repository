@@ -175,7 +175,7 @@ if (file_exists('/var/www/site-php')) {
   }
 }
 
-// Include custom sites.php code from factory-hooks/pre-sites-php.
+// Include custom sites.php code from factory-hooks/post-sites-php.
 if (function_exists('acsf_hooks_include')) {
   acsf_hooks_include('post-settings-php');
 }

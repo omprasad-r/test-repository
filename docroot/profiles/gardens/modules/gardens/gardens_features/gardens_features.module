@@ -251,6 +251,8 @@ function gardens_features_init() {
     'gardensFeatures' => array(
       'userIsAnonymous' => $anonymous,
       'dialogUserEnabled' => $dialog_user,
+      'isSMB' => module_exists('gardens_misc') ? gardens_misc_is_smb() : FALSE,
+      'siteFactoryProductPage' => variable_get('gardens_features_acsf_product_page', 'https://www.acquia.com/products-services/acquia-cloud-site-factory'),
       )
     );
   drupal_add_js($settings, 'setting');

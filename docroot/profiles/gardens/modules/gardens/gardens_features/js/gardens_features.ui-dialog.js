@@ -148,6 +148,7 @@ Drupal.behaviors.gardensFeaturesUIDialog = {
  * Get service attribution
  */
 Drupal.behaviors.gardensFeaturesUIDialog.getServiceAttribution = function () {
+  var isSMB = Drupal.settings.gardensFeatures.isSMB;
   var $output = $('<li>').addClass('service');
   $output.append($('<span>', {
     text: Drupal.t('Site powered by')
@@ -156,8 +157,8 @@ Drupal.behaviors.gardensFeaturesUIDialog.getServiceAttribution = function () {
     html: '&nbsp;'
   }).addClass('spacer'));
   $output.append($('<a>', {
-    href: 'http://www.drupalgardens.com/',
-    text: Drupal.t('Drupal Gardens')
+    href: isSMB ? 'http://www.drupalgardens.com/' : Drupal.settings.gardensFeatures.siteFactoryProductPage,
+    text: isSMB ? Drupal.t('Drupal Gardens') : Drupal.t('Acquia Cloud Site Factory')
   }).addClass('service-uri'));
   return $output;
 }
