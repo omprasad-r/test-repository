@@ -20,39 +20,6 @@ function gardens_misc_schema() {
     'primary key' => array('mail'),
   );
 
-  $schema['image_dimensions'] = array(
-    'description' => 'Cache images dimensions.',
-    'fields' => array(
-      'fid' => array(
-        'description' => 'File ID.',
-        'type' => 'serial',
-        'unsigned' => TRUE,
-        'not null' => TRUE,
-      ),
-      'height' => array(
-        'description' => 'The height of the image in pixels.',
-        'type' => 'int',
-        'unsigned' => TRUE,
-        'not null' => TRUE,
-        'default' => 0,
-      ),
-      'width' => array(
-        'description' => 'The width of the image in pixels..',
-        'type' => 'int',
-        'unsigned' => TRUE,
-        'not null' => TRUE,
-        'default' => 0,
-      ),
-    ),
-    'primary key' => array('fid'),
-    'foreign keys' => array(
-      'file_managed' => array(
-        'table' => 'file_managed',
-        'columns' => array('fid' => 'fid'),
-      ),
-    ),
-  );
-
   return $schema;
 }
 
