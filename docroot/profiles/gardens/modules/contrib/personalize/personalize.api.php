@@ -200,6 +200,20 @@ function hook_personalize_form_ajax_submit($agent_data) {
 }
 
 /**
+ * Alter the AJAX commands returned upon submission of agent-related changes.
+ *
+ * This allows the addition of AJAX commands returned when any of the forms
+ * on the campaign edit page are submitted.
+ *
+ * @param array $commands
+ *   An array of AJAX commands to be returned that is passed by reference to be
+ *   modified.
+ */
+function hook_personalize_form_ajax_commands_alter(&$commands) {
+
+}
+
+/**
  * Returns links for the "create new personalized content" dropdown.
  *
  * This hook is typically implemented by modules that provide an

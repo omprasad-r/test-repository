@@ -4,7 +4,7 @@ Feature: Theme Builder DOM navigation
     Given a fresh gardens installation
     And I am logged in as our testuser
 
-  @selenium
+  @utest @selenium
   Scenario Outline: As user, I can see the navigation arrows when enabling power theming
     Given I am on "the homepage"
     And I open the theme builder
@@ -19,7 +19,7 @@ Feature: Theme Builder DOM navigation
       | about link  |
       | blog link   |
 
-  @selenium
+  @utest @selenium
   Scenario Outline: As user, I can use the theme builder element navigation
     Given I am on "the homepage"
     And I open the theme builder
@@ -37,7 +37,7 @@ Feature: Theme Builder DOM navigation
       | next sibling      | blog link       |
       | previous sibling  | about link      |
 
-  @selenium
+  @utest @selenium
   Scenario Outline: As user, I can see the DOM navigation refiner display
     Given I am on "the homepage"
     And I open the theme builder
@@ -51,7 +51,7 @@ Feature: Theme Builder DOM navigation
       | about link  |
       | blog link   |
 
-  @selenium
+  @utest @selenium
   Scenario Outline: As user, I can see the correct DOM navigation CSS selector
     Given I am on "the homepage"
     And I open the theme builder
@@ -67,7 +67,7 @@ Feature: Theme Builder DOM navigation
       | about link      |
       | blog link       |
 
-  @selenium
+  @utest @selenium
   Scenario: As a user, I can use the DOM navigation to get to the top of the page
     Given I am on the homepage
     And I open the theme builder
@@ -78,7 +78,7 @@ Feature: Theme Builder DOM navigation
     And I enable theme builder CSS display
     Then I should be able to navigate to the top of the page
 
-  @selenium
+  @utest @selenium
   Scenario: As a user, I can use the DOM navigation and change elements
     Given I am on the homepage
     And I open the theme builder
@@ -94,18 +94,23 @@ Feature: Theme Builder DOM navigation
       | font family | Bradley Hand  |
 
 
+  @utest
   Scenario: As a user, I want don’t want to see the next/previous sibling navigation arrow in the themebuilder if the selected element doesn’t have a next/previous sibling
-    Given this hasn't been implemented yet
+    Given this hasn't been automated yet
 
+  @utest
   Scenario: As a user, I want don’t want to see the child navigation arrow in the themebuilder if the selected element doesn’t have a child sibling
-    Given this hasn't been implemented yet
+    Given this hasn't been automated yet
 
+  @utest
   Scenario: As a user, I can theme elements using a CSS pseudo class
-    Given this hasn't been implemented yet
+    Given this hasn't been automated yet
 
+  @utest
   Scenario: As a user, I can save a themed pseudo class
-    Given this hasn't been implemented yet
+    Given this hasn't been automated yet
 
+  @utest
   Scenario: As a user, I can publish a themed pseudo class
-    Given this hasn't been implemented yet
+    Given this hasn't been automated yet
 

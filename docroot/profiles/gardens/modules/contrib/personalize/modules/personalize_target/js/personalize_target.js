@@ -11,18 +11,20 @@ Drupal.personalize_target = (function() {
         var option_set = settings[i];
         var decision_point = option_set.decision_point;
         var decision_name = option_set.decision_name;
-        for (var j in option_set.options) {
-          if (option_set.options.hasOwnProperty(j) && option_set.options[j].hasOwnProperty('fixed_targeting')) {
-            decision_points[decision_point] = decision_points[decision_point] || {};
-            decision_points[decision_point][decision_name] = decision_points[decision_point][decision_name] || {
-              'mapped_features' : {}
-            };
-            // Loop through all features specified for an option and add them to the
-            // features map for this decision.
-            for (var k in option_set.options[j].fixed_targeting) {
-              if (option_set.options[j].fixed_targeting.hasOwnProperty(k)) {
-                var feature_name = option_set.options[j].fixed_targeting[k];
-                decision_points[decision_point][decision_name].mapped_features[feature_name] = option_set.options[j].option_id;
+        if (option_set.hasOwnProperty('targeting')) {
+          for (var j in option_set.targeting) {
+            if (option_set.targeting.hasOwnProperty(j) && option_set.targeting[j].hasOwnProperty('option_id') && option_set.targeting[j].hasOwnProperty('targeting_features')) {
+              decision_points[decision_point] = decision_points[decision_point] || {};
+              decision_points[decision_point][decision_name] = decision_points[decision_point][decision_name] || {
+                'mapped_features' : {}
+              };
+              // Loop through all features specified for a targeting rule and add them to the
+              // features map for this decision.
+              for (var k in option_set.targeting[j].targeting_features) {
+                if (option_set.targeting[j].targeting_features.hasOwnProperty(k)) {
+                  var feature_name = option_set.targeting[j].targeting_features[k];
+                  decision_points[decision_point][decision_name].mapped_features[feature_name] = option_set.targeting[j].option_id;
+                }
               }
             }
           }

@@ -133,6 +133,18 @@ interface PersonalizeAgentInterface {
   public function stopNow();
 
   /**
+   * Whether this agent should be started now.
+   *
+   * An agent class can imlement some logic to determine whether or not the agent
+   * in question should be set to the "running" status.  For example, an agent
+   * type might want to start automatically when certain setup has been created.
+   *
+   * @return boolean
+   *   TRUE if the agent should be set to running, FALSE otherwise.
+   */
+  public function startNow();
+
+  /**
    * Whether the agent supports multivariate tests.
    *
    * @return boolean
@@ -396,6 +408,13 @@ abstract class PersonalizeAgentBase implements PersonalizeAgentInterface, Person
    */
   public function errors() {
     return array();
+  }
+
+  /**
+   * Implements PersonalizeAgentInterface::startNow().
+   */
+  public function startNow() {
+    return FALSE;
   }
 
   /**

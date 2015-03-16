@@ -13,25 +13,15 @@
       return;
     }
     queueIsProcessing = true;
-    var queue_url = Drupal.settings.basePath + 'acquia_lift/queue';
+    var queue_url = Drupal.settings.basePath + Drupal.settings.pathPrefix + 'acquia_lift/queue';
     Drupal.acquiaLift.queueCount++;
     $.ajax({
       url: queue_url,
       type: "POST",
       success: function (response, status, jqXHR) {
-        var processed = false;
-        // Process any Drupal commands returned.
-        for (var i in response) {
-          if (response.hasOwnProperty(i) && response[i]['command'] && Drupal.ajax.prototype.commands[response[i]['command']]) {
-            Drupal.ajax.prototype.commands[response[i]['command']](Drupal.ajax.prototype, response[i], status);
-            processed = true;
-          }
-        }
-        if (processed) {
-          Drupal.attachBehaviors();
-        }
-        $(document).trigger('acquiaLiftQueueSyncComplete');
+        Drupal.settings.acquia_lift.sync_queue = 0;
         queueIsProcessing = false;
+        $(document).trigger('acquiaLiftQueueSyncComplete');
       },
       complete: function (jqXHR, status) {
         Drupal.acquiaLift.queueCount--;

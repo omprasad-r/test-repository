@@ -236,7 +236,7 @@
      *   The new status value for the campaign.
      */
     updateStatus: function (newStatus) {
-      var updateUrl = Drupal.settings.basePath + 'admin/structure/personalize/manage/' + this.get('name') + '/ajax_status/' + newStatus;
+      var updateUrl = Drupal.settings.basePath + Drupal.settings.pathPrefix + 'admin/structure/personalize/manage/' + this.get('name') + '/ajax_status/' + newStatus;
       var model = this;
       $.getJSON(updateUrl, function (data) {
         if (data.success) {
@@ -250,8 +250,8 @@
           // application scope.
           // Leaving for now since the reliance on drupal settings is all over
           // the application so it's not horrible.
-          Drupal.settings.personalize.campaigns[model.get('name')].status = data.currentStatus;
-          Drupal.settings.personalize.campaigns[model.get('name')].nextStatus = data.nextStatus;
+          Drupal.settings.acquia_lift.campaigns[model.get('name')].status = data.currentStatus;
+          Drupal.settings.acquia_lift.campaigns[model.get('name')].nextStatus = data.nextStatus;
         }
       });
     }

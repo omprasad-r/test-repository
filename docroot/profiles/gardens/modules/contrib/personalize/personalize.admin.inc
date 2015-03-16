@@ -85,6 +85,89 @@ function personalize_admin_form_submit($form, &$form_state) {
 }
 
 /**
+ * Form for changing the status of an agent.
+ *
+ * @param $agent_name
+ *   THe name of the agent the form is for.
+ * @param array $agent_status
+ *   The current status of the agent.
+ * @return array
+ *   Array representing the status change form.
+ */
+function personalize_status_change_form($form, &$form_state, $agent_name, $agent_status) {
+  $friendly_statuses = personalize_get_agent_status_map();
+  $form = array();
+  $form['agent_name'] = array(
+    '#type' => 'value',
+    '#value' => $agent_name,
+  );
+  switch($agent_status) {
+    case PERSONALIZE_STATUS_NOT_STARTED:
+      // Just present a start button, no need for a dropdown.
+      $form['status'] = array(
+        '#type' => 'value',
+        '#value' => PERSONALIZE_STATUS_RUNNING
+      );
+      $submit_text = t('Start');
+      break;
+    case PERSONALIZE_STATUS_RUNNING:
+      // Just present  Pause button, not need for a dropdown.
+      $form['status'] = array(
+        '#type' => 'value',
+        '#value' => PERSONALIZE_STATUS_PAUSED
+      );
+      $submit_text = t('Pause');
+      break;
+    default:
+      // Present a dropdown of all available next statuses.
+      $allowed_statuses = personalize_allowed_status_transitions($agent_status);
+      $options = array(
+        '' => t('--Select--')
+      );
+      foreach ($allowed_statuses as $status) {
+        $options[$status] = $friendly_statuses[$status];
+      }
+      $form['status'] = array(
+        '#prefix' => '<div class="personalize-status-change-select">',
+        '#suffix' => '</div>',
+        '#type' => 'select',
+        '#options' => $options,
+        '#default_value' => '',
+      );
+      $submit_text = t('Change');
+      break;
+  }
+
+  $form['submit'] = array(
+    '#type' => 'submit',
+    '#value' => $submit_text
+  );
+  return $form;
+}
+
+/**
+ * Submit callback for the status change form.
+ */
+function personalize_status_change_form_submit(&$form, &$form_state) {
+  $agent_name = $form_state['values']['agent_name'];
+  if (!empty($form_state['values']['status'])) {
+    $status = $form_state['values']['status'];
+    if ($status == PERSONALIZE_STATUS_COMPLETED) {
+      // Redirect to a confirm form as this has more serious implications than
+      // other status changes.
+      $form_state['redirect'] = array('admin/structure/personalize/manage/'. $agent_name .'/complete');
+    }
+    else {
+      // Otherwise just change the status as requested.
+      $status_map = personalize_get_agent_status_map();
+      if (personalize_agent_set_status($agent_name, $status)) {
+        drupal_set_message(t('Set the status of campaign @campaign to @status', array('@campaign' => $agent_name, '@status' => $status_map[$status])));
+      }
+    }
+  }
+}
+
+/**
  * Returns a visitor context select box.
  *
  * @param $settings
@@ -225,14 +308,14 @@ function personalize_agent_list() {
   $header = array(
     array('data' => t('Campaign name')),
     array('data' => t('Type')),
-    array('data' => t('Start/pause')),
+    array('data' => t('Change status')),
     array('data' => t('Operations'), 'colspan' => 4),
   );
   $agents = personalize_agent_load_multiple(array(), array(), FALSE, TRUE, 'label');
   if (empty($agents)) {
     return array(
       'no_agents' => array(
-        '#markup' => '<div>' . t('No agents available.') . '</div>'
+        '#markup' => '<div>' . t('No campaigns available.') . '</div>'
       )
     );
   }
@@ -253,8 +336,23 @@ function personalize_agent_list() {
     if (empty($agents)) {
       continue;
     }
+    $description = '';
+    switch($status) {
+      case PERSONALIZE_STATUS_NOT_STARTED:
+        $description = t('This table lists campaigns that have never been started.');
+        break;
+      case PERSONALIZE_STATUS_RUNNING:
+        $description = t('This table lists campaigns that are displaying personalized content to website visitors for each variation set.');
+        break;
+      case PERSONALIZE_STATUS_PAUSED:
+        $description = t('This table lists campaigns that use personalization JavaScript to display the fallback/winner variation for each variation set.');
+        break;
+      case PERSONALIZE_STATUS_COMPLETED:
+        $description = t('This table lists campaigns that use PHP (whenever possible) to display the fallback/winner variation for each variation set, which can cause variations to display more quickly than those in paused campaigns.');
+        break;
+    }
     $build['status_' . $status] = array(
-      '#markup' => '<h2>' . $status_map[$status] . '</h2>'
+      '#markup' => '<h2>' . $status_map[$status] . '</h2><p>' . $description . '</p>'
     );
     $rows = array();
     foreach ($agents as $agent) {
@@ -280,34 +378,111 @@ function personalize_agent_list() {
           $storage = t('Default');
           break;
       }
-      $agent_status = personalize_agent_get_status($agent->machine_name);
-      $status_toggle_form = drupal_get_form("personalize_toggle_status_{$agent->machine_name}_form", $agent->machine_name, $agent_status);
+
+      $status_change_form = drupal_get_form("personalize_change_status_{$agent->machine_name}_form", $agent->machine_name, $status);
       // @todo We are ignoring the "storage" info and the clone/export functionality
       //   for now. Revisit once we can provide full support for clone/export.
       $plugin = personalize_agent_load_agent($agent->machine_name);
       $tablerow = array(
         array('data' => check_plain($agent->label)),
         array('data' => $agent->plugin),
-        array('data' => drupal_render($status_toggle_form)),
+        array('data' => drupal_render($status_change_form)),
         //array('data' => $storage),
         array('data' => l(t('Edit'), 'admin/structure/personalize/manage/'. $agent->machine_name .'/edit')),
-        array('data' => $plugin instanceof PersonalizeAgentReportInterface && ($agent_status > PERSONALIZE_STATUS_NOT_STARTED) ? l(t('View reports'), 'admin/structure/personalize/manage/'. $agent->machine_name .'/report') : ''),
+        array('data' => $plugin instanceof PersonalizeAgentReportInterface && ($status > PERSONALIZE_STATUS_NOT_STARTED) ? l(t('View reports'), 'admin/structure/personalize/manage/'. $agent->machine_name .'/report') : ''),
         //array('data' => l(t('Export'), 'admin/structure/personalize/manage/'. $agent->machine_name .'/export')),
         //array('data' => l(t('Clone'), 'admin/structure/personalize/manage/'. $agent->machine_name .'/clone')),
         array('data' => $delete_link),
       );
+      // Show the scheduled start date for campaigns that aren't running yet.
+      if ($status === PERSONALIZE_STATUS_NOT_STARTED) {
+        $start_variable = _personalize_agent_get_starttime_variable($agent->machine_name);
+        $start_date = variable_get($start_variable, 0);
+        array_splice($tablerow, 1, 0, array('data' => $start_date > 0 ? format_date($start_date, 'custom', 'M d, Y') : ''));
+      }
+
       $rows[] = $tablerow;
     }
+    // Add the scheduled start date in to the "not started" table headers.
+    $build_header = $header;
+    if ($status === PERSONALIZE_STATUS_NOT_STARTED) {
+      array_splice($build_header, 1, 0, array('data' => t('Scheduled start')));
+    }
 
+    $build['#attached']['css'][] = drupal_get_path('module', 'personalize') . '/css/personalize.admin.css';
     $build['table_' . $status] = array(
       '#theme' => 'table',
-      '#header' => $header,
+      '#header' => $build_header,
       '#rows' => $rows,
       '#attributes' => array('id' => 'personalize'),
     );
   }
 
   return $build;
+}
+
+/**
+ * Form for setting the status of an agent to "Completed".
+ *
+ * @todo This duplicates code in personalize_status_toggle_message - refactor
+ *   it out to its own function.
+ */
+function personalize_agent_complete_form($form, &$form_state, $agent) {
+  // Display information about the "winner" that will be shown for each option
+  // set in this agent.
+  $option_sets = personalize_option_set_load_by_agent($agent->machine_name);
+  $theme_variables = array(
+    'option_sets' => array(),
+    'option_message' => '',
+    'alert_message' => '',
+    'agent_name' => $agent->machine_name,
+  );
+  foreach($option_sets as $option_set) {
+    $v = 1;
+
+    // No winner selected, so first item is shown as the control item.
+    if (empty($option_set->winner)) {
+      $winner = $option_set->options[0];
+      $winner_type = t('Control');
+    }
+    // Show the selected winning option.
+    else {
+      foreach($option_set->options as $option) {
+        if ($option_set->winner == $option['option_id']) {
+          $winner = $option;
+          $winner_type = t('Winner');
+          break;
+        }
+        $v++;
+      }
+    }
+    // Generate the message shown for each 'winning' option.
+    $theme_variables['option_sets'][] = array(
+      'label' => (isset($option_set->label) ? check_plain($option_set->label) : t('Option @id', array('@id' => $option_set->osid))),
+      'counter' => 'V' . $v,
+      'winner_label' => $winner['option_label'],
+      'alert' => (!empty($winner['targeting_features']) ? t('Show @v to specific users will not apply when paused.', array('@v' => 'V' . $v)) : ''),
+      'winner_type' => $winner_type,
+    );
+  }
+  if (!empty($theme_variables['option_sets'])) {
+    $theme_variables['option_message'] = t('All visitors will see the following @variations:', array('@variations' => format_plural(count($option_sets), 'variation', 'variations')));
+  }
+  $form['message'] = array(
+    '#markup' => theme('personalize_campaign_status_update', $theme_variables)
+  );
+  $form['machine_name'] = array('#type' => 'hidden', '#value' => $agent->machine_name);
+  $form['title'] = array('#type' => 'hidden', '#value' => $agent->label);
+  return confirm_form($form, t('Are you sure you want to stop the agent %title?', array('%title' => $agent->label)), 'admin/structure/personalize', '', t('Complete'), t('Cancel'));
+}
+
+/**
+ * Submit handler for agent completion form.
+ */
+function personalize_agent_complete_form_submit($form, &$form_state) {
+  personalize_agent_set_status($form_state['values']['machine_name'], PERSONALIZE_STATUS_COMPLETED);
+  drupal_set_message(t('The campaign %name has been stopped.', array('%name' => $form_state['values']['title'])));
+  $form_state['redirect'] = 'admin/structure/personalize';
 }
 
 /**
@@ -623,7 +798,7 @@ function personalize_status_toggle_message($agent_name, $current_status) {
       'label' => (isset($option_set->label) ? check_plain($option_set->label) : t('Option @id', array('@id' => $option_set->osid))),
       'counter' => 'V' . $v,
       'winner_label' => $winner['option_label'],
-      'alert' => (!empty($winner['fixed_targeting']) ? t('Show @v to specific users will not apply when paused.', array('@v' => 'V' . $v)) : ''),
+      'alert' => (!empty($winner['targeting_features']) ? t('Show @v to specific users will not apply when paused.', array('@v' => 'V' . $v)) : ''),
       'winner_type' => $winner_type,
     );
   }
@@ -681,6 +856,21 @@ function personalize_agent_form($form, &$form_state, $agent_data = NULL) {
   }
 
   $form['#attached']['library'][] = array('personalize', 'admin.campaign');
+  if (isset($agent_data->machine_name)) {
+    $form['#attached']['js'][] = array(
+      'type' => 'setting',
+      'data' => array(
+        'personalize' => array(
+          'campaigns' => array(
+            $agent_data->machine_name => array(
+              'status' => personalize_agent_get_status($agent_data->machine_name),
+            )
+          )
+        )
+      )
+    );
+  }
+
   $form['agent_form'] = array(
     '#tree' => TRUE,
     '#type' => 'personalize_admin_section',
@@ -696,14 +886,20 @@ function personalize_agent_form($form, &$form_state, $agent_data = NULL) {
   );
 
   if (!empty($agent_data->machine_name)) {
-    $toggle_form = personalize_status_toggle_form_definition($agent_data->machine_name, personalize_agent_get_status($agent_data->machine_name), TRUE, 'personalize_agent_page_status_toggle_ajax_callback');
-    $form['agent_form']['agent_fieldset']['header'] = array(
-      '#type' => 'container',
-      '#attributes' => array(
-        'class' => array('personalize-admin-content-header'),
-      ),
-      'toggle_form' => $toggle_form,
-    );
+    $status = personalize_agent_get_status($agent_data->machine_name);
+    if ($status == PERSONALIZE_STATUS_COMPLETED) {
+      drupal_set_message(t('You are editing a completed campaign.'), 'warning');
+    }
+    else {
+      $toggle_form = personalize_status_toggle_form_definition($agent_data->machine_name, $status, TRUE, 'personalize_agent_page_status_toggle_ajax_callback');
+      $form['agent_form']['agent_fieldset']['header'] = array(
+        '#type' => 'container',
+        '#attributes' => array(
+          'class' => array('personalize-admin-content-header'),
+        ),
+        'toggle_form' => $toggle_form,
+      );
+    }
   }
   $basic_form = personalize_agent_build_basic_form($agent_data, TRUE, array('agent_form', 'agent_fieldset', 'agent_basic'));
   if ($basic_form === FALSE) {
@@ -725,7 +921,7 @@ function personalize_agent_form($form, &$form_state, $agent_data = NULL) {
   }
 
   // Allow the campaign end date to be set.
-  $form['agent_form']['agent_fieldset']['campaign_end'] = personalize_agent_end_date_form(!empty($agent_data->machine_name) ? $agent_data->machine_name : NULL);
+  $form['agent_form']['agent_fieldset']['campaign_dates'] = personalize_agent_date_form(!empty($agent_data->machine_name) ? $agent_data->machine_name : NULL);
 
   $form['agent_form']['agent_fieldset']['advanced'] = array(
     '#type' => 'fieldset',
@@ -777,34 +973,59 @@ function personalize_agent_form($form, &$form_state, $agent_data = NULL) {
 }
 
 /**
- * Generate the form array to set a campaign end date.
+ * Generate the form array to set campaign dates.
  *
  * @param $agent_name
  *   (optional) The machine name for the campaign.
  * @return array
  *   The renderable form array for the end date form fields.
  */
-function personalize_agent_end_date_form($agent_name = NULL) {
+function personalize_agent_date_form($agent_name = NULL) {
   if (!empty($agent_name)) {
     $end_variable = _personalize_agent_get_stoptime_variable($agent_name);
     $agent_end = $default_end = variable_get($end_variable, 0);
+    $start_variable = _personalize_agent_get_starttime_variable($agent_name);
+    $agent_start = $default_start = variable_get($start_variable, 0);
   }
   else {
     $agent_end = 0;
+    $agent_start = 0;
   }
-  // Default the end date to one month if the campaign is new or does not yet
-  // have an end date set.
+  // Default the start date to one month and the end date to one month if the
+  // campaign is new or does not yet have an end date set.
+  if ($agent_start == 0) {
+    $default_start = strtotime('+1 month');
+  }
   if ($agent_end == 0) {
     $default_end = strtotime('+1 month');
   }
 
+  $agent_start_date = array('year' => date('Y', $default_start), 'month' => intval(date('m', $default_start)), 'day' => date('d', $default_start));
+  $form['campaign_start'] = array(
+    '#type' => 'radios',
+    '#title' => t('Campaign start date'),
+    '#options' => array(
+      'none' => t('Start manually'),
+      'specified' => t('Start on selected date'),
+    ),
+    '#default_value' => $agent_start == 0 ? 'none' : 'specified',
+  );
+  $form['campaign_start_date'] = array(
+    '#type' => 'date',
+    '#default_value' => $agent_start_date,
+    '#states' => array(
+      'visible' => array(
+        ':input[name="campaign_start"]' => array('value' => 'specified'),
+      ),
+    ),
+  );
   $agent_end_date = array('year' => date('Y', $default_end), 'month' => intval(date('m', $default_end)), 'day' => date('d', $default_end));
   $form['campaign_end'] = array(
     '#type' => 'radios',
     '#title' => t('Campaign end date'),
     '#options' => array(
-      'none' => t('Run until I stop campaign'),
-      'specified' => t('Select date'),
+      'none' => t('End manually'),
+      'specified' => t('End on selected date'),
     ),
     '#default_value' => $agent_end == 0 ? 'none' : 'specified',
   );
@@ -817,46 +1038,69 @@ function personalize_agent_end_date_form($agent_name = NULL) {
       ),
     ),
   );
-  drupal_alter('personalize_agent_end_date_form', $form, $agent_name);
+  drupal_alter('personalize_agent_date_form', $form, $agent_name);
   return $form;
 }
 
 /**
- * Validate the campaign end date form values.
+ * Validate the campaign date form values.
  *
  * @param $values
  *   An array of values to validate.
  */
-function personalize_agent_end_date_form_validate($values) {
+function personalize_agent_date_form_validate($values) {
+  $start_date = 0;
+  $end_date = 0;
+  if (isset($values['campaign_start']) && $values['campaign_start'] === 'specified') {
+    $start_date = strtotime($values['campaign_start_date']['year'] . '-' . $values['campaign_start_date']['month'] . '-' . $values['campaign_start_date']['day']);
+    if ($start_date < time()) {
+      form_set_error('campaign_start_date', t('When provided, the start date for the campaign must be in the future.'));
+    }
+  }
   if (isset($values['campaign_end']) && $values['campaign_end'] === 'specified') {
     $end_date = strtotime($values['campaign_end_date']['year'] . '-' . $values['campaign_end_date']['month'] . '-' . $values['campaign_end_date']['day']);
     if ($end_date < time()) {
       form_set_error('campaign_end_date', t('When provided, the end date for the campaign must be in the future.'));
     }
   }
+  if ($start_date > 0 && $end_date > 0) {
+    if ($end_date <= $start_date) {
+      form_set_error('campaign_end_date', t('When provided, the end date for the campaign must be after the start date for the campaign.'));
+    }
+  }
 }
 
 /**
- * Save an agent campaign end date values.
+ * Save an agent campaign start and end date values.
  *
  * @param $agent_name
  *   The name of the campaign.
  * @param $values
  *   An array of campaign end date values.
  */
-function personalize_agent_end_date_form_submit($agent_name, $values) {
-  if (empty($values['campaign_end'])) {
-    return;
+function personalize_agent_date_form_submit($agent_name, $values) {
+  if (!empty($values['campaign_start'])) {
+    // Set the start date.
+    if ($values['campaign_start'] === 'specified') {
+      $start_date = strtotime($values['campaign_start_date']['year'] . '-' . $values['campaign_start_date']['month'] . '-' . $values['campaign_start_date']['day']);
+    }
+    else {
+      $start_date = 0;
+    }
+    $varname = _personalize_agent_get_starttime_variable($agent_name);
+    variable_set($varname, $start_date);
   }
-  // Set the end date.
-  if ($values['campaign_end'] === 'specified') {
-    $end_date = strtotime($values['campaign_end_date']['year'] . '-' . $values['campaign_end_date']['month'] . '-' . $values['campaign_end_date']['day']);
+  if (!empty($values['campaign_end'])) {
+    // Set the end date.
+    if ($values['campaign_end'] === 'specified') {
+      $end_date = strtotime($values['campaign_end_date']['year'] . '-' . $values['campaign_end_date']['month'] . '-' . $values['campaign_end_date']['day']);
+    }
+    else {
+      $end_date = 0;
+    }
+    $varname = _personalize_agent_get_stoptime_variable($agent_name);
+    variable_set($varname, $end_date);
   }
-  else {
-    $end_date = 0;
-  }
-  $varname = _personalize_agent_get_stoptime_variable($agent_name);
-  variable_set($varname, $end_date);
 }
 
 /**
@@ -905,16 +1149,11 @@ function personalize_agent_form_ajax_submit($form, $form_state) {
   // Update the current agent status.
   if (!empty($agent_data)) {
     $current_status = personalize_agent_get_status($agent_data->machine_name);
-    list($next_status, $status_text) = _personalize_status_toggle_next($current_status);
     $settings = array(
       'personalize' => array(
         'campaigns' => array(
           $agent_data->machine_name => array(
             'status' => $current_status,
-            'nextStatus' => array(
-              'status' => $next_status,
-              'text' => $status_text,
-            ),
           ),
         ),
       ),
@@ -933,9 +1172,14 @@ function personalize_agent_form_ajax_submit($form, $form_state) {
   $commands[] = ajax_command_replace('#' . $form_div_id, drupal_render($form));
 
   // Any agent type that needs to sync changes to a 3rd party system will probably
-  // do so asynchronously. They can implement this hook to sync the changes during
-  // ajax submit of these forms, so they don't have to wait for a new page load.
+  // do so asynchronously.
+  // Third party agents can modify the commands returned to synchronize
+  // from the client-side.
+  drupal_alter('personalize_form_ajax_commands', $commands);
+  // Third party agents can implements this hook to synchronize from the server
+  // side during ajax submit of these forms.
   module_invoke_all('personalize_form_ajax_submit', $agent_data);
+
   return personalize_ajax_commands_deliver($commands, TRUE);
 }
 
@@ -1085,6 +1329,7 @@ function personalize_agent_build_basic_form($agent_data = NULL, $include_machine
 function personalize_agent_goals_form($form, &$form_state, $agent_data) {
   // Determine goals for inclusion.
   $goals = $exclude = array();
+  $all_actions = visitor_actions_get_actions();
   if (isset($form_state['values']['goals'])) {
     foreach ($form_state['values']['goals'] as $delta => $goal) {
       if (!empty($goal['action_name'])) {
@@ -1110,10 +1355,18 @@ function personalize_agent_goals_form($form, &$form_state, $agent_data) {
     $form_state['num_goals']--;
   }
 
-  // Any action already set as a goal on this campaign should be excluded
-  // from the action dropdown.
-  foreach ($goals as $goal) {
-    $exclude[$goal['action']] = $goal['action'];
+  foreach ($goals as $i => $goal) {
+    if (!isset($all_actions[$goal['action']])) {
+      // The action for this goal no longer exists - don't include it in the form
+      // and set a warning that it will be removed upon save.
+      drupal_set_message(t('At least one of your goals no longer has an action associated with it. Saving this form will cause the goal to be removed from the campaign.'), 'warning', FALSE);
+      unset($goals[$i]);
+    }
+    else {
+      // Any action already set as a goal on this campaign should be excluded
+      // from the action dropdown.
+      $exclude[$goal['action']] = $goal['action'];
+    }
   }
 
   if (empty($goals)) {
@@ -1240,11 +1493,13 @@ function personalize_agent_goals_form($form, &$form_state, $agent_data) {
       )
     );
     $options = $goal['action'] == '' ? $new_goal_options : $goal_options;
-    // If the current goal is a limited use visitor action, then it won't be
-    // in the list of options to display.
+
     if (!empty($goal['action']) && empty($options[$goal['action']])) {
-      $goal_action = visitor_actions_custom_load($goal['action']);
-      $options = array_merge(array($goal['action'] => $goal_action['label']), $options);
+      if (isset($all_actions[$goal['action']])) {
+        // The current goal was excluded from the list of options because it is
+        // a limited use visitor action, just add it separately here.
+        $options = array_merge(array($goal['action'] => $all_actions[$goal['action']]['label']), $options);
+      }
     }
     $section['goals'][$delta]['action_name'] = array(
       '#type' => 'select',
@@ -1384,7 +1639,7 @@ function personalize_agent_option_sets_form($form, &$form_state, $agent_data, $a
   if ($agent_instance instanceof PersonalizeExplicitTargetingInterface) {
     $targeting_support = $agent_instance->explicitTargetingSupportMultiple();
     // Build up a list of targeting values so we can map options to them.
-    $targeting_values = personalize_get_fixed_targeting_values_for_agent($agent_data);
+    $targeting_values = personalize_get_targeting_values_for_agent($agent_data);
   }
 
   foreach ($option_sets as $option_set) {
@@ -1427,6 +1682,7 @@ function personalize_agent_option_sets_form($form, &$form_state, $agent_data, $a
     );
 
     $variant_number = 1;
+    $targeting = personalize_get_targeting_for_options($option_set);
     foreach ($option_set->options as $option) {
       $is_winner = FALSE;
       $is_control = $variant_number == 1;
@@ -1492,7 +1748,7 @@ function personalize_agent_option_sets_form($form, &$form_state, $agent_data, $a
           '#theme_wrappers' => array('personalize_html_tag'),
           '#attributes' => array(
             // The ID is necessary for the AJAX replace to function correctly.
-            'id' => 'edit-option-sets-option-set-' . $option_set->osid . '-options-' . $option['option_id'] . '-basic-winner',
+            'id' => 'edit-option-sets-option-set-' . trim($option_set->osid, ' -') . '-options-' . trim($option['option_id'], ' -') . '-basic-winner',
             'class' => array('personalize-add-link'),
             'title' => t('Click here to set as winning variation.')
           ),
@@ -1518,7 +1774,7 @@ function personalize_agent_option_sets_form($form, &$form_state, $agent_data, $a
         $section['option_set_' . $option_set->osid]['options'][$option['option_id']]['targeting']['enable_explicit_targeting'] = array(
           '#title' => t('Show to visitors with specific traits'),
           '#type' => 'checkbox',
-          '#default_value' => !empty($option['fixed_targeting']) ? 1 : 0,
+          '#default_value' => !empty($targeting[$option['option_id']]) ? 1 : 0,
           '#parents' => array('option_sets', 'option_set_' . $option_set->osid, 'options', $option['option_id'],'enable_explicit_targeting'),
         );
         $states = array(
@@ -1721,6 +1977,8 @@ function personalize_targeting_support_form_elements($option_set, $option, $targ
     ),
   );
 
+  // Get an array of targeting rules per option id.
+  $targeting_for_options = personalize_get_targeting_for_options($option_set);
   // Load from the existing form if passed first, otherwise, load from option
   // set.
   $mappings = array();
@@ -1737,10 +1995,11 @@ function personalize_targeting_support_form_elements($option_set, $option, $targ
       );
     }
   }
-  else if (isset($option['fixed_targeting'])) {
-    foreach ($option['fixed_targeting'] as $feature) {
-      if (isset($option['fixed_targeting_rules'][$feature])) {
-        $mappings[] = $option['fixed_targeting_rules'][$feature];
+  else if (isset($targeting_for_options[$option['option_id']])) {
+    $rule = $targeting_for_options[$option['option_id']];
+    foreach ($rule['targeting_features'] as $feature) {
+      if (isset($rule['targeting_rules'][$feature])) {
+        $mappings[] = $rule['targeting_rules'][$feature];
       }
     }
   }
@@ -1868,7 +2127,7 @@ function personalize_targeting_support_form_elements($option_set, $option, $targ
       '#attributes' => array(
         'class' => array('personalize-delete-context', 'form-submit',),
         'title' => t('Delete this context.'),
-        'id' => 'edit-option-sets-option-set-' . $osid . '-options-' . $option['option_id'] . '-explicit-targeting-mapping-contexts-' . $delta . '-remove',
+        'id' => 'edit-option-sets-option-set-' . trim($osid, '- ') . '-options-' . trim($option['option_id'], ' -') . '-explicit-targeting-mapping-contexts-' . $delta . '-remove',
       ),
       '#submit' => array('personalize_targeting_remove_context_submit'),
       '#ajax' => array(
@@ -1887,7 +2146,7 @@ function personalize_targeting_support_form_elements($option_set, $option, $targ
     '#value' => 'add_context_' . $osid . '_' . $option['option_id'],
     '#theme_wrappers' => array('personalize_html_tag'),
     '#attributes' => array(
-      'id' => 'edit-option-sets-option-set-' . $osid . '-options-' . $option['option_id'] . '-explicit-targeting-add-new',
+      'id' => 'edit-option-sets-option-set-' . trim($osid, ' -') . '-options-' . trim($option['option_id'], ' -') . '-explicit-targeting-add-new',
       'class' => array('personalize-add-link'),
       'title' => t('Click here to add more contexts.')
     ),
@@ -1912,6 +2171,10 @@ function personalize_targeting_support_form_elements($option_set, $option, $targ
 
     // Add radio buttons so the user can select how multiple features for an option
     // should be treated.
+    $default_strategy = 'OR';
+    if (isset($targeting_for_options[$option['option_id']]) && isset($targeting_for_options[$option['option_id']]['targeting_strategy'])) {
+      $default_strategy = $targeting_for_options[$option['option_id']]['targeting_strategy'];
+    }
     $form['strategies']['strategy'] = array(
       '#type' => 'select',
       '#multiple' => FALSE,
@@ -1922,7 +2185,7 @@ function personalize_targeting_support_form_elements($option_set, $option, $targ
         'OR' => 'any',
         'AND' => 'all'
       ),
-      '#default_value' => isset($option['fixed_targeting_strategy']) ? $option['fixed_targeting_strategy'] : 'OR',
+      '#default_value' => $default_strategy,
       '#parents' => $strategy_parents,
     );
   }
@@ -2073,7 +2336,7 @@ function _personalize_get_targeting_values($plugin_name, $agent_data, $limit_to_
  *   An associative array keyed by context name, with an array of information
  *   about the possible values for that context.
  */
-function personalize_get_fixed_targeting_values_for_agent($agent_data) {
+function personalize_get_targeting_values_for_agent($agent_data) {
   $agent_instance = personalize_agent_load_agent($agent_data->machine_name);
   if ($agent_instance instanceof PersonalizeAutoTargetingInterface && $agent_instance::constrainExplicitTargetingContexts()) {
     $value_options = array();
@@ -2268,7 +2531,7 @@ function personalize_agent_form_validate($form, &$form_state) {
     // Call the validation callback for the agent type.
     $class::optionsFormValidate($form, $form_state);
   }
-  personalize_agent_end_date_form_validate($form_state['values']);
+  personalize_agent_date_form_validate($form_state['values']);
 }
 
 /**
@@ -2292,7 +2555,7 @@ function personalize_agent_form_submit($form, &$form_state) {
       personalize_agent_set_status($agent->machine_name, PERSONALIZE_STATUS_PAUSED);
       personalize_status_toggle_message($agent->machine_name, PERSONALIZE_STATUS_PAUSED);
     }
-    personalize_agent_end_date_form_submit($agent->machine_name, $form_state['values']);
+    personalize_agent_date_form_submit($agent->machine_name, $form_state['values']);
     $form_state['redirect'] = "admin/structure/personalize/manage/{$agent->machine_name}/edit";
   }
   else {
@@ -2429,7 +2692,7 @@ function personalize_agent_option_sets_form_submit($form, &$form_state) {
       // Keep track of feature strings that have already been designated to options,
       // which options they have been designated to, and whether there's a rule
       // associated with each feature.
-      $designated_features = $option_features = $feature_rules = array();
+      $designated_features = $targeting = array();
       foreach ($values['options'] as $option_id => $settings) {
         $option_features[$option_id] = $feature_rules[$option_id] = array();
         $feature_values = $rules = array();
@@ -2456,33 +2719,29 @@ function personalize_agent_option_sets_form_submit($form, &$form_state) {
             $rules[$feature_string]['plugin'] = $plugin_name;
           }
           foreach ($feature_values as $feature) {
-            $option_features[$option_id][] = $feature;
-            $feature_rules[$option_id][$feature] = $rules[$feature];
             // Mark this feature string as already designated.
             if (!in_array($feature, $designated_features)) {
               $designated_features[] = $feature;
             }
             else {
-              drupal_set_message(t('You have set the same targeting feature for more than one option. Depending on whether features are AND\'d or OR\'d together for the different options, and on how the decision agent evaluates explicit targeting rules, this may not produced the desired effect.'), 'warning');
+              drupal_set_message(t('You have set the same targeting feature for more than one option. Depending on whether features are AND\'d or OR\'d together for the different options, and on how the decision agent evaluates explicit targeting rules, this may not produce the desired effect.'), 'warning');
             }
-
           }
-        }
-      }
-
-      // Now add the features to the option set's options array.
-      foreach ($option_set->options as &$option) {
-        if (isset($option_features[$option['option_id']])) {
-          $option['fixed_targeting'] = $option_features[$option['option_id']];
-          $option['fixed_targeting_rules'] = $feature_rules[$option['option_id']];
-
+          $rule = array(
+            'option_id' => $option_id,
+            'targeting_features' => $feature_values,
+            'targeting_rules' => $rules,
+          );
           // If a strategy has been specified for how to use the targeting features,
           // then store this as well.
-          if (isset($values['options'][$option['option_id']]['explicit_targeting']['strategy'])) {
-            $option['fixed_targeting_strategy'] = $values['options'][$option['option_id']]['explicit_targeting']['strategy'];
+          if (isset($values['options'][$option_id]['explicit_targeting']['strategy'])) {
+            $rule['targeting_strategy'] = $values['options'][$option_id]['explicit_targeting']['strategy'];
           }
+          $targeting[] = $rule;
         }
       }
+
+      $option_set->targeting = $targeting;
       personalize_option_set_save($option_set);
     }
   }
@@ -2829,7 +3088,7 @@ function personalize_set_campaign_context_callback($agent_data) {
  * Landing page for configuring agents.
  */
 function personalize_admin_page() {
-  return '<a href="' . base_path() . 'admin/content/personalize/agents">manage agents</a>';
+  return l(t('manage agents'), 'admin/content/personalize/agents');
 }
 
 /**
@@ -2888,4 +3147,27 @@ function personalize_targeting_generate_value_code($value_match, $operator) {
     return $value_match;
   }
   return $operator_map[$operator] . PERSONALIZE_TARGETING_OP_SEPARATOR . $value_match;
+}
+
+/**
+ * Returns the targeting that has been defined for the options in an option set.
+ *
+ * @param $option_set
+ *   The option set to get targeting info for.
+ * @return array
+ *   An associative array, keyed by option_id, whose values are arrays of target-
+ *   ing info for the option in question. If any option does not have targeting
+ *   set up, it will not be included in the array.
+ */
+function personalize_get_targeting_for_options($option_set) {
+  // Get an array of targeting rules per option id.
+  $targeting_for_options = array();
+  if (!empty($option_set->targeting)) {
+    foreach ($option_set->targeting as $rule) {
+      if (isset($rule['option_id'])) {
+        $targeting_for_options[$rule['option_id']] = $rule;
+      }
+    }
+  }
+  return $targeting_for_options;
 }

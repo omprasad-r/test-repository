@@ -15,7 +15,7 @@
       $('.personalize-goal-action', context).once('personalize-goal-action', function() {
         $(this).bind('change', function(e) {
           var val = e.currentTarget.selectedOptions[0].value;
-          if (val.indexOf(Drupal.settings.basePath + 'admin/structure/visitor_actions/add-in-context') === 0) {
+          if (val.indexOf(Drupal.settings.basePath + Drupal.settings.pathPrefix + 'admin/structure/visitor_actions/add-in-context') === 0) {
             document.location.href = val;
           }
         })

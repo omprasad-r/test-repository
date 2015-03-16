@@ -5,5 +5,5 @@ Feature: Contextual links
     And I am logged in as our testuser
 
   Scenario: As a site owner, I can use the block roll over menu
-    Given this hasn't been implemented yet
+    Given this hasn't been automated yet
 

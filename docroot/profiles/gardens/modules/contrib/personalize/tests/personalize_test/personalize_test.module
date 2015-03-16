@@ -16,6 +16,12 @@ function personalize_test_menu() {
     'page callback' => 'personalize_test_personalized_page',
     'access callback' => TRUE,
   );
+  $items['personalize-test/multiple-renderings'] = array(
+    'type' => MENU_CALLBACK,
+    'title' => 'Testing Multiple Rendering of Option Sets',
+    'page callback' => 'personalize_test_multiple_os_renderings',
+    'access callback' => TRUE,
+  );
   $items['personalize-test/goal'] = array(
     'type' => MENU_CALLBACK,
     'title' => 'Testing Goals',
@@ -107,6 +113,38 @@ function personalize_test_personalized_page($personalized_content = NULL, $goal_
     foreach ($goal_names as $i => $goal_name) {
       $test_agent = $i == 0 ? 'test-agent' : ($use_multiple_agents ? 'test-agent-2' : 'test-agent');
       personalize_set_goal($test_agent, $goal_name, 1);
+    }
+  }
+  return $renderable;
+}
+
+/**
+ * Page callback to test multiple renderings of the same option set.
+ *
+ * @param int $num_option_sets
+ *   The number of distinct option sets to create.
+ * @param int $num_options
+ *   The number of options per option set.
+ * @param int $num_repetitions
+ *   The number of times to render each option set.
+ * @return array
+ *   A render array for the page.
+ */
+function personalize_test_multiple_os_renderings($num_option_sets = 1, $num_options = 2, $num_repetitions = 2) {
+  $renderable = array();
+  $loaded_option_sets = array();
+  for ($i = 0; $i < $num_option_sets; $i++) {
+    $agent = 'test-agent';
+    $osid = 'test-os-' . ($i + 1);
+
+    $option_set = create_dummy_option_set($osid, $agent, $num_options, NULL, NULL);
+    $loaded_option_sets[$osid] = $option_set;
+  }
+  if (!empty($loaded_option_sets)) {
+    foreach ($loaded_option_sets as $osid => $option_set) {
+      for ($j = 0; $j < $num_repetitions; $j++) {
+        $renderable['content_' . $osid . '_' . ($j + 1)] = create_renderable_from_option_set($option_set);
+      }
     }
   }
   return $renderable;
