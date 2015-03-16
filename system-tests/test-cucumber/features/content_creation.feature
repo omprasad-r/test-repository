@@ -6,6 +6,7 @@ Feature: Content creation
     And I have the navigation block visible
     And I am logged in as our testuser
 
+  @utest
   Scenario: As a user, I can create a basic page and update the page content
     Given that I have permission to create a basic page
     And I my site administrator has enabled the Navigation block
@@ -14,6 +15,7 @@ Feature: Content creation
     And I edit my new page
     Then I can see my edits
 
+  @utest
   Scenario: As a user, I can create custom content types
     Given that I have a custom content type
     And I have permission to create that content type

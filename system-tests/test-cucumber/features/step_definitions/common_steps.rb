@@ -259,7 +259,7 @@ Then /^I should not see an error message$/ do
   page.should_not have_css('div.error')
 end
 
-Given /^this hasn't been implemented yet$/ do
+Given /^this hasn't been automated yet$/ do
   pending
 end
 

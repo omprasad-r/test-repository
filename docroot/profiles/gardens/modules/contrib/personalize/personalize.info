@@ -13,9 +13,9 @@ files[] = includes/personalize.classes.inc
 files[] = includes/personalize.controller.inc
 files[] = tests/personalize.test
 
-; Information added by Drupal.org packaging script on 2015-01-14
-version = "7.x-1.0-rc3"
+; Information added by Drupal.org packaging script on 2015-02-26
+version = "7.x-1.0-rc7"
 core = "7.x"
 project = "personalize"
-datestamp = "1421248982"
+datestamp = "1424981114"
 

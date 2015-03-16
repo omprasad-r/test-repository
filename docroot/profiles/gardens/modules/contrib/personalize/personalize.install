@@ -143,6 +143,13 @@ function personalize_schema() {
         'not null' => FALSE,
         'description' => 'The path to a local preview page for the option set.',
       ),
+      'targeting' => array(
+        'type' => 'blob',
+        'not null' => FALSE,
+        'size' => 'big',
+        'serialize' => TRUE,
+        'description' => 'A serialized array specifying any targeting rules for this option set.',
+      )
     ),
     'primary key' => array('osid'),
     'foreign keys' => array(
@@ -581,6 +588,59 @@ function personalize_update_7014() {
   }
 }
 
+/**
+ * Add targeting column for Option Sets.
+ */
+function personalize_update_7015() {
+  if (!db_field_exists('personalize_option_sets', 'targeting')) {
+    db_add_field('personalize_option_sets', 'targeting', array(
+      'type' => 'blob',
+      'not null' => FALSE,
+      'size' => 'big',
+      'serialize' => TRUE,
+      'description' => 'A serialized array specifying any targeting rules for this option set.',
+    ));
+  }
+
+  // Move any existing fixed targeting rules to the new targeting column.
+  $result = db_select('personalize_option_sets', 'o')
+    ->fields('o', array('osid', 'options'))
+    ->execute();
+
+  foreach ($result as $row) {
+    $targeting = array();
+    $options = unserialize($row->options);
+    foreach ($options as &$option) {
+      if (!empty($option['fixed_targeting'])) {
+        $targ = array(
+          'option_id' => $option['option_id'],
+          'targeting_features' => $option['fixed_targeting']
+        );
+
+        if (isset($option['fixed_targeting_rules'])) {
+          $targ['targeting_rules'] = $option['fixed_targeting_rules'];
+          unset($option['fixed_targeting_rules']);
+        }
+        if (isset($option['fixed_targeting_strategy'])) {
+          $targ['targeting_strategy'] = $option['fixed_targeting_strategy'];
+          unset($option['fixed_targeting_strategy']);
+        }
+        unset($option['fixed_targeting']);
+        $targeting[] = $targ;
+      }
+    }
+
+    if (!empty($targeting)) {
+      $fields = array('options' => serialize($options));
+      $fields['targeting'] = serialize($targeting);
+      // Save the updated options back to the database.
+      db_update('personalize_option_sets')
+        ->condition('osid', $row->osid)
+        ->fields($fields)
+        ->execute();
+    }
+  }
+}
 /**
  * Converts a feature string to an array with 'key' and 'value' elements.
  *

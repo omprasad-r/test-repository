@@ -31,6 +31,26 @@
                 {"first-choice":{"html":"<div class=\"osid-2-first-option\">this is the first choice<\/div>","index":0},"second-choice":{"html":"<div class=\"osid-2-second-option\">this is the second choice<\/div>","index":1}}
             </script>
         </div>
+        // Third option set has an empty html property
+        <div class="personalize-option-set" data-personalize="osid-3">
+            <noscript><div class="osid-3-noscript-option">ohai</div></noscript>
+            <script type="text/template">
+                {"first-choice":{"html":"<div class=\"osid-3-first-option\">this is the first choice<\/div>","index":0},"second-choice":{"html":"","index":1}}
+            </script>
+        </div>
+        // Fourth option set has an empty html property and is rendered twice.
+        <div class="personalize-option-set" data-personalize="osid-4">
+            <noscript><div class="osid-4-noscript-option">ohai</div></noscript>
+            <script type="text/template">
+                {"first-choice":{"html":"<div class=\"osid-4-first-option\">this is the first choice<\/div>","index":0},"second-choice":{"html":"","index":1}}
+            </script>
+        </div>
+        <div class="personalize-option-set" data-personalize="osid-4">
+            <noscript><div class="osid-4-noscript-option">ohai</div></noscript>
+            <script type="text/template">
+                {"first-choice":{"html":"<div class=\"osid-4-first-option\">this is the first choice<\/div>","index":0},"second-choice":{"html":"","index":1}}
+            </script>
+        </div>
     </div>
 </div>
 

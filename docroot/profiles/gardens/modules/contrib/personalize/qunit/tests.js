@@ -1,3 +1,36 @@
+QUnit.test( "Executor test", function( assert ) {
+  // Test the executor for a regular option set.
+  assert.equal(0, $('.osid-1-first-option').length);
+  assert.equal(0, $('.osid-1-second-option').length);
+  Drupal.personalize.executors.show.execute($('[data-personalize=osid-1]'), 'first-choice', 1);
+  assert.equal(1, $('.osid-1-first-option').length);
+  assert.equal(0, $('.osid-1-second-option').length);
+  Drupal.personalize.executors.show.execute($('[data-personalize=osid-1]'), 'second-choice', 1);
+  assert.equal(0, $('.osid-1-first-option').length);
+  assert.equal(1, $('.osid-1-second-option').length);
+
+  // Test an option set that appears multiple times on the page.
+  assert.equal(0, $('.osid-2-first-option').length);
+  assert.equal(0, $('.osid-2-second-option').length);
+  Drupal.personalize.executors.show.execute($('[data-personalize=osid-2]'), 'first-choice', 2);
+  assert.equal(2, $('.osid-2-first-option').length);
+  assert.equal(0, $('.osid-2-second-option').length);
+  Drupal.personalize.executors.show.execute($('[data-personalize=osid-2]'), 'second-choice', 2);
+  assert.equal(0, $('.osid-2-first-option').length);
+  assert.equal(2, $('.osid-2-second-option').length);
+
+  // Test the executor for an option set with an empty html attribute
+  Drupal.personalize.executors.show.execute($('[data-personalize=osid-3]'), 'second-choice', 3);
+  assert.equal(0, $('.osid-3-first-option').length);
+  assert.equal(1, $('.osid-3-noscript-option').length);
+
+  // Test the executor for an option set with an empty html attribute
+  // that is rendered multiple times
+  Drupal.personalize.executors.show.execute($('[data-personalize=osid-4]'), 'second-choice', 4);
+  assert.equal(0, $('.osid-4-first-option').length);
+  assert.equal(2, $('.osid-4-noscript-option').length);
+});
+
 QUnit.test( "Evaluate contexts test", function( assert ) {
   var agentType = 'js_test_agent';
   Drupal.personalize.agents = Drupal.personalize.agents || {};
@@ -186,28 +219,6 @@ QUnit.asyncTest( "Get visitor contexts timeout test", function( assert ) {
     QUnit.start();
   };
   Drupal.personalize.getVisitorContexts(contexts, callback);
-});
-
-QUnit.test( "Executor test", function( assert ) {
-  // Test the executor for a regular option set.
-  assert.equal(0, $('.osid-1-first-option').length);
-  assert.equal(0, $('.osid-1-second-option').length);
-  Drupal.personalize.executors.show.execute($('[data-personalize=osid-1]'), 'first-choice', 1);
-  assert.equal(1, $('.osid-1-first-option').length);
-  assert.equal(0, $('.osid-1-second-option').length);
-  Drupal.personalize.executors.show.execute($('[data-personalize=osid-1]'), 'second-choice', 1);
-  assert.equal(0, $('.osid-1-first-option').length);
-  assert.equal(1, $('.osid-1-second-option').length);
-
-  // Test an option set that appears multiple times on the page.
-  assert.equal(0, $('.osid-2-first-option').length);
-  assert.equal(0, $('.osid-2-second-option').length);
-  Drupal.personalize.executors.show.execute($('[data-personalize=osid-2]'), 'first-choice', 2);
-  assert.equal(2, $('.osid-2-first-option').length);
-  assert.equal(0, $('.osid-2-second-option').length);
-  Drupal.personalize.executors.show.execute($('[data-personalize=osid-2]'), 'second-choice', 2);
-  assert.equal(0, $('.osid-2-first-option').length);
-  assert.equal(2, $('.osid-2-second-option').length);
 });
 
 QUnit.module("Personalize page tests", {

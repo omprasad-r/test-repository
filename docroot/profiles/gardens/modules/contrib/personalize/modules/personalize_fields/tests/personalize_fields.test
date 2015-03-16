@@ -739,8 +739,9 @@ class PersonalizeFieldsTest extends PersonalizeBaseTest {
     $this->assertNoOptionSet($osid);
     $this->assertFalse(isset($personalize_settings['option_sets']));
 
-    // Assert that the content of the first option has been output.
+    // Assert that the content of only the first option has been output.
     $this->assertText('first option' );
+    $this->assertNoText('second option');
 
     // Now set the winner of the option set to the second option.
     $option_set->winner = 'second-option';
@@ -751,14 +752,14 @@ class PersonalizeFieldsTest extends PersonalizeBaseTest {
     $personalize_settings = $settings['personalize'];
     $this->assertFalse(isset($personalize_settings['agent_map']));
 
-    // Assert that the js for the agent has been loaded.
+    // Assert that the js for the agent has not been loaded.
     $this->assertNoRaw('personalize_test.js');
 
     // Assert that the option set has not been output.
     $this->assertNoOptionSet($osid);
     $this->assertFalse(isset($personalize_settings['option_sets']));
 
-    // Assert that the content of the first option has been output.
+    // Assert that the content of only the second option has been output.
     $this->assertNoText('first option');
     $this->assertText('second option');
   }
@@ -875,6 +876,105 @@ class PersonalizeFieldsTest extends PersonalizeBaseTest {
     // values so we should not get a "Make this field personalizable" checkbox.
     $this->drupalGet('admin/structure/types/manage/article/fields/my_test_field');
     $this->assertNoFieldByName('field[settings][personalize][enabled]');
+  }
+
+  /**
+   * Tests rendering of personalized fields when a value is missing.
+   */
+  function testPersonalizeFieldsMissingValue() {
+    // Add personalizable field to the article node type.
+    $field = array(
+      'type' => 'text',
+      'field_name' => 'article_headline',
+      'cardinality' => -1,
+      'settings' => array(
+        'personalize' => array(
+          'enabled' => 1,
+          'agent_type' => 'test_agent',
+          'options' => array(
+            'test_agent' => array(
+              'use_client_side_goal_processing' => 1
+            )
+          )
+        ),
+      ),
+    );
+    field_create_field($field);
+    $instance = array(
+      'field_name' => 'article_headline',
+      'entity_type' => 'node',
+      'label' => 'Personalizable Headline',
+      'bundle' => 'article',
+      'required' => FALSE,
+    );
+    field_create_instance($instance);
+
+    // Create a node with 3 values of the personalized field, one of which is
+    // empty.
+    $node = new stdClass();
+    $node->type = 'article';
+    $node->language = LANGUAGE_NONE;
+    node_object_prepare($node);
+    $node->title = $this->randomName();
+    $node->article_headline['und'][0] = array('value' => 'first value');
+    $node->article_headline['und'][1] = array('value' => '');
+    $node->article_headline['und'][2] = array('value' => 'third value');
+    node_save($node);
+
+    $this->resetAll();
+
+    // Now create the option set.
+    $option_set = new stdClass();
+    $option_set->is_new = TRUE;
+    $option_set->data = array();
+    $option_set->options = array();
+    $option_set->plugin = 'fields';
+    $option_set->new_agent_title = 'Article: Personalizable Headline';
+    $option_set->options = array(
+      array(
+        'option_label' => personalize_fields_generate_option_label(0, array('value' => 'first value'))
+      ),
+      array(
+        'option_label' => personalize_fields_generate_option_label(1, array('value' => 'second value'))
+      ),
+      array(
+        'option_label' => personalize_fields_generate_option_label(2, array('value' => 'third value'))
+      )
+    );
+    personalize_fields_option_set_save($option_set, 'node', $node, 'article_headline');
+    $first_osid = 'osid-' . $option_set->osid;
+    $this->resetAll();
+
+    $agent_name = 'article-personalizable-headline';
+    personalize_agent_set_status($agent_name, PERSONALIZE_STATUS_RUNNING);
+    $this->assertEqual(3, count($option_set->options));
+
+    $this->drupalGet('node/' . $node->nid);
+    // There should be no personalization js settings on the page for this option
+    // set.
+    $settings = $this->drupalGetSettings();
+    $this->assertFalse(isset($settings['personalize']['option_sets']));
+    // Make sure only the first value is being output and there is no personalization
+    // mark-up.
+    $this->assertText('first value');
+    $this->assertNoText('third value');
+    $this->assertNoRaw('<script type="text/template" data-personalize-script="osid-1">');
+
+    // Now make the second value non-empty.
+    $node->article_headline['und'][1] = array('value' => 'second value');
+    node_save($node);
+    $this->resetAll();
+    $this->drupalGet('node/' . $node->nid);
+    // Assert the js settings are now present for this option set.
+    $settings = $this->drupalGetSettings();
+    $this->assertTrue(isset($settings['personalize']['option_sets'][$first_osid]));
+    // Assert that the normal personalization markup is being output, containing
+    // all three field values.
+    $html = <<<EOT
+<div class="personalize-option-set" data-personalize="osid-1"><noscript>first value</noscript><script type="text/template" data-personalize-script="osid-1">{"first-value":{"html":"first value","index":0},"second-value":{"html":"second value","index":1},"third-value":{"html":"third value","index":2}}</script></div>
+EOT;
+
+    $this->assertRaw($html);
   }
 
   /**
