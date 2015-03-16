@@ -6,7 +6,7 @@ Feature: Theme Builder typekit integration
 
   Scenario: As a user, I can enable typekit fonts
 
-  @selenium
+  @utest @selenium
   Scenario Outline: As a user, I can use typekit fonts in the theme builder
     Given the typekit font management is enabled
     And I am on "the homepage"
@@ -18,7 +18,7 @@ Feature: Theme Builder typekit integration
       | h1#site-name                        | Corpulent Web |
       | p#site-slogan                       | Givry Web     |
 
-  @selenium
+  @utest @selenium
   Scenario Outline: As a user, I can select a typekit font and should see it is set correctly after preview, save, save as and publish
     Given the typekit font management is enabled
     And I am on "the homepage"
@@ -37,6 +37,7 @@ Feature: Theme Builder typekit integration
       |   save_as       |
       |   publish       |
 
+  @utest
   Scenario: As a user, I can disable the typekit module and should see that the tk fonts don't show up
     Given the typekit font management is enabled
     When the module font_management is disabled
@@ -44,6 +45,7 @@ Feature: Theme Builder typekit integration
     And I open the theme builder
     Then I should not see element "optgroup[label $= 'Typekit fonts']" within "select#style-font-family"
 
+  @utest
   Scenario: As a user, I can disable the typekit integration in the font management and should see that the tk fonts don't show up
     Given the typekit font management is enabled
     When I disable the typekit integration
@@ -51,12 +53,15 @@ Feature: Theme Builder typekit integration
     And I open the theme builder
     Then I should not see element "optgroup[label $= 'Typekit fonts']" within "select#style-font-family"
 
+  @utest
   Scenario: As a user, I can enable monotype fonts
-    Given this hasn't been implemented yet
+    Given this hasn't been automated yet
 
+  @utest
   Scenario: As a user, I can select a monotype font and should see it is set correctly after preview, save, save as and publish
-    Given this hasn't been implemented yet
+    Given this hasn't been automated yet
 
+  @utest
   Scenario: As a user, I can disable the monotype integration in the font management and should see that the MT fonts don't show up
-    Given this hasn't been implemented yet
+    Given this hasn't been automated yet
 

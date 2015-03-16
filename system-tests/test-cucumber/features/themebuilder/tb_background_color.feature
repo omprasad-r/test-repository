@@ -4,6 +4,7 @@ Feature: Theme Builder background color
     Given a fresh gardens installation
     And I am logged in as our testuser
 
+  @utest
   Scenario Outline: As user, I can set the background color of an element
     Given I am on "the homepage"
     And I open the theme builder
@@ -19,6 +20,7 @@ Feature: Theme Builder background color
       | site slogan     | b     |
       | site slogan     | d     |
 
+  @utest
   Scenario Outline: As user, I can set the background color of an element and preview, save and publish theme
     Given I am on "the homepage"
     And I open the theme builder
@@ -37,6 +39,7 @@ Feature: Theme Builder background color
       | save_as |
       | publish |
 
+  @utest
   Scenario Outline: As user, I can set the background image of an element
     Given I am on "the homepage"
     And I open the theme builder
@@ -51,6 +54,7 @@ Feature: Theme Builder background color
       | site name link  |
       | site slogan     |
 
+  @utest
   Scenario Outline: As user, I can set the background image of an element and save, save as and publish theme
     Given I am on "the homepage"
     And I open the theme builder
@@ -69,6 +73,7 @@ Feature: Theme Builder background color
       | save_as |
       | publish |
 
+  @utest
   Scenario Outline: As user, I can set the background image of an element and set the repetition
     Given I am on "the homepage"
     And I open the theme builder
@@ -85,6 +90,7 @@ Feature: Theme Builder background color
       | background-repeat-repeat-y  |
       | background-repeat-no-repeat |
 
+  @utest
   Scenario Outline: As user, I can set the background image of an element and set the attachment
     Given I am on "the homepage"
     And I open the theme builder
@@ -99,6 +105,7 @@ Feature: Theme Builder background color
       | background-attachment-scroll  |
       | background-attachment-fixed   |
 
+  @utest
   Scenario: As user, I can remove a set background image
     Given I am on "the homepage"
     And I open the theme builder

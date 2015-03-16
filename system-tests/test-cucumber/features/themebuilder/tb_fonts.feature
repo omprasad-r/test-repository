@@ -4,6 +4,7 @@ Feature: Theme Builder fonts
     Given a fresh gardens installation
     And I am logged in as our testuser
 
+  @utest
   Scenario Outline: As user, I can change the font color by using the color picker
     Given I am on "the homepage"
     And I open the theme builder
@@ -20,7 +21,7 @@ Feature: Theme Builder fonts
       |     d         |
       |     e         |
 
-  @selenium
+  @utest @selenium
   Scenario Outline: As user, I can change the font size by using the slider
     Given I am on "the homepage"
     And I open the theme builder
@@ -36,7 +37,7 @@ Feature: Theme Builder fonts
       | site name link  |
       | site slogan     |
 
-  @poltergeist
+  @utest @poltergeist
   Scenario Outline: As user, I can change the font size by using the textfield
     Given I am on "the homepage"
     And I open the theme builder
@@ -55,7 +56,7 @@ Feature: Theme Builder fonts
       | site slogan     |
 
       # Needs selenium because webkit does not report correct font family
-  @selenium
+  @utest @selenium
   Scenario Outline: As user, I can change the font family
     Given I am on "the homepage"
     And I open the theme builder
@@ -75,6 +76,7 @@ Feature: Theme Builder fonts
       |     Georgia         |
       |     Monaco          |
 
+  @utest
   Scenario Outline: As user, I can change the font weight, style, decoration and transform
     Given I am on "the homepage"
     And I open the theme builder
@@ -94,7 +96,8 @@ Feature: Theme Builder fonts
       | site name link  | font-transform    | text transform    |
       | site slogan     | font-transform    | text transform    |
 
-  Scenario Outline: As user, I can change the font algnment
+  @utest
+  Scenario Outline: As user, I can change the font alignment
     Given I am on "the homepage"
     And I open the theme builder
     And I switch to theme builder tab "Styles"
@@ -113,6 +116,7 @@ Feature: Theme Builder fonts
       | site name link  | text-align-justify  |
       | site slogan     | text-align-justify  |
 
+  @utest
   Scenario Outline: As user, I can change and reload the font color by using the color picker
     Given I am on "the homepage"
     And I open the theme builder
@@ -134,7 +138,7 @@ Feature: Theme Builder fonts
       |     d         |
       |     e         |
 
-  @selenium
+  @utest @selenium
   Scenario Outline: As user, I can change and reload the font size by using the slider
     Given I am on "the homepage"
     And I open the theme builder
@@ -155,6 +159,7 @@ Feature: Theme Builder fonts
       | site slogan     |       50            |
       | site slogan     |       65            |
 
+  @utest
   Scenario Outline: As user, I can change and reload the font size by using the textfield
     Given I am on "the homepage"
     And I open the theme builder
@@ -174,7 +179,7 @@ Feature: Theme Builder fonts
       | site slogan     |
 
       # Needs selenium because webkit does not report correct font family
-  @selenium
+  @utest @selenium
   Scenario Outline: As user, I can change and reload the font family
     Given I am on "the homepage"
     And I open the theme builder
@@ -199,6 +204,7 @@ Feature: Theme Builder fonts
       |     Georgia         |
       |     Monaco          |
 
+  @utest
   Scenario Outline: As user, I can change and reload the font weight, style, decoration and transform
     Given I am on "the homepage"
     And I open the theme builder
@@ -224,7 +230,7 @@ Feature: Theme Builder fonts
       | site slogan     | font-transform    | text transform    |
 
       # webkit is detecting wrong alignment
-  @selenium
+  @utest @selenium
   Scenario Outline: As user, I can change and reload the font algnment
     Given I am on "the homepage"
     And I open the theme builder
@@ -249,6 +255,7 @@ Feature: Theme Builder fonts
       | site name link  | text-align-justify  |
       | site slogan     | text-align-justify  |
 
+  @utest
   Scenario Outline: As user, I can change and publish the font color by using the color picker
     Given I am on "the homepage"
     And I open the theme builder
@@ -271,7 +278,7 @@ Feature: Theme Builder fonts
       |     e         |
 
 
-  @selenium
+  @utest @selenium
   Scenario Outline: As user, I can change and publish the font size by using the slider
     Given I am on "the homepage"
     And I open the theme builder
@@ -292,6 +299,7 @@ Feature: Theme Builder fonts
       | site slogan     |       50            |
       | site slogan     |       65            |
 
+  @utest
   Scenario Outline: As user, I can change and publish the font size by using the textfield
     Given I am on "the homepage"
     And I open the theme builder
@@ -311,7 +319,7 @@ Feature: Theme Builder fonts
       | site slogan     |
 
       # Needs selenium because webkit does not report correct font family
-  @selenium
+  @utest @selenium
   Scenario Outline: As user, I can change and publish the font family
     Given I am on "the homepage"
     And I open the theme builder
@@ -336,6 +344,7 @@ Feature: Theme Builder fonts
       |     Georgia         |
       |     Monaco          |
 
+  @utest
   Scenario Outline: As user, I can change and publish the font weight, style, decoration and transform
     Given I am on "the homepage"
     And I open the theme builder
@@ -361,7 +370,7 @@ Feature: Theme Builder fonts
       | site slogan     | font-transform    | text transform    |
 
       # webkit is detecting wrong alignment
-  @selenium
+  @utest @selenium
   Scenario Outline: As user, I can change and publish the font algnment
     Given I am on "the homepage"
     And I open the theme builder
@@ -386,7 +395,7 @@ Feature: Theme Builder fonts
       | site name link  | text-align-justify  |
       | site slogan     | text-align-justify  |
 
-  @selenium
+  @utest @selenium
   Scenario Outline: As a user, I can change the font face settings and preview, save and publish them
     Given I am on "the homepage"
     And I open the theme builder
@@ -420,9 +429,11 @@ Feature: Theme Builder fonts
       |   publish       |
 
 
+  @utest
   Scenario: As a user, I can change font attributes using different themes
-    Given this hasn't been implemented yet
+    Given this hasn't been automated yet
 
+  @utest
   Scenario: As a user, I can show and hide the power theming
-    Given this hasn't been implemented yet
+    Given this hasn't been automated yet
 

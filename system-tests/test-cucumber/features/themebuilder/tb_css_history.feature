@@ -4,7 +4,7 @@ Feature: Theme Builder CSS history
     Given a fresh gardens installation
     And I am logged in as our testuser
 
-  @selenium
+  @utest @selenium
   Scenario Outline: As a user, I can set CSS font styles in the theme builder and can see them in the history
     Given I am on "the homepage"
     And I open the theme builder
@@ -17,7 +17,7 @@ Feature: Theme Builder CSS history
       | #header-region #site-name a   |
       | #main h2 a                    |
 
-  @selenium
+  @utest @selenium
   Scenario Outline: As a user, I can set selectively hide CSS rules
     Given I am on "the homepage"
     And I open the theme builder
@@ -35,7 +35,7 @@ Feature: Theme Builder CSS history
       | #header-region #site-name a   |
       | #main h2 a                    |
 
-  @selenium
+  @utest @selenium
   Scenario Outline: As a user, I can set selectively hide and re-enable CSS rules
     Given I am on "the homepage"
     And I open the theme builder
@@ -52,7 +52,7 @@ Feature: Theme Builder CSS history
       | #header-region #site-name a   |
       | #main h2 a                    |
 
-  @selenium
+  @utest @selenium
   Scenario Outline: As a user, I can delete CSS rules
     Given I am on "the homepage"
     And I open the theme builder
@@ -71,7 +71,7 @@ Feature: Theme Builder CSS history
       | #header-region #site-name a   |
       | #main h2 a                    |
 
-  @selenium
+  @utest @selenium
   Scenario Outline: As a user, I can hide all CSS rules
     Given I am on "the homepage"
     And I open the theme builder
@@ -90,7 +90,7 @@ Feature: Theme Builder CSS history
       | #header-region #site-name a   |
       | #main h2 a                    |
 
-  @selenium
+  @utest @selenium
   Scenario Outline: As a user, I can hide and re-enable all CSS rules
     Given I am on "the homepage"
     And I open the theme builder
@@ -108,7 +108,7 @@ Feature: Theme Builder CSS history
       | #header-region #site-name a   |
       | #main h2 a                    |
 
-  @selenium
+  @utest @selenium
   Scenario Outline: As a user, I can save the theme and see correct CSS rules
     Given I am on "the homepage"
     And I open the theme builder
@@ -129,7 +129,7 @@ Feature: Theme Builder CSS history
       | #header-region #site-name a   |
       | #main h2 a                    |
 
-  @selenium
+  @utest @selenium
   Scenario Outline: As a user, I can save the named theme and see correct CSS rules
     Given I am on "the homepage"
     And I open the theme builder
@@ -150,7 +150,7 @@ Feature: Theme Builder CSS history
       | #header-region #site-name a   |
       | #main h2 a                    |
 
-  @selenium
+  @utest @selenium
   Scenario Outline: As a user, I can publish the theme and see correct CSS rules
     Given I am on "the homepage"
     And I open the theme builder
@@ -171,24 +171,30 @@ Feature: Theme Builder CSS history
       | #main h2 a                    |
 
 
+  @utest
   Scenario: As a user, I can append custom CSS code and observe changes in preview
-    Given this hasn't been implemented yet
+    Given this hasn't been automated yet
 
+  @utest
   Scenario: As a user, I can append custom CSS code and save the theme
-    Given this hasn't been implemented yet
+    Given this hasn't been automated yet
 
+  @utest
   Scenario: As a user, I can select a CSS item to style and see that the right one is highlighted
-    Given this hasn't been implemented yet
+    Given this hasn't been automated yet
 
+  @utest
   Scenario: As a user, I can selectively hide and show CSS selector attributes
-    Given this hasn't been implemented yet
+    Given this hasn't been automated yet
 
+  @utest
   Scenario: As a user, I can delete/undo CSS rule attributes
-    Given this hasn't been implemented yet
+    Given this hasn't been automated yet
 
+  @utest
   Scenario: As a user, I can delete/undo CSS rule attributes and preview, save and publish the theme
-    Given this hasn't been implemented yet
+    Given this hasn't been automated yet
 
+  @utest
   Scenario: As a user, I can change the viewport metatag
-    Given this hasn't been implemented yet
-
+    Given this hasn't been automated yet

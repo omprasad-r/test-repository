@@ -11,7 +11,7 @@
         if (preview && !element.previewable) {
           // If this variation is not previewable in the normal way, we can just reload
           // the page with the selected option.
-          var base = Drupal.settings.basePath;
+          var base = Drupal.settings.basePath + Drupal.settings.pathPrefix;
           var path = location.pathname && /^(?:[\/\?\#])*(.*)/.exec(location.pathname)[1] || '';
           var param = Drupal.settings.personalize.optionPreselectParam;
           document.location.href = base + path + '?' + param + '=' + osid + '--' + choice_name;

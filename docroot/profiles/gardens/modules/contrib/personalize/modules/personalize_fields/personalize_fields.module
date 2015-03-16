@@ -945,6 +945,36 @@ function personalize_fields_field_attach_view_alter(&$output, $context) {
   foreach (element_children($output) as $field_name) {
     $element = &$output[$field_name];
     if ($option_set = _personalize_fields_get_option_set_for_field($entity->entity_type, $entity_id, $field_name)) {
+      // For field types that should have a #markup property in their output, we
+      // can do a check to make sure each value has a non-empty #markup property.
+      $uses_markup = isset($element[0]['#markup']);
+      if ($uses_markup) {
+        $children = element_children($element);
+        foreach ($children as $index) {
+          if (empty($element[$index]['#markup'])) {
+            unset($element[$index]);
+          }
+        }
+        $non_empty_values = element_children($element);
+        // If the number of non-empty field values does not correspond to the
+        // number of options in the option set, don't personalize. However, we
+        // must ensure that only the first value of the field is displayed.
+        if (count($non_empty_values) != count($option_set->options)) {
+          if (empty($non_empty_values)) {
+            $element[0] = array('#markup' => '');
+          }
+          else {
+            $element[0] = $element[$non_empty_values[0]];
+          }
+          // Remove all other values.
+          for ($i = 1; $i < count($non_empty_values); $i++) {
+            unset($element[$non_empty_values[$i]]);
+          }
+          // No personalization happening here, move along...
+          return;
+        }
+      }
+
       personalize_element_with_option_set($output[$field_name], $option_set, TRUE);
       $element['#first_option'] = $element[0];
       $element['#personalize_option_set'] = $option_set;
