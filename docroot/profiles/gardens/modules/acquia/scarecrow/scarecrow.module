@@ -360,8 +360,20 @@ function scarecrow_form_user_admin_permissions_alter(&$form, &$form_state) {
   $form['#validate'][] = '_scarecrow_permissions_validate';
 }
 
+/**
+ * Determines if Mollom has been configured to protect the website.
+ */
+function _scarecrow_mollom_is_configured() {
+  $is_configured = FALSE;
+  if (module_exists('mollom')) {
+    $status = _mollom_status();
+    $is_configured = $status['isConfigured'] && $status['isVerified'] && !$status['isTesting'];
+  }
+  return $is_configured;
+}
+
 function _scarecrow_comments_protected_by_mollom() {
-  if (!module_exists('mollom') || _mollom_status() !== TRUE) {
+  if (!_scarecrow_mollom_is_configured()) {
     return FALSE;
   }
 
@@ -380,7 +392,7 @@ function _scarecrow_comments_protected_by_mollom() {
  */
 function _scarecrow_node_protected_by_mollom($node_type) {
   $mollom_protection = FALSE;
-  if (module_exists('mollom') && _mollom_status() === TRUE) {
+  if (_scarecrow_mollom_is_configured()) {
     $form = mollom_form_load($node_type . '_node_form');
     if ($form && $form['mode'] != MOLLOM_MODE_DISABLED) {
       $mollom_protection = TRUE;

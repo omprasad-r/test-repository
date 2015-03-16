@@ -5,6 +5,7 @@ Feature: Theme Builder spacing settings
     Given a fresh gardens installation
     And I am logged in as our testuser
 
+  @utest
   Scenario Outline: As a user, I can set the edge spacing of an element using the slider
     Given I am on "the homepage"
     And I open the theme builder
@@ -25,6 +26,7 @@ Feature: Theme Builder spacing settings
       | padding |
       | border  |
 
+  @utest
   Scenario Outline: As a user, I can set the spacing of an element using text input
     Given I am on "the homepage"
     And I open the theme builder
@@ -45,6 +47,7 @@ Feature: Theme Builder spacing settings
       | padding |
       | border  |
 
+  @utest
   Scenario Outline: As a user, I can set the border color of an element
     Given I am on "the homepage"
     And I open the theme builder
@@ -62,6 +65,7 @@ Feature: Theme Builder spacing settings
       | d     |
       | e     |
 
+  @utest
   Scenario Outline: As a user, I can set the corner of an element using the slider
     Given I am on "the homepage"
     And I open the theme builder
@@ -79,6 +83,7 @@ Feature: Theme Builder spacing settings
       | padding |
       | border  |
 
+  @utest
   Scenario Outline: As a user, I can change spacing settings and save, save as and preview the theme
     Given I am on "the homepage"
     And I open the theme builder
@@ -101,12 +106,14 @@ Feature: Theme Builder spacing settings
       | save_as |
       | publish |
 
+  @utest
   Scenario: As a user, I want to be able to use undo and redo in combination with changes to an elements spacing parameters
-    Given this hasn't been implemented yet
+    Given this hasn't been automated yet
 
+  @utest
   Scenario: As a user, I want to be able to enable and disable power theming
-    Given this hasn't been implemented yet
+    Given this hasn't been automated yet
 
+  @utest
   Scenario: As a user, I want to have visual and textual feedback when selecting an item to theme
-    Given this hasn't been implemented yet
-
+    Given this hasn't been automated yet

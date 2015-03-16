@@ -4,7 +4,7 @@ Feature: Theme Builder basic interaction
     Given a fresh gardens installation
     And I am logged in as our testuser
 
-  @smoke
+  @smoke @utest
   Scenario: As user, I can do a basic modification followed by a save as
     Given I am on "the homepage"
     And I open the theme builder
@@ -16,8 +16,7 @@ Feature: Theme Builder basic interaction
     And I type "14" into "style-font-size"
     And I save timestamped theme with prefix "test"
 
-  @smoke
-  @selenium
+  @utest @smoke @selenium
   Scenario: As user, I can use the font size slider
     Given I am on "the homepage"
     And I open the theme builder
@@ -27,7 +26,7 @@ Feature: Theme Builder basic interaction
     And I move the "style-font-size" slider to 30 percent
     Then I should see that "site name link" equals "style-font-size" font size
 
-  @smoke
+  @smoke @utest
   Scenario: As user, I can use the color palette picker
     Given I change the window size to 1600x1200
     And I am on "the homepage"
@@ -38,7 +37,7 @@ Feature: Theme Builder basic interaction
     And I pick item "b" from color picker "style-font-color"
     Then I should see that "site name link" equals "style-font-color" color
 
-  @smoke
+  @smoke @utest
   Scenario Outline: As user, I can set spacing margins, padding and borders by typing
     Given I am on "the homepage"
     And I open the theme builder
@@ -59,8 +58,7 @@ Feature: Theme Builder basic interaction
       | rotating banner | padding     |             |
       | site name link  | border      |   -width    |
 
-  @smoke
-  @selenium
+  @smoke @utest @selenium
   Scenario Outline: As user, I can set margins, padding and borders using the slider
     Given I am on "the homepage"
     And I open the theme builder
@@ -81,7 +79,7 @@ Feature: Theme Builder basic interaction
       | site name link  | padding     |             |
       | site name link  | border      |   -width    |
 
-  @selenium
+  @smoke @utest @selenium
   Scenario Outline: As a user, I should be able to switch between the vertical tabs under the "Advanced tab"
     Given I am on "the homepage"
     And I open the theme builder
@@ -94,6 +92,7 @@ Feature: Theme Builder basic interaction
       |   Custom CSS        |
       |   Viewport settings |
 
+  @smoke @utest
   Scenario: As a user, I can publish themes several times in a row without breaking the installation
     Given I am on "the homepage"
     And I open the theme builder

@@ -5,6 +5,7 @@ Feature: Blocks
     And I am logged in as our testuser
     And I am an administrator on the site
 
+  @utest
   Scenario: As a user, I can create a block
     When I open my blocks management interface
     And I try to add a block
@@ -12,11 +13,13 @@ Feature: Blocks
     And I save
     Then I have a block
 
+  @utest
   Scenario: As a user, I can assign a block to a region
     Given I have created a block
     And I assign the block to a region
     Then the block is displayed in the proper region
 
+  @utest
   Scenario Outline: As a user, I can edit a block
     Given I have created a block assigned to a region
     And I configure it from the <edit mode>
@@ -27,12 +30,13 @@ Feature: Blocks
     | contextual menu |
     | blocks dialog   |
 
+  @utest
   Scenario: As a user, I can delete a block
     Given I have created a block assigned to a region
     And I choose to delete the block
     Then my block is gone
 
-
+  @utest
   Scenario: As a user, I can assign multiple blocks to a region
     Given I have created a block assigned to a region
     And I create another block and assign it to the same region

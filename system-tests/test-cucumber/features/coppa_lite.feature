@@ -5,18 +5,21 @@ Feature: Coppa lite
     And I am logged in as our testuser
     And I have a coppa lite enabled
 
+  @wmg @utest
   Scenario: As a user, I can register a user who is older than 13 years
     When I visit a site as a new user
     And I sign up for the site
     And I enter a date that is COPPA compliant
     Then I can be registered on the site
 
+  @wmg @utest
   Scenario: As a user, I can't register a user who is younger than 13 years
     When I visit a site as a new user
     And I sign up for the site
     And I enter a date that is not COPPA compliant
     Then my regsitration is rejected
 
+  @wmg @utest
   Scenario: As a user, I can't register a user who is younger than 13 years and pretends to be older
     When I visit a site as a new user
     And I sign up for the site

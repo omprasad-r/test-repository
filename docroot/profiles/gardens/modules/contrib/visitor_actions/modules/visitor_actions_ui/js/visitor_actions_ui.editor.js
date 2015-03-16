@@ -34,7 +34,7 @@ Drupal.behaviors.visitorActionsUIEditor = {
     });
     var toggleViews = Drupal.visitorActions.ui.views.toggleViews = [];
     // Process the visitor actions edit mode toggle.
-    $('[href="' + Drupal.settings.basePath + 'admin/structure/visitor_actions/add"]')
+    $('[href="' + Drupal.settings.basePath + Drupal.settings.pathPrefix + 'admin/structure/visitor_actions/add"]')
       .each(function (index, element) {
         toggleViews.push(
           (new Drupal.visitorActions.ui.AppToggleView({
@@ -433,7 +433,7 @@ $.extend(Drupal.visitorActions.ui, {
       }
       var that = this;
       var type = this.model.get('type');
-      var formPath = Drupal.settings.basePath +
+      var formPath = Drupal.settings.basePath + Drupal.settings.pathPrefix +
         'visitor_actions/add/' +
         Drupal.encodePath(type) +
         '?path=' + Drupal.encodePath(Drupal.settings.visitor_actions.currentPath);

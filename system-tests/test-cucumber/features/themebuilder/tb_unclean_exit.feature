@@ -4,7 +4,7 @@ Feature: Theme Builder exit
     Given a fresh gardens installation
     And I am logged in as our testuser
 
-  @selenium
+  @utest @selenium
   Scenario Outline: As user, I can re-open the theme builder and see the active draft message
     Given I am on "the homepage"
     And I open the theme builder
@@ -24,7 +24,7 @@ Feature: Theme Builder exit
       | site name link  |
       | site slogan     |
 
-  @selenium
+  @utest @selenium
   Scenario Outline: As user, I can re-open the theme builder and see that the changed attributes are set correctly
     Given I am on "the homepage"
     And I open the theme builder
@@ -54,7 +54,7 @@ Feature: Theme Builder exit
       | site name link  |
       | site slogan     |
 
-  @selenium
+  @utest @selenium
   Scenario Outline: As user, I can open a second theme builder session and see the active draft message
     Given I am on "the homepage"
     And I open the theme builder

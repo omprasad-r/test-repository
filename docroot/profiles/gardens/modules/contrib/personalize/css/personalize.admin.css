@@ -239,3 +239,9 @@ html.js .personalize-admin-content .collapsible .fieldset-legend,
 .personalize-admin-cache-settings .form-item label {
   display: inline-block;
 }
+
+.personalize-status-change-select {
+  float: left;
+  padding-top: 2px;
+  padding-right: 5px;
+}

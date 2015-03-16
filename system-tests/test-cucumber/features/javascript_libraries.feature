@@ -5,6 +5,7 @@ Feature: Javascript libraries
     And I am logged in as our testuser
     And I have javascript libraries enabled
 
+  @utest
   Scenario Outline: As a user, I can enable an '<library type>' JS library
     When I configure javascript libraries
     And I choose to add a new '<library type>' javascript library
@@ -15,6 +16,7 @@ Feature: Javascript libraries
     | upload     |
     | web url    |
 
+  @utest
   Scenario Outline: As a user, I can disable an '<library type>' JS library
     Given I have a '<library type>' javascript library enabled
     And I chose to disable it
@@ -24,6 +26,7 @@ Feature: Javascript libraries
     | upload     |
     | web url    |
 
+  @utest
   Scenario: As a user, I can cache JS libraries for performance
     Given I have some javascript libraries enabled
     And I chose to chache my js libraries
@@ -34,6 +37,7 @@ Feature: Javascript libraries
     And I clear all the caches on my site
     Then my javascript code is still available
 
+  @utest
   Scenario Outline: As a user, I can use the included JS libraries
     When I '<enable>' and included JS library
     Then the javascript code is '<availability>' availble for use on my site
@@ -42,6 +46,7 @@ Feature: Javascript libraries
     | enable  |              |
     | disable | not          |
 
+  @utest
   Scenario: As a user, I can use jCarousel to create a carousel view
     When I follow the steps in http://acquia.com/blog/creating-carousel-drupal-gardens
     Then I get a nice carousel on my site

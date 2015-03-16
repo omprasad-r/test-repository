@@ -53,7 +53,7 @@ function theme_personalize_options_wrapper($variables) {
     $prefix .= '<noscript>' . $no_script_content . '</noscript>';
   }
 
-  $prefix .= '<script type="text/template">';
+  $prefix .= '<script type="text/template" data-personalize-script="' . $js_id . '">';
   $suffix = '</script></div>';
 
   // Build array of rendered options for JSON encoding.

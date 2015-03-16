@@ -12,7 +12,7 @@ Drupal.behaviors.visitorActionsEditorLauncher = {
     // disabled, the JavaScript resources to build the edit mode will be
     // loaded.
     if (!getAppView()) {
-      var $triggers = $('[href="' + Drupal.settings.basePath + 'admin/structure/visitor_actions/add"]')
+      var $triggers = $('[href="' + Drupal.settings.basePath + Drupal.settings.pathPrefix + 'admin/structure/visitor_actions/add"]')
       var $placeholders = $triggers.once('visitor-actions-ui-launcher');
       // Filter out the triggers that have been processed and unbind them.
       if ($placeholders.length) {
@@ -71,7 +71,7 @@ Drupal.behaviors.visitorActionsEditorLauncher = {
           }
 
           Drupal.ajax[id] = new Drupal.ajax(id, $('#' + id), {
-            url: Drupal.settings.basePath + 'visitor_actions_ui/edit-mode-toggle/assets',
+            url: Drupal.settings.basePath + Drupal.settings.pathPrefix + 'visitor_actions_ui/edit-mode-toggle/assets',
             event: 'load.visitorActionsUI',
             wrapper: id,
             progress: {
@@ -153,7 +153,7 @@ function attachVisitorActionsToggleEditMode () {
       // Toggle edit mode on the server. The response will update
       // Drupal.settings.visitor_actions.edit_mode.
       Drupal.ajax[element.id] = new Drupal.ajax(element.id, element, {
-        url: Drupal.settings.basePath + 'visitor_actions_ui/edit-mode-toggle',
+        url: Drupal.settings.basePath + Drupal.settings.pathPrefix + 'visitor_actions_ui/edit-mode-toggle',
         event: 'toggle.visitorActionsUI',
         progress: {
           type: 'none'
