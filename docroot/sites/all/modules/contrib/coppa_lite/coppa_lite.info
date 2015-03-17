@@ -4,3 +4,9 @@ core = 7.x
 dependencies[] = date
 files[] = coppa_lite.module
 files[] = coppa_lite.test
+; Information added by Drupal.org packaging script on 2014-12-05
+version = "7.x-1.0+3-dev"
+core = "7.x"
+project = "coppa_lite"
+datestamp = "1417812781"
+

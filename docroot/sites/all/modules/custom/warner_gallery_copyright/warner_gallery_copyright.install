@@ -1,0 +1,37 @@
+<?php
+/**
+ * @file
+ * Summary
+ */
+
+/**
+ * Implements hook_install();
+ * To create a copyright field 
+ * Added field to media_gallery content type
+ */
+function warner_gallery_copyright_install() {
+  $field_name = 'field_media_gallery_copyright';
+  // Make sure the field doesn't already exist.
+  if (!field_info_field($field_name)) {
+    // Create the field.
+    $field = array(
+      'field_name' => $field_name,
+      'type' => 'text',
+      'settings' => array( 'max_length' => 255),
+    );
+    field_create_field($field);
+    // Create the instance.
+    $instance = array( 'field_name' => $field_name,
+      'entity_type' => 'node',
+      'bundle' => 'media_gallery',
+      'label' => 'Copyright',
+      'description' => 'Add copyright information.',
+      'required' => TRUE,
+    );
+    field_create_instance($instance);
+    watchdog('warner_gallery_copyright', '@field_name was added successfully.', array('@field_name' => $field_name));
+  }
+  else {
+    watchdog('warner_gallery_copyright', '@field_name already exists.', array('@field_name' => $field_name));
+  }
+}
