@@ -1,0 +1,8 @@
+name = Warner Honeypot Auto configuration
+description = Auto configure honeypot for warner's site.
+core = 7.x
+package = Drupal Gardens
+t
+files[] = warner_honeypot.install
+
+dependencies[] = honeypot

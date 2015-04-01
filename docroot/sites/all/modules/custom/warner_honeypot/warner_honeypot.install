@@ -1,0 +1,12 @@
+<?php
+
+/**
+ * Implements hook_install().
+ */
+function warner_honeypot_install() {
+  variable_set('honeypot_element_name', 'honeypot');
+  variable_set('honeypot_log', TRUE);
+  variable_set('honeypot_form_user_register_form', TRUE);
+  variable_set('honeypot_form_webforms', TRUE);
+  variable_set('honeypot_log', TRUE);
+}

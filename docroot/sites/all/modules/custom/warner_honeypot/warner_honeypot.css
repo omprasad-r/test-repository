@@ -1,0 +1,9 @@
+/**
+ * @file wmg.ui.dialog.css
+ *
+ * Standard structure styling for WMG user overlays.
+ */
+ 
+.url-textfield{
+    display:none !important; 
+}

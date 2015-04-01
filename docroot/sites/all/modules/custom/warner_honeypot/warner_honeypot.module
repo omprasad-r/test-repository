@@ -1,0 +1,15 @@
+<?php
+
+/**
+ * @file
+ * Warner Honeypot module, for deterring spam bots from completing Drupal forms.
+ */
+/*
+ * Implements hook_init()
+ * Adding stylesheet for forms protected by honeypot
+ */
+function warner_honeypot_init() {
+    drupal_add_css(
+            drupal_get_path('module', 'warner_honeypot') . '/warner_honeypot.css'
+    );
+}
