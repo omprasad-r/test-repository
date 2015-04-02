@@ -1,6 +1,5 @@
 require 'rubygems'
 require 'erb'
-require 'cucumber/formatter/ordered_xml_markup'
 require 'cucumber/formatter/duration'
 require 'cucumber/formatter/io'
 require 'axlsx'
@@ -46,11 +45,11 @@ module Acquia
 
 
       def before_features(features)
-        @step_count = get_step_count(features)
+        @step_count = features && features.step_count || 0
         @wb = @p.workbook
         @sheet = @wb.add_worksheet
         @sheet.add_row(Array.new(7) + ["Total"])
-        @sheet.add_row(["Enterprise Gardener", "https://gardener.utest.acquia-sites.com"] + Array.new(5) + ["Pass"])
+        @sheet.add_row(["Enterprise Gardener", "https://www.verifysf.verification.acquia-test.com"] + Array.new(5) + ["Pass"])
         @sheet.add_row(["SMB Gardener", "https://gardener.gsteamer.acquia-sites.com"] + Array.new(5) + ["Fail"])
         @sheet.add_row(["Total Steps", @step_count] + Array.new(5) + ["Not run"])
         testers = []
@@ -141,8 +140,8 @@ module Acquia
         @scenario_number+=1
         @scenario_red = false
         css_class = {
-          Cucumber::Ast::Scenario        => 'scenario',
-          Cucumber::Ast::ScenarioOutline => 'scenario outline'
+          Cucumber::Core::Ast::Scenario        => 'scenario',
+          Cucumber::Core::Ast::ScenarioOutline => 'scenario outline'
         }[feature_element.class]
 #        @builder << "<div class='#{css_class}'>"
       end
@@ -375,45 +374,6 @@ module Acquia
 #          @builder.text!("makeYellow('cucumber-header');") unless @header_red
 #          @builder.text!("makeYellow('scenario_#{@scenario_number}');") unless @scenario_red
 #        end         
-      end
-
-      def get_step_count(features)
-        count = 0
-        features = features.instance_variable_get("@features")
-        features.each do |feature|
-          #get background steps
-          if feature.instance_variable_get("@background")
-            background = feature.instance_variable_get("@background")
-            background.init
-            background_steps = background.instance_variable_get("@steps").instance_variable_get("@steps")
-            count += background_steps.size
-          end
-          #get scenarios
-          feature.instance_variable_get("@feature_elements").each do |scenario|
-            scenario.init
-            #get steps
-            steps = scenario.instance_variable_get("@steps").instance_variable_get("@steps")
-            count += steps.size
-
-            #get example table
-            examples = scenario.instance_variable_get("@examples_array")
-            unless examples.nil?
-              examples.each do |example|
-                example_matrix = example.instance_variable_get("@outline_table").instance_variable_get("@cell_matrix")
-                count += example_matrix.size
-              end
-            end
-
-            #get multiline step tables
-            steps.each do |step|
-              multi_arg = step.instance_variable_get("@multiline_arg")
-              next if multi_arg.nil?
-              matrix = multi_arg.instance_variable_get("@cell_matrix")
-              count += matrix.size unless matrix.nil?
-            end
-          end
-        end
-        return count
       end
 
       def build_step(keyword, step_match, status)

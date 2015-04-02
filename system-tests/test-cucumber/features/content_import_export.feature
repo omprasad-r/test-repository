@@ -1,7 +1,8 @@
 Feature: Content import and export
 
   Background:
-    Given a fresh gardens installation
+    Given a fresh installation
+    And node export is enabled
     And I am logged in as our testuser
 
   Scenario: As a user, I can export a site node in various formats

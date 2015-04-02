@@ -460,12 +460,26 @@ function gardens_client_user_register_theme() {
  * Implements hook_form_FORM_ID_alter().
  */
 function gardens_client_form_acsf_openid_admin_settings_form_alter(&$form, $form_state) {
-  $theme_options = array(
-    'seven' => t('Seven (Default Drupal administration theme)'),
-    'blossom' => t('Blossom (Drupal Gardens administration theme)'),
-  );
   module_load_include('inc', 'system', 'system.admin');
-  $form += system_themes_admin_form($form, $form_state, $theme_options);
+
+  // Get current list of themes.
+  $themes = system_rebuild_theme_data();
+  uasort($themes, 'system_sort_modules_by_info_name');
+
+  foreach ($themes as &$theme) {
+    if (!empty($theme->info['hidden'])) {
+      continue;
+    }
+    // Ignore themebuilder themes.
+    if (strpos($theme->filename, '/themes/mythemes/acq_')) {
+      continue;
+    }
+    $admin_theme_options[$theme->name] = $theme->info['name'];
+  }
+  $admin_theme_options['seven'] = t('Seven (Default Drupal administration theme)');
+  $admin_theme_options['blossom'] = t('Blossom (Drupal Gardens administration theme)');
+
+  $form += system_themes_admin_form($form, $form_state, $admin_theme_options);
   unset($form['admin_theme']['actions']);
 
   // On gardens_distro the OpenID login via overlay is enforced.
