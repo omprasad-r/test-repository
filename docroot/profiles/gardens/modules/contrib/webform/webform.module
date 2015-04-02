@@ -1622,9 +1622,6 @@ function webform_block_view($delta = '') {
   // This is a webform node block.
   $node->webform_block = TRUE;
 
-  // Use the node title for the block title.
-  $subject = $node->title;
-
   // Generate the content of the block based on display settings.
   if ($settings['display'] == 'form') {
     webform_node_view($node, 'full');
@@ -1640,9 +1637,9 @@ function webform_block_view($delta = '') {
     $content['#contextual_links']['node'] = array('node', array($node->nid));
   }
 
-  // Create the block.
+  // Create the block, using the node title for the block title.
   $block = array(
-    'subject' => $subject,
+    'subject' => check_plain($node->title),
     'content' => $content,
   );
   return $block;

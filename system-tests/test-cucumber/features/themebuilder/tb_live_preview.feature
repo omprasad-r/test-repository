@@ -20,7 +20,7 @@ Feature: Theme Builder live preview
       |   Sidebar B   |
 
   @smoke @utest @wip
-  Scenario Outline: As user, I can preview any theme that has been saved on the site
+  Scenario: As user, I can preview any theme that has been saved on the site
     Given the role "themer" has the permission "themebuilder preview"
     And I am on "the homepage"
     Then I should see the site in the preview theme
@@ -40,14 +40,14 @@ Feature: Theme Builder live preview
       | in_preview_block |
 
   @smoke @utest @wip
-  Scenario Outline: As other_user, I can not preview any theme
+  Scenario: As other_user, I can not preview any theme
     Given someone is previewing a theme other than the live theme
     And I am on "the homepage"
     Then I cannot see the "Theme preview" block
     And I cannot see any evidence that a theme other than the live theme is active
 
   @smoke @utest @wip
-  Scenario Outline: As themer_user I can use ThemeBuilder while user is previewing a saved theme
+  Scenario: As themer_user I can use ThemeBuilder while user is previewing a saved theme
     Given I am logged in as themer_user
     And I have permissions to theme the site
     And I make changes to the theme and save theme
@@ -56,7 +56,7 @@ Feature: Theme Builder live preview
     Then they can see the theme changes as I save my theme
 
   @smoke @utest @wip
-  Scenario Outline: As themer_user I can not use ThemeBuilder while I am previewing a theme
+  Scenario: As themer_user I can not use ThemeBuilder while I am previewing a theme
     Given I am logged in as themer_user
     And I have permissions to theme the site
     And I have permissions to "theme preview"
@@ -65,7 +65,7 @@ Feature: Theme Builder live preview
     Then I should be blocked from opening the ThemeBuilder
     
   @smoke @utest @wip
-  Scenario Outline: As themer_user I can not preview a theme while I am using the  ThemeBuilder
+  Scenario: As themer_user I can not preview a theme while I am using the  ThemeBuilder
     Given I am logged in as themer_user
     And I have permissions to theme the site
     And I have permissions to "theme preview"
