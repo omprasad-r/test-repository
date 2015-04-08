@@ -4,9 +4,18 @@
  * Implements hook_install().
  */
 function warner_honeypot_install() {
-  variable_set('honeypot_element_name', 'honeypot');
   variable_set('honeypot_log', TRUE);
   variable_set('honeypot_form_user_register_form', TRUE);
   variable_set('honeypot_form_webforms', TRUE);
   variable_set('honeypot_log', TRUE);
+}
+
+/*
+ * Imlements hook_update_N().
+ */
+function warner_honeypot_update_7001() {
+  // Enabling honeypot for all the forms
+  variable_set('honeypot_element_name', 'homepage'); 
+  // Setting name = url if it wasn't setup on installation of the module for existing sites
+  variable_set('honeypot_protect_all_forms', TRUE);
 }
