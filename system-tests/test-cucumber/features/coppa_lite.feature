@@ -17,7 +17,7 @@ Feature: Coppa lite
     When I visit a site as a new user
     And I sign up for the site
     And I enter a date that is not COPPA compliant
-    Then my regsitration is rejected
+    Then my registration is rejected
 
   @wmg @utest
   Scenario: As a user, I can't register a user who is younger than 13 years and pretends to be older

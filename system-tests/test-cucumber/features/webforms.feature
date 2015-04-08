@@ -197,7 +197,7 @@ Feature: Webforms
     Then I should see a status message with the text "You must login or register to view this form"
 
   @smoke @utest
-  Scenario Outline: As a user, I can add new webforms to certain content types
+  Scenario: As a user, I can add new webforms to certain content types
     Given this hasn't been automated yet
 
   @smoke @utest

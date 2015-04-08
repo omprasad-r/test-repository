@@ -43,35 +43,6 @@ Given /^I am logged in as our testuser using the login iframe$/ do
   end
 end
 
-
-Given /^I am logged in as our testuser using the login iframe$/ do
-  username = "qatestuser"
-  password = "ham#fee"
-
-  click_link('Log in')
-  within_class_frame(["overlay-active"]) do
-    within(:css, "form#user-login") do
-      fill_in('edit-name', :with => username)
-      fill_in('edit-pass', :with => password)
-      click_button("edit-submit")
-    end
-  end
-end
-
-Given /^I am logged in as our testuser using the login iframe$/ do
-  username = "qatestuser"
-  password = "ham#fee"
-
-  click_link('Log in')
-  within_class_frame(["overlay-active"]) do
-    within(:css, "form#user-login") do
-      fill_in('edit-name', :with => username)
-      fill_in('edit-pass', :with => password)
-      click_button("edit-submit")
-    end
-  end
-end
-
 Given /^I am (manually )?logged in as (?:user )?["'](.*)["'] with (?:the )?password ['"](.*)['"]$/ do |manually, user, password|
   step 'I have a new session'
   #$site_capabilities get set in env.rb

@@ -179,7 +179,7 @@ Background:
     Given I visit the configuration page
     Then there should be a link to /admin/config/media/galleries
 
-  @selenium
+  @selenium @utest
   Scenario: As a user I can drag and drop images within a gallery
     Given I create a media gallery with the title 'gullury' and the description 'bluuurk'
     And I change the window size to 1600x1200

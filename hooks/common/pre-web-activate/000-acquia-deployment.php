@@ -200,6 +200,7 @@ function request_theme_files($site, $env, $webnode) {
     $parameters = array(
       'sitegroup' => $site,
       'webnode' => $webnode,
+      'environment' => $env,
     );
     $creds = get_shared_creds($site, $env);
     $message = new SimpleRestMessage($site, $env);
