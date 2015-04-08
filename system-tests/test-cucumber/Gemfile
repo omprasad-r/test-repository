@@ -1,6 +1,6 @@
 source 'https://rubygems.org'
 
-gem 'cucumber'
+gem 'cucumber', '~>2.0.0.rc5'
 gem 'rspec'
 gem 'capybara'
 gem 'excon'
@@ -11,6 +11,7 @@ gem 'capybara-screenshot', '=0.1.7'
 gem 'nokogiri'
 gem 'poltergeist'
 gem 'axlsx'
+gem 'selenium-webdriver'
 
 #nobody using it at the moment
 #gem 'sauce' , :git => 'git://github.com/saucelabs/sauce_ruby.git'

@@ -167,6 +167,14 @@ if (file_exists('/var/www/site-php')) {
       exit;
     }
   }
+  if (isset($_ENV['AH_SITE_ENVIRONMENT'])) {
+    // DG-10819: Enable Migrate background operations by default on all Acquia
+    // hosting environments. See https://drupal.org/node/1958170. The path here
+    // should be valid on all Acquia hosting servers, and will not take effect
+    // on non-Acquia environments since AH_SITE_ENVIRONMENT won't be set in that
+    // case.
+    $conf['migrate_drush_path'] = '/usr/local/bin/drush';
+  }
 
   if (!empty($site_settings['conf'])) {
     foreach ((array) $site_settings['conf'] as $key => $value) {

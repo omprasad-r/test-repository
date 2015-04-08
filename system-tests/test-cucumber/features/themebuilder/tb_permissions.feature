@@ -24,7 +24,7 @@ Feature: Theme Builder permission
       |   Themes    |
 
   @utest @smoke
-  Scenario Outline: As user, I should have access to all theme builder tabs
+  Scenario: As user, I should have access to all theme builder tabs
     Given the role "authenticated user" has the permission "administer site configuration"
     And I am on "the homepage"
     When I open the theme builder
