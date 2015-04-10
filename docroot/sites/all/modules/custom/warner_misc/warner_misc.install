@@ -545,3 +545,11 @@ function warner_misc_update_11162() {
     }
   }
 }
+
+/**
+* Enables Honeypot and Warner Honeypot module.
+* Auto Config honeypot for all the SF sites 
+*/
+function warner_misc_update_11163() {
+  module_enable(array('honeypot','warner_honeypot'), FALSE);
+}
