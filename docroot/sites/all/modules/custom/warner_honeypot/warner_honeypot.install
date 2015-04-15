@@ -13,7 +13,7 @@ function warner_honeypot_install() {
 /*
  * Imlements hook_update_N().
  */
-function warner_honeypot_update_7001() {
+function warner_honeypot_update_7002() {
   // Enabling honeypot for all the forms
   variable_set('honeypot_element_name', 'homepage'); 
   // Setting name = url if it wasn't setup on installation of the module for existing sites
