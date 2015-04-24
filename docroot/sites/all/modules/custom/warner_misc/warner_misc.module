@@ -1150,3 +1150,14 @@ function warner_misc_wysiwyg_editor_settings_alter(&$settings, &$context) {
     $settings['toolbar'] = $new_toolbar;
   }
 }
+
+/**
+ * Implements hook_form_alter()
+ * JIRA WMM-184
+ */
+function warner_utils_form_node_type_form_alter(&$form, $form_state) {
+  if (module_exists('flippy')) {
+    $form['flippy']['flippy_next_label']['#maxlength'] = 600;
+    $form['flippy']['flippy_prev_label']['#maxlength'] = 600;
+  }
+}
