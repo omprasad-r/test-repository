@@ -225,7 +225,7 @@ function _warner_misc_configure_antivirus() {
   variable_set('antivirus_notify_msg', "");
   variable_set('antivirus_scanner_clamavdaemon_flags', array('-v' => '-v'));
   variable_set('antivirus_settings_clamavdaemon', array(
-    'host' => 'custom-108.wmg-egardens.hosting.acquia.com',
+    'host' => 'custom-203.wmg-egardens.hosting.acquia.com',
     'port' => '3310',
     'timeout' => '5',
   ));
