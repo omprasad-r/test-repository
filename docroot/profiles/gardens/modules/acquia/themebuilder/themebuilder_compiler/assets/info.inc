@@ -128,6 +128,33 @@ class ThemebuilderInfo extends ThemebuilderAssetNew {
    */
   function set($key, $value) {
     if (!$this->contents) {
+      $theme = variable_get('theme_default');
+      $site = getenv('AH_SITE_GROUP');
+      $env = getenv('AH_SITE_ENVIRONMENT');
+      $domain = acsf_get_acsf_site()->standard_domain;
+      $backtrace = debug_backtrace();
+      $theme_object = isset($backtrace[1]['object']) && $backtrace[1]['object'] instanceof Theme ? $backtrace[1]['object'] : NULL;
+      if ($theme_object) {
+        $path = DRUPAL_ROOT . '/' . $theme_object->getPath();
+        $info_path = $path . '/' . $theme_object->getName() . '.info';
+        $info = file_get_contents($info_path);
+        $list = `ls -la $path/`;
+      }
+      else {
+        $path = 'UNABLE TO DETERMINE';
+        $info_path = 'UNABLE TO DETERMINE';
+        $info = 'N/A';
+        $list = 'N/A';
+      }
+      $file = sprintf('/mnt/gfs/%s.%s/logs/%s-%s-themebuilder-fail.log', $site, $env, gethostname(), date('Ymd-His'));
+      file_put_contents($file,
+        "\n" . date('r ') . $domain . "\n*****************\n" .  print_r($backtrace, TRUE) .
+        "\nTHEME_DEFAULT: $theme\n" .
+        "\nTHEME PATH: $path\n" .
+        "\nINFO PATH: $info_path\n" .
+        "\nDIRECTORY CONTENTS:\n" . $list .
+        "\nINFO CONTENTS:\n" . $info, FILE_APPEND);
+      watchdog('themebuilder', "DG-13705: Unable to call set() on thembeuilder Info asset. Logging to file: " . $file, array(), WATCHDOG_ERROR);
       throw new Exception('Info object is not initialized.');
     }
     $this->contents[$key] = $value;
