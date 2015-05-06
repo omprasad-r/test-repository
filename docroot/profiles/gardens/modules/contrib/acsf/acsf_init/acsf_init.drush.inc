@@ -134,7 +134,6 @@ function drush_acsf_connect_factory() {
   $site_owner_mail = trim(drush_get_option('site-owner-mail'));
   $site_owner_roles = drush_get_option_list('site-owner-roles');
 
-  $site_owner_account = user_load_by_mail($site_owner_mail);
   // Validate email addresses.
   if (!valid_email_address($site_admin_mail)) {
     return drush_set_error(dt('The site-admin-mail value is not a valid email address.'));
@@ -142,6 +141,7 @@ function drush_acsf_connect_factory() {
   if (!valid_email_address($site_owner_mail)) {
     return drush_set_error(dt('The site-owner-mail value is not a valid email address.'));
   }
+
   // Make sure there is no regular user account with the admin email address.
   $site_admin_mail_account = user_load_by_mail($site_admin_mail);
   if ($site_admin_mail_account && $site_admin_mail_account->uid > 1) {
@@ -150,25 +150,32 @@ function drush_acsf_connect_factory() {
       '@uid' => $site_admin_mail_account->uid,
     )));
   }
-  // Make sure there is no user with the same name before creating a new user.
-  if (empty($site_owner_account) && user_load_by_name($site_owner_name)) {
-    return drush_set_error(dt('Unable to create the site owner account, there is already a user account with the name @site-owner-name but with a different email address.', array(
-      '@site-owner-name' => $site_owner_name,
-    )));
-  }
-  // Make sure the name isn't used by another user with a different email.
-  $conflicting_account = user_load_by_name($site_owner_name);
-  if ($conflicting_account && $site_owner_account->uid !== $conflicting_account->uid) {
-    return drush_set_error(dt('Unable to update the site owner account, uid @uid is already using the name @site-owner-name but with a different email address.', array(
-      '@uid' => $conflicting_account->uid,
-      '@site-owner-name' => $site_owner_name,
-    )));
-  }
+
   // If a list of roles was specified, make sure they all exist.
   foreach ($site_owner_roles as $role) {
     if (!user_role_load_by_name($role)) {
       return drush_set_error(dt('The role @role does not exist.', array('@role' => $role)));
     }
+  }
+
+  // The site owner's email address may have been changed on the factory (for
+  // instance, if the user updated their email address on the factory and the
+  // new email address has not yet been synced to the site). First, try to
+  // locate the user account by site-owner-mail.
+  $site_owner_account = user_load_by_mail($site_owner_mail);
+  if (!empty($site_owner_account) && $site_owner_account->name !== $site_owner_name) {
+    return drush_set_error(dt('The site-owner-name value does not match the name of the user loaded by site-owner-mail.'));
+  }
+  // If the site owner user account is not found, try to locate it by
+  // site-owner-name.
+  if (empty($site_owner_account)) {
+    $site_owner_account = user_load_by_name($site_owner_name);
+  }
+  // Finally, if the site owner user account is still not found, we need to
+  // throw an error. If we were to create a new account the new site owner user
+  // ID would not match the previous one and their roles could be different.
+  if (empty($site_owner_account)) {
+    return drush_set_error(dt('The site owner account cannot be found by site-owner-mail or site-owner-name.'));
   }
 
   // Clear all caches ahead of time so Drupal has a chance to rebuild
