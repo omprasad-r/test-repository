@@ -43,7 +43,7 @@ function gardens_client_menu() {
     'title' => 'Factory registration',
     'page callback' => 'acsf_openid_factory_login_page',
     'page arguments' => array('register'),
-    'access callback' => 'acsf_openid_user_register_access',
+    'access callback' => TRUE,
     'type' => MENU_CALLBACK,
     'file path' => drupal_get_path('module', 'acsf_openid'),
     'file' => 'acsf_openid.pages.inc',
