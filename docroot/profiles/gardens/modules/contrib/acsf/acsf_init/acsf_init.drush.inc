@@ -64,9 +64,9 @@ function acsf_init_drush_command() {
 function drush_acsf_init() {
   // Retrieve the path to the acsf module relative to this file.
   $path = dirname(dirname(dirname(__FILE__)));
-  $relative_path = str_replace(DRUPAL_ROOT . '/', '', $path);
-  $repo_root = str_replace('/docroot', '', DRUPAL_ROOT);
-  $lib_path = sprintf('%s/%s/acsf/acsf_init/lib', DRUPAL_ROOT, $relative_path);
+  $relative_path = str_replace(realpath(DRUPAL_ROOT) . '/', '', realpath($path));
+  $repo_root = str_replace('/docroot', '', realpath(DRUPAL_ROOT));
+  $lib_path = sprintf('%s/%s/acsf/acsf_init/lib', realpath(DRUPAL_ROOT), $relative_path);
 
   drush_print(dt('Installing ACSF requirements.'));
 

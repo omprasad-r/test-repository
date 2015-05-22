@@ -6,8 +6,10 @@
  */
 
 // Include custom sites.php code from factory-hooks/pre-sites-php.
-if (function_exists('acsf_hooks_include')) {
-  acsf_hooks_include('pre-settings-php');
+if (function_exists('acsf_hooks_includes')) {
+  foreach (acsf_hooks_includes('pre-settings-php') as $uri) {
+    include_once $uri;
+  }
 }
 
 /**
@@ -184,6 +186,8 @@ if (file_exists('/var/www/site-php')) {
 }
 
 // Include custom sites.php code from factory-hooks/post-sites-php.
-if (function_exists('acsf_hooks_include')) {
-  acsf_hooks_include('post-settings-php');
+if (function_exists('acsf_hooks_includes')) {
+  foreach (acsf_hooks_includes('post-settings-php') as $uri) {
+    include_once $uri;
+  }
 }
