@@ -72,28 +72,16 @@ function field_base_features_export($data, &$export, $module_name = '') {
 
   foreach ($data as $identifier) {
     if ($base = features_field_base_load($identifier)) {
-      // If this field is already provided by another module, remove the field
-      // and add the other module as a dependency.
-      if (isset($map[$identifier]) && $map[$identifier] != $module_name) {
-        if (isset($export['features']['field_base'][$identifier])) {
-          unset($export['features']['field_base'][$identifier]);
-        }
-        $module = $map[$identifier];
-        $export['dependencies'][$module] = $module;
+      $export['features']['field_base'][$identifier] = $identifier;
+      $export['dependencies'][$base['module']] = $base['module'];
+      if ($base['storage']['type'] != variable_get('field_storage_default', 'field_sql_storage')) {
+        $export['dependencies'][$base['storage']['module']] = $base['storage']['module'];
       }
-      // If the field has not yet been exported, add it
-      else {
-        $export['features']['field_base'][$identifier] = $identifier;
-        $export['dependencies'][$base['module']] = $base['module'];
-        if ($base['storage']['type'] != variable_get('field_storage_default', 'field_sql_storage')) {
-          $export['dependencies'][$base['storage']['module']] = $base['storage']['module'];
-        }
-        // If taxonomy field, add in the vocabulary
-        if ($base['type'] == 'taxonomy_term_reference' && !empty($base['settings']['allowed_values'])) {
-          foreach ($base['settings']['allowed_values'] as $allowed_values) {
-            if (!empty($allowed_values['vocabulary'])) {
-              $pipe['taxonomy'][] = $allowed_values['vocabulary'];
-            }
+      // If taxonomy field, add in the vocabulary
+      if ($base['type'] == 'taxonomy_term_reference' && !empty($base['settings']['allowed_values'])) {
+        foreach ($base['settings']['allowed_values'] as $allowed_values) {
+          if (!empty($allowed_values['vocabulary'])) {
+            $pipe['taxonomy'][] = $allowed_values['vocabulary'];
           }
         }
       }
@@ -107,7 +95,6 @@ function field_base_features_export($data, &$export, $module_name = '') {
  */
 function field_instance_features_export($data, &$export, $module_name = '') {
   $pipe = array('field_base' => array());
-  $map = features_get_default_map('field_instance');
 
   // The field_default_field_instances() hook integration is provided by the
   // features module so we need to add it as a dependency.
@@ -115,27 +102,15 @@ function field_instance_features_export($data, &$export, $module_name = '') {
 
   foreach ($data as $identifier) {
     if ($instance = features_field_instance_load($identifier)) {
-      // If this field is already provided by another module, remove the field
-      // and add the other module as a dependency.
-      if (isset($map[$identifier]) && $map[$identifier] != $module_name) {
-        if (isset($export['features']['field_instance'][$identifier])) {
-          unset($export['features']['field_instance'][$identifier]);
+      $export['features']['field_instance'][$identifier] = $identifier;
+      $export['dependencies'][$instance['widget']['module']] = $instance['widget']['module'];
+      foreach ($instance['display'] as $key => $display) {
+        if (isset($display['module'])) {
+          $export['dependencies'][$display['module']] = $display['module'];
+          // @TODO: handle the pipe to image styles
         }
-        $module = $map[$identifier];
-        $export['dependencies'][$module] = $module;
       }
-      // If the field has not yet been exported, add it
-      else {
-        $export['features']['field_instance'][$identifier] = $identifier;
-        $export['dependencies'][$instance['widget']['module']] = $instance['widget']['module'];
-        foreach ($instance['display'] as $key => $display) {
-          if (isset($display['module'])) {
-            $export['dependencies'][$display['module']] = $display['module'];
-            // @TODO: handle the pipe to image styles
-          }
-        }
-        $pipe['field_base'][] = $instance['field_name'];
-      }
+      $pipe['field_base'][] = $instance['field_name'];
     }
   }
   return $pipe;

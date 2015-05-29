@@ -26,17 +26,11 @@ function node_features_export_options() {
  */
 function node_features_export($data, &$export, $module_name = '') {
   $pipe = array();
-  $map = features_get_default_map('node');
 
   foreach ($data as $type) {
     // Poll node module to determine who provides the node type.
     if ($info = node_type_get_type($type)) {
-      // If this node type is provided by a different module, add it as a dependency
-      if (isset($map[$type]) && $map[$type] != $module_name) {
-        $export['dependencies'][$map[$type]] = $map[$type];
-      }
-      // Otherwise export the node type.
-      elseif (in_array($info->base, array('node_content', 'features'))) {
+      if (in_array($info->base, array('node_content', 'features'))) {
         $export['features']['node'][$type] = $type;
         $export['dependencies']['node'] = 'node';
         $export['dependencies']['features'] = 'features';

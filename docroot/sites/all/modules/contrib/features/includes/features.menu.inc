@@ -63,15 +63,8 @@ function menu_custom_features_export($data, &$export, $module_name = '') {
 
   // Collect a menu to module map
   $pipe = array();
-  $map = features_get_default_map('menu_custom', 'menu_name');
   foreach ($data as $menu_name) {
-    // If this menu is provided by a different module, add it as a dependency.
-    if (isset($map[$menu_name]) && $map[$menu_name] != $module_name) {
-      $export['dependencies'][$map[$menu_name]] = $map[$menu_name];
-    }
-    else {
-      $export['features']['menu_custom'][$menu_name] = $menu_name;
-    }
+    $export['features']['menu_custom'][$menu_name] = $menu_name;
   }
   return $pipe;
 }
@@ -188,17 +181,10 @@ function menu_links_features_export($data, &$export, $module_name = '') {
 
   // Collect a link to module map
   $pipe = array();
-  $map = features_get_default_map('menu_links', 'menu_links_features_identifier');
   foreach ($data as $key => $identifier) {
     if ($link = features_menu_link_load($identifier)) {
-      // If this link is provided by a different module, add it as a dependency.
       $new_identifier = menu_links_features_identifier($link, empty($export));
-      if (isset($map[$identifier]) && $map[$identifier] != $module_name) {
-        $export['dependencies'][$map[$identifier]] = $map[$identifier];
-      }
-      else {
-        $export['features']['menu_links'][$new_identifier] = $new_identifier;
-      }
+      $export['features']['menu_links'][$new_identifier] = $new_identifier;
       // For now, exclude a variety of common menus from automatic export.
       // They may still be explicitly included in a Feature if the builder
       // chooses to do so.

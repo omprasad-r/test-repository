@@ -170,14 +170,8 @@ function user_permission_features_rebuild($module) {
  */
 function user_role_features_export($data, &$export, $module_name = '') {
   $export['dependencies']['features'] = 'features';
-  $map = features_get_default_map('user_role', 'name');
   foreach ($data as $role) {
-    // Role is provided by another module. Add dependency.
-    if (isset($map[$role]) && $map[$role] != $module_name) {
-      $export['dependencies'][$map[$role]] = $map[$role];
-    }
-    // Export.
-    elseif(user_role_load_by_name($role)) {
+    if(user_role_load_by_name($role)) {
       $export['features']['user_role'][$role] = $role;
     }
   }

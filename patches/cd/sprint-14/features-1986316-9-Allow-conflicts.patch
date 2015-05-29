@@ -1,0 +1,261 @@
+From 6fdcf6c9029425c0f0ad341cd93bc21d998b59a0 Mon Sep 17 00:00:00 2001
+From: Axel Rutz <axel.rutz@clever-systems.net>
+Date: Sun, 21 Sep 2014 20:10:07 +0200
+Subject: [PATCH] Issue #1986316: Allow conflicts
+
+---
+ includes/features.ctools.inc   |   13 +--------
+ includes/features.field.inc    |   57 +++++++++++-----------------------------
+ includes/features.image.inc    |    9 +------
+ includes/features.menu.inc     |   18 ++-----------
+ includes/features.node.inc     |    8 +-----
+ includes/features.taxonomy.inc |   16 ++++-------
+ includes/features.user.inc     |    8 +-----
+ 7 files changed, 27 insertions(+), 102 deletions(-)
+
+diff --git a/includes/features.ctools.inc b/includes/features.ctools.inc
+index 387cece..a2d603f 100644
+--- a/includes/features.ctools.inc
++++ b/includes/features.ctools.inc
+@@ -159,18 +159,7 @@ function ctools_component_features_export($component, $data, &$export, $module_n
+   // Add the components
+   foreach ($data as $object_name) {
+     if ($object = _ctools_features_export_crud_load($component, $object_name)) {
+-      // If this object is provided as a default by a different module, don't
+-      // export and add that module as a dependency instead.
+-      if (!empty($object->export_module) && $object->export_module !== $module_name) {
+-        $export['dependencies'][$object->export_module] = $object->export_module;
+-        if (isset($export['features'][$component][$object_name])) {
+-          unset($export['features'][$component][$object_name]);
+-        }
+-      }
+-      // Otherwise, add the component.
+-      else {
+-        $export['features'][$component][$object_name] = $object_name;
+-      }
++      $export['features'][$component][$object_name] = $object_name;
+     }
+   }
+ 
+diff --git a/includes/features.field.inc b/includes/features.field.inc
+index 09104a3..939cc66 100644
+--- a/includes/features.field.inc
++++ b/includes/features.field.inc
+@@ -72,28 +72,16 @@ function field_base_features_export($data, &$export, $module_name = '') {
+ 
+   foreach ($data as $identifier) {
+     if ($base = features_field_base_load($identifier)) {
+-      // If this field is already provided by another module, remove the field
+-      // and add the other module as a dependency.
+-      if (isset($map[$identifier]) && $map[$identifier] != $module_name) {
+-        if (isset($export['features']['field_base'][$identifier])) {
+-          unset($export['features']['field_base'][$identifier]);
+-        }
+-        $module = $map[$identifier];
+-        $export['dependencies'][$module] = $module;
++      $export['features']['field_base'][$identifier] = $identifier;
++      $export['dependencies'][$base['module']] = $base['module'];
++      if ($base['storage']['type'] != variable_get('field_storage_default', 'field_sql_storage')) {
++        $export['dependencies'][$base['storage']['module']] = $base['storage']['module'];
+       }
+-      // If the field has not yet been exported, add it
+-      else {
+-        $export['features']['field_base'][$identifier] = $identifier;
+-        $export['dependencies'][$base['module']] = $base['module'];
+-        if ($base['storage']['type'] != variable_get('field_storage_default', 'field_sql_storage')) {
+-          $export['dependencies'][$base['storage']['module']] = $base['storage']['module'];
+-        }
+-        // If taxonomy field, add in the vocabulary
+-        if ($base['type'] == 'taxonomy_term_reference' && !empty($base['settings']['allowed_values'])) {
+-          foreach ($base['settings']['allowed_values'] as $allowed_values) {
+-            if (!empty($allowed_values['vocabulary'])) {
+-              $pipe['taxonomy'][] = $allowed_values['vocabulary'];
+-            }
++      // If taxonomy field, add in the vocabulary
++      if ($base['type'] == 'taxonomy_term_reference' && !empty($base['settings']['allowed_values'])) {
++        foreach ($base['settings']['allowed_values'] as $allowed_values) {
++          if (!empty($allowed_values['vocabulary'])) {
++            $pipe['taxonomy'][] = $allowed_values['vocabulary'];
+           }
+         }
+       }
+@@ -107,7 +95,6 @@ function field_base_features_export($data, &$export, $module_name = '') {
+  */
+ function field_instance_features_export($data, &$export, $module_name = '') {
+   $pipe = array('field_base' => array());
+-  $map = features_get_default_map('field_instance');
+ 
+   // The field_default_field_instances() hook integration is provided by the
+   // features module so we need to add it as a dependency.
+@@ -115,27 +102,15 @@ function field_instance_features_export($data, &$export, $module_name = '') {
+ 
+   foreach ($data as $identifier) {
+     if ($instance = features_field_instance_load($identifier)) {
+-      // If this field is already provided by another module, remove the field
+-      // and add the other module as a dependency.
+-      if (isset($map[$identifier]) && $map[$identifier] != $module_name) {
+-        if (isset($export['features']['field_instance'][$identifier])) {
+-          unset($export['features']['field_instance'][$identifier]);
+-        }
+-        $module = $map[$identifier];
+-        $export['dependencies'][$module] = $module;
+-      }
+-      // If the field has not yet been exported, add it
+-      else {
+-        $export['features']['field_instance'][$identifier] = $identifier;
+-        $export['dependencies'][$instance['widget']['module']] = $instance['widget']['module'];
+-        foreach ($instance['display'] as $key => $display) {
+-          if (isset($display['module'])) {
+-            $export['dependencies'][$display['module']] = $display['module'];
+-            // @TODO: handle the pipe to image styles
+-          }
++      $export['features']['field_instance'][$identifier] = $identifier;
++      $export['dependencies'][$instance['widget']['module']] = $instance['widget']['module'];
++      foreach ($instance['display'] as $key => $display) {
++        if (isset($display['module'])) {
++          $export['dependencies'][$display['module']] = $display['module'];
++          // @TODO: handle the pipe to image styles
+         }
+-        $pipe['field_base'][] = $instance['field_name'];
+       }
++      $pipe['field_base'][] = $instance['field_name'];
+     }
+   }
+   return $pipe;
+diff --git a/includes/features.image.inc b/includes/features.image.inc
+index 2b5eb27..855e006 100644
+--- a/includes/features.image.inc
++++ b/includes/features.image.inc
+@@ -30,16 +30,9 @@ function image_features_export_options() {
+  */
+ function image_features_export($data, &$export, $module_name = '') {
+   $pipe = array();
+-  $map = features_get_default_map('image');
+   foreach ($data as $style) {
+     $export['dependencies']['image'] = 'image';
+-    // If another module provides this style, add it as a dependency
+-    if (isset($map[$style]) && $map[$style] != $module_name) {
+-      $module = $map[$style];
+-      $export['dependencies'][$module] = $module;
+-    }
+-    // Otherwise, export the style
+-    elseif (image_style_load($style)) {
++    if (image_style_load($style)) {
+       $export['features']['image'][$style] = $style;
+     }
+   }
+diff --git a/includes/features.menu.inc b/includes/features.menu.inc
+index c883e6a..5169441 100644
+--- a/includes/features.menu.inc
++++ b/includes/features.menu.inc
+@@ -63,15 +63,8 @@ function menu_custom_features_export($data, &$export, $module_name = '') {
+ 
+   // Collect a menu to module map
+   $pipe = array();
+-  $map = features_get_default_map('menu_custom', 'menu_name');
+   foreach ($data as $menu_name) {
+-    // If this menu is provided by a different module, add it as a dependency.
+-    if (isset($map[$menu_name]) && $map[$menu_name] != $module_name) {
+-      $export['dependencies'][$map[$menu_name]] = $map[$menu_name];
+-    }
+-    else {
+-      $export['features']['menu_custom'][$menu_name] = $menu_name;
+-    }
++    $export['features']['menu_custom'][$menu_name] = $menu_name;
+   }
+   return $pipe;
+ }
+@@ -188,17 +181,10 @@ function menu_links_features_export($data, &$export, $module_name = '') {
+ 
+   // Collect a link to module map
+   $pipe = array();
+-  $map = features_get_default_map('menu_links', 'menu_links_features_identifier');
+   foreach ($data as $key => $identifier) {
+     if ($link = features_menu_link_load($identifier)) {
+-      // If this link is provided by a different module, add it as a dependency.
+       $new_identifier = menu_links_features_identifier($link, empty($export));
+-      if (isset($map[$identifier]) && $map[$identifier] != $module_name) {
+-        $export['dependencies'][$map[$identifier]] = $map[$identifier];
+-      }
+-      else {
+-        $export['features']['menu_links'][$new_identifier] = $new_identifier;
+-      }
++      $export['features']['menu_links'][$new_identifier] = $new_identifier;
+       // For now, exclude a variety of common menus from automatic export.
+       // They may still be explicitly included in a Feature if the builder
+       // chooses to do so.
+diff --git a/includes/features.node.inc b/includes/features.node.inc
+index 9461778..0a82546 100644
+--- a/includes/features.node.inc
++++ b/includes/features.node.inc
+@@ -26,17 +26,11 @@ function node_features_export_options() {
+  */
+ function node_features_export($data, &$export, $module_name = '') {
+   $pipe = array();
+-  $map = features_get_default_map('node');
+ 
+   foreach ($data as $type) {
+     // Poll node module to determine who provides the node type.
+     if ($info = node_type_get_type($type)) {
+-      // If this node type is provided by a different module, add it as a dependency
+-      if (isset($map[$type]) && $map[$type] != $module_name) {
+-        $export['dependencies'][$map[$type]] = $map[$type];
+-      }
+-      // Otherwise export the node type.
+-      elseif (in_array($info->base, array('node_content', 'features'))) {
++      if (in_array($info->base, array('node_content', 'features'))) {
+         $export['features']['node'][$type] = $type;
+         $export['dependencies']['node'] = 'node';
+         $export['dependencies']['features'] = 'features';
+diff --git a/includes/features.taxonomy.inc b/includes/features.taxonomy.inc
+index a7c85cd..022ebdd 100644
+--- a/includes/features.taxonomy.inc
++++ b/includes/features.taxonomy.inc
+@@ -38,19 +38,13 @@ function taxonomy_features_export($data, &$export, $module_name = '') {
+   $export['dependencies']['taxonomy'] = 'taxonomy';
+ 
+   // Add dependencies for each vocabulary.
+-  $map = features_get_default_map('taxonomy');
+   foreach ($data as $machine_name) {
+-    if (isset($map[$machine_name]) && $map[$machine_name] != $module_name) {
+-      $export['dependencies'][$map[$machine_name]] = $map[$machine_name];
+-    }
+-    else {
+-      $export['features']['taxonomy'][$machine_name] = $machine_name;
++    $export['features']['taxonomy'][$machine_name] = $machine_name;
+ 
+-      $fields = field_info_instances('taxonomy_term', $machine_name);
+-      foreach ($fields as $name => $field) {
+-        $pipe['field'][] = "taxonomy_term-{$field['bundle']}-{$field['field_name']}";
+-        $pipe['field_instance'][] = "taxonomy_term-{$field['bundle']}-{$field['field_name']}";
+-      }
++    $fields = field_info_instances('taxonomy_term', $machine_name);
++    foreach ($fields as $name => $field) {
++      $pipe['field'][] = "taxonomy_term-{$field['bundle']}-{$field['field_name']}";
++      $pipe['field_instance'][] = "taxonomy_term-{$field['bundle']}-{$field['field_name']}";
+     }
+   }
+   return $pipe;
+diff --git a/includes/features.user.inc b/includes/features.user.inc
+index 152c5a8..a75ecec 100644
+--- a/includes/features.user.inc
++++ b/includes/features.user.inc
+@@ -170,14 +170,8 @@ function user_permission_features_rebuild($module) {
+  */
+ function user_role_features_export($data, &$export, $module_name = '') {
+   $export['dependencies']['features'] = 'features';
+-  $map = features_get_default_map('user_role', 'name');
+   foreach ($data as $role) {
+-    // Role is provided by another module. Add dependency.
+-    if (isset($map[$role]) && $map[$role] != $module_name) {
+-      $export['dependencies'][$map[$role]] = $map[$role];
+-    }
+-    // Export.
+-    elseif(user_role_load_by_name($role)) {
++    if(user_role_load_by_name($role)) {
+       $export['features']['user_role'][$role] = $role;
+     }
+   }
+-- 
+1.7.9.5
+

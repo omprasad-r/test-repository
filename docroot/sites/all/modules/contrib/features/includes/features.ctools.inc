@@ -159,18 +159,7 @@ function ctools_component_features_export($component, $data, &$export, $module_n
   // Add the components
   foreach ($data as $object_name) {
     if ($object = _ctools_features_export_crud_load($component, $object_name)) {
-      // If this object is provided as a default by a different module, don't
-      // export and add that module as a dependency instead.
-      if (!empty($object->export_module) && $object->export_module !== $module_name) {
-        $export['dependencies'][$object->export_module] = $object->export_module;
-        if (isset($export['features'][$component][$object_name])) {
-          unset($export['features'][$component][$object_name]);
-        }
-      }
-      // Otherwise, add the component.
-      else {
-        $export['features'][$component][$object_name] = $object_name;
-      }
+      $export['features'][$component][$object_name] = $object_name;
     }
   }
 

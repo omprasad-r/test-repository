@@ -38,19 +38,13 @@ function taxonomy_features_export($data, &$export, $module_name = '') {
   $export['dependencies']['taxonomy'] = 'taxonomy';
 
   // Add dependencies for each vocabulary.
-  $map = features_get_default_map('taxonomy');
   foreach ($data as $machine_name) {
-    if (isset($map[$machine_name]) && $map[$machine_name] != $module_name) {
-      $export['dependencies'][$map[$machine_name]] = $map[$machine_name];
-    }
-    else {
-      $export['features']['taxonomy'][$machine_name] = $machine_name;
+    $export['features']['taxonomy'][$machine_name] = $machine_name;
 
-      $fields = field_info_instances('taxonomy_term', $machine_name);
-      foreach ($fields as $name => $field) {
-        $pipe['field'][] = "taxonomy_term-{$field['bundle']}-{$field['field_name']}";
-        $pipe['field_instance'][] = "taxonomy_term-{$field['bundle']}-{$field['field_name']}";
-      }
+    $fields = field_info_instances('taxonomy_term', $machine_name);
+    foreach ($fields as $name => $field) {
+      $pipe['field'][] = "taxonomy_term-{$field['bundle']}-{$field['field_name']}";
+      $pipe['field_instance'][] = "taxonomy_term-{$field['bundle']}-{$field['field_name']}";
     }
   }
   return $pipe;
