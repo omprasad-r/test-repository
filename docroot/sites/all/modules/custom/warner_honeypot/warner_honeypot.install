@@ -10,8 +10,8 @@ function warner_honeypot_install() {
   variable_set('honeypot_log', TRUE);
 }
 
-/*
- * Imlements hook_update_N().
+/**
+ * Sets variables for honeypot_element_name and honeypot_protect_all_forms.
  */
 function warner_honeypot_update_7002() {
   // Enabling honeypot for all the forms
