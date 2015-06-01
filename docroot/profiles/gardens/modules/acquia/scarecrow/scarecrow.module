@@ -1497,6 +1497,8 @@ function scarecrow_forbidden_permissions() {
     // The related feature is being hidden with a form alter so the permission
     // necessary to it should be hidden.
     'report to mollom',
+    // We do not want to allow users to execute arbitrary PHP code.
+    'use ctools import',
   );
   return variable_get('scarecrow_forbidden_permissions', $default_forbidden_permissions);
 }

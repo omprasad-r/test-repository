@@ -1332,12 +1332,15 @@ function drupal_serve_page_from_cache(stdClass $cache) {
   $if_modified_since = isset($_SERVER['HTTP_IF_MODIFIED_SINCE']) ? strtotime($_SERVER['HTTP_IF_MODIFIED_SINCE']) : FALSE;
   $if_none_match = isset($_SERVER['HTTP_IF_NONE_MATCH']) ? stripslashes($_SERVER['HTTP_IF_NONE_MATCH']) : FALSE;
 
-  if ($if_modified_since && $if_none_match
-      && $if_none_match == $etag // etag must match
-      && $if_modified_since == $cache->created) {  // if-modified-since must match
-    header($_SERVER['SERVER_PROTOCOL'] . ' 304 Not Modified');
-    drupal_send_headers($default_headers);
-    return;
+  // Safari incorrectly caches 304's as empty pages; process for 304 header in all other browsers.
+  if (strpos($_SERVER['HTTP_USER_AGENT'], 'Safari') === FALSE) {
+    if ($if_modified_since && $if_none_match
+        && $if_none_match == $etag // etag must match
+        && $if_modified_since == $cache->created) {  // if-modified-since must match
+      header($_SERVER['SERVER_PROTOCOL'] . ' 304 Not Modified');
+      drupal_send_headers($default_headers);
+      return;
+    }
   }
 
   // Send the remaining headers.

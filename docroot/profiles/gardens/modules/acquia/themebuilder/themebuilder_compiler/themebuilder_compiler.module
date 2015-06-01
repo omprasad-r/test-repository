@@ -1308,7 +1308,7 @@ function themebuilder_compiler_save_as($label, $system_name = NULL, $publish = F
   themebuilder_log_trace_enter(__FUNCTION__);
   $start_time = microtime(TRUE);
   // Let's limit the available characters for the name.
-  $label = preg_replace("/[^a-zA-Z0-9_-\s']+/", '', $label);
+  $label = preg_replace("/[^a-zA-Z0-9_\-\s']+/", '', $label);
   $label = empty($label) ? 'Untitled' : $label;
 
   $sys_name = themebuilder_compiler_human_to_machine_name($label);
