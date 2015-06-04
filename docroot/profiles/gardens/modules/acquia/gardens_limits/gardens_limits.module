@@ -402,6 +402,18 @@ function theme_gardens_limits_system_powered_by($variables) {
  */
 function gardens_limits_powered_by_forced() {
   $site = acsf_get_acsf_site();
+  $forced = (bool) $site->acquia_zuora['force_powered_by'];
+  // Refresh site data to make sure that the user's subscription data is
+  // up-to-date.
+  if ($forced) {
+    try {
+      $site->refresh();
+    }
+    catch (\Acquia\Acsf\AcsfMessageFailureException $e) {
+      watchdog_exception('gardens_limits', $e);
+      drupal_set_message(t('Unable to contact the factory via AcsfMessage.'), 'error');
+    }
+  }
   return (bool) $site->acquia_zuora['force_powered_by'];
 }
 
