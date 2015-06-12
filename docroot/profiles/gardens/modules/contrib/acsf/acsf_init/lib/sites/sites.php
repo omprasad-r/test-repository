@@ -7,35 +7,23 @@
 
 if (!function_exists('acsf_hooks_includes')) {
   /**
-   * Scans a Factory hooks directory and returns PHP files that should be included.
+   * Scans a factory-hooks sub-directory and returns PHP files to be included.
    *
    * @param string $hook_name
-   *   The name of the hook whose files should be included.
+   *   The name of the hook whose files should be returned.
    *
-   * @return array
-   *   List of customer defined hook files to include.
+   * @return string[]
+   *   A list of customer-defined hook files to include.
    */
   function acsf_hooks_includes($hook_name) {
-    $dir = getcwd() . '/../factory-hooks/' . $hook_name;
-    $includes = array();
-    if (is_dir($dir) && $handle = opendir($dir)) {
-      while (FALSE !== ($filename = readdir($handle))) {
-        $uri = "$dir/$filename";
-        // Ignore hidden files and only include .php files.
-        if ($filename[0] != '.' && strpos($filename, '.php', strlen($filename) - 4) && is_file($uri)) {
-          $includes[] = $uri;
-        }
-      }
-
-      closedir($handle);
-    }
-    return $includes;
+    $hook_pattern = sprintf('%s/../factory-hooks/%s/*.php', getcwd(), $hook_name);
+    return glob($hook_pattern, GLOB_NOSORT);
   }
 }
 
 // Include custom sites.php code from factory-hooks/pre-sites-php.
-foreach (acsf_hooks_includes('pre-sites-php') as $uri) {
-  include_once $uri;
+foreach (acsf_hooks_includes('pre-sites-php') as $pre_hook) {
+  include_once $pre_hook;
 }
 
 if (!function_exists('is_acquia_host')) {
@@ -98,6 +86,6 @@ $GLOBALS['gardens_site_settings'] = $data['gardens_site_settings'];
 $sites[$dir] = $data['dir'];
 
 // Include custom sites.php code from factory-hooks/pre-sites-php.
-foreach (acsf_hooks_includes('post-sites-php') as $uri) {
-  include_once $uri;
+foreach (acsf_hooks_includes('post-sites-php') as $post_hook) {
+  include_once $post_hook;
 }

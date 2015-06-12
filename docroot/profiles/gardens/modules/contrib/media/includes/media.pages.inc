@@ -261,6 +261,9 @@ function media_add_upload_submit($form, &$form_state) {
   $form_state['redirect'] = array('media/browser', array('query' => array('render' => 'media-popup', 'fid' => $file->fid)));
 }
 
+/**
+ * Form constructor for the media upload form (multiple).
+ */
 function media_add_upload_multiple($form, &$form_state, $params = array()) {
   $form = media_add_upload($form, $form_state, $params);
   unset($form['upload']['#title']);
@@ -273,19 +276,32 @@ function media_add_upload_multiple($form, &$form_state, $params = array()) {
   return $form;
 }
 
+/**
+ * Form submission handler for media_add_upload_multiple().
+ */
 function media_add_upload_multiple_submit($form, &$form_state) {
   $scheme = variable_get('file_default_scheme', 'public') . '://';
   $saved_files = array();
+  $failed_files = array();
   // We can't use file_save_upload() because of http://www.jacobsingh.name/content/tight-coupling-no-not
   foreach ($form_state['values']['upload'] as $uploaded_file) {
     if ($uploaded_file['status'] == 'done') {
       $source = $uploaded_file['tmppath'];
+      // Compose the file's permanent destination.
       $destination = file_stream_wrapper_uri_normalize($scheme . $uploaded_file['name']);
       // Rename it to its original name, and put it in its final home.
       // Note - not using file_move here because if we call file_get_mime
       // (in file_uri_to_object) while it has a .tmp extension, it horks.
-
       $destination = file_unmanaged_move($source, $destination, FILE_EXISTS_RENAME);
+      // If something goes wrong during the process, we should avoid inserting
+      // a new record with no URI in the file_managed table. Just continue with
+      // the next one (if there's any more to add).
+      if (!$destination) {
+        $failed_files[] = $uploaded_file['name'];
+        $error_message = t('The specified file %name (%source) could not be uploaded.', array('%name' => $uploaded_file['name'], '%source' => $source));
+        watchdog('media', $error_message);
+        continue;
+      }
 
       $file = file_uri_to_object($destination);
       file_save($file);
@@ -303,6 +319,12 @@ function media_add_upload_multiple_submit($form, &$form_state) {
   foreach ($saved_files as $file) {
     $fids[] = $file->fid;
   }
+
+  // Set flag if there were failures.
+  if (!empty($failed_files)) {
+    $_SESSION['multiple_upload_failed'] = TRUE;
+  }
+
   $form_state['redirect'] = array('media/browser', array('query' => array('render' => 'media-popup', 'fid' => $fids)));
 }
 
