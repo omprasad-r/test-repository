@@ -5,10 +5,10 @@
  * Drupal site-specific configuration file.
  */
 
-// Include custom sites.php code from factory-hooks/pre-sites-php.
+// Include custom settings.php code from factory-hooks/pre-settings-php.
 if (function_exists('acsf_hooks_includes')) {
-  foreach (acsf_hooks_includes('pre-settings-php') as $uri) {
-    include_once $uri;
+  foreach (acsf_hooks_includes('pre-settings-php') as $pre_hook) {
+    include_once $pre_hook;
   }
 }
 
@@ -185,9 +185,9 @@ if (file_exists('/var/www/site-php')) {
   }
 }
 
-// Include custom sites.php code from factory-hooks/post-sites-php.
+// Include custom settings.php code from factory-hooks/post-settings-php.
 if (function_exists('acsf_hooks_includes')) {
-  foreach (acsf_hooks_includes('post-settings-php') as $uri) {
-    include_once $uri;
+  foreach (acsf_hooks_includes('post-settings-php') as $post_hook) {
+    include_once $post_hook;
   }
 }

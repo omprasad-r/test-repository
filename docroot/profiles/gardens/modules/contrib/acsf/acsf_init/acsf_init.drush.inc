@@ -90,7 +90,8 @@ function drush_acsf_init() {
   }
 
   // Copy the required files.
-  foreach (acsf_init_get_required_files($repo_root) as $file => $location) {
+  foreach (acsf_init_get_required_files($repo_root) as $location) {
+    $file = $location['filename'];
     $source = sprintf('%s/%s/%s', $lib_path, $location['source'], $file);
     $dest = sprintf('%s/%s', $location['dest'], $file);
     $mod = isset($location['mod']) ? $location['mod'] : FALSE;
@@ -267,7 +268,8 @@ function drush_acsf_init_verify() {
   $lib_path = sprintf('%s/%s/acsf/acsf_init/lib', $drupal_root, $relative_path);
 
   $error = FALSE;
-  foreach (acsf_init_get_required_files($repo_root) as $file => $location) {
+  foreach (acsf_init_get_required_files($repo_root) as $location) {
+    $file = $location['filename'];
     $source = sprintf('%s/%s/%s', $lib_path, $location['source'], $file);
     $dest = sprintf('%s/%s', $location['dest'], $file);
     if (!file_exists($dest)) {
@@ -298,7 +300,8 @@ function drush_acsf_init_verify() {
 function drush_acsf_uninstall() {
   drush_print('Removing ACSF requirements.');
 
-  foreach (acsf_init_get_required_files($repo_root) as $file => $location) {
+  foreach (acsf_init_get_required_files($repo_root) as $location) {
+    $file = $location['filename'];
     $dest = sprintf('%s/%s', $location['dest'], $file);
     if (file_exists($dest)) {
       $confirm = drush_confirm(dt('Delete !file?', array('!file' => $dest)));
@@ -325,6 +328,7 @@ function acsf_init_get_required_dirs($repo_root) {
     'acquia hook dir' => sprintf('%s/hooks/acquia', $repo_root),
     'cloud hook samples' => sprintf('%s/hooks/samples', $repo_root),
     'site config logic' => sprintf('%s/sites/g', DRUPAL_ROOT),
+    'site env default' => sprintf('%s/sites/default', DRUPAL_ROOT),
   );
 }
 
@@ -333,59 +337,78 @@ function acsf_init_get_required_dirs($repo_root) {
  */
 function acsf_init_get_required_files($repo_root) {
   return array(
-    'README.md' => array(
+    array(
+      'filename' => 'README.md',
       'source' => 'cloud_hooks',
       'dest' => sprintf('%s/hooks', $repo_root),
     ),
-    '000-acquia_required_scrub.php' => array(
+    array(
+      'filename' => '000-acquia_required_scrub.php',
       'source' => 'cloud_hooks/common/post-db-copy',
       'dest' => sprintf('%s/hooks/common/post-db-copy', $repo_root),
       'mod' => 0751,
     ),
-    '000-acquia-deployment.php' => array(
+    array(
+      'filename' => '000-acquia-deployment.php',
       'source' => 'cloud_hooks/common/pre-web-activate',
       'dest' => sprintf('%s/hooks/common/pre-web-activate', $repo_root),
       'mod' => 0751,
     ),
-    'db_connect.php' => array(
+    array(
+      'filename' => 'db_connect.php',
       'source' => 'cloud_hooks/acquia',
       'dest' => sprintf('%s/hooks/acquia', $repo_root),
     ),
-    'uri.php' => array(
+    array(
+      'filename' => 'uri.php',
       'source' => 'cloud_hooks/acquia',
       'dest' => sprintf('%s/hooks/acquia', $repo_root),
     ),
-    'acquia-cloud-site-factory-post-db.sh' => array(
+    array(
+      'filename' => 'acquia-cloud-site-factory-post-db.sh',
       'source' => 'cloud_hooks/samples',
       'dest' => sprintf('%s/hooks/samples', $repo_root),
     ),
-    'hello-world.sh' => array(
+    array(
+      'filename' => 'hello-world.sh',
       'source' => 'cloud_hooks/samples',
       'dest' => sprintf('%s/hooks/samples', $repo_root),
     ),
-    'post-code-deploy.tmpl' => array(
+    array(
+      'filename' => 'post-code-deploy.tmpl',
       'source' => 'cloud_hooks/samples',
       'dest' => sprintf('%s/hooks/samples', $repo_root),
     ),
-    'sites.php' => array(
+    array(
+      'filename' => 'sites.php',
       'source' => 'sites',
       'dest' => sprintf('%s/sites', DRUPAL_ROOT),
     ),
-    'apc_rebuild.php' => array(
+    array(
+      'filename' => 'apc_rebuild.php',
       'source' => 'sites/g',
       'dest' => sprintf('%s/sites/g', DRUPAL_ROOT),
     ),
-    '.gitignore' => array(
+    array(
+      'filename' => '.gitignore',
       'source' => 'sites/g',
       'dest' => sprintf('%s/sites/g', DRUPAL_ROOT),
     ),
-    'settings.php' => array(
+    array(
+      'filename' => 'settings.php',
       'source' => 'sites/g',
       'dest' => sprintf('%s/sites/g', DRUPAL_ROOT),
     ),
-    'sites.inc' => array(
+    array(
+      'filename' => 'sites.inc',
       'source' => 'sites/g',
       'dest' => sprintf('%s/sites/g', DRUPAL_ROOT),
+    ),
+    array(
+      'filename' => 'settings.php',
+      'source' => 'sites/default',
+      'dest' => sprintf('%s/sites/default', DRUPAL_ROOT),
+      'mod' => 0644,
     ),
   );
 

@@ -859,11 +859,20 @@ function acsf_openid_block_view($delta = '') {
       $login_path = 'user/login';
       $register_path = 'user/register';
     }
-    return array(
-      'content' => t('<a href="@log-in-url">Log in</a> or <a href="@sign-up-url">Sign up</a>', array(
-        '@log-in-url' => url($login_path, array('query' => user_login_destination())),
+    $content = t('<a href="@log-in-url">Log in</a>', array(
+      '@log-in-url' => url($login_path, array('query' => user_login_destination())),
+    ));
+
+    // Show the 'Sign up' link only if user registration is allowed for visitors.
+    $registration_allowed = variable_get('user_register', USER_REGISTER_VISITORS_ADMINISTRATIVE_APPROVAL) != USER_REGISTER_ADMINISTRATORS_ONLY;
+    if ($registration_allowed) {
+      $content .= t(' or <a href="@sign-up-url">Sign up</a>', array(
         '@sign-up-url' => url($register_path, array('query' => user_login_destination())),
-      )),
+      ));
+    }
+
+    return array(
+      'content' => $content,
     );
   }
 }
