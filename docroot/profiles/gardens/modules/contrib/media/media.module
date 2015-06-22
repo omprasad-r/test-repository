@@ -1224,3 +1224,20 @@ function media_form_has_errors($form) {
   }
   return FALSE;
 }
+
+/**
+ * Implements hook_init().
+ */
+function media_init() {
+  // If there are delayed messages to be displayed, display them after all
+  // media related requests have been processed. Otherwise our messages might
+  // get lost.
+  if (!empty($_SESSION['media_delayed_messages']) && strpos($_GET['q'], 'media') !== 0) {
+    foreach ($_SESSION['media_delayed_messages'] as $type => $messages) {
+      foreach ($messages as $message) {
+        drupal_set_message($message, $type);
+      }
+    }
+    unset($_SESSION['media_delayed_messages']);
+  }
+}

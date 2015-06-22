@@ -421,9 +421,18 @@ function gardens_client_block_view_acsf_openid_login_alter(&$build, $block) {
       // structured such that they will open in a dialog.
       drupal_add_library('dialog', 'dialog');
       $login_link = l(t('Log in'), 'user/login/nojs', array('attributes' => array('title' => t('Log in'), 'class' => array('use-ajax', 'use-dialog'))));
-      $register_link = l(t('Sign up'), 'user/register/nojs', array('attributes' => array('title' => t('Create a new user account.'), 'class' => array('use-ajax', 'use-dialog'))));
+      $content = t('!login_link', array('!login_link' => $login_link));
+
+      // Show the 'Sign up' link only if user registration is allowed for
+      // visitors.
+      $registration_allowed = variable_get('user_register', USER_REGISTER_VISITORS_ADMINISTRATIVE_APPROVAL) != USER_REGISTER_ADMINISTRATORS_ONLY;
+      if ($registration_allowed) {
+        $register_link = l(t('Sign up'), 'user/register/nojs', array('attributes' => array('title' => t('Create a new user account.'), 'class' => array('use-ajax', 'use-dialog'))));
+        $content .= t(' or !register_link', array('!register_link' => $register_link));
+      }
+
       $build = array(
-        'content' => t('!login_link or !register_link', array('!login_link' => $login_link, '!register_link' => $register_link)),
+        'content' => $content,
       );
       return;
     }

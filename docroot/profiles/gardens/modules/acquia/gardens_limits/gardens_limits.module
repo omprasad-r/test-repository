@@ -411,7 +411,6 @@ function gardens_limits_powered_by_forced() {
     }
     catch (\Acquia\Acsf\AcsfMessageFailureException $e) {
       watchdog_exception('gardens_limits', $e);
-      drupal_set_message(t('Unable to contact the factory via AcsfMessage.'), 'error');
     }
   }
   return (bool) $site->acquia_zuora['force_powered_by'];

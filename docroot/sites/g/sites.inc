@@ -115,13 +115,13 @@ function gardens_site_data_build_data(array $site, array $map) {
  *   A gardens site data structure, or zero if the domain was not found.
  */
 function gardens_site_data_get_site_from_file($domain) {
-  $map = gardens_site_data_load_file();
-  if (!empty($map['sites'][$domain])) {
-    return gardens_site_data_build_data($map['sites'][$domain], $map);
+  $result = 0;
+  if ($map = gardens_site_data_load_file()) {
+    if (!empty($map['sites'][$domain])) {
+      $result = gardens_site_data_build_data($map['sites'][$domain], $map);
+    }
   }
-  else {
-    return 0;
-  }
+  return $result;
 }
 
 /**
@@ -156,8 +156,9 @@ function gardens_site_data_refresh_domains(array $domains) {
   $location = gardens_site_data_get_filepath();
   $data = array();
   foreach ($domains as $domain) {
+    $domain = trim($domain);
     // Shell out to grep to find the relevant line of the json file.
-    $result = shell_exec(sprintf("grep %s %s --no-filename --color=never --context=0", escapeshellarg($domain), escapeshellarg($location)));
+    $result = trim(shell_exec(sprintf("grep %s %s --no-filename --color=never --context=0", escapeshellarg($domain), escapeshellarg($location))));
 
     if (empty($result)) {
       // Log an explicit fail in APC if we cannot find the domain, so that we
@@ -171,7 +172,7 @@ function gardens_site_data_refresh_domains(array $domains) {
       // (with or without the trailing comma).
       $matches = array();
       $pattern = '@^\s*"' . preg_quote($domain, '@') . '": ({.+}),?$@';
-      if (preg_match($pattern, trim($result), $matches)) {
+      if (preg_match($pattern, $result, $matches)) {
         $found_site = json_decode($matches[1], TRUE);
       }
 
@@ -188,9 +189,15 @@ function gardens_site_data_refresh_domains(array $domains) {
         // This will happen if the domain appears in the JSON file, but the
         // format of the file has changed such that the grep-based single-line
         // parsing no longer works.
-        // TODO: Log the error in such a way that it will squawk loudly.
-        $map = gardens_site_data_load_file();
-        $data[$domain] = gardens_site_data_build_data($map['sites'][$domain], $map);
+        watchdog(WATCHDOG_ALERT, 'Unable to extract site data for site @site from sites.json line "@line".', array('@site' => $domain, '@line' => $result));
+        if ($map = gardens_site_data_load_file()) {
+          if (!empty($map['sites'][$domain])) {
+            $data[$domain] = gardens_site_data_build_data($map['sites'][$domain], $map);
+          }
+          else {
+            $data[$domain] = 0;
+          }
+        }
       }
       else {
         $data[$domain] = gardens_site_data_build_data($found_site, $global_map_data);
@@ -224,13 +231,18 @@ function gardens_site_data_cache_set($domain, $data) {
 /**
  * Retrieves cached site info from APC for a given domain.
  *
+ * @param string $domain
+ *   The domain associated with the cached data.
+ *
  * @return mixed
  *   An object containing information about the site on success, or FALSE if no
  *   cached data was found for the domain.
  */
 function gardens_site_data_cache_get($domain) {
+  $result = FALSE;
   if (function_exists('apc_fetch')) {
     $domain_key = "gardens_domain:$domain";
-    return apc_fetch($domain_key);
+    $result = apc_fetch($domain_key);
   }
+  return $result;
 }

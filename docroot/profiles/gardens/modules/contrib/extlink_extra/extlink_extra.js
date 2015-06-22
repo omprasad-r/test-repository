@@ -19,7 +19,7 @@ Drupal.behaviors.extlink_extra = {
   //Returns an array of DOM elements of all external links
   extlinkAttach : function(context) { 
     // Strip the host name down, removing ports, subdomains, or www.
-    var pattern = /^(([^\/:]+?\.)*)([^\.:]{4,})((\.[a-z]{1,4})*)(:[0-9]{1,5})?$/;
+    var pattern = /^(([^\/:]+?\.)*)([^\.:]{3,})((\.[a-z]{2,6})*)(:[0-9]{1,5})?$/;
     var host = window.location.host.replace(pattern, '$3$4');
     var subdomain = window.location.host.replace(pattern, '$1');
 
@@ -31,7 +31,9 @@ Drupal.behaviors.extlink_extra = {
       var subdomains = "(www\\.)?";
     }
     else {
-      var subdomains = subdomain.replace(".", "\\.");
+      // Find all occurences of '.' and replace it with '\.'.
+      var re = new RegExp('\\.', 'g');
+      var subdomains = subdomain.replace(re, '\\.');
     }
 
     // Build regular expressions that define an internal link.
