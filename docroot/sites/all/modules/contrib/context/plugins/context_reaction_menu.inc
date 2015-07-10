@@ -132,7 +132,9 @@ class context_reaction_menu extends context_reaction {
       $paths = $this->fetch_from_context($context);
       $active_paths = array_merge($active_paths, $paths);
     }
-
+    if (isset($active_paths[0]) && $active_paths[0] == 0) {
+      $active_paths[0] = 'management:admin';
+    }
     $by_menu_name = array();
     foreach ($active_paths as $id) {
       list($menu_name, $path) = explode(':', $id);
