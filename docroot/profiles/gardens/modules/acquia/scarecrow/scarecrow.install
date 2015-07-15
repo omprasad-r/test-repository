@@ -1743,3 +1743,29 @@ function scarecrow_update_11206() {
     db_create_table('image_dimensions', $schema['image_dimensions']);
   }
 }
+
+/**
+ * Disable services, MASt and related modules for SMB customers.
+ */
+function scarecrow_update_11207() {
+  if (gardens_misc_is_smb()) {
+    $mast_related_modules = array(
+      'mast',
+      'oauth_common',
+      'oauth_common_providerui',
+      'original_author',
+      'services',
+      'services_oauth',
+      'rest_server',
+      'xmlrpc_server',
+      'services_test_resource',
+    );
+    if (module_exists('mast') || module_exists('services')) {
+      module_disable($mast_related_modules, FALSE);
+      db_query("DELETE FROM {variable} WHERE name LIKE 'mast_%'");
+      db_query("DELETE FROM {variable} WHERE name LIKE 'oauth_common_%'");
+      db_query("DELETE FROM {variable} WHERE name LIKE 'services_%'");
+      drupal_uninstall_modules($mast_related_modules, FALSE);
+    }
+  }
+}

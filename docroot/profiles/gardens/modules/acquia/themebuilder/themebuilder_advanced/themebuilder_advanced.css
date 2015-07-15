@@ -21,6 +21,14 @@
   color: #000000;
   resize: none;
   padding: 2px 0.5% 2px;
+  /*
+  The behaviour of the 'white-space' property changed as of FF 36.0.
+  If set to 'normal', it will collapse newlines to spaces, therefore the
+  'Enter' key won't make a carriage return in the textarea. The change below is
+  needed to preserve newlines.
+  */
+  white-space: pre-wrap;
+  word-wrap: normal;
 }
 
 #themebuilder-wrapper #themebuilder-advanced-css {
