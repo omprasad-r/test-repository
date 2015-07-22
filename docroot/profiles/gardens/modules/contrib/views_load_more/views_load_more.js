@@ -15,6 +15,8 @@
     var method = response.method || ajax.method;
     var targetList = response.targetList || '';
     var effect = ajax.getEffect(response);
+    var pager_selector = response.options.pager_selector ? response.options.pager_selector : '.pager-load-more';
+    var attachment_selector = response.options.attachment_selector ? response.options.attachment_selector : 'div.attachment';
 
     // We don't know what response.data contains: it might be a string of text
     // without HTML, so don't rely on jQuery correctly iterpreting
@@ -49,64 +51,48 @@
     // jquery selector to replace the content with.
     // Provide sensible defaults for unordered list, ordered list and table
     // view styles.
-    var content_query = targetList && !response.options.content ? '.view-content ' + targetList : response.options.content || '.view-content';
+    var content_query = targetList && !response.options.content ? '> .view-content ' + targetList : response.options.content || '> .view-content';
 
     // If we're using any effects. Hide the new content before adding it to the DOM.
     if (effect.showEffect != 'show') {
       new_content.find(content_query).children().hide();
     }
 
-    // Remove old pager link, then add the new one. If there are attachments
-    // with enabled pager inheritance, insert pager only once.
-    wrapper.find('.pager a').remove();
-    if (!response.attachment_inherit_pager) {
-      wrapper.find('.pager').parent('.item-list').html(new_content.find('.pager'));
-    }
-    else {
-      wrapper.find('.pager').parent('.item-list').html(new_content.find('.pager').last());
+    // Update the pager(s).
+    // Find both for the wrapper as the newly loaded content the direct child
+    // .item-list in case of nested pagers.
+    var pagers = wrapper.find(pager_selector);
+    var pagers_new = new_content.find(pager_selector);
+    if (pagers.length > 0 && pagers_new.length > 0) {
+      pagers.each(function(i) {
+        $(this).replaceWith(pagers_new[i]);
+      });
     }
 
-    // Add new content with paying attention to attachments.
-    var new_content_result = new_content.find(content_query);
-    wrapper.find(content_query).each(function(i, settings) {
-      // If this is an attachment, append new elements only if it has pager
-      // inheritance enabled.
-      if ($(new_content_result[i]).parents('div.attachment').length == 1) {
+    // Add the new content to the page.
+    wrapper.find(content_query)[method](new_content.find(content_query).children());
+    // Re-class new content.
+    reClassContent(wrapper.find(content_query));
+
+    // Add new content for attachments.
+    var new_content_attachments = new_content.find(content_query).parent().find(attachment_selector).children();
+    // Iterate through each attachment.
+    wrapper.find(content_query).parent().find(attachment_selector).children().each(function(i, settings) {
+      // Append new elements only if there are any, and pager inheritance is
+      // enabled.
+      if ($(new_content_attachments[i]).find(content_query).length == 1) {
         var this_wrapper = this;
         if (response.attachment_inherit_pager) {
           $.each(response.attachment_inherit_pager, function(index, item) {
-            if (new_content_result[i].parentElement.classList.contains(item)) {
-              $(this_wrapper)[method](new_content_result[i].children);
+            if (new_content_attachments[i].classList.contains(item)) {
+              $(this_wrapper).find(content_query)[method]($(new_content_attachments[i]).find(content_query).children());
             }
           });
         }
       }
-      else {
-        // Add new content.
-        $(this)[method](new_content_result[i].children);
-      }
 
       // Re-class new content.
-      var row = 1;
-      $(this).children()
-        .removeClass('views-row-first views-row-last views-row-odd views-row-even')
-        .filter(':first')
-          .addClass('views-row-first')
-          .end()
-        .filter(':last')
-          .addClass('views-row-last')
-          .end()
-        .filter(':even')
-          .addClass('views-row-odd')
-          .end()
-        .filter(':odd')
-          .addClass('views-row-even')
-          .end()
-        .each(function() {
-          var classes = $(this).attr('class');
-          var indexClass = classes.match(/views-row-[0-9]+/);
-          $(this).removeClass(indexClass[0]).addClass('views-row-' + row++);
-      });
+      reClassContent($(this).find(content_query));
     });
 
     if (effect.showEffect != 'show') {
@@ -122,8 +108,41 @@
     var classes = wrapper.attr('class');
     var onceClass = classes.match(/jquery-once-[0-9]*-[a-z]*/);
     wrapper.removeClass(onceClass[0]);
-    var settings = response.settings || ajax.settings || Drupal.settings;
+    settings = response.settings || ajax.settings || Drupal.settings;
     Drupal.attachBehaviors(wrapper, settings);
+  };
+
+  /**
+   * Re-class the loaded content.
+   *
+   * @param content
+   *
+   * @todo this is faulty in many ways. first of which is that user may have
+   * configured view to not have these classes at all.
+   */
+  var reClassContent = function (content) {
+    var row = 1;
+    $(content).children()
+      .removeClass('views-row-first views-row-last views-row-odd views-row-even')
+      .filter(':first')
+      .addClass('views-row-first')
+      .end()
+      .filter(':last')
+      .addClass('views-row-last')
+      .end()
+      .filter(':even')
+      .addClass('views-row-odd')
+      .end()
+      .filter(':odd')
+      .addClass('views-row-even')
+      .end()
+      .each(function() {
+        var classes = $(this).attr('class');
+        var indexClass = classes.match(/views-row-[0-9]+/);
+        if (indexClass) {
+          $(this).removeClass(indexClass[0]).addClass('views-row-' + row++);
+        }
+      });
   }
 
   /**
@@ -131,26 +150,36 @@
    */
   Drupal.behaviors.ViewsLoadMore = {
     attach: function (context, settings) {
-      if (settings && settings.viewsLoadMore && settings.views.ajaxViews) {
-        opts = {
+      var default_opts = {
           offset: '100%'
         };
+
+      if (settings && settings.viewsLoadMore && settings.views && settings.views.ajaxViews) {
         $.each(settings.viewsLoadMore, function(i, setting) {
-          var view = '.view-id-' + setting.view_name + '.view-display-id-' + setting.view_display_id + ' .pager-next a';
+          var view = '.view-id-' + setting.view_name + '.view-display-id-' + setting.view_display_id + ' .pager-next a',
+            opts = {};
+
+          $.extend(opts, default_opts, settings.viewsLoadMore[i].opts);
+
+          $(view).waypoint('destroy');
           $(view).waypoint(function(event, direction) {
-            $(view).waypoint('remove');
             $(view).click();
           }, opts);
         });
       }
     },
     detach: function (context, settings, trigger) {
-      if (settings && Drupal.settings.viewsLoadMore && settings.views.ajaxViews) {
+      if (settings && settings.viewsLoadMore && settings.views && settings.views.ajaxViews) {
         $.each(settings.viewsLoadMore, function(i, setting) {
-          var view = '.view-id-' + setting.view_name + '.view-display-id-' + setting.view_display_id + ' .pager-next a';
-          $(view, context).waypoint('destroy');
+          var view = '.view-id-' + setting.view_name + '.view-display-id-' + setting.view_display_id;
+          if ($(context).is(view)) {
+            $('.pager-next a', view).waypoint('destroy');
+          }
+          else {
+            $(view, context).waypoint('destroy');
+          }
         });
       }
     }
-     };
+  };
 })(jQuery);

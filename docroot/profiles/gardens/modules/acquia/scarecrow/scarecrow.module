@@ -1106,6 +1106,7 @@ function scarecrow_disallowed_modules() {
     'date_context',
     // Services, oAuth, etc. may only be enabled as part of the member API or
     // MASt modules - not available on their own.
+    'mast',
     'services',
     'services_oauth',
     'services_test_resource',

@@ -35,6 +35,9 @@ class ThemeExistsElf extends PostprocessThemeElf {
     if (!$this->doesThemeExist($themeName)) {
       if (!empty($themeName)) {
         $this->logGlusterIssues($themeName);
+
+        // Attempt to restore the theme using the backup directory created
+        // during Themebuilder save.
         try {
           $backupPath = $this->getBackupDir($themeName);
           $themePath = $this->getThemeDir($themeName);
@@ -56,6 +59,31 @@ class ThemeExistsElf extends PostprocessThemeElf {
         }
         catch (Exception $e) {
           // Fall through to last resort code below.
+        }
+
+        // Check if the theme can be found on the ephemeral disk.
+        $ephemeral_dir = $this->getThemeEphemeralDir($themeName);
+        if ($ephemeral_dir && file_exists($ephemeral_dir)) {
+          // Recreate the symbolic link hoping that it would fix the Gluster
+          // issue.
+          $theme_path = $this->getThemeDir($themeName);
+          $command = sprintf('[ ! -e %2$s ] && ln -s %1$s %2$s', escapeshellarg($ephemeral_dir), escapeshellarg($theme_path));
+          exec($command, $output, $exit_code);
+          if ($exit_code === 0 || $this->doesThemeExist($themeName)) {
+            if ($exit_code === 0) {
+              ThemeBuilderLog()->gardensWarning('Theme fixed by ThemeExistsElf.', sprintf('The default theme "%s" did not exist on Gluster but was found on the ephemeral disk and the symbolic link was recreated.', $themeName));
+            }
+            $fixCount++;
+            return $fixCount;
+          }
+          else {
+            $message = sprintf('The default theme "%s" did not exist on Gluster but was found on ephemeral. Could not recreate the symbolic link.', $themeName);
+            ThemeBuilderLog()->gardensError('ThemeExistsElf tried to fix a theme using the ephemeral, but the operation failed.', $message);
+            // Exit early because letting this theme elf proceed would mean
+            // getting the active theme overridden and the customer will just
+            // think that their theme got lost.
+            throw new Exception($message);
+          }
         }
       }
       else {
@@ -237,4 +265,42 @@ class ThemeExistsElf extends PostprocessThemeElf {
     $themePath = substr($themePath, 0, max(0, strlen($themePath) - (strlen("${themeName}.info") + 1)));
     return $themePath;
   }
+
+  /**
+   * Returns the theme's supposed location on the ephemeral disk.
+   *
+   * @param string $theme_name
+   *   The name of the theme to look for.
+   *
+   * @return string
+   *   The path to the theme on the ephemeral disk if it can be found.
+   */
+  private function getThemeEphemeralDir($theme_name) {
+    $path = NULL;
+    $site = getenv('AH_SITE_GROUP');
+    $env = getenv('AH_SITE_ENVIRONMENT');
+    // In the theme repository on the ephemeral disk, the sites are organized in
+    // a directory that relates to the name of the site's docroot pair.
+    // Unfortunately this name has not been consistently generated, and it is
+    // also not being stored in the site, so we can not use anything more
+    // concrete here (example names being: tangle001, heartland1_01, wmg_04 or
+    // on dev tangle_<sitegroup>). Lowering the scope of the search by:
+    // - including the site's directory in the path after the asterisk,
+    // - restricting the search to just directories (type -d),
+    // - restricting the depth it is allowed to go (-maxdepth 1).
+    // Note: maxdepth needs to come before the name option!
+    // Note: escaping the directory path where the find should happen will
+    // result in an error that the directory could not be found.
+    $command = sprintf('find /mnt/tmp/%s.%s/theme_repo/live/themebuilder/*/%s -maxdepth 1 -name %s -type d', $site, $env, gardens_client_get_gardens_db_name(), escapeshellarg($theme_name));
+    exec($command, $output, $exit_code);
+    // The $output will be an array, and each value will be one line of the find
+    // command's output. If $output is empty then the theme directory was not
+    // found. If it contains more than one directory then we do not know which
+    // one to take, so again, do not do anything.
+    if ($exit_code === 0 && count($output) === 1) {
+      $path = array_pop($output);
+    }
+    return $path;
+  }
+
 }
