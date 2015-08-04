@@ -3296,3 +3296,21 @@ function gardens_misc_acsf_registry() {
     ),
   );
 }
+
+/**
+ * Implements hook_preprocess_token_tree().
+ */
+function gardens_misc_preprocess_token_tree(&$variables) {
+  // If the customer adds lots of content types and fields then the token tree
+  // generation can become very memory intensive resulting in all pages using
+  // the token tree to error out if the token cache is unpopulated. The token
+  // tree theme function has the option to load the tokens using jQuery in which
+  // case all the token categories are fetched separately resulting in a lower
+  // memory usage. The drawback is that the jQuery based dialog building can
+  // take a while and in that time period the page is basically unresponsive.
+  // Ensure that the dialog is not forced when it's called from the jQuery
+  // callback to the token/tree path.
+  if (variable_get('gardens_misc_force_token_tree_dialog', FALSE) && empty($variables['dialog']) && arg(0) != 'token') {
+    $variables['dialog'] = TRUE;
+  }
+}
