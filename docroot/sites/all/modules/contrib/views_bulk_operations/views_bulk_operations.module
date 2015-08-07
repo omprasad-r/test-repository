@@ -75,7 +75,7 @@ function views_bulk_operations_load_action_includes() {
  */
 function views_bulk_operations_cron() {
   db_delete('queue')
-    ->condition('name', db_like('views_bulk_operations_active_queue_'), 'LIKE')
+    ->condition('name', db_like('views_bulk_operations_active_queue_') . '%', 'LIKE')
     ->condition('created', REQUEST_TIME - 86400, '<')
     ->execute();
 }
