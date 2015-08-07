@@ -1,0 +1,220 @@
+<?php
+
+/**
+ * Implements hook_permission().
+ */
+function spamagement_permission() {
+  return array(
+    'administer spamagement settings' => array(
+      'title' => t('Administer Spamagement settings'),
+      'description' => t('Administer settings for the Spamagement module.'),
+    ),
+    'report and delete spam users and their content' => array(
+      'title' => t('Report and delete spam users and their content'),
+      'description' => t('Use Spamagement actions to report and delete individual spam users and their content.'),
+    ),
+  );
+}
+
+/**
+ * Implements hook_menu().
+ */
+function spamagement_menu() {
+  $items = array();
+
+  $items['admin/settings/spamagement'] = array(
+    'title' => 'Spamagement module settings',
+    'description' => 'Configure the spamagement tool.',
+    'file' => 'spamagement.admin.inc',
+    'page callback' => 'drupal_get_form',
+    'page arguments' => array('spamagement_admin'),
+    'access arguments' => array('administer spamagement settings'),
+    'type' => MENU_NORMAL_ITEM,
+  );
+
+  return $items;
+}
+
+/**
+ * Implements hook_action_info().
+ */
+function spamagement_action_info() {
+  return array(
+    'spamagement_wipe_user' => array(
+      'type' => 'node',
+      'label' => t('Report and delete all of a spam user\'s content, as well as the user itself.'),
+      'configurable' => FALSE,
+      'permissions' => array('report and delete spam users and their content'),
+      'triggers' => array('any'),
+    ),
+  );
+}
+
+/**
+ * Implements hook_user_insert().
+ */
+function spamagement_user_insert(&$edit, $account, $category) {
+  $log = variable_get('spamagement_log_successful_registrations', FALSE);
+  if ($log) {
+    $ip = ip_address();
+    $name = $account->name;
+    $mail = $account->mail;
+    watchdog('spamagement', 'Successful registration: @name/@mail/@ip', array('@ip' => $ip, '@name' => $name, '@mail' => $mail), WATCHDOG_INFO);
+  }
+}
+
+/**
+ * Given a node, find its user account and:
+ * - Find all their content, both nodes and comments.
+ * - Report all of it to Mollom, if Mollom is enabled.
+ * - Delete all of it.
+ * - Delete the user account.
+ */
+function spamagement_wipe_user(&$node, $context = array()) {
+  global $user;
+  $uid = $node->uid;
+  if ($uid == 1 || $user->uid == $uid) {
+    watchdog('spamagement', 'You cann\'t delete the content created by you or user id 1', WATCHDOG_ERROR);
+  }
+  else {
+    watchdog('spamagement', 'Performing Spamagement user wipe for user :uid', array(':uid' => $uid), WATCHDOG_ERROR);
+
+    $batch = array(
+      'operations' => array(),
+      'finished' => 'spamagement_wipe_user_finished',
+      'title' => t('Wiping spam user'),
+      'init_message' => t('Initializing spam user wipe'),
+      'progress_message' => t('Processed @current out of @total.'),
+      'error_message' => t('Spam user wipe has encountered an error.'),
+    );
+
+    // Load all the NIDs.
+    $nids = array();
+    $result = db_query('SELECT n.nid FROM {node} n WHERE n.uid = :uid', array(':uid' => $uid));
+    foreach ($result as $record) {
+      $nids[] = $record->nid;
+    }
+    $batch['operations'][] = array('spamagement_wipe_user_nodes', array($nids));
+
+    watchdog('spamagement', 'Queueing :count nodes for deletion', array(':count' => count($nids)), WATCHDOG_INFO);
+
+    // Load all the CIDs.
+    $cids = array();
+    $result = db_query('SELECT c.cid FROM {comment} c WHERE c.uid = :uid', array(':uid' => $uid));
+    foreach ($result as $record) {
+      $cids[] = $record->cid;
+    }
+    $batch['operations'][] = array('spamagement_wipe_user_comments', array($cids));
+
+    watchdog('spamagement', 'Queueing :count comments for deletion', array(':count' => count($cids)), WATCHDOG_INFO);
+
+    // Delete the user account.
+    $batch['operations'][] = array('spamagement_wipe_user_user', array($uid));
+
+    watchdog('spamagement', 'Setting up the batch', array(), WATCHDOG_INFO);
+    batch_set($batch);
+  }
+}
+
+/**
+ * Callback to remove nodes
+ * @param array $nids
+ * @param type $context
+ * @return type
+ */
+function spamagement_wipe_user_nodes(array $nids, &$context) {
+  watchdog('spamagement', 'Running spamagement_wipe_user_nodes', array(), WATCHDOG_INFO);
+
+  if (!isset($context['sandbox']['current_key'])) {
+    $context['sandbox']['current_key'] = 0;
+  }
+
+  // Based on previous experimentation I think we can handle 100 at a time without a timeout.
+  $limit = 100;
+
+  // Set range.
+  $first_key = $context['sandbox']['current_key'];
+  if (!array_key_exists($first_key, $nids)) {
+    $context['finished'] = 1;
+    return;
+  }
+  $current_nids = array_slice($nids, $first_key, $limit);
+
+  // First, report the nodes to Mollom, if Mollom is enabled.
+  if (module_exists('mollom')) {
+    mollom_data_report_multiple('node', $nids, 'spam', 'moderate', 'spamagement_wipe_user');
+  }
+
+  // Then, delete them.
+  node_delete_multiple($current_nids);
+
+  $context['results'][] = t('Reported and deleted :count nodes.', array(':count' => count($current_nids)));
+  watchdog('spamagement', 'Reported and deleted :count nodes.', array(':count' => count($current_nids)), WATCHDOG_INFO);
+
+  $max = count($nids);
+  $processed = $max - ($context['sandbox']['current_key'] + $limit);
+  $context['finished'] = $processed / $max;
+  if ($context['finished'] > 1) {
+    $context['finished'] = 1;
+  }
+
+  $context['sandbox']['current_key'] += $limit;
+}
+
+/**
+ * callback to remove comments
+ * @param array $cids
+ * @param type $context
+ * @return type
+ */
+function spamagement_wipe_user_comments(array $cids, &$context) {
+  watchdog('spamagement', 'Running spamagement_wipe_user_comments', array(), WATCHDOG_INFO);
+
+  if (!isset($context['sandbox']['current_key'])) {
+    $context['sandbox']['current_key'] = 0;
+  }
+
+  // Based on previous experimentation I think we can handle 100 at a time without a timeout.
+  $limit = 100;
+
+  // Set range.
+  $first_key = $context['sandbox']['current_key'];
+  if (!array_key_exists($first_key, $cids)) {
+    $context['finished'] = 1;
+    return;
+  }
+  $current_cids = array_slice($cids, $first_key, $limit);
+
+  // First, report the nodes to Mollom, if Mollom is enabled.
+  if (module_exists('mollom')) {
+    mollom_data_report_multiple('comment', $cids, 'spam', 'moderate', 'spamagement_wipe_user');
+  }
+
+  // Then, delete them.
+  node_delete_multiple($current_cids);
+
+  $context['results'][] = t('Reported and deleted :count comments.', array(':count' => count($current_cids)));
+  watchdog('spamagement', 'Reported and deleted :count comments.', array(':count' => count($current_cids)), WATCHDOG_INFO);
+
+  $max = count($cids);
+  $processed = $max - ($context['sandbox']['current_key'] + $limit);
+  $context['finished'] = $processed / $max;
+  if ($context['finished'] > 1) {
+    $context['finished'] = 1;
+  }
+
+  $context['sandbox']['current_key'] += $limit;
+}
+
+/**
+ * Callback to delete users
+ * @param type $uid
+ * @param type $context
+ */
+function spamagement_wipe_user_user($uid, &$context) {
+  watchdog('spamagement', 'Running spamagement_wipe_user_user', array(), WATCHDOG_INFO);
+  _user_cancel(array(), user_load($uid), 'user_cancel_delete');
+  $context['results'][] = t('Removed user account.');
+  $context['finished'] = 1;
+}
+
