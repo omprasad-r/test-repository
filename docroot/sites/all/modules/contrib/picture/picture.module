@@ -1496,6 +1496,7 @@ function _picture_filter_prepare_image($image) {
   // Make sure the closing tag is right.
   $image = str_replace('/>', '>', $image);
   $image = str_replace('>', ' />', $image);
+  $image = str_replace("&nbsp;", '', $image);
   $image = htmlspecialchars($image);
 
   // Parse the tag as xml.
@@ -1508,7 +1509,15 @@ function _picture_filter_prepare_image($image) {
   }
 
   $fallback_image_style = '';
-  $mapping_id = isset($attributes['data-picture-mapping']) ? $attributes['data-picture-mapping'] : $attributes['data-picture-group'];
+  if(isset($attributes['data-picture-mapping'])) {
+  	$mapping_id = $attributes['data-picture-mapping'];
+  } 
+  else if(isset($attributes['data-picture-group'])) {
+  	$mapping_id = $attributes['data-picture-group'];
+  } 
+  else {
+  	$mapping_id = null;
+  }
   $mappings = picture_mapping_load($mapping_id);
   // Make sure we have valid mappings.
   if (empty($mappings)) {
