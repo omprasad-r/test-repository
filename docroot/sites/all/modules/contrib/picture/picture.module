@@ -774,7 +774,7 @@ function picture_field_formatter_picture_view($entity_type, $entity, $field, $in
   if (isset($mapping_name) && !empty($mapping_name)) {
     $picture_mapping = picture_mapping_load($mapping_name);
     if (!$picture_mapping) {
-      trigger_error("Unable to load picture mapping $mapping_name.", E_USER_ERROR);
+      trigger_error(check_plain("Unable to load picture mapping $mapping_name."), E_USER_ERROR);
       return $element;
     }
   }
@@ -798,7 +798,7 @@ function picture_field_formatter_picture_view($entity_type, $entity, $field, $in
     $formatter = 'picture_formatter_colorbox';
     $mappings = picture_mapping_load($display['settings']['colorbox_settings']['colorbox_group']);
     if (!$mappings) {
-      trigger_error("Unable to load picture mapping {$display['settings']['colorbox_settings']['colorbox_group']}.", E_USER_ERROR);
+      trigger_error(check_plain("Unable to load picture mapping {$display['settings']['colorbox_settings']['colorbox_group']}."), E_USER_ERROR);
       return $element;
     }
     $colorbox_breakpoints = picture_get_mapping_breakpoints($mappings, $colorbox_fallback_image_style);

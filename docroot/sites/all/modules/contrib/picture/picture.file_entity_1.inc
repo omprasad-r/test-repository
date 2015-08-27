@@ -47,7 +47,7 @@ function picture_file_formatter_picture_view($file, $display, $langcode) {
     $group_name = $display['settings']['picture_group'];
     $mappings = picture_mapping_load($group_name);
     if (!$mappings) {
-      trigger_error("Unable to load picture mapping $group_name.", E_USER_ERROR);
+      trigger_error(check_plain("Unable to load picture mapping $group_name."), E_USER_ERROR);
       return;
     }
     $breakpoint_styles = picture_get_mapping_breakpoints($mappings, $fallback_image_style);
