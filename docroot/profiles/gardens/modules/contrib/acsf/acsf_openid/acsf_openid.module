@@ -142,7 +142,7 @@ function acsf_openid_menu_alter(&$items) {
     $items['user']['file path'] = drupal_get_path('module', 'acsf_openid');
   }
   else {
-    $access_callbacks['admin/people/invite'] = FALSE;
+    $items['admin/people/invite']['access callback'] = FALSE;
   }
 }
 
