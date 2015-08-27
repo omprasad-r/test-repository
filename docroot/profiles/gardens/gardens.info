@@ -1,5 +1,5 @@
 name = Gardens
-description = Create a fantastic little bitty site.
+description = Ready-to-use solution designed to help create and publish websites more easily.
 core = 7.x
 distribution_name = Drupal Gardens
 
