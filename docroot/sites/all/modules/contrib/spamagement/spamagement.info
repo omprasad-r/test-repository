@@ -1,0 +1,7 @@
+name = Spamagement
+description = A collection of tools to help manage spam that doesn't get blocked by other tools.
+core = 7.x
+
+dependencies[] = views_bulk_operations
+dependencies[] = admin_views
+dependencies[] = views_ui
