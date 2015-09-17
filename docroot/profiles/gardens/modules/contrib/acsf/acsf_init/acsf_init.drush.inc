@@ -172,11 +172,13 @@ function drush_acsf_connect_factory() {
   if (empty($site_owner_account)) {
     $site_owner_account = user_load_by_name($site_owner_name);
   }
-  // Finally, if the site owner user account is still not found, we need to
-  // throw an error. If we were to create a new account the new site owner user
-  // ID would not match the previous one and their roles could be different.
+  // If the site owner account is still not found then either the customer has
+  // made a typo or maybe there is going to be a new owner who needs a new
+  // account. Ask for confirmation to create a new account.
   if (empty($site_owner_account)) {
-    return drush_set_error(dt('The site owner account cannot be found by site-owner-mail or site-owner-name.'));
+    if (!drush_confirm(dt('The site owner name or email address that you provided does not correspond to any account on the site. Do you want to create a new account?'))) {
+      return drush_user_abort();
+    }
   }
 
   // Clear all caches ahead of time so Drupal has a chance to rebuild
@@ -211,6 +213,10 @@ function drush_acsf_connect_factory() {
 
   // Create or update site owner account.
   // Prepare roles for site owner.
+  if (empty($site_owner_account)) {
+    $site_owner_account = new stdClass();
+    $site_owner_account->is_new = TRUE;
+  }
   $site_owner_account_edit = $default_account_edit;
   foreach ($site_owner_roles as $role) {
     $rid = user_role_load_by_name($role)->rid;

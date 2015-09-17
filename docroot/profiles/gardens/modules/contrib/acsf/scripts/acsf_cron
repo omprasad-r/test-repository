@@ -16,7 +16,7 @@
  *     site-file    - The file containing the sites to run cron on.
  *     env          - The hosting environment.
  *     site         - The hosting site.
- *     drush        - How drush should be invoked - defaults to '\drush5'.
+ *     drush        - How drush should be invoked - defaults to '\drush6'.
  *     drush-cache  - The drush cache directory
  *
  * Example:
@@ -251,7 +251,7 @@ function _acsf_cron_parse_command_line() {
   );
   $options = getopt('', $long_options);
   $result = new stdClass();
-  $result->drush = '\drush5';
+  $result->drush = '\drush6';
 
   foreach ($options as $name => $value) {
     switch ($name) {
