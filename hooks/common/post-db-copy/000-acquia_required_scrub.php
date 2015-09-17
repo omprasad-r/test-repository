@@ -44,7 +44,7 @@ mysql_close($link);
 
 // Get the Factory creds using acsf-get-factory-creds.
 $command = sprintf(
-  'AH_SITE_GROUP=%1$s AH_SITE_ENVIRONMENT=%2$s drush5 @%1$s.%2$s -r %4$s -i %3$s acsf-get-factory-creds --pipe',
+  'AH_SITE_GROUP=%1$s AH_SITE_ENVIRONMENT=%2$s drush6 @%1$s.%2$s -r %4$s -i %3$s acsf-get-factory-creds --pipe',
   escapeshellarg($site),
   escapeshellarg($env),
   escapeshellarg($acsf_location),
@@ -68,7 +68,7 @@ shell_exec(sprintf('mkdir -p %s', escapeshellarg($cache_directory)));
 
 // Execute the scrub.
 $command = sprintf(
-  'CACHE_PREFIX=%s \drush5 @%s.%s -r /var/www/html/%s.%s/docroot -l %s -y acsf-site-scrub',
+  'CACHE_PREFIX=%s \drush6 @%s.%s -r /var/www/html/%s.%s/docroot -l %s -y acsf-site-scrub',
   escapeshellarg($cache_directory),
   escapeshellarg($site),
   escapeshellarg($env),

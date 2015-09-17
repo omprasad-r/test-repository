@@ -234,7 +234,7 @@ function drush_acsf_site_sync() {
  * Command callback. Puts a site into maintenance.
  */
 function drush_acsf_go_offline() {
-  include_once './includes/lock.inc';
+  require_once DRUPAL_ROOT . '/' . variable_get('lock_inc', 'includes/lock.inc');
   $query = _drush_acsf_clear_maint();
   // For now hard-code a 10 minute expected offline time.
   $expected = time() + 10 * 60;
@@ -295,7 +295,7 @@ function drush_acsf_post_go_offline() {
  * Command command. Takes a site out of maintenance.
  */
 function drush_acsf_go_online() {
-  include_once './includes/lock.inc';
+  require_once DRUPAL_ROOT . '/' . variable_get('lock_inc', 'includes/lock.inc');
   // Determine whether the user intended the site to be in maintenance mode.
   $content = _drush_acsf_get_raw_variable('acsf_site_owner_maintenance_mode');
 

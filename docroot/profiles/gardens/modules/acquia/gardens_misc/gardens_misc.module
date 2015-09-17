@@ -1212,8 +1212,8 @@ function gardens_misc_get_tracking_code_track_pageview() {
   }
   $tracking_domain = variable_get('gardens_misc_ga_domain', 'none');
   return <<<EOF
-  ga('create', '$tracking_code', '$tracking_domain');
-  ga('send', 'pageview');
+  ga('create', '$tracking_code', '$tracking_domain', {'name': 'ACSF'});
+  ga('ACSF.send', 'pageview');
 EOF;
 }
 
@@ -3312,5 +3312,57 @@ function gardens_misc_preprocess_token_tree(&$variables) {
   // callback to the token/tree path.
   if (variable_get('gardens_misc_force_token_tree_dialog', FALSE) && empty($variables['dialog']) && arg(0) != 'token') {
     $variables['dialog'] = TRUE;
+  }
+}
+
+/**
+ * Implements hook_preprocess_comment_wrapper().
+ */
+function gardens_misc_preprocess_comment_wrapper(&$variables) {
+  if (!empty($variables['content']['comments']['pager']['#theme']) && $variables['content']['comments']['pager']['#theme'] == 'pager') {
+    // Many times comments can be spammy and sometimes there are thousands (if
+    // not more) comments on a single node. When a crawler finds such a node and
+    // tries to load these comment pages simultaneously that could put a huge
+    // stress on the database due to the amount of data and the required data
+    // paging. As an attempt to lower the risk, we want to add a nofollow
+    // attribute to the comment related pager links without affecting other kind
+    // of pagers.
+    // The pager links are generated in the theme_pager_link which could be
+    // modified by a preprocess function, but it is hard to get the necessary
+    // information there because the "top" theme_pager function is only passing
+    // the pager's id and the extra url parameter array to it.
+    // One possibility is that we are going to set a global variable here to
+    // flag a certain pager id to be tweaked in the pager link preprocess
+    // function. Or we could add a custom url parameter to the pager's build
+    // array which would act as an indicator for the pager link preprocess
+    // function.
+    // Both feels hackish, but maybe the custom url parameter feels less bad.
+    if (empty($variables['content']['comments']['pager']['#parameters'])) {
+      $variables['content']['comments']['pager']['#parameters'] = array();
+    }
+    $variables['content']['comments']['pager']['#parameters']['gardens_misc_comment_pager_needs_nofollow'] = 1;
+  }
+}
+
+/**
+ * Implements hook_views_pre_render().
+ */
+function gardens_misc_views_pre_render(&$view) {
+  // We only want views displaying comments to be affected by this change.
+  if ($view->base_table == 'comment' && $view->display_handler->render_pager()) {
+    // See gardens_misc_preprocess_comment_wrapper() for more info what is being
+    // done here. This is doing the same as the said function except this is for
+    // views handling comment listings.
+    $view->exposed_raw_input['gardens_misc_comment_pager_needs_nofollow'] = TRUE;
+  }
+}
+
+/**
+ * Implements hook_preprocess_pager_link().
+ */
+function gardens_misc_preprocess_pager_link(&$variables) {
+  if (!empty($variables['parameters']['gardens_misc_comment_pager_needs_nofollow'])) {
+    unset($variables['parameters']['gardens_misc_comment_pager_needs_nofollow']);
+    $variables['attributes']['rel'] = 'nofollow';
   }
 }
