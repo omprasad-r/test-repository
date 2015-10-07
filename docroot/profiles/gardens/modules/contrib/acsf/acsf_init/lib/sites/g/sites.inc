@@ -169,9 +169,17 @@ function gardens_site_data_refresh_domains(array $domains) {
     else {
       // $result is in the form of
       // "example.com": {"name": "g123", "flags": {}},
-      // (with or without the trailing comma).
+      // (with or without the trailing comma).  Due to the fact that the above
+      // grep command is quite greedy, we need to be prepared for the fact that
+      // we may get more than 1 line returned from the command.  The "m"
+      // (multiline) modifier is used in the following regular expression
+      // so that the begin and end anchors can match the beginning and end of
+      // any one of those lines, rather than having to match the entire string
+      // from beginning to end (which fails if there is more than 1 line of
+      // results).  More than one line can typically be returned if the
+      // searched-for site domain is a substring of another site domain.
       $matches = array();
-      $pattern = '@^\s*"' . preg_quote($domain, '@') . '": ({.+}),?$@';
+      $pattern = '@^\s*"' . preg_quote($domain, '@') . '": ({.+}),?$@m';
       if (preg_match($pattern, $result, $matches)) {
         $found_site = json_decode($matches[1], TRUE);
       }
@@ -189,7 +197,12 @@ function gardens_site_data_refresh_domains(array $domains) {
         // This will happen if the domain appears in the JSON file, but the
         // format of the file has changed such that the grep-based single-line
         // parsing no longer works.
-        watchdog(WATCHDOG_ALERT, 'Unable to extract site data for site @site from sites.json line "@line".', array('@site' => $domain, '@line' => $result));
+        if (function_exists('watchdog')) {
+          watchdog(WATCHDOG_ALERT, 'Unable to extract site data for site @site from sites.json line "@line".', array('@site' => $domain, '@line' => $result));
+        }
+        elseif (function_exists('syslog')) {
+          syslog(LOG_ERR, sprintf('Unable to extract site data for site %s from sites.json line "%s".', $domain, $result));
+        }
         if ($map = gardens_site_data_load_file()) {
           if (!empty($map['sites'][$domain])) {
             $data[$domain] = gardens_site_data_build_data($map['sites'][$domain], $map);
