@@ -42,7 +42,21 @@ function spamagement_action_info() {
   return array(
     'spamagement_wipe_user' => array(
       'type' => 'node',
-      'label' => t('Report and delete all of a spam user\'s content, as well as the user itself.'),
+      'label' => t('Report and delete all of a node\'s author\'s content as spam, as well as the author\'s user account.'),
+      'configurable' => FALSE,
+      'permissions' => array('report and delete spam users and their content'),
+      'triggers' => array('any'),
+    ),
+    'spamagement_wipe_user_by_comment' => array(
+      'type' => 'comment',
+      'label' => t('Report and delete all of a comment\'s author\'s content as spam, as well as the author\'s user account.'),
+      'configurable' => FALSE,
+      'permissions' => array('report and delete spam users and their content'),
+      'triggers' => array('any'),
+    ),
+    'spamagement_wipe_user_by_user' => array(
+      'type' => 'user',
+      'label' => t('Report and delete all of a user\'s content as spam, as well as the user itself.'),
       'configurable' => FALSE,
       'permissions' => array('report and delete spam users and their content'),
       'triggers' => array('any'),
@@ -64,17 +78,60 @@ function spamagement_user_insert(&$edit, $account, $category) {
 }
 
 /**
- * Given a node, find its user account and:
+ * Given a user account:
  * - Find all their content, both nodes and comments.
  * - Report all of it to Mollom, if Mollom is enabled.
  * - Delete all of it.
  * - Delete the user account.
  */
+function spamagement_wipe_user_by_user(&$account, $context = array()) {
+  return _spamagement_wipe_user($account, $context);
+}
+
+/**
+ * Given a node, find its user account and:
+ * - Find all their content, both nodes and comments.
+ * - Report all of it to Mollom, if Mollom is enabled.
+ * - Delete all of it.
+ * - Delete the user account.
+ * Sorry about the break in naming convention; the original release
+ * of this module only had one of these actions, and it behaved like
+ * this one; so, I'm keeping the name the same to avoid issues when
+ * folks upgrade sites that used the first release.
+ */
 function spamagement_wipe_user(&$node, $context = array()) {
+  $account = user_load($node->uid);
+  if (!$account) {
+    watchdog('spamagement', 'The author of node :nid, UID :uid, does not exist.', array(':nid' => $node->nid, ':uid' => $node->uid), WATCHDOG_ERROR);
+    return;
+  }
+  return _spamagement_wipe_user($account, $context);
+}
+
+/**
+ * Given a comment, find its user account and:
+ * - Find all their content, both nodes and comments.
+ * - Report all of it to Mollom, if Mollom is enabled.
+ * - Delete all of it.
+ * - Delete the user account.
+ */
+function spamagement_wipe_user_by_comment(&$comment, $context = array()) {
+  $account = user_load($comment->uid);
+  if (!$account) {
+    watchdog('spamagement', 'The author of comment :cid, UID :uid, does not exist.', array(':cid' => $comment->cid, ':uid' => $comment->uid), WATCHDOG_ERROR);
+    return;
+  }
+  return _spamagement_wipe_user($account, $context);
+}
+/**
+ * Internal function to handle batching the jobs fired off by
+ * spamagement_wipe_user_by_*() functions.
+ */
+function _spamagement_wipe_user(&$account, $context = array()) {
   global $user;
-  $uid = $node->uid;
+  $uid = $account->uid;
   if ($uid == 1 || $user->uid == $uid) {
-    watchdog('spamagement', 'You cann\'t delete the content created by you or user id 1', WATCHDOG_ERROR);
+    watchdog('spamagement', 'You can\'t delete the content created by you or user id 1', WATCHDOG_ERROR);
   }
   else {
     watchdog('spamagement', 'Performing Spamagement user wipe for user :uid', array(':uid' => $uid), WATCHDOG_ERROR);
@@ -145,19 +202,32 @@ function spamagement_wipe_user_nodes(array $nids, &$context) {
     mollom_data_report_multiple('node', $nids, 'spam', 'moderate', 'spamagement_wipe_user');
   }
 
+  // Collect a sample node in case we need data later.
+  $sample_nid = current($current_nids);
+  $sample_node = node_load($sample_nid);
+
   // Then, delete them.
   node_delete_multiple($current_nids);
 
-  $context['results'][] = t('Reported and deleted :count nodes.', array(':count' => count($current_nids)));
+  if (!array_key_exists('counts', $context['results'])) {
+    $context['results']['counts'] = array('nodes' => 0, 'comments' => 0, 'users' => 0);
+  }
+  $context['results']['counts']['nodes'] += count($current_nids);
   watchdog('spamagement', 'Reported and deleted :count nodes.', array(':count' => count($current_nids)), WATCHDOG_INFO);
 
   $max = count($nids);
-  $processed = $max - ($context['sandbox']['current_key'] + $limit);
+  $processed = $context['results']['counts']['nodes'];
   $context['finished'] = $processed / $max;
   if ($context['finished'] > 1) {
     $context['finished'] = 1;
   }
 
+  $account = user_load($sample_node->uid);
+  $context['message'] = t('Deleted @count of @total nodes owned by user %uname.', array(
+    '@count' => $context['results']['counts']['nodes'],
+    '@total' => count($nids),
+    '%uname'  => $account->name,
+  ));
   $context['sandbox']['current_key'] += $limit;
 }
 
@@ -190,19 +260,32 @@ function spamagement_wipe_user_comments(array $cids, &$context) {
     mollom_data_report_multiple('comment', $cids, 'spam', 'moderate', 'spamagement_wipe_user');
   }
 
-  // Then, delete them.
-  node_delete_multiple($current_cids);
+  // Collect a sample comment in case we need data later.
+  $sample_cid = current($current_cids);
+  $sample_comment = comment_load($sample_cid);
 
-  $context['results'][] = t('Reported and deleted :count comments.', array(':count' => count($current_cids)));
+  // Then, delete them.
+  comment_delete_multiple($current_cids);
+
+  if (!array_key_exists('counts', $context['results'])) {
+    $context['results']['counts'] = array('nodes' => 0, 'comments' => 0, 'users' => 0);
+  }
+  $context['results']['counts']['comments'] += count($current_cids);
   watchdog('spamagement', 'Reported and deleted :count comments.', array(':count' => count($current_cids)), WATCHDOG_INFO);
 
   $max = count($cids);
-  $processed = $max - ($context['sandbox']['current_key'] + $limit);
+  $processed = $context['results']['counts']['comments'];
   $context['finished'] = $processed / $max;
   if ($context['finished'] > 1) {
     $context['finished'] = 1;
   }
 
+  $account = user_load($sample_comment->uid);
+  $context['message'] = t('Deleted @count of @total comments owned by user %uname.', array(
+    '@count' => $context['results']['counts']['comments'],
+    '@total' => count($cids),
+    '%uname'  => $account->name,
+  ));
   $context['sandbox']['current_key'] += $limit;
 }
 
@@ -213,8 +296,36 @@ function spamagement_wipe_user_comments(array $cids, &$context) {
  */
 function spamagement_wipe_user_user($uid, &$context) {
   watchdog('spamagement', 'Running spamagement_wipe_user_user', array(), WATCHDOG_INFO);
-  _user_cancel(array(), user_load($uid), 'user_cancel_delete');
-  $context['results'][] = t('Removed user account.');
+  $account = user_load($uid);
+  _user_cancel(array(), $account, 'user_cancel_delete');
+  $context['results']['uid'] = $uid;
   $context['finished'] = 1;
+  $context['message'] = t('Deleted user %uname.', array('%uname' => $account->name));
 }
 
+/**
+ * Batch 'finished' callback
+ */
+function spamagement_wipe_user_finished($success, $results, $operations) {
+  if ($success) {
+    $type = 'status';
+    if (module_exists('mollom')) {
+      $message = t('Reported and deleted @nodes nodes and @comments comments associated with UID @uid and deleted the user account.', array(
+        '@nodes'    => $results['counts']['nodes'],
+        '@comments' => $results['counts']['comments'],
+        '@uid'      => $results['uid'],
+      ));
+    } else {
+      $message = t('Deleted @nodes nodes and @comments comments associated with UID @uid and deleted the user accounts.', array(
+        '@nodes'    => $results['counts']['nodes'],
+        '@comments' => $results['counts']['comments'],
+        '@uid'      => $results['uid'],
+      ));
+    }
+  } else {
+    // At some point we should provide more detail here as well.
+    $message = t('There was an error while trying to report and delete content in bulk.');
+    $type = 'error';
+  }
+  drupal_set_message($message, $type);
+}
