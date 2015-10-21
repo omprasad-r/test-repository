@@ -10,6 +10,32 @@
 function wmg_turnkey_lightbox_field_default_field_bases() {
   $field_bases = array();
 
+  // Exported field_base: 'body'
+  $field_bases['body'] = array(
+    'active' => 1,
+    'cardinality' => 1,
+    'deleted' => 0,
+    'field_name' => 'body',
+    'field_permissions' => array(
+      'type' => 0,
+    ),
+    'indexes' => array(
+      'format' => array(
+        0 => 'format',
+      ),
+    ),
+    'locked' => 0,
+    'module' => 'text',
+    'object_types' => array(
+      0 => 'node',
+    ),
+    'settings' => array(
+      'max_length' => '',
+    ),
+    'translatable' => 0,
+    'type' => 'text_with_summary',
+  );
+
   // Exported field_base: 'field_cta_button'
   $field_bases['field_cta_button'] = array(
     'active' => 1,

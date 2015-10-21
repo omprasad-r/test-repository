@@ -1,13 +1,13 @@
 <?php
 /**
  * @file
- * wmg_wmg_turnkey_lightbox.views_default.inc
+ * wmg_turnkey_lightbox.views_default.inc
  */
 
 /**
  * Implements hook_views_default_views().
  */
-function wmg_wmg_turnkey_lightbox_views_default_views() {
+function wmg_turnkey_lightbox_views_default_views() {
   $export = array();
 
   $view = new view();
@@ -888,7 +888,7 @@ var isPreviewed = [field_preview_mode];
     t('"[field_cta_button-title]":"[field_cta_button-url]"'),
     t('{[field_cta_button]}'),
   );
-  $export['wmg_wmg_turnkey_lightbox'] = $view;
+  $export['wmg_turnkey_lightbox'] = $view;
 
   return $export;
 }
