@@ -1,0 +1,6 @@
+name = "Youtuve Iframe"
+description = "Provides a flexiblity of converting youtube URLs to iframe."
+core = 7.x
+package = "Other"
+
+
