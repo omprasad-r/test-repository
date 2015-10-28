@@ -1140,7 +1140,7 @@ function gardens_misc_mail_site_admins($params) {
   }
 
   // Send mail to all users with this role (except for user 1, since that is
-  // the Gardens admin user).
+  // the Site Factory admin user).
   $uids = db_query("SELECT u.uid FROM {users} u INNER JOIN {users_roles} ur ON u.uid = ur.uid WHERE ur.rid IN (:rids) AND u.uid > 1", array(':rids' => $rids))->fetchCol();
   if ($uids) {
     $accounts = user_load_multiple($uids);

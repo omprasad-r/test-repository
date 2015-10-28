@@ -57,6 +57,9 @@
   &.navbar-oriented .acquia-lift-campaign {
     padding-right: 0; /* LTR */
   }
+  .navbar-tray-horizontal>.navbar-lining {
+    padding-right: 3em; /* LTR */
+  }
 }
 
 /* Menu wrapper container */
@@ -104,8 +107,8 @@
 
       .menu-wrapper > .#{$menu-class},
       .#{$menu-class} {
-        max-width: 28em;
-        min-width: 22em;
+        max-width: 30em;
+        min-width: 26em;
       }
     }
     .acquia-lift-scrollable {
@@ -152,11 +155,9 @@
         top: 0;
         bottom: 0;
       }
-      .acquia-lift-campaign,
-      .acquia-lift-preview-option {
-        display: block;
-        width: 100%;
-        float: left;
+      .acquia-lift-menu-actions {
+        float: right;
+        padding-left: .5em;
       }
       .acquia-lift-campaign-edit,
       .acquia-lift-variation-delete,
@@ -164,10 +165,7 @@
       .acquia-lift-variation-edit,
       .acquia-lift-goal-rename,
       .acquia-lift-goal-delete {
-        position: relative;
-        display: block;
-        float: right;
-        text-align: right;
+        margin-left: .5em;
       }
       .acquia-lift-campaign {
         margin-right: -4.2em;
@@ -175,10 +173,6 @@
       }
       .acquia-lift-campaign-edit {
         width: 4.2em;
-      }
-      .acquia-lift-preview-option {
-        margin-right: -9em;
-        padding-right: 9em;
       }
       .acquia-lift-variation-edit {
         width: 2.3em;
@@ -221,14 +215,13 @@
   .navbar-tray .acquia-lift-menu-link, .#{$menu-class} .#{$menu-class} a.acquia-lift-menu-link {
     color: #29aae1;
   }
-  .navbar-tray .acquia-lift-menu-link {
+  .navbar-tray .acquia-lift-menu-link, .#{$menu-class} .#{$menu-class} a.acquia-lift-menu-link {
     &:hover, &:active {
       color: #007ec0;
     }
-  }
-  .#{$menu-class} .#{$menu-class} a.acquia-lift-menu-link {
-    &:hover, &:active {
-      color: #007ec0;
+    &.acquia-lift-disabled {
+      color: $text-color-disabled;
+      cursor: default;
     }
   }
 }
@@ -236,9 +229,9 @@
 /* Create links */
 #navbar-administration {
   .navbar-tray-horizontal {
-    .acquia-lift-menu-create {
+    .acquia-lift-menu-create, .acquia-lift-menu-all {
       border-top: $border-size solid $border-color;
-      padding: .7em 1.3333em .7em 1.3333em;
+      padding: 1.0em 1.3333em 1.0em 1.3333em;
     }
     .#{$menu-class} ul li.last {
       padding-top: .6em;
@@ -273,6 +266,11 @@
         color: #c6c6c6;
       }
     }
+    .acquia-lift-menu-campaign-warning {
+      padding-left: 38px;
+      margin-left: 1.5em;
+      background: $background-color url(../images/FF8000/alert.png) no-repeat left center;
+    }
   }
 }
 
@@ -291,7 +289,7 @@
 /* Additional edit links are only available in horizontal view */
 #navbar-administration {
   .navbar-tray-vertical {
-    .acquia-lift-campaign-edit, .acquia-lift-variation-delete, .acquia-lift-variation-rename, .acquia-lift-variation-edit, .acquia-lift-goal-rename, .acquia-lift-goal-delete, .acquia-lift-page-variation-toggle {
+    .acquia-lift-campaign-edit, .acquia-lift-variation-delete, .acquia-lift-variation-rename, .acquia-lift-variation-edit, .acquia-lift-goal-rename, .acquia-lift-goal-delete {
       display: none !important;
     }
 

@@ -76,7 +76,7 @@ function themebuilder_marketplace_install() {
       's3_key' => 'themes/acquia/broadway',
       'base_theme' => 1,
       'thumbnail_url' => 'http://www.drupalgardens.com/sites/default/files/imagecache/thumbnail/sites/default/files/marketplace_thumbnails/broadway.png',
-      'username' => 'Gardens admin',
+      'username' => 'Site Factory admin',
     ),
     array(
       'nid' => 377876,
@@ -85,7 +85,7 @@ function themebuilder_marketplace_install() {
       's3_key' => 'themes/acquia/campaign',
       'base_theme' => 1,
       'thumbnail_url' => 'http://www.drupalgardens.com/sites/default/files/imagecache/thumbnail/sites/default/files/marketplace_thumbnails/campaign.png',
-      'username' => 'Gardens admin',
+      'username' => 'Site Factory admin',
     ),
     array(
       'nid' => 377896,
@@ -94,7 +94,7 @@ function themebuilder_marketplace_install() {
       's3_key' => 'themes/acquia/carbon',
       'base_theme' => 1,
       'thumbnail_url' => 'http://www.drupalgardens.com/sites/default/files/imagecache/thumbnail/sites/default/files/marketplace_thumbnails/carbon.png',
-      'username' => 'Gardens admin',
+      'username' => 'Site Factory admin',
     ),
     array(
       'nid' => 377906,
@@ -103,7 +103,7 @@ function themebuilder_marketplace_install() {
       's3_key' => 'themes/acquia/impact',
       'base_theme' => 1,
       'thumbnail_url' => 'http://www.drupalgardens.com/sites/default/files/imagecache/thumbnail/sites/default/files/marketplace_thumbnails/impact.png',
-      'username' => 'Gardens admin',
+      'username' => 'Site Factory admin',
     ),
     array(
       'nid' => 377941,
@@ -112,7 +112,7 @@ function themebuilder_marketplace_install() {
       's3_key' => 'themes/acquia/kenwood',
       'base_theme' => 1,
       'thumbnail_url' => 'http://www.drupalgardens.com/sites/default/files/imagecache/thumbnail/sites/default/files/marketplace_thumbnails/kenwood.png',
-      'username' => 'Gardens admin',
+      'username' => 'Site Factory admin',
     ),
     array(
       'nid' => 377946,
@@ -121,7 +121,7 @@ function themebuilder_marketplace_install() {
       's3_key' => 'themes/acquia/builderbase',
       'base_theme' => 1,
       'thumbnail_url' => 'http://www.drupalgardens.com/sites/default/files/imagecache/thumbnail/sites/default/files/marketplace_thumbnails/minima.png',
-      'username' => 'Gardens admin',
+      'username' => 'Site Factory admin',
     ),
     array(
       'nid' => 377966,
@@ -130,7 +130,7 @@ function themebuilder_marketplace_install() {
       's3_key' => 'themes/acquia/sonoma',
       'base_theme' => 1,
       'thumbnail_url' => 'http://www.drupalgardens.com/sites/default/files/imagecache/thumbnail/sites/default/files/marketplace_thumbnails/sonoma.png',
-      'username' => 'Gardens admin',
+      'username' => 'Site Factory admin',
     ),
     array(
       'nid' => 378041,
@@ -139,7 +139,7 @@ function themebuilder_marketplace_install() {
       's3_key' => 'themes/acquia/sparks',
       'base_theme' => 1,
       'thumbnail_url' => 'http://www.drupalgardens.com/sites/default/files/imagecache/thumbnail/sites/default/files/marketplace_thumbnails/sparks_0.png',
-      'username' => 'Gardens admin',
+      'username' => 'Site Factory admin',
     ),
     array(
       'nid' => 378096,
@@ -148,7 +148,7 @@ function themebuilder_marketplace_install() {
       's3_key' => 'themes/acquia/barebones',
       'base_theme' => 1,
       'thumbnail_url' => 'http://www.drupalgardens.com/sites/default/files/imagecache/thumbnail/sites/default/files/marketplace_thumbnails/barebones.png',
-      'username' => 'Gardens admin',
+      'username' => 'Site Factory admin',
     ),
   );
 

@@ -9,7 +9,7 @@
  */
 function personalize_drush_command() {
   $items['personalize-complete-agents'] = array (
-    'description' => 'Completes any campaigns that are due to be completed',
+    'description' => 'Completes any personalizations that are due to be completed',
     'aliases' => array('pers-complete'),
   );
   return $items;
@@ -24,11 +24,11 @@ function personalize_drush_command() {
 function drush_personalize_complete_agents() {
   $completed = personalize_complete_agents();
   if (empty($completed)) {
-    $msg = dt('No campaigns are due to be completed at this time.');
+    $msg = dt('No personalizations are due to be completed at this time.');
     $status = 'ok';
   }
   else {
-    $msg = dt('The following campaigns have been completed: @agents.', array('@agents' => implode(', ', $completed)));
+    $msg = dt('The following personalizations have been completed: @agents.', array('@agents' => implode(', ', $completed)));
     $status = 'success';
   }
   drush_log($msg, $status);

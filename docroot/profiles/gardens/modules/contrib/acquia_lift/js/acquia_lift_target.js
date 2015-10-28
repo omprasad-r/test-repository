@@ -53,12 +53,18 @@ Drupal.acquia_lift_target = (function() {
       if (Drupal.settings.acquia_lift_target.option_sets.hasOwnProperty(osid)) {
         var optionSet = Drupal.settings.acquia_lift_target.option_sets[osid];
         var agent_name = optionSet.agent,
+            agent_plugin = Drupal.settings.acquia_lift_target.test_agent_plugin,
             nestedPoint = optionSet.decision_point,
             nestedDecision = optionSet.decision_name,
-            choiceNames = optionSet.option_names,
+            subChoices = {},
             fallbacks = {};
+        subChoices[nestedDecision] = optionSet.option_names;
         fallbacks[nestedDecision] = 0;
-        if (Drupal.settings.acquia_lift_target.agent_map.hasOwnProperty(agent_name)) {
+
+        if (Drupal.settings.acquia_lift_target.agent_map.hasOwnProperty(agent_name) && Drupal.personalize.agents.hasOwnProperty(agent_plugin)) {
+          if (Drupal.settings.acquia_lift_target.agent_map[agent_name].type !== agent_plugin) {
+            return;
+          }
           var subCallback = function(selection) {
             for (var decision_name in decisions) {
               if (decisions.hasOwnProperty(decision_name) && selection.hasOwnProperty(nestedDecision)) {
@@ -67,8 +73,7 @@ Drupal.acquia_lift_target = (function() {
             }
             callback(decisions);
           };
-
-          Drupal.personalize.agents.acquia_lift.getDecisionsForPoint(agent_name, {}, choiceNames, nestedPoint, fallbacks, subCallback);
+          Drupal.personalize.agents[agent_plugin].getDecisionsForPoint(agent_name, {}, subChoices, nestedPoint, fallbacks, subCallback);
           return;
         }
       }
@@ -94,7 +99,8 @@ Drupal.acquia_lift_target = (function() {
           ruleId,
           strategy,
           feature_strings = convertContextToFeatureStrings(visitor_context),
-          fallbackIndex = fallbacks.hasOwnProperty(decision_name) ? fallbacks[decision_name] : 0;
+          fallbackIndex = fallbacks.hasOwnProperty(decision_name) ? fallbacks[decision_name] : 0,
+          defaultTarget = Drupal.settings.acquia_lift_target.default_target;
       // Initialize each decision to the fallback option.
       for (var decision_name in choices) {
         if (choices.hasOwnProperty(decision_name)) {
@@ -105,7 +111,13 @@ Drupal.acquia_lift_target = (function() {
       for (i in agentRules[agent_name]) {
         if (agentRules[agent_name].hasOwnProperty(i)) {
           ruleId = i;
-          if (agentRules[agent_name][ruleId].targeting_features.length == 0) {
+          // If this is the "everyone else" target, then there are no features to be matched,
+          // just execute the decision for this target.
+          if (agentRules[agent_name][ruleId].name == defaultTarget) {
+            executeDecision(agentRules[agent_name][ruleId], decisions, choices, callback);
+            return;
+          }
+          if (!agentRules[agent_name][ruleId].hasOwnProperty('targeting_features') || agentRules[agent_name][ruleId].targeting_features.length == 0) {
             continue;
           }
           strategy = agentRules[agent_name][ruleId].targeting_strategy;
@@ -152,6 +164,21 @@ Drupal.acquia_lift_target = (function() {
       // If we got here there was no matched targeting rule so we just call the
       // callback with the fallback decisions.
       callback(decisions);
+    },
+    'sendGoal': function(agent_name, goal_name, value) {
+      if (!initialized) {
+        init();
+      }
+      // Find any nested tests this goal needs to be sent to.
+      var nested = Drupal.settings.acquia_lift_target.nested_tests;
+      if (nested.hasOwnProperty(agent_name)) {
+        var agent_plugin = Drupal.settings.acquia_lift_target.test_agent_plugin;
+        for (var i in nested[agent_name]) {
+          if (nested[agent_name].hasOwnProperty(i) && Drupal.personalize.agents.hasOwnProperty(agent_plugin)) {
+            Drupal.personalize.agents[agent_plugin].sendGoalToAgent(nested[agent_name][i], goal_name, value);
+          }
+        }
+      }
     }
   }
 })();
@@ -163,7 +190,7 @@ Drupal.personalize.agents.acquia_lift_target = {
     Drupal.acquia_lift_target.getDecision(agent_name, visitor_context, choices, decision_point, fallbacks, callback);
   },
   'sendGoalToAgent': function(agent_name, goal_name, value) {
-    // @todo: Introduce the concept of goals in fixed targeting :)
+    Drupal.acquia_lift_target.sendGoal(agent_name, goal_name, value);
   },
   'featureToContext': function(featureString) {
     var contextArray = featureString.split('::');
@@ -173,5 +200,81 @@ Drupal.personalize.agents.acquia_lift_target = {
     }
   }
 };
+
+Drupal.personalize.agents.acquia_lift_learn = {
+  'getDecisionsForPoint': function(agent_name, visitor_context, choices, decision_point, fallbacks, callback) {
+    // Our decision point may have multiple decisions, if doing MVT.
+    Drupal.acquiaLiftLearn.getDecision(agent_name, choices, decision_point, fallbacks, callback);
+  },
+  'sendGoalToAgent': function(agent_name, goal_name, goal_value, jsEvent) {
+    Drupal.acquiaLiftLearn.sendGoal(agent_name, goal_name, goal_value, jsEvent);
+  }
+};
+Drupal.acquiaLiftLearn = (function() {
+
+  var settings, api, initialized = false, sessionID = null;
+
+  function initializeSession() {
+    if (sessionID == null) {
+      sessionID = TC.getSessionID();
+      Drupal.personalize.saveSessionID(sessionID);
+    }
+  }
+  function init() {
+    initializeSession();
+    settings = Drupal.settings.acquia_lift_learn;
+    api = Drupal.acquiaLiftV2API.getInstance();
+    initialized = true;
+  }
+
+  return {
+    'getDecision': function(agent_name, choices, decision_point, fallbacks, callback) {
+      if (!initialized) {
+        init();
+      }
+      var options = {};
+      var fb = [];
+      for (var key in fallbacks) {
+        if (fallbacks.hasOwnProperty(key) && choices.hasOwnProperty(key)) {
+          fb.push({
+            'decision_set_id': key,
+            'external_id': choices[key][fallbacks[key]]
+          });
+        }
+      }
+      options.fallback = fb;
+      api.decision(agent_name, options, function(outcome) {
+        // We need to send back an object with decision names as keys
+        // and the chosen option for each one as the value.
+        var decisions = {};
+        for (var i in outcome) {
+          if (outcome.hasOwnProperty(i) && outcome[i].hasOwnProperty('decision_set_id') &&
+              outcome[i].hasOwnProperty('external_id')) {
+            decisions[outcome[i].decision_set_id] = outcome[i].external_id;
+          }
+        }
+        callback(decisions);
+      });
+    },
+    'sendGoal': function(agent_name, goal_name, value) {
+      if (!initialized) {
+        init();
+      }
+      var options = {
+        reward: value,
+        goal: goal_name
+      };
+      Drupal.acquiaLiftUtility.GoalQueue.addGoal(agent_name, options);
+    },
+    // @todo Remove this once we can just pass the session id in the api's
+    //   getInstance call (i.e. once V1's js has gone away.
+    'getSessionID': function() {
+      if (sessionID == null) {
+        initializeSession();
+      }
+      return sessionID;
+    }
+  }
+})();
 
 })(jQuery);

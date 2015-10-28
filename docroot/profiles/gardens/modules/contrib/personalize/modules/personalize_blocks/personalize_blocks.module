@@ -4,25 +4,28 @@
  * Implements hook_menu().
  */
 function personalize_blocks_menu() {
-  $items['admin/structure/personalize/variations/personalize-blocks'] = array(
-    'title' => 'Blocks',
-    'description' => 'Create personalized blocks.',
+  $items['admin/structure/personalize-blocks'] = array(
+    'title' => 'Personalize blocks',
+    'description' => 'Manage your personalized blocks',
     'page callback' => 'personalize_blocks_list',
-    'access callback' => 'user_access',
     'access arguments' => array('manage personalized content'),
-    'type' => MENU_LOCAL_TASK,
+    'type' => MENU_NORMAL_ITEM,
     'file' => 'personalize_blocks.admin.inc',
   );
-  $items['admin/structure/personalize/variations/personalize-blocks/list'] = array(
-    'title' => 'List personalize blocks',
-    'type' => MENU_DEFAULT_LOCAL_TASK,
+  $items['admin/structure/personalize-blocks/add'] = array(
+    'title' => 'Add personalized block',
+    'page callback' => 'drupal_get_form',
+    'page arguments' => array('personalize_blocks_form', 'add'),
+    'access arguments' => array('manage personalized content'),
+    'type' => MENU_LOCAL_ACTION,
+    'file' => 'personalize_blocks.admin.inc',
   );
   $items['admin/structure/personalize/variations/personalize-blocks/add'] = array(
     'title' => 'Add personalized block',
     'page callback' => 'drupal_get_form',
     'page arguments' => array('personalize_blocks_form', 'add'),
     'access arguments' => array('manage personalized content'),
-    'type' => MENU_LOCAL_ACTION,
+    'type' => MENU_CALLBACK,
     'file' => 'personalize_blocks.admin.inc',
   );
   $items['admin/structure/personalize/variations/personalize-blocks/manage/%personalize_block'] = array(
@@ -45,12 +48,12 @@ function personalize_blocks_menu() {
     'type' => MENU_LOCAL_TASK,
     'file' => 'personalize_blocks.admin.inc',
   );
-  $items['admin/structure/personalize/variations/personalize-blocks/manage/%personalize_block/clone'] = array(
-    'title' => 'Clone Personalized Block',
-    'page callback' => 'personalize_blocks_clone',
-    'page arguments' => array(4),
+  $items['admin/structure/personalize/variations/personalize-blocks/manage/%personalize_block/%/delete'] = array(
+    'title' => 'Delete Personalized Block Variation',
+    'page callback' => 'drupal_get_form',
+    'page arguments' => array('personalize_blocks_block_option_delete', 6, 7),
     'access arguments' => array('manage personalized content'),
-    'type' => MENU_LOCAL_TASK,
+    'type' => MENU_CALLBACK,
     'file' => 'personalize_blocks.admin.inc',
   );
   return $items;
@@ -148,7 +151,8 @@ function personalize_blocks_block_info() {
  */
 function personalize_blocks_block_view($delta = '') {
   $block = array();
-  if ($pblock = personalize_blocks_build_personalized_block($delta)) {
+  $path_is_admin = path_is_admin(current_path());
+  if ($pblock = personalize_blocks_build_personalized_block($delta, $path_is_admin)) {
       $block['content'] = $pblock;
       $block['content']['#contextual_links']['personalize_blocks'] = array('admin/structure/personalize/variations/personalize-blocks/manage', array($delta));
       $block['subject'] = FALSE;
@@ -175,10 +179,15 @@ function personalize_blocks_contextual_links_view_alter(&$element, $items) {
 /**
  * Builds a personalized block given an option set id.
  */
-function personalize_blocks_build_personalized_block($osid) {
+function personalize_blocks_build_personalized_block($osid, $show_default_only = FALSE) {
   if ($option_set = personalize_block_load($osid)) {
     $personalized_block = new PersonalizedBlock($option_set->options, $option_set->executor);
     try {
+      // Show only the default variation block.
+      if ($show_default_only) {
+        return $personalized_block->buildDefault();
+      }
+
       $renderable = $personalized_block->build();
     }
     catch (Exception $e) {

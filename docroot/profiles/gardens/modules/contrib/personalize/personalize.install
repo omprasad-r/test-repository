@@ -204,7 +204,7 @@ function personalize_schema() {
   );
 
   $schema['personalize_campaign_goals'] = array(
-    'description' => 'Stores visitor actions as goals for campaigns.',
+    'description' => 'Stores visitor actions as goals for personalizations.',
     'fields' => array(
       'id' => array(
         'description' => 'The primary identifier for this goal.',
@@ -279,6 +279,8 @@ function personalize_uninstall() {
     ->execute();
   foreach ($result as $row) {
     variable_del("personalize_campaign_{$row->machine_name}_status");
+    variable_del("personalize_campaign_{$row->machine_name}_stop");
+    variable_del("personalize_campaign_{$row->machine_name}_start");
   }
 }
 
@@ -641,6 +643,34 @@ function personalize_update_7015() {
     }
   }
 }
+
+/**
+ * Introduces identifiers for targeting rules.
+ */
+function personalize_update_7016() {
+  $result = db_select('personalize_option_sets', 'o')
+    ->fields('o', array('osid', 'targeting'))
+    ->execute();
+  // Start with a base string to create our machine names from.
+  $str = 'target_';
+  foreach ($result as $row) {
+    if (!empty($row->targeting)) {
+      $targeting = unserialize($row->targeting);
+      $new_targeting = array();
+      foreach ($targeting as $index => $targ) {
+        $name = $str . ($index + 1);
+        $new_targeting[$name] = $targ;
+        $new_targeting[$name]['weight'] = $index;
+      }
+      // Save the updated options back to the database.
+      db_update('personalize_option_sets')
+        ->condition('osid', $row->osid)
+        ->fields(array('targeting' => serialize($new_targeting)))
+        ->execute();
+    }
+  }
+}
+
 /**
  * Converts a feature string to an array with 'key' and 'value' elements.
  *

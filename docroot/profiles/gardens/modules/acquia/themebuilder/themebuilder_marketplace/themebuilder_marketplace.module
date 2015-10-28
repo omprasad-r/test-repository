@@ -57,7 +57,7 @@ function themebuilder_marketplace_get_theme_list() {
   $query = db_query('SELECT name, username, s3_key FROM {themebuilder_marketplace_featured}');
   foreach ($query as $result) {
     $system_name = themebuilder_marketplace_get_base_name($result->s3_key);
-    if ($result->username == 'Gardens admin') {
+    if ($result->username == 'Site Factory admin') {
       $meta = t("!service_name_long base theme", array(
         '!service_name_long' => acsf_factory_name(),
       ));

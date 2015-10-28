@@ -1,4 +1,11 @@
 QUnit.test( "Executor test", function( assert ) {
+  expect(22);
+  // Provide a mock of the attach behaviors function for purposes of tracking
+  // that it is correctly called.
+  Drupal.attachBehaviors = function(bread, circus) {
+    assert.ok(true, 'Attach behaviors called.');
+  }
+
   // Test the executor for a regular option set.
   assert.equal(0, $('.osid-1-first-option').length);
   assert.equal(0, $('.osid-1-second-option').length);
@@ -618,6 +625,63 @@ QUnit.asyncTest("MVT decision caching", function( assert ) {
   QUnit.stop();
   Drupal.personalize.personalizePage(Drupal.settings);
 });
+
+QUnit.asyncTest('Decision caching expiration', function( assert ) {
+  // Clear out the storage.
+  Drupal.personalize.storage.utilities.maintain();
+  // Since decision caching is turned on for this test, make sure we remove
+  // anything we add to local storage at the start of the test.
+  localStorage.removeItem("Drupal.personalize:decisions:my-agent:osid-1");
+  // Set decision caching to true for our test agent.
+  Drupal.settings.personalize.agent_map['my-agent'].cache_decisions = true;
+  // Set the expiration for decisions to 3 seconds.
+  Drupal.settings.personalize.cacheExpiration.decisions = .05;
+
+  // The expect assertion is actually what determines the success or failure of
+  // this test as total amount of callbacks indicates the expiration.
+  expect(15);
+  QUnit.start();
+  // This callback should be called twice.
+  Drupal.personalize.agents.test_agent.getDecisionsForPoint = function(name, visitor_context, choices, decision_point, fallbacks, callback) {
+    QUnit.start();
+    assert.equal(name, 'my-agent');
+    assert.ok($.isEmptyObject(visitor_context));
+    assert.ok(choices.hasOwnProperty('osid-1'));
+    assert.equal(choices['osid-1'][0], 'first-option');
+    assert.equal(choices['osid-1'][1], 'second-option');
+    assert.equal(decision_point, 'osid-1');
+    callback.call(null, {'osid-1': 'second-option'});
+  };
+  var reran = false;
+  var complete = false;
+  // Show executor should be called three times.
+  Drupal.personalize.executors.show.execute = function ($option_sets, choice_name, osid, preview) {
+    assert.equal('second-option', choice_name, 'Executor got the expected option');
+    if (complete) {
+      return;
+    }
+    if (!reran) {
+      reran = true;
+      Drupal.personalize.resetAll();
+      Drupal.personalize.personalizePage(Drupal.settings);
+    } else {
+      // Now expire the decision.
+      Drupal.personalize.resetAll();
+      QUnit.stop();
+      setTimeout(function () {
+        complete = true;
+        // In a new page call the storage would be pruned.
+        Drupal.personalize.storage.utilities.maintain();
+        Drupal.personalize.personalizePage(Drupal.settings);
+      }, 4000);
+    }
+  };
+
+  QUnit.stop();
+  Drupal.personalize.personalizePage(Drupal.settings);
+
+});
+
 
 QUnit.asyncTest("Complex option set processing", function( assert ) {
   // This entire test is about the expected number of assertions. It has multiple option sets

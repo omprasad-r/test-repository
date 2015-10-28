@@ -13,7 +13,6 @@ function personalize_blocks_list() {
     array('data' => t('Operations'), 'colspan' => 3),
   );
   $rows = array();
-
   foreach (personalize_option_set_load_by_type('block') as $personalized_block) {
     $tablerow = array(
       array('data' => check_plain($personalized_block->data['block_title'])),
@@ -23,11 +22,9 @@ function personalize_blocks_list() {
     );
     $rows[] = $tablerow;
   }
-
   if (empty($rows)) {
     $rows[] = array(array('data' => t('No personalize_blocks instances available.'), 'colspan' => 4));
   }
-
   $build = array(
     '#theme' => 'table',
     '#header' => $header,
@@ -35,17 +32,6 @@ function personalize_blocks_list() {
     '#attributes' => array('id' => 'personalize_blocks'),
   );
   return $build;
-}
-
-/**
- * Clone personalize_blocks.
- */
-function personalize_blocks_clone($block) {
-  unset($block->osid);
-  $data = $block->data;
-  $data['block_title'] = '';
-  $block->data = $data;
-  return drupal_get_form('personalize_blocks_form', 'clone', $block);
 }
 
 /**
@@ -66,9 +52,6 @@ function personalize_blocks_form($form, &$form_state, $formtype, $pblock = NULL)
   }
 
   if (!empty($pblock->osid)) {
-    // Make sure a warning message is delivered if this is a running
-    // campaign.
-    personalize_warn_if_running($pblock->agent);
     $form['osid'] = array(
       '#type' => 'value',
       '#value' => $pblock->osid,
@@ -152,10 +135,12 @@ function personalize_blocks_form($form, &$form_state, $formtype, $pblock = NULL)
   // If the "Add another" button was clicked, we need to increment the number of
   // blocks by one.
   $num_blocks = count($pblock->options);
-  if (isset($form_state['num_blocks']) && $form_state['num_blocks'] > $num_blocks) {
+  $num_blocks_requested = isset($form_state['num_blocks']) ? $form_state['num_blocks'] : $num_blocks;
+  while ($num_blocks < $num_blocks_requested) {
     $pblock->options[] = array('option_label' => personalize_generate_option_label($num_blocks));
+    $num_blocks++;
   }
-  $form_state['num_blocks'] = count($pblock->options);
+  $form_state['num_blocks'] = $num_blocks;
   // Keep track of block options throughout Ajax submits.
   $form_state['pblock'] =  $pblock;
 
@@ -227,15 +212,29 @@ function _personalize_blocks_form(array $block, $pblock) {
     '#type' => 'container',
   );
 
-  $bid_id = "personalize_blocks_{$delta}_bid";
+  $select_class = 'personalize-blocks-select-' . $delta;
+  $form['block']['block_type'] = array(
+    '#type' => 'radios',
+    '#options' => array(
+      'select' => t('Select existing block'),
+      'add' => t('Create new block'),
+    ),
+    '#attributes' => array(
+      'class' => array('personalize-blocks-inline', $select_class),
+    ),
+    '#default_value' => 'select',
+  );
   $form['block']['bid'] = array(
     '#type' => 'select',
-    '#options' => array('' => t('Select a block...')) + personalize_blocks_get_blocks() + array('add' => t('Add a new block')),
+    '#options' => personalize_blocks_get_blocks(),
+    '#empty_option' => t('Select a block...'),
     '#default_value' => $default,
     '#title' => t('Select a block'),
     '#title_display' => 'invisible',
-    '#attributes' => array(
-      'id' => $bid_id,
+    '#states' => array(
+      'visible' => array(
+        ':input.' . $select_class => array('value' => 'select'),
+      ),
     ),
   );
 
@@ -244,7 +243,7 @@ function _personalize_blocks_form(array $block, $pblock) {
     '#title' => t('Add a new block'),
     '#states' => array(
       'visible' => array(
-        '#' . $bid_id => array('value' => 'add'),
+        ':input.' . $select_class => array('value' => 'add'),
       ),
     ),
   );
@@ -332,6 +331,7 @@ function _personalize_blocks_add_block_form(&$form_state) {
  * @ingroup themeable
  */
 function theme_personalize_blocks_admin_form_blocks($variables) {
+  $has_operations = FALSE;
   $blocks = $variables['blocks'];
   $draggable = isset($blocks['#draggable']) && $blocks['#draggable'];
   $rows = array();
@@ -360,6 +360,11 @@ function theme_personalize_blocks_admin_form_blocks($variables) {
     if ($draggable) {
       $fields[] = array('data' => drupal_render($block['weight']), 'class' => array('personalized-blocks-weight'));
     }
+
+    if (!isset($block['remove']['#access']) || $block['remove']['#access'] === TRUE) {
+      $has_operations = TRUE;
+    }
+
     $fields = array_merge($fields, array(
       array('data' => drupal_render($block['block']), 'class' => array('personalized-block-block')),
       array('data' => drupal_render($block['remove']), 'class' => array('personalize-block-remove'))
@@ -376,6 +381,14 @@ function theme_personalize_blocks_admin_form_blocks($variables) {
       $row = array_merge($row, $block['#attributes']);
     }
     $rows[] = $row;
+  }
+
+  // If there were never any operations available then remove the column.
+  if (!$has_operations) {
+    array_pop($header);
+    foreach ($rows as &$row) {
+      array_pop($row['data']);
+    }
   }
 
   $build['personalized_block'] = array(
@@ -406,6 +419,10 @@ function theme_personalize_blocks_admin_form_draggable_blocks($variables) {
  * Ajax callback for the add tab and remove tab buttons.
  */
 function personalize_blocks_ajax_callback($form, $form_state) {
+  // Clear messages since they don't need to be repeated within the AJAX
+  // callback area.
+  drupal_get_messages();
+
   return $form['pblock_wrapper']['blocks'];
 }
 
@@ -439,7 +456,7 @@ function personalize_blocks_form_validate($form, &$form_state) {
       if (empty($block['option_label'])) {
         form_set_error('blocks][' . $j . '][option_label', t('A label is required for each block option.'));
       }
-      if ($block['block']['bid'] === 'add') {
+      if ($block['block']['block_type'] === 'add') {
         if (empty($block['block']['add']['info'])) {
           form_set_error('blocks][' . $j . '][block][add][info', t('A block description is required when creating a new block.'));
         }
@@ -451,6 +468,9 @@ function personalize_blocks_form_validate($form, &$form_state) {
 
         if ($custom_block_exists) {
           form_set_error('blocks][' . $j . '][block][add][info', t('Ensure that each block description is unique.'));
+        }
+        else {
+          $num_blocks++;
         }
       }
       if (!empty($block['block']['bid'])) {
@@ -467,7 +487,7 @@ function personalize_blocks_form_validate($form, &$form_state) {
     $agent_title = trim($form_state['values']['agent_basic_info']['title']);
 
     if (empty($agent_title)) {
-      form_error($form['personalize']['agent_basic_info']['title'], t('Campaign name is required'));
+      form_error($form['personalize']['agent_basic_info']['title'], t('Personalization name is required'));
     }
   }
 }
@@ -478,8 +498,8 @@ function personalize_blocks_form_validate($form, &$form_state) {
 function personalize_blocks_form_submit($form, &$form_state) {
   if ($form_state['clicked_button']['#id'] == 'edit-submit-form') {
     // Create any new blocks
-    foreach($form_state['values']['blocks'] as &$block) {
-      if ($block['block']['bid'] === 'add') {
+    foreach($form_state['values']['blocks'] as $delta => &$block) {
+      if ($block['block']['block_type'] === 'add') {
         $block['block']['bid'] = _personalize_blocks_add_custom_block($block['block']['add']);
       }
     }
@@ -492,7 +512,7 @@ function personalize_blocks_form_submit($form, &$form_state) {
         $pblock->agent = $new_agent->machine_name;
       }
       else {
-        drupal_set_message('There was a problem saving the new campaign', 'error');
+        drupal_set_message('There was a problem saving the new personalization', 'error');
         return;
       }
     }
@@ -501,7 +521,7 @@ function personalize_blocks_form_submit($form, &$form_state) {
       personalize_blocks_replace_existing($form_state['values']['original_block'], $pblock);
     }
     else {
-      $form_state['redirect'] = 'admin/structure/personalize/variations/personalize-blocks';
+      $form_state['redirect'] = 'admin/structure/personalize/manage/' . $pblock->agent . '/variations';
     }
   }
 }
@@ -512,7 +532,8 @@ function personalize_blocks_form_submit($form, &$form_state) {
 function personalize_blocks_block_delete($form, $form_state, $pblock) {
   $form['osid'] = array('#type' => 'hidden', '#value' => $pblock->osid);
   $form['title'] = array('#type' => 'hidden', '#value' => $pblock->data['block_title']);
-  return confirm_form($form, t('Are you sure you want to delete the personalized_block block %title?', array('%title' => $pblock->data['block_title'])), 'admin/structure/personalize/variations/personalize-blocks', '', t('Delete'), t('Cancel'));
+  $form['agent'] = array('#type' => 'value', '#value' => $pblock->agent);
+  return confirm_form($form, t('Are you sure you want to delete the personalized_block block %title?', array('%title' => $pblock->data['block_title'])), 'admin/structure/personalize/manage/' . $pblock->agent . '/variations', '', t('Delete'), t('Cancel'));
 }
 
 /**
@@ -522,9 +543,44 @@ function personalize_blocks_block_delete_submit($form, &$form_state) {
   personalize_option_set_delete($form_state['values']['osid']);
   drupal_set_message(t('The personalize_blocks instance %name has been removed.', array('%name' => $form_state['values']['title'])));
   cache_clear_all();
-  $form_state['redirect'] = 'admin/structure/personalize/variations/personalize-blocks';
+  $form_state['redirect'] = 'admin/structure/personalize/manage/' . $form_state['values']['agent'] . '/variations';
 }
 
+/**
+ * Deletion of personalized_block block option from within an existing
+ * personalized block.
+ */
+function personalize_blocks_block_option_delete($form, $form_state, $pblock, $option_id) {
+  $option_label = $option_id;
+  foreach($pblock->options as $option) {
+    if ($option['option_id'] === $option_id) {
+      $option_label = $option['option_label'];
+      break;
+    }
+  }
+  $form['osid'] = array('#type' => 'hidden', '#value' => $pblock->osid);
+  $form['option_id'] = array('#type' => 'hidden', '#value' => $option_id);
+  $form['block_title'] = array('#type' => 'hidden', '#value' => $pblock->data['block_title']);
+  $form['option_label'] = array('#type' => 'hidden', '#value' => $option_label);
+  return confirm_form($form, t('Are you sure you want to delete variation %option_label from the %title personalized block?', array('%option_label' => $option_label, '%title' => $pblock->data['block_title'])), 'admin/structure/personalize/variations/personalize-blocks/manage/' . $pblock->osid, '', t('Delete'), t('Cancel'));
+}
+
+/**
+ * Submit handler for personalized_block block deletion.
+ */
+function personalize_blocks_block_option_delete_submit($form, &$form_state) {
+  $option_set = personalize_option_set_load($form_state['values']['osid']);
+  foreach($option_set->options as $i => $option) {
+    if ($option['option_id'] === $form_state['values']['option_id']) {
+      unset($option_set->options[$i]);
+      break;
+    }
+  }
+  personalize_option_set_save($option_set);
+  drupal_set_message(t('The variation %option_label has been removed from the %block_title personalized block.', array('%option_label' => $form_state['values']['option_label'], '%block_title' => $form_state['values']['block_title'])));
+  cache_clear_all();
+  $form_state['redirect'] = 'admin/structure/personalize/manage/' . $option_set->agent . '/variations';
+}
 
 /**
  * Helper function to get all blocks.

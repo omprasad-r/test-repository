@@ -93,8 +93,8 @@ QUnit.test("test explicit targeting logic", function( assert ) {
   });
 });
 
-QUnit.test("test nesting logic", function( assert ) {
-  expect(6);
+QUnit.test("test nesting logic - decisions", function( assert ) {
+  expect(7);
   // Add settings for a targeting agent with a test nested in it..
   var agentName = 'my-parent-agent',
       decisionName = 'my-decision',
@@ -143,12 +143,11 @@ QUnit.test("test nesting logic", function( assert ) {
   addLiftTargetToDrupalSettings(agentName, enabledContexts, decisionName, 'osid-1', options, targeting);
   // Now add the acquia_lift_target settings for the nested option set.
   var sub_agent_name = 'my-nested-agent';
-  Drupal.settings.acquia_lift_target = Drupal.settings.acquia_lift_target || {};
-  Drupal.settings.acquia_lift_target.agent_map = Drupal.settings.acquia_lift_target.agent_map || {};
+
   Drupal.settings.acquia_lift_target.agent_map[sub_agent_name] = {
-    'type': 'acquia_lift'
+    'type': 'acquia_lift_learn'
   };
-  var subOs_str = 'osid-' + 123;
+  var subOs_str = 'osid-' + subOS;
   Drupal.settings.acquia_lift_target.option_sets = Drupal.settings.acquia_lift_target.option_sets || {};
   Drupal.settings.acquia_lift_target.option_sets[subOs_str] = {
     'agent': sub_agent_name,
@@ -167,9 +166,12 @@ QUnit.test("test nesting logic", function( assert ) {
     'stateful': 0,
     'winner': null
   };
-  Drupal.personalize.agents.acquia_lift = Drupal.personalize.agents.acquia_lift || {};
+  Drupal.personalize.agents.acquia_lift_learn = Drupal.personalize.agents.acquia_lift_learn || {};
   // Mock the acquia_lift testing agent to just make it return the second option.
-  Drupal.personalize.agents.acquia_lift.getDecisionsForPoint = function(agentName, evaluatedVisitorContexts, choices, decisionName, fallbacks, callback) {
+  Drupal.personalize.agents.acquia_lift_learn.getDecisionsForPoint = function(agentName, evaluatedVisitorContexts, choices, decisionName, fallbacks, callback) {
+    var expected_chocies = {}
+    expected_chocies[subOs_str] = ['first-option', 'second-option'];
+    assert.deepEqual(choices, expected_chocies);
     var selection = {};
     selection[subOs_str] = 'second-option';
     callback(selection);
@@ -218,6 +220,38 @@ QUnit.test("test nesting logic", function( assert ) {
     assert.equal(decisions[decisionName], 'third-option');
   });
 });
+
+
+QUnit.test("test nesting logic - goals", function( assert ) {
+  expect(3);
+  // Add settings for a targeting agent with a test nested in it..
+  var agentName = 'my-parent-agent';
+
+  Drupal.settings.personalize.agent_map = Drupal.settings.personalize.agent_map || {};
+  Drupal.settings.personalize.agent_map[agentName] = {
+    'active': 1,
+    'cache_decisions': false,
+    'enabled_contexts': {},
+    'type': 'acquia_lift_target'
+  };
+  // Now add the acquia_lift_target settings for the nested option set.
+  var sub_agent_name = 'my-nested-agent';
+
+  Drupal.settings.acquia_lift_target.nested_tests[agentName] = {};
+  Drupal.settings.acquia_lift_target.nested_tests[agentName][sub_agent_name] = sub_agent_name;
+
+  // Fire a goal and confirm the acquia_lift_learn agent gets it. We do this by mocking
+  // the acquia_lift_learn agent's sendGoalToAgent function and confirming it gets called
+  // with the correct arguments.
+  Drupal.personalize.agents.acquia_lift_learn.sendGoalToAgent = function(agent_name, goal_name, value) {
+    assert.equal(agent_name, sub_agent_name);
+    assert.equal(goal_name, 'some-goal');
+    assert.equal(value, 2);
+  };
+  Drupal.personalize.agents.acquia_lift_target.sendGoalToAgent(agentName, 'some-goal', 2);
+
+});
+
 
 /**
  * Adds settings for the required targeting agent set-up to Drupal.settings.

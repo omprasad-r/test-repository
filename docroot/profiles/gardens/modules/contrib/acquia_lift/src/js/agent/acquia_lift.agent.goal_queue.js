@@ -9,6 +9,7 @@
   Drupal.acquiaLiftUtility.GoalQueue = Drupal.acquiaLiftUtility.GoalQueue || (function($) {
 
     var acquiaLiftAPI;
+    var isProcessing = false;
 
     /**
      * Converts the data for a goal into the format for saving in the queue.
@@ -58,18 +59,22 @@
      *   - a boolean indicating if the processing was successful.
      */
     function processGoalItem(queueItem, callback) {
-      var api = Drupal.acquiaLiftAPI.getInstance();
+      var api_class = Drupal.settings.acquia_lift.api_class;
+      if (!Drupal.hasOwnProperty(api_class)) {
+        throw new Error('Cannot communicate with Lift API.');
+      }
+      acquiaLiftAPI = Drupal[api_class].getInstance();
       var goal = convertQueueDataToGoal(queueItem.getData());
       if (!goal.agentName || !goal.options) {
         throw new Error('Invalid goal data.');
       }
-      api.goal(goal.agentName, goal.options, function(accepted, session, retryable) {
+      acquiaLiftAPI.goal(goal.agentName, goal.options, function(accepted, session, retryable) {
         if (callback && typeof callback === 'function') {
           callback(queueItem, accepted, session, retryable);
         }
       });
-      if (api.isManualBatch()) {
-        api.batchSend();
+      if (typeof acquiaLiftAPI.isManualBatch == "function" && acquiaLiftAPI.isManualBatch()) {
+        acquiaLiftAPI.batchSend();
       }
     }
 
@@ -104,7 +109,15 @@
        *   tried (such as in an initial processing for the page request).
        */
       'processQueue': function (reset) {
+        var that = this;
         reset = reset || false;
+        if (isProcessing) {
+          setTimeout(function() {
+            that.processQueue(reset);
+          }, 2)
+          return;
+        }
+        isProcessing = true;
         // The processing status should be reset upon the initial page load.
         if (reset) {
           Drupal.acquiaLiftUtility.Queue.reset();
@@ -132,6 +145,7 @@
             for (i = 0; i < num; i++) {
               Drupal.acquiaLiftUtility.Queue.add(failed[i]);
             }
+            isProcessing = false;
           }
         }
 
@@ -146,6 +160,14 @@
         }
         // Kick off the queue.
         processNext();
+      },
+
+      /**
+       * Reset the queue for testing purposes.
+       */
+      'reset': function() {
+        isProcessing = false;
+        Drupal.acquiaLiftUtility.Queue.reset();
       }
     }
   }($));

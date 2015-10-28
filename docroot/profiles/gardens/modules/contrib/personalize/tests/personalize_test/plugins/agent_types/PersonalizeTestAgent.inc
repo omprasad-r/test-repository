@@ -4,7 +4,7 @@
  * Provides an agent type for testing purposes.
  */
 
-class PersonalizeTestAgent extends PersonalizeAgentBase implements PersonalizeAgentGoalInterface, PersonalizeAgentReportInterface {
+class PersonalizeTestAgent extends PersonalizeAgentBase implements PersonalizeAgentGoalInterface {
 
   public $goals_received = array();
 
@@ -27,9 +27,8 @@ class PersonalizeTestAgent extends PersonalizeAgentBase implements PersonalizeAg
   /**
    * Implements PersonalizeAgentGoalInterface::useClientSideGoalDelivery().
    */
-  public function useClientSideGoalDelivery()
-  {
-    return $this->data['use_client_side_goal_processing'];
+  public function useClientSideGoalDelivery() {
+    return isset($this->data['use_client_side_goal_processing']) ? $this->data['use_client_side_goal_processing'] : NULL;
   }
 
   /**
@@ -38,20 +37,6 @@ class PersonalizeTestAgent extends PersonalizeAgentBase implements PersonalizeAg
   public function sendGoal($goal_name, $value = NULL) {
     // Just print info to the screen.
     print sprintf("The %s goal with value %d was received by the %s agent", $goal_name, $value, $this->getMachineName());
-  }
-
-  /**
-   * Implements PersonalizeAgentInterface::optionsForm().
-   */
-  public static function optionsForm($agent_data, $option_parents = array()) {
-    $form = array();
-    $form['use_client_side_goal_processing'] = array(
-      '#type' => 'checkbox',
-      '#title' => t('Client-side goal processing'),
-      '#default_value' => isset($agent_data->data['use_client_side_goal_processing']) ? $agent_data->data['use_client_side_goal_processing'] : 1,
-      '#description' => t('Should goals for this agent be processed on the client-side? (Recommended)'),
-    );
-    return $form;
   }
 
   /**
@@ -65,19 +50,4 @@ class PersonalizeTestAgent extends PersonalizeAgentBase implements PersonalizeAg
     );
   }
 
-  /**
-   * Implements PersonalizeAgentReportInterface::renderStatsforOptionSet().
-   */
-  public function renderStatsForOptionSet($option_set, $date_from, $date_to = NULL) {
-    return NULL;
-  }
-
-  /**
-   * Implements PersonalizeAgentReportInterface::buildCampaignReports().
-   */
-  public function buildCampaignReports($options) {
-    return array(
-      'report' => NULL,
-    );
-  }
 }

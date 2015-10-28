@@ -62,6 +62,42 @@ QUnit.test('Visitor actions page elements', function (assert) {
 });
 
 /**
+ * Page view with delayed subscriber.
+ */
+QUnit.test('Visitor actions page view with delayed subscription', function (assert) {
+  $ = jQuery;
+  expect(6);
+
+  Drupal.settings.visitor_actions.actions['pageView'] = {
+    actionable_element: 'page',
+    event: 'view'
+  };
+
+  function subscribeCallback(name, event, context) {
+    assert.equal(name, 'pageView', 'Callback called for pageView.');
+    assert.ok(event.type === 'PageView', 'pageView called as a page view event.');
+    assert.equal(context.PageView, Drupal.settings.visitor_actions.pageContext, 'Page view set in context.');
+  }
+
+  function subscribeCallbackDelay(name, event, context) {
+    assert.equal(name, 'pageView', 'Delayed callback called for pageView.');
+    assert.ok(event.type === 'PageView', 'pageView called as a page view event.');
+    assert.equal(context.PageView, Drupal.settings.visitor_actions.pageContext, 'Page view set in context.');
+  }
+
+  // Subscribe to the actions.
+  Drupal.visitorActions.publisher.subscribe(subscribeCallback);
+
+  // Attach the behaviors (triggering the page view event).
+  Drupal.behaviors.visitorActions.attach($('#qunit-fixture'), Drupal.settings);
+
+  // Subscribe to the actions after the event occurs.
+  Drupal.visitorActions.publisher.subscribe(subscribeCallbackDelay);
+
+  cleanup();
+});
+
+/**
  * Page stay.
  */
 QUnit.asyncTest('Visitor actions page stay event', function (assert) {

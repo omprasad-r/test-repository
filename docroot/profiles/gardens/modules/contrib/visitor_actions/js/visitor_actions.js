@@ -74,6 +74,7 @@
    */
   var Publisher = function () {
     this.subscribers = [];
+    this.events = [];
   };
 
   Publisher.prototype = {
@@ -90,14 +91,28 @@
     deliver: function (name, event, pageContext) {
       forEach(this.subscribers, function (subscriber) {
        subscriber.call(this, name, event, pageContext);
-      })
+      });
+      this.events.push({
+        'name': name,
+        'event': event,
+        'pageContext': pageContext
+      });
     },
+
     /**
      * Registers subscribers to published data.
      *
      * @param Function subscriber
+     *   The subscriber callback for event notifications
+     * @param boolean receivePreviousEvents
+     *   True to get have the subscriber callback invoked with notifications
+     *   for all events of this page request that occurred prior to subscribing.
+     *   False to only receive notifications for future events.
+     *   Defaults to true.
      */
-    subscribe: function (subscriber) {
+    subscribe: function (subscriber, receivePreviousEvents) {
+      receivePreviousEvents = typeof(receivePreviousEvents) == 'undefined';
+
       var alreadyExists = some(this.subscribers,
         function(el) {
           return el === subscriber;
@@ -105,15 +120,23 @@
       );
       if (!alreadyExists) {
         this.subscribers.push(subscriber);
+
+        if (receivePreviousEvents) {
+          forEach(this.events, function (eventData) {
+            subscriber.call(this, eventData.name, eventData.event, eventData.pageContext);
+          })
+        }
       }
     },
+
     /**
-     * Clears a publisher's subscribers.
+     * Clears a publisher's subscriber and event listings.
      *
      * Used for testing purposes.
      */
     reset: function() {
       this.subscribers = [];
+      this.events = [];
     }
   };
 

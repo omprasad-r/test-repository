@@ -50,6 +50,11 @@
   margin-bottom: 0;
   margin-top: 0;
 }
+.visitor-actions-ui-dialog .visitor-actions-ui-dialog-content fieldset {
+  margin-bottom: 12px;
+  margin-top: 0;
+  min-height: 40px;
+}
 
 /* Dialog pointer */
 .visitor-actions-ui-dialog > .visitor-actions-ui-dialog-pointer {

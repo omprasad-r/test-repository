@@ -9,17 +9,17 @@ QUnit.test("selector basics", function( assert ) {
   assert.equal(selector, '#page', 'ID selector matched');
   $elem = jQuery('.myclass');
   selector = Drupal.utilities.getSelector($elem[0]);
-  assert.equal(selector, '#page p.ignoreme.myclass', 'Class match produces a unique selector.');
+  assert.equal(selector, '#page > .ignoreme', 'Class match produces a unique selector.');
   $elem = jQuery('#ignoremyid');
   selector = Drupal.utilities.getSelector($elem[0], 'ignoremyid');
-  assert.equal(selector, '#page > p:first-child + p + p', 'Ignored id not included in selector.');
+  assert.equal(selector, '#page > p:eq(2)', 'Ignored id not included in selector.');
   $elem = jQuery('#ignoremyid');
   assert.equal($elem.length, 1, 'Ignore id restored');
   $elem = jQuery('.ignoreme');
   selector = Drupal.utilities.getSelector($elem[0], 'ignoremyid', 'ignoreme');
-  assert.equal(selector, '#page > p', 'Ignored class name not included in selector.');
+  assert.equal(selector, '#page > p:eq(0)', 'Ignored class name not included in selector.');
   $elem = jQuery('.ignoreme');
-  assert.equal($elem.length, 1, 'Ignore class restored');
+  assert.equal($elem.length, 2, 'Ignore class restored');
 });
 
 QUnit.module("Visitor Actions UI dialog model tests");

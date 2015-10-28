@@ -69,22 +69,6 @@ interface PersonalizeAgentInterface {
   public static function create($agent_data);
 
   /**
-   * Returns the options form for configuring this type of agent.
-   *
-   * @param $agent_data
-   *   The agent being edited, if it's an edit form.
-   *
-   * @return array
-   *   A FAPI array.
-   */
-  public static function optionsForm($agent_data, $option_parents = array());
-
-  /**
-   * Validates the form data.
-   */
-  public static function optionsFormValidate($form, &$form_state);
-
-  /**
    * A method to call once an agent has been saved.
    *
    * @param $old_data
@@ -133,18 +117,6 @@ interface PersonalizeAgentInterface {
   public function stopNow();
 
   /**
-   * Whether this agent should be started now.
-   *
-   * An agent class can imlement some logic to determine whether or not the agent
-   * in question should be set to the "running" status.  For example, an agent
-   * type might want to start automatically when certain setup has been created.
-   *
-   * @return boolean
-   *   TRUE if the agent should be set to running, FALSE otherwise.
-   */
-  public function startNow();
-
-  /**
    * Whether the agent supports multivariate tests.
    *
    * @return boolean
@@ -159,6 +131,7 @@ interface PersonalizeAgentInterface {
    *   TRUE if the agent supports multiple decision points, FALSE otherwise.
    */
   public function supportsMultipleDecisionPoints();
+
 }
 
 interface PersonalizeAgentGoalInterface {
@@ -188,39 +161,6 @@ interface PersonalizeAgentGoalInterface {
  */
 class PersonalizeException extends Exception {};
 
-interface PersonalizeAgentReportInterface {
-
-  /**
-   * Returns information about the performance of the Option Set.
-   *
-   * @param $option_set
-   *   The Option Set to return stats for.
-   * @param $date_from
-   *   The starting date for the report.
-   * @param null $date_to
-   *   The end date for the report.
-   * @return string
-   *   An array of stats to display.
-   */
-  public function renderStatsForOptionSet($option_set, $date_from, $date_to = NULL);
-
-  /**
-   * Returns an array of reports available for a campaign.
-   *
-   * Each report is returned as a render array.
-   *
-   * @param $options
-   * An array of report filter options.
-   * - decision: Preselected decision to display.
-   * - start: The start date of the report.
-   * - from: The end date of the report.
-   * - goal: (optional) A selected goal for reporting; defaults to all.
-   * - conversion_metric: (optional) Metric to display within the conversion report.  One
-   *   of 'rate' (conversion rate) or 'value' (conversion value).
-   */
-  public function buildCampaignReports($options);
-}
-
 /**
  * An interface to implement when an agent supports explicit targeting for
  * content variations.
@@ -242,24 +182,6 @@ interface PersonalizeExplicitTargetingInterface extends PersonalizeAgentInterfac
 
 }
 
-/**
- * An interface to implement when an agent supports automatic targeting of
- * results based on campaign-specific targeting options.
- */
-interface PersonalizeAutoTargetingInterface extends PersonalizeAgentInterface {
-
-  /**
-   * Indicates if explicit targeting options are dependent on the auto targeting
-   * context options selected for the campaign.
-   *
-   * @return boolean
-   *   True to indicate that explicit targeting values are dependent upon
-   *   campaign auto-targeting options selected.  False to indicate that
-   *   explicit targeting options are selected independently of campaign
-   *   auto-targeting context options.
-   */
-  public static function constrainExplicitTargetingContexts();
-}
 
 /**
  * Abstract base class for agents, providing default implementations of some methods.
@@ -375,20 +297,6 @@ abstract class PersonalizeAgentBase implements PersonalizeAgentInterface, Person
   }
 
   /**
-   * Implements PersonalizeAgentInterface::optionsForm().
-   */
-  public static function optionsForm($agent_data, $option_parents = array()) {
-    return array();
-  }
-
-  /**
-   * Implements PersonalizeAgentInterface::optionsFormValidate().
-   */
-  public static function optionsFormValidate($form, &$form_state) {
-    return;
-  }
-
-  /**
    * Implements PersonalizeAgentInterface::postSave().
    */
   public function postSave($old_data) {
@@ -408,13 +316,6 @@ abstract class PersonalizeAgentBase implements PersonalizeAgentInterface, Person
    */
   public function errors() {
     return array();
-  }
-
-  /**
-   * Implements PersonalizeAgentInterface::startNow().
-   */
-  public function startNow() {
-    return FALSE;
   }
 
   /**

@@ -106,7 +106,7 @@ function personalize_url_context_admin_form($form, &$form_state) {
   $form['querystring_contexts'] = array(
     '#prefix' => '<div class="personalize-url-context-textarea">',
     '#suffix' => '</div>',
-    '#description' => t('List here all of the querystring parameters you might want to use for targeting purposes in your campaigns. Put each parameter on its own line.'),
+    '#description' => t('List here all of the querystring parameters you might want to use for targeting purposes in your personalizations. Put each parameter on its own line.'),
     '#type' => 'textarea',
     '#title' => t('Querystring contexts'),
     '#default_value' => !empty($query_string_contexts) ? implode("\r\n", $query_string_contexts) : '',
@@ -116,7 +116,7 @@ function personalize_url_context_admin_form($form, &$form_state) {
   $form['cookie_contexts'] = array(
     '#prefix' => '<div class="personalize-cookie-context-textarea">',
     '#suffix' => '</div>',
-    '#description' => t('List here all of the cookies you might want to use for targeting purposes in your campaigns. Put each cookie on its own line.'),
+    '#description' => t('List here all of the cookies you might want to use for targeting purposes in your personalizations. Put each cookie on its own line.'),
     '#type' => 'textarea',
     '#title' => t('Cookie contexts'),
     '#default_value' => !empty($cookie_contexts) ? implode("\r\n", $cookie_contexts) : '',

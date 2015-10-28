@@ -138,6 +138,7 @@ function theme_acquia_lift_percentage($variables) {
 
   // Add classes for percentage control and collapsible details.
   $element['#attributes']['class'][] = 'acquia-lift-percentage-control';
+  $element['#attributes']['class'][] = 'clearfix';
   if (isset($element['#collapsible']) && $element['#collapsible']) {
     $element['#attributes']['class'][] = 'acquia-lift-collapsible';
     if (isset($element['#collapsed']) && $element['#collapsed']) {
@@ -166,40 +167,6 @@ function theme_acquia_lift_percentage($variables) {
     $output .= '</div>';
   }
   // Close the wrapping div.
-  $output .= '</div>';
-  return $output;
-}
-
-/**
- * Theme function to show a percentage difference as a label.
- *
- * The percentage is shown as a line filled to the set percentage with optional
- * labels for the percentage indicated (and rest of percentage).
- *
- * @param $variables
- *   The theme variables that will include:
- *   - percent_label: The label for the main percentage selected
- *   - rest_label: The label for the rest of the percentage selected
- *   - percent: The required percentage selected as a float.
- */
-function theme_acquia_lift_percentage_label($variables) {
-  $percent = round($variables['percent'], 2);
-  $rest_percent = 100 - $percent;
-
-  $output = '<div class="acquia-lift-distribution form-item">';
-  if (!empty($variables['percent_label'])) {
-    $output .= '<div class="distribution-set">';
-    $output .= $variables['percent_label'] . ' (' . $variables['percent'] . '%)';
-    $output .= '</div>';
-  }
-  if (!empty($variables['rest_label'])) {
-    $output .= '<div class="distribution-rest">';
-    $output .= $variables['rest_label'] . ' (' . $rest_percent . '%)';
-    $output .= '</div>';
-  }
-  $output .= '<div class="distribution-graphic">';
-  $output .= '<div class="fill" data-acquia-lift-fill="' . $percent . '"></div>';
-  $output .= '</div>';
   $output .= '</div>';
   return $output;
 }
@@ -265,7 +232,9 @@ function theme_acquia_lift_report_overview($variables) {
  *   - items: An array of types with the following keys
  *     - type:  What to display for the type
  *     - description: What to display as the description of the type
- *     - url: The url to create a new item of that type.
+ *     - path: The path to create a new item of that type.
+ *     - url_options: An optional array of options to pass when generating
+ *       the url from the path above.
  *     - logo: Logo to denote the type.
  *     - modal: true if url should continue in a modal, false if a new page
  *     - ctools_style: The ctools modal style to use for the next url (if
@@ -289,7 +258,7 @@ function theme_acquia_lift_type_list($variables) {
     $html .= '<div class="acquia-lift-type-logo">' . $type['logo'] . '</div>';
     $html .= '<div class="acquia-lift-type-title">';
     $url_options = isset($type['url_options']) ? $type['url_options'] : array();
-    if ($type['modal']) {
+    if (!empty($type['modal'])) {
       $path_parts = explode('/', $type['path']);
       $last = end($path_parts);
       if ($last != 'nojs') {

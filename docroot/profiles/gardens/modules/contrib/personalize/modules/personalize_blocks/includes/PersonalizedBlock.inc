@@ -42,6 +42,11 @@ class PersonalizedBlock {
     }
   }
 
+  public function buildDefault() {
+    $default_block = array_shift($this->blocks);
+    return $this->buildBlock($default_block['bid']);
+  }
+
   /**
    * Extracts the module and delta for a block from the personalized block id.
    *

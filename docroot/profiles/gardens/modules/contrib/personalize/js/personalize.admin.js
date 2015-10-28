@@ -6,7 +6,6 @@
   /**
    * Campaign edit page functionality.
    *
-   * Make personalize admin content containers collapsible.
    * Adds add in context link for goals.
    */
   Drupal.behaviors.personalizeCampaignEdit = {
@@ -15,68 +14,48 @@
       $('.personalize-goal-action', context).once('personalize-goal-action', function() {
         $(this).bind('change', function(e) {
           var val = e.currentTarget.selectedOptions[0].value;
-          if (val.indexOf(Drupal.settings.basePath + Drupal.settings.pathPrefix + 'admin/structure/visitor_actions/add-in-context') === 0) {
+          if (val.indexOf(Drupal.settings.basePath + Drupal.settings.pathPrefix + 'admin/structure/visitor_actions/add-in-context') >= 0) {
             document.location.href = val;
           }
         })
       });
-      $('.personalize-admin-content', context).once(function() {
-        // If the fieldset is collapsed, then set this style to be collapsed.
-        var $holder = $(this);
-        var $fieldset = $holder.children('fieldset');
-        if (!$fieldset) {
-          return;
-        }
-        if (!$fieldset.hasClass('collapsible')) {
-          return;
-        }
-        if ($fieldset.hasClass('collapsed')) {
-          $holder.addClass('personalize-collapsed');
-        }
-        // When the fieldset title is clicked, then add toggle the collapsed class.
-        $('legend .personalize-fieldset-header .fieldset-title', $fieldset).on('click', function(e) {
-          $holder.toggleClass('personalize-collapsed');
-        });
-      });
-      $('.personalize-admin-content-header', context).once(function() {
-        var $container = $(this).parents('.personalize-collapsible');
-        $container.find('.personalize-admin-content-title').after('<div class="personalize-admin-content-title-suffix"></div>');
-        $('.personalize-admin-content-title-suffix', $container).append($(this));
-      });
-    }
-  };
 
-  /**
-   * Campaign edit form submission handling.
-   *
-   * Adds a confirmation prompt to the user when they are about to make changes
-   * to a running campaign that will result in pausing the campaign.
-   */
-  Drupal.behaviors.personalizeCampaignEditFormHandling = {
-    attach: function (context, settings) {
-      // Add a handler to form submits that trigger campaign status changes.
-      $('input.personalize-admin-warn', context).once().each(function() {
-        var currentCampaign = Drupal.settings.personalize.activeCampaign;
-        if (typeof currentCampaign === 'undefined') {
-          return;
+      // Handle checking for changes when using the process bar navigation
+      $('#personalize-campaign-wizard-process-bar .personalize-wizard-navigation-item a').once('personalize-campaign-navigation').click(function(e) {
+        var $parentLi = $(this).parents('li');
+        // If the clicked navigation link is available as a navigation item
+        // then set the next step, save the form, and prevent link actions.
+        if (!$parentLi.hasClass('personalize-wizard-navigation-disabled') && !$parentLi.hasClass('personalize-wizard-navigation-current')) {
+          var $campaignForm = $(this).closest('form');
+          $('input[name="override_step"]', $campaignForm).val($(this).attr('data-personalize-section'));
+          // TRICKY: Must actually click a button Drupal expects rather than
+          // a simple form.submit() or the submit function will not be called.
+          $('input#edit-save', $campaignForm).trigger('click');
         }
-        // Overwrite beforeSubmit for each submit button (no cancel).
-        Drupal.ajax[this.id].options.beforeSubmit = function(form_values, $element, options) {
-          var campaign = Drupal.settings.personalize.campaigns[currentCampaign];
-          if (typeof(campaign) === 'undefined') {
-            return;
+        e.preventDefault();
+        e.stopImmediatePropagation();
+        return false;
+      });
+
+      // Submit process bar buttons that have corresponding action links.
+      $('#personalize-campaign-wizard-process-bar .personalize-wizard-process-bar-actions').once(function() {
+        var context = $(this);
+        $('[data-personalize-action]', context).each(function() {
+          var buttonClass = $(this).attr('data-personalize-action');
+          var $actionButton = $('.' + buttonClass, context);
+          if ($actionButton.length > 0) {
+            // When the link is clicked, submit the button instead.
+            $(this).click(function(e) {
+              $actionButton.trigger('click');
+              e.stopImmediatePropagation();
+              e.preventDefault();
+              return false;
+            });
+            // Can't just rely on the element-hidden class here because some
+            // themes will override it in their button styling.
+            $actionButton.hide();
           }
-          if (Drupal.settings.personalize.status && Drupal.settings.personalize.status[campaign.status]) {
-            var currentStatus = Drupal.settings.personalize.status[campaign.status];
-            if (currentStatus === Drupal.t('Running')) {
-              if (confirm(Drupal.t('Making these changes will pause the currently running campaign.  Are you sure you want to continue?'))) {
-                return true;
-              } else {
-                return false;
-              }
-            }
-          }
-        }
+        });
       });
     }
   };
@@ -102,23 +81,6 @@
           return false;
         });
         $optional.hide();
-      });
-    }
-  };
-
-  /**
-   * Add any summary data to administrative fieldsets.
-   */
-  Drupal.behaviors.personalizeAdminFieldset = {
-    attach: function (context, settings) {
-      $('#personalize-agent-option-sets-form .fieldset-wrapper fieldset').once().each(function() {
-        var fieldset = this,
-          $summary_text = $('.fieldset-wrapper:first .personalize-summary', this);
-        if ($summary_text.length == 0) {
-          return;
-        }
-        $('a.fieldset-title:first', this).after('<div class="personalize-admin-content-title-suffix">' + $summary_text.html() + '</div>');
-        $summary_text.remove();
       });
     }
   };

@@ -46,7 +46,7 @@
             return;
           } else if ($option_set.length > 1) {
             var agent_name = Drupal.settings.personalize.option_sets[osid].agent;
-            Drupal.personalize.debug('Selector ' + element.selector + ' in campaign ' + agent_name + ' matches multiple DOM elements, cannot perform personalization', 5010);
+            Drupal.personalize.debug('Selector ' + element.selector + ' in personalization ' + agent_name + ' matches multiple DOM elements, cannot perform personalization', 5010);
             // Cannot perform personalization on sets of matched elements.
             return;
           }
@@ -66,6 +66,7 @@
         // who was explicitly given permission to write JavaScript to be executed
         // on this site. Mitigating the evil of the eval.
         eval(selectedContent);
+        Drupal.attachBehaviors();
       }
     }
   };
@@ -75,7 +76,7 @@
     execute : function($selector, selectedContent, isControl, osid) {
       // We need to keep track of how we've changed the element, if only
       // to support previewing different options.
-      if (isControl && !this.controlContent.hasOwnProperty(osid)) {
+      if (!this.controlContent.hasOwnProperty(osid)) {
         this.controlContent[osid] = $selector.html();
       }
       if (isControl) {
@@ -142,7 +143,7 @@
     execute : function($selector, selectedContent, isControl, osid) {
       // Keep track of how the element has been changed in order to preview
       // different options.
-      if (isControl && !this.controlContent.hasOwnProperty(osid)) {
+      if (!this.controlContent.hasOwnProperty(osid)) {
         this.controlContent[osid] = this.getOuterHtml($selector);
       }
       if ($selector.length === 0) {
@@ -151,6 +152,10 @@
       var events = this.getElementEvents($selector);
       var data = $selector.data();
       if (isControl) {
+        // Don't do anything if the control is already being shown.
+        if (this.controlContent[osid] == this.getOuterHtml($selector)) {
+          return;
+        }
         $selector.replaceWith(this.controlContent[osid]);
         // Reset the $selector variable to the new element.
         $selector = this.getElement(osid);
@@ -167,6 +172,7 @@
         $newContent.attr('data-personalize', osid);
         this.addElementEvents($newContent, events);
         this.addElementData($newContent, data);
+        Drupal.attachBehaviors($newContent);
       }
     }
   };
@@ -176,7 +182,7 @@
     execute : function($selector, selectedContent, isControl, osid) {
       // Keep track of how the element has been changed in order to preview
       // different options.
-      if (isControl && !this.controlContent.hasOwnProperty(osid)) {
+      if (!this.controlContent.hasOwnProperty(osid)) {
         this.controlContent[osid] = $selector.text();
       }
       if (isControl) {

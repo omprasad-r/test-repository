@@ -18,9 +18,30 @@ class VisitorActionsTest extends DrupalWebTestCase {
   }
 
   function setUp() {
-    parent::setUp(array('visitor_actions_test'));
-    // Create and login user
-    $this->adminUser = $this->drupalCreateUser(array('access administration pages', 'administer visitor actions'));
+    parent::setUp(array('visitor_actions_test', 'locale'));
+    // Create and login user.
+    $this->adminUser = $this->drupalCreateUser(array('access administration pages', 'administer visitor actions', 'administer languages'));
+    $this->drupalLogin($this->adminUser);
+
+    // Enable French language.
+    $edit = array();
+    $edit['langcode'] = 'fr';
+    $this->drupalPost('admin/config/regional/language/add', $edit, t('Add language'));
+
+    // Enable URL language detection and selection.
+    $edit = array('language[enabled][locale-url]' => 1);
+    $this->drupalPost('admin/config/regional/language/configure', $edit, t('Save settings'));
+
+    // Create a node and an alias to the node.
+    $this->drupalCreateNode(array('nid' => 13579, 'is_new' => TRUE));
+    $alias_path = array(
+      'source' => 'node/13579',
+      'alias' => 'my_node_13579',
+    );
+    path_save($alias_path);
+
+    // Login out user.
+    $this->drupalLogout($this->adminUser);
   }
 
   /**
@@ -35,10 +56,9 @@ class VisitorActionsTest extends DrupalWebTestCase {
   }
 
   /**
-   * Tests personalization behavior under multiple scenarios.
+   * Tests action behavior under multiple scenarios.
    */
   public function testActionSettings() {
-
     $this->drupalGet('node');
     $settings = $this->drupalGetSettings();
     $va_settings = $settings['visitor_actions'];
@@ -70,6 +90,45 @@ class VisitorActionsTest extends DrupalWebTestCase {
     $this->assertEqual($expected_actions, array_keys($va_settings['actions']));
   }
 
+  /**
+   * Tests actions' "pages" filtering. See visitor_actions_match_page().
+   */
+  public function testActionPageFiltering() {
+    // The actions that will show on all pages, that are unrelated to this test.
+    $all_page_action_names = array(
+      0 => 'scroll_to_bottom',
+      1 => 'visitor_actions_test_form_click_test',
+      2 => 'visitor_actions_test_form_hover_test',
+      3 => 'visitor_actions_test_form_submit_client_side',
+    );
+
+    // This is an iteration of the truth table.
+    $expected_action_names_per_page_url_array = array(
+      'node/13579' => array(
+        'node/13579', 'node/*', 'my_node_13579',
+      ),
+      'my_node_13579' => array(
+        'node/13579', 'node/*', 'my_node_13579',
+      ),
+      'fr/node/13579' => array(
+        'node/13579', 'node/*', 'my_node_13579', 'fr/node/13579', 'fr/my_node_13579',
+      ),
+      'fr/my_node_13579' => array(
+        'node/13579', 'node/*', 'my_node_13579', 'fr/node/13579', 'fr/my_node_13579',
+      ),
+    );
+
+    // Assert expected action names per pages' URLs.
+    foreach ($expected_action_names_per_page_url_array as $page_url => $expected_action_names) {
+      $this->drupalGet($page_url);
+      $settings = $this->drupalGetSettings();
+      $page_action_names = array_keys($settings['visitor_actions']['actions']);
+      // Eliminate the "background noises" actions that show up on all pages, then reindex.
+      $actual_action_names = array_values(array_diff($page_action_names, $all_page_action_names));
+      $this->assertEqual($expected_action_names, $actual_action_names);
+    }
+  }
+
   public function testActionCreationForm() {
     $this->drupalLogin($this->adminUser);
     $this->drupalGet('admin/structure/visitor_actions/add');
@@ -95,18 +154,43 @@ class VisitorActionsTest extends DrupalWebTestCase {
 
     $this->assertTrue(in_array($action_name, array_keys($va_settings['actions'])));
 
-    // Now edit the action and specify '<front>' as the path.
-    $edit = array(
-      'pages' => '<front>',
+    // Now edit the action and specify valid paths.
+    $valid_path_array = array(
+      '<front>',
+      'node',
+      'node/13579',
+      'node/*',
+      'fr/node/13579',
+      'fr/my_node_13579',
+      'fr/node/*',
+      "fr/node\rmy_node_13579",
+      "fr/node\nmy_node_13579",
+      "fr/node\r\nmy_node_13579",
     );
-    $this->drupalPost("admin/structure/visitor_actions/manage/$action_name/edit", $edit, t('Save'));
-    $this->assertNoText('The selected pages must contain valid paths.');
-    // Now edit the action and specify an invalid path.
-    $edit = array(
-      'pages' => 'some invalid url',
+    foreach ($valid_path_array as $valid_path) {
+      $edit = array(
+        'pages' => $valid_path,
+      );
+      $this->drupalPost("admin/structure/visitor_actions/manage/$action_name/edit", $edit, t('Save'));
+      $this->assertNoText('You have specified an invalid path for Pages');
+    }
+
+    // Now edit the action and specify invalid paths.
+    $valid_path_array = array(
+      'some invalid url',
+      'node/1111',
+      'de/node/*',
+      "fr/node/13579\nsome invalid url",
+      "fr/node/13579\nde/node/*",
+      "fr/node/13579\nnode/1111",
     );
-    $this->drupalPost("admin/structure/visitor_actions/manage/$action_name/edit", $edit, t('Save'));
-    $this->assertText('The selected pages must contain valid paths.');
+    foreach ($valid_path_array as $valid_path) {
+      $edit = array(
+        'pages' => $valid_path,
+      );
+      $this->drupalPost("admin/structure/visitor_actions/manage/$action_name/edit", $edit, t('Save'));
+      $this->assertText('You have specified an invalid path for Pages');
+    }
   }
 
   public function testActionCreationAPI() {
