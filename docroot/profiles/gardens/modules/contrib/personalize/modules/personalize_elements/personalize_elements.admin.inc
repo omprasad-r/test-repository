@@ -27,13 +27,11 @@ function personalize_elements_edit($element) {
  * Menu callback for displaying a list of all existing custom elements.
  */
 function personalize_elements_list() {
-
   $header = array(
     array('data' => t('Variation set name')),
     array('data' => t('Operations'), 'colspan' => 2),
   );
   $rows = array();
-
   foreach (personalize_option_set_load_by_type('elements') as $option_set) {
     $tablerow = array(
       array('data' => check_plain($option_set->label)),
@@ -42,11 +40,9 @@ function personalize_elements_list() {
     );
     $rows[] = $tablerow;
   }
-
   if (empty($rows)) {
     $rows[] = array(array('data' => t('No elements available.'), 'colspan' => 3));
   }
-
   $build = array(
     '#theme' => 'table',
     '#header' => $header,
@@ -84,13 +80,14 @@ function personalize_elements_form($form, &$form_state, $isAjax = FALSE, $option
   }
   elseif (isset($option_set->options)) {
     foreach ($option_set->options as $option) {
-      $options[] = array('option_label' => $option['option_label'], 'personalize_elements_content' => isset($option['personalize_elements_content']) ? $option['personalize_elements_content'] : '');
+      $options[] = array(
+        'option_id' => $option['option_id'],
+        'option_label' => $option['option_label'],
+        'personalize_elements_content' => isset($option['personalize_elements_content']) ? $option['personalize_elements_content'] : ''
+      );
     }
   }
   if (!empty($option_set->osid)) {
-    // Make sure a warning message is delivered if this is a running
-    // campaign.
-    personalize_warn_if_running($option_set->agent);
     $form['osid'] = array(
       '#type' => 'value',
       '#value' => $option_set->osid,
@@ -169,6 +166,7 @@ function personalize_elements_form($form, &$form_state, $isAjax = FALSE, $option
       'option_label' => personalize_generate_option_label($index),
       'content' => '',
       'is_new' => TRUE,
+      'option_id' => '',
     );
   }
   $show_control = TRUE;
@@ -189,6 +187,7 @@ function personalize_elements_form($form, &$form_state, $isAjax = FALSE, $option
     array_unshift($options, array(
       'option_label' => PERSONALIZE_CONTROL_OPTION_LABEL,
       'personalize_elements_content' => '',
+      'option_id' => PERSONALIZE_CONTROL_OPTION_ID,
     ));
   }
   $form_state['num_options'] = count($options);
@@ -233,6 +232,10 @@ function personalize_elements_form($form, &$form_state, $isAjax = FALSE, $option
     $option_form = array(
       '#tree' => TRUE,
       '#type' => 'container',
+    );
+    $option_form['option_id'] = array(
+      '#type' => 'value',
+      '#value' => $option['option_id'],
     );
     $option_form['option_label'] = array(
       '#prefix' => '<div class="personalize-elements-option-label-element">',
@@ -294,10 +297,10 @@ function personalize_elements_form($form, &$form_state, $isAjax = FALSE, $option
     '#title_display' => 'invisible',
     '#field_prefix' => $base_url . base_path(),
     '#default_value' => isset($_GET['path']) ? urldecode($_GET['path']) : (isset($option_set->data['pages']) ? $option_set->data['pages'] : ''),
-    '#description' => t("Specify pages by using their paths or leave blank to apply to all pages. Enter one path per line. The '*' character is a wildcard. Example paths are %blog for the blog page and %blog-wildcard for every personal blog. %front is the front page.", array('%blog' => 'blog', '%blog-wildcard' => 'blog/*', '%front' => '<front>')),
+    '#description' => t("Specify pages by using one path per line. The '*' character is a wildcard. Example paths are %blog for the blog page and %blog-wildcard for every personal blog. %front is the front page. If the URL's language prefix is skipped, all languages of the same URL will be selected.", array('%blog' => 'blog', '%blog-wildcard' => 'blog/*', '%front' => '<front>')),
     '#states' => array(
       'disabled' => array(
-        ':input=[name="pages_all"]' => array('value' => '1'),
+        ':input[name="pages_all"]' => array('value' => '1'),
       )
     )
   );
@@ -366,11 +369,6 @@ function personalize_elements_form_validate($form, &$form_state) {
     if ($needs_control_option && !$has_control_option) {
       $num_required = 1;
     }
-    elseif ($has_control_option && !$needs_control_option) {
-      // THe control option will be removed, there should be an additional 2
-      // options besides the control option.
-      $num_required = 3;
-    }
     // If an option has an empty label and empty content, it will be removed so
     // we need to count how many non-empty options there are.
     $non_empty_options = 0;
@@ -384,6 +382,12 @@ function personalize_elements_form_validate($form, &$form_state) {
         $changed++;
       }
       $option['personalize_elements_content'] = $filtered;
+      if ($option['option_label'] == PERSONALIZE_CONTROL_OPTION_LABEL) {
+        if ($needs_control_option) {
+          $non_empty_options++;
+        }
+        continue;
+      }
       if (!empty($option['personalize_elements_content'])) {
         $non_empty_options++;
         if (empty($option['option_label'])) {
@@ -397,8 +401,10 @@ function personalize_elements_form_validate($form, &$form_state) {
     if ($changed) {
       drupal_set_message(t('Disallowed HTML tags were removed from @variations.', array('@variations' => format_plural($changed, '1 variation', '@count variations', array('@count' => $changed)))), 'warning');
     }
-    if ($values['pages_all'] == 0 && !personalize_elements_pages_validate($values['pages'])) {
-      form_set_error('pages', t('The selected pages must contain valid paths.'));
+    if ($values['pages_all'] == 0) {
+      $form['details']['pages']['#allow_external'] = FALSE;
+      $form['details']['pages']['#allow_dynamic'] = TRUE;
+      visitor_actions_form_element_path_validate($form['details']['pages'], $form_state);
     }
 
     if (!personalize_elements_selector_validate($form_state['values']['selector'])) {
@@ -424,13 +430,13 @@ function personalize_elements_form_submit($form, &$form_state) {
         $option_set->agent = $new_agent->machine_name;
       }
       else {
-        drupal_set_message('There was a problem saving the new campaign', 'error');
+        drupal_set_message('There was a problem saving the new personalization', 'error');
         return;
       }
     }
     personalize_option_set_save($option_set);
-    drupal_set_message(t('The option set was saved.'));
-    $form_state['redirect'] = 'admin/structure/personalize/variations/personalize-elements';
+    drupal_set_message(t('The variation set was saved.'));
+    $form_state['redirect'] = 'admin/structure/personalize/manage/' . $option_set->agent . '/variations';
   }
 }
 
@@ -495,7 +501,7 @@ function personalize_elements_convert_form_values_to_option_set($values) {
     'data' => array(
       'personalize_elements_selector' => isset($values['selector']) ? $values['selector'] : '',
       'personalize_elements_type' => $values['variation_type'],
-      'pages' => $values['pages_all'] == 1 ? '' : $values['pages'],
+      'pages' => isset($values['pages_all']) && $values['pages_all'] == 1 ? '' : $values['pages'],
     )
   );
   if (isset($values['osid'])) {
@@ -510,7 +516,8 @@ function personalize_elements_convert_form_values_to_option_set($values) {
 function personalize_elements_element_delete($form, $form_state, $option_set) {
   $form['osid'] = array('#type' => 'hidden', '#value' => $option_set->osid);
   $form['title'] = array('#type' => 'hidden', '#value' => $option_set->label);
-  return confirm_form($form, t('Are you sure you want to delete the element %title?', array('%title' => $option_set->label)), 'admin/structure/personalize/variations/personalize-elements', '', t('Delete'), t('Cancel'));
+  $form['agent'] = array('#type' => 'value', '#value' => $option_set->agent);
+  return confirm_form($form, t('Are you sure you want to delete the element %title?', array('%title' => $option_set->label)), 'admin/structure/personalize/manage/' . $option_set->agent . '/variations', '', t('Delete'), t('Cancel'));
 }
 
 /**
@@ -519,7 +526,42 @@ function personalize_elements_element_delete($form, $form_state, $option_set) {
 function personalize_elements_element_delete_submit($form, &$form_state) {
   personalize_option_set_delete($form_state['values']['osid']);
   drupal_set_message(t('The personalized element %name has been removed.', array('%name' => $form_state['values']['title'])));
-  $form_state['redirect'] = 'admin/structure/personalize/variations/personalize-elements';
+  $form_state['redirect'] = 'admin/structure/personalize/manage/' . $form_state['values']['agent'] . '/variations';
+}
+
+/**
+ * Form for deleting an option within a personalized element.
+ */
+function personalize_elements_option_delete($form, $form_state, $option_set, $option_id) {
+  $option_label = $option_id;
+  foreach($option_set->options as $option) {
+    if ($option['option_id'] === $option_id) {
+      $option_label = $option['option_label'];
+      break;
+    }
+  }
+  $form['osid'] = array('#type' => 'hidden', '#value' => $option_set->osid);
+  $form['option_id'] = array('#type' => 'hidden', '#value' => $option_id);
+  $form['title'] = array('#type' => 'hidden', '#value' => $option_set->label);
+  $form['option_label'] = array('#type' => 'hidden', '#value' => $option_label);
+  return confirm_form($form, t('Are you sure you want to delete variation %option_label from the %title personalized element?', array('%option_label' => $option_label, '%title' => $option_set->label)), 'admin/structure/personalize/variations/personalize-blocks/manage/' . $option_set->osid, '', t('Delete'), t('Cancel'));
+}
+
+/**
+ * Submit handler for personalize_elements_option_delete().
+ */
+function personalize_elements_option_delete_submit($form, &$form_state) {
+  $option_set = personalize_option_set_load($form_state['values']['osid']);
+  foreach($option_set->options as $i => $option) {
+    if ($option['option_id'] === $form_state['values']['option_id']) {
+      unset($option_set->options[$i]);
+      break;
+    }
+  }
+  personalize_option_set_save($option_set);
+  drupal_set_message(t('The variation %option_label has been removed from the %title personalized element.', array('%option_label' => $form_state['values']['option_label'], '%title' => $form_state['values']['title'])));
+  cache_clear_all();
+  $form_state['redirect'] = 'admin/structure/personalize/manage/' . $option_set->agent . '/variations';
 }
 
 /**
@@ -561,7 +603,7 @@ function personalize_elements_filter_personalize_element_option($variation_type,
 
   $filtered = $option_content;
     if ($variation_type !== 'runJS') {
-      $filtered = filter_xss($filtered, $allowed_tags);
+      $filtered = personalize_sanitize_string($filtered, $allowed_tags);
     }
   return $filtered;
 }
@@ -583,24 +625,4 @@ function personalize_elements_selector_validate($selector) {
   $matches = array();
   $matched = preg_match_all($re, $selector, $matches);
   return $matched == 0;
-}
-
-/**
- * Validates the pages entered for a personalized element.
- *
- * @param $pages
- *   The list of pages to validate separated by line breaks.
- * @return boolean
- *   True if the pages validate successfully, false if error.
- */
-function personalize_elements_pages_validate($pages) {
-  foreach(preg_split('~[\r\n]+~', $pages) as $line){
-    if(empty($line)) {
-      continue;
-    }
-    if (!valid_url($line) && $line !== '<front>') {
-      return FALSE;
-    }
-  }
-  return TRUE;
 }

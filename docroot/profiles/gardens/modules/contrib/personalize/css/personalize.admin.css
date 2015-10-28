@@ -3,17 +3,13 @@
  * Styles for Personalize administrative interfaces.
  */
 
-/** 
- * All 
-*/
-.personalize-goal .form-item label,
-.personalize-admin-content .fieldset-wrapper .form-item label {
-  margin: 0;
-}
-
 /**
  * Goals
  */
+.personalize-goal .form-item label {
+  margin: 0;
+}
+
 .personalize-goals-wrapper {
   margin-bottom: 1.4em;
   -webkit-transition: all 1s ease-in-out;
@@ -90,49 +86,16 @@ button.personalize-delete-goal, button.personalize-delete-context {
 div.personalize-variation-row div.personalize-remove-context {
   padding-top: 1.4em;
 }
-
-/* Seven positions the fieldset title absolutely */
-.fieldset-legend.personalize-admin-content-title {
-  position: relative;;
-}
-
-/* Tighten up the rest of the fieldsets */
-.fieldset-legend.personalize-admin-content-title {
-  margin-top: 0;
-}
-.personalize-admin-content fieldset {
-  padding-top: 1em;
-  margin: .5em 0;
-  min-height: 2em;
-}
-.personalize-admin-content > fieldset > legend {
-  padding: 1em 1em 0 1em;
-}
-.personalize-admin-content fieldset legend,
-.personalize-admin-content fieldset .fieldset-legend {
-  position: relative;
-}
-
-/** Trick to allow fieldset not to grow beyond 100% when contents are wide. */
-#personalize-agent-option-sets-form fieldset.personalize-option-set {
-  min-width: 0;
-  display: table-cell;
-}
-
-#personalize-agent-option-sets-form fieldset.personalize-option-set .fieldset-legend {
-  min-height: 1em;
-}
-#personalize-agent-goals-form fieldset.personalize-goal legend .fieldset-title div.personalize-admin-enumerated-item,
-#personalize-agent-option-sets-form fieldset.personalize-option-set legend .fieldset-title div.personalize-admin-enumerated-item {
-  display: inline;
-}
-#personalize-agent-option-sets-form fieldset.personalize-option-set legend .fieldset-title div.personalize-admin-enumerated-item {
+.personalize-wizard-variation-sets .personalize-option-header h3 .personalize-admin-enumerated-item {
   overflow: hidden;
   text-overflow: ellipsis;
+  vertical-align: top;
+  max-width: 500px;
   white-space: nowrap;
 }
-#personalize-agent-option-sets-form .personalize-content-variation div.personalize-admin-enumerated-item .personalize-content-variation-control,
-#personalize-agent-option-sets-form .personalize-content-variation div.personalize-admin-enumerated-item .personalize-content-variation-winner {
+
+.personalize-content-variation div.personalize-admin-enumerated-item .personalize-content-variation-control,
+.personalize-content-variation div.personalize-admin-enumerated-item .personalize-content-variation-winner {
   display: inline-block;
   margin-left: 1.5em;
   font-weight: normal;
@@ -143,15 +106,21 @@ div.personalize-variation-row div.personalize-remove-context {
   background-size: 18px 18px;
   padding-left: 22px;
 }
-#personalize-agent-option-sets-form .personalize-option-header-item,
-#personalize-agent-option-sets-form .personalize-stat {
+.personalize-option-set-report {
+  display:inline-block;
+}
+.personalize-option-set-report .personalize-stat {
+  margin: 0 .25em;
+}
+.personalize-option-set-report,
+.personalize-option-header-item {
   border-right: 1px solid;
   margin-right: .5em;
   padding-right: .5em;
   font-weight: normal;
   text-transform: lowercase;
 }
-#personalize-agent-option-sets-form .personalize-option-header-item:last-child {
+.personalize-option-header-item:last-child {
   border-right: none;
 }
 .personalize-content-variation .personalize-admin-enumerated-item {
@@ -169,20 +138,11 @@ div.personalize-variation-row div.personalize-remove-context {
 .personalize-variation-row div {
   float: left;
 }
-
 .personalize-variation-row div.personalize-target-wrapper {
     clear: both;
 }
 div.personalize-target-wrapper div.form-item {
     padding: 0 10px 0 0;
-}
-
-.personalize-admin-content > fieldset > legend {
-  font-size: 1em;
-}
-.personalize-admin-content-content .personalize-admin-content-title .personalize-admin-enumerated-item,
-.personalize-admin-content-content fieldset .fieldset-title .personalize-admin-enumerated-item {
-  display: block; 
 }
 
 #personalize-agent-page-messages .personalize-alert {
@@ -197,41 +157,8 @@ div.personalize-target-wrapper div.form-item {
   margin-left: 0.4em;
 }
 
-html.js .personalize-admin-content .collapsible .fieldset-legend,
-.personalize-admin-content fieldset legend,
-.personalize-admin-content fieldset .fieldset-legend,
-.personalize-admin-content-title-suffix,
-.personalize-admin-content-title-suffix div,
-#personalize-agent-form #personalize-status-toggle-form,
-#personalize-agent-form #personalize-status-toggle-form div {
-  display: inline-block;
-}
-.personalize-admin-content-title-suffix {
-  vertical-align: middle;
-}
-.personalize-admin-content-title-suffix .personalize-admin-content-header > * {
-  float: left;
-}
-.personalize-admin-content-title-suffix input {
-  margin-top: 0;
-  margin-bottom: 0;
-}
-.personalize-admin-content-title-suffix,
-.personalize-admin-content-title {
-  height: 2.2em;
-  line-height: 2.2em;
-  vertical-align: middle;
-}
 #personalize-agent-option-sets-form .personalize-option-header {
   margin-left: 1em; /* LTR */
-}
-
-/* MVT Form section */
-.personalize-mvt-edit {
-  font-size: 1.25em;
-}
-.personalize-mvt-edit .personalize-admin-enumerated-item {
-  display: inline-block;
 }
 
 /* Configuration settings page */
@@ -240,8 +167,171 @@ html.js .personalize-admin-content .collapsible .fieldset-legend,
   display: inline-block;
 }
 
-.personalize-status-change-select {
+.personalize-status-change *:not(option) {
+  display: inline-block;
+  margin-left: 1em;
+}
+
+/* Personalize campaign wizard forms */
+/* Shouldn't have to do this but some forms actually override the display
+   on inputs */
+.personalize-wizard-process-bar-actions .element-hidden {
+  display: none;
+}
+#personalize-campaign-wizard .personalize-wizard-section {
+  width: 100%;
+}
+#personalize-campaign-wizard .personalize-wizard-section .personalize-wizard-column {
   float: left;
-  padding-top: 2px;
-  padding-right: 5px;
+  width: 48%;
+  margin: 1em;
+}
+#personalize-campaign-wizard .form-actions .description {
+  font-size: .9em;
+  color: #666;
+}
+/* Agent top level form */
+#personalize-campaign-wizard #edit-agent-basic-info .form-item {
+  padding: 0;
+}
+.personalize-wizard-section-title * {
+  display: inline-block;
+}
+.personalize-wizard-section-title h2 {
+  margin-right: 1em; /* LTR */
+}
+#personalize-campaign-wizard #edit-agent-basic-info .personalize-campaign-overview {
+  float: right; /* LTR */
+  padding: 0 1em;
+}
+
+.personalize-wizard-section .personalize-option-header h3,
+.personalize-wizard-section .personalize-admin-enumerated-item {
+  display:inline-block;
+  margin-right: 1em; /* LTR */
+}
+.personalize-wizard-section .personalize-admin-enumerated-counter:after {
+  content: ':';
+}
+/* Process bar */
+#personalize-wizard-process-bar {
+  margin-bottom: 1.2em;
+}
+#personalize-wizard-process-bar .personalize-wizard-navigation {
+  border-bottom: 2px solid #999;
+  padding: 0 1em;
+}
+#personalize-wizard-process-bar .personalize-wizard-navigation > ul {
+  list-style: none;
+  overflow: hidden;
+  margin: 0;
+  padding: 0 0 .5em 0;
+  display: inline-block;
+  float: left;
+}
+#personalize-wizard-process-bar .personalize-wizard-navigation > ul li {
+  padding: 1em 1em 0 1em;
+  position: relative;
+  display: block;
+  float: left;
+}
+#personalize-wizard-process-bar li.personalize-wizard-navigation-current {
+  border-bottom: 2px solid #0074BD;
+}
+#personalize-wizard-process-bar li.personalize-wizard-navigation-current a {
+  text-decoration: none;
+}
+#personalize-wizard-process-bar li.personalize-wizard-navigation-current a:hover {
+  cursor: default;
+}
+#personalize-wizard-process-bar li.personalize-wizard-navigation-disabled a,
+#personalize-wizard-process-bar li.personalize-wizard-navigation-disabled a:hover {
+  color: #999;
+  cursor: default;
+  text-decoration: none;
+}
+#personalize-wizard-process-bar .personalize-wizard-process-bar-actions {
+  float: right;
+}
+#personalize-wizard-process-bar .personalize-wizard-process-bar-actions,
+#personalize-wizard-process-bar .personalize-wizard-process-bar-actions > div {
+  display: inline-block;
+  position: relative;
+}
+#personalize-wizard-process-bar .personalize-wizard-process-bar-actions .personalize-wizard-action-links {
+  position: absolute;
+  right: .7em;
+  border-color: #999;
+  background-color: #fff;
+}
+/** Work-around for additional mark-up added by ember theme **/
+#personalize-wizard-process-bar .personalize-wizard-process-bar-actions .ctools-dropbutton-wrapper {
+  position: absolute;
+  right: .7em;
+}
+#personalize-wizard-process-bar .personalize-wizard-process-bar-actions .ctools-dropbutton-wrapper .personalize-wizard-action-links {
+  position: relative;
+  right: 0;
+}
+/** End work around **/
+#personalize-wizard-process-bar .personalize-wizard-process-bar-actions .personalize-wizard-action-links li {
+  padding: .3em;
+  white-space: nowrap;
+}
+#personalize-wizard-process-bar .personalize-wizard-process-bar-actions .personalize-wizard-action-links li:hover {
+  background-color: #e6e9ed;
+}
+#personalize-wizard-process-bar .personalize-wizard-section-help {
+  border-bottom: 1px solid #0074BD;
+}
+#personalize-wizard-process-bar .personalize-wizard-instructions {
+  padding: .5em;
+}
+#personalize-wizard-process-bar .personalize-wizard-expanded-help {
+  display: none;
+}
+
+.personalize-wizard-actions {
+  padding-top: 1em;
+}
+/* Tabs */
+.personalize-tabs-container.ui-tabs .ui-tabs-nav li.ui-tabs-selected a {
+  background: none;
+  font-weight: bold;
+  text-decoration: none;
+  cursor: default;
+}
+
+.personalize-tabs-container.ui-tabs .ui-tabs-nav li.ui-tabs-selected a:hover {
+  text-decoration: none;
+}
+
+.personalize-tabs-container.ui-tabs .ui-tabs-nav li a {
+  background: none;
+  font-weight: normal;
+  color: inherit;
+  cursor: pointer;
+}
+
+.personalize-tabs-container.ui-tabs .ui-tabs-nav li a:hover {
+  text-decoration: underline;
+}
+/* Review screen */
+.personalize-wizard-summary-item {
+  margin-bottom: 2em;
+  line-height: 1em;
+}
+.personalize-wizard-summary-item .personalize-wizard-summary-count,
+.personalize-wizard-summary-item .personalize-wizard-summary-details {
+  display: inline-block;
+  vertical-align: middle;
+}
+.personalize-wizard-summary-item .personalize-wizard-summary-count {
+  font-size: 4em;
+  margin-right: .25em; /* LTR */
+  line-height: 1em;
+}
+.personalize-wizard-summary-item .personalize-wizard-summary-details ul,
+.personalize-wizard-summary-item .personalize-wizard-summary-details ul li {
+  list-style-type: none;
 }

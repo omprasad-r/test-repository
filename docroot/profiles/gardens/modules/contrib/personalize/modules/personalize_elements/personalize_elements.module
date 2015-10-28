@@ -11,25 +11,28 @@ define('PERSONALIZE_ELEMENTS_HELP_URL_SELECTOR', 'https://docs.acquia.com/lift/p
  * Implements hook_menu().
  */
 function personalize_elements_menu() {
-  $items['admin/structure/personalize/variations/personalize-elements'] = array(
-    'title' => 'Elements',
-    'description' => 'Personalize page elements.',
+  $items['admin/structure/personalize-elements'] = array(
+    'title' => 'Personalize elements',
+    'description' => 'Manage your personalized elements',
     'page callback' => 'personalize_elements_list',
-    'access callback' => 'user_access',
     'access arguments' => array('manage personalized content'),
-    'type' => MENU_LOCAL_TASK,
+    'type' => MENU_NORMAL_ITEM,
     'file' => 'personalize_elements.admin.inc',
   );
-  $items['admin/structure/personalize/variations/personalize-elements/list'] = array(
-    'title' => 'List personalize elements',
-    'type' => MENU_DEFAULT_LOCAL_TASK,
+  $items['admin/structure/personalize-elements/add'] = array(
+    'title' => 'Add personalized element',
+    'page callback' => 'drupal_get_form',
+    'page arguments' => array('personalize_elements_form', 'add'),
+    'access arguments' => array('manage personalized content'),
+    'type' => MENU_LOCAL_ACTION,
+    'file' => 'personalize_elements.admin.inc',
   );
   $items['admin/structure/personalize/variations/personalize-elements/add'] = array(
     'title' => 'Add personalized element',
     'page callback' => 'drupal_get_form',
     'page arguments' => array('personalize_elements_form', 'add'),
     'access arguments' => array('manage personalized content'),
-    'type' => MENU_LOCAL_ACTION,
+    'type' => MENU_CALLBACK,
     'file' => 'personalize_elements.admin.inc',
   );
   $items['admin/structure/personalize/variations/personalize-elements/manage/%personalize_element'] = array(
@@ -50,6 +53,14 @@ function personalize_elements_menu() {
     'page arguments' => array('personalize_elements_element_delete', 6),
     'access arguments' => array('manage personalized content'),
     'type' => MENU_LOCAL_TASK,
+    'file' => 'personalize_elements.admin.inc',
+  );
+  $items['admin/structure/personalize/variations/personalize-elements/manage/%personalize_element/%/delete'] = array(
+    'title' => 'Delete Personalized Element Variation',
+    'page callback' => 'drupal_get_form',
+    'page arguments' => array('personalize_elements_option_delete', 6, 7),
+    'access arguments' => array('manage personalized content'),
+    'type' => MENU_CALLBACK,
     'file' => 'personalize_elements.admin.inc',
   );
   $items['admin/config/content/personalize/personalize-elements'] = array(
@@ -168,7 +179,7 @@ function personalize_elements_limit_option_sets_by_path(&$option_sets, $path = N
   foreach ($option_sets as $osid => $option_set) {
     $page_match = TRUE;
     if (isset($option_set->data['pages']) && !empty($option_set->data['pages'])) {
-      $page_match = personalize_elements_match_page($option_set->data['pages'], $path);
+      $page_match = visitor_actions_match_page($option_set->data['pages'], $path);
     }
     if (!$page_match) {
       unset($option_sets[$osid]);
@@ -353,7 +364,7 @@ function personalize_elements_get_option_set_for_variation($title, $agent_name, 
     if ($option_set->data['personalize_elements_selector'] == $selector && $option_set->data['personalize_elements_type'] == $variation_type) {
       // We only use this option set if the pages property has not been set or
       // has been set to include this page.
-      if (empty($option_set->data['pages']) || personalize_elements_match_page($option_set->data['pages'], $page)) {
+      if (empty($option_set->data['pages']) || visitor_actions_match_page($option_set->data['pages'], $page)) {
         // Now constrain the pages property to just the variation page.
         $option_set->data['pages'] = $page;
         return $option_set;
@@ -425,26 +436,4 @@ function personalize_element_load($osid) {
     return NULL;
   }
   return $os;
-}
-
-/**
- * Returns whether the supplied list of pages includes a match for
- * the current page.
- *
- * @param $pages
- *   String containing a set of pages separated by \n, \r or \r\n.
- * @param string $compare_path
- *   The internal page path for comparison if different than the current path.
- * @return bool
- *   Returns TRUE if the current path is matched, FALSE otherwise.
- */
-function personalize_elements_match_page($pages, $compare_path = NULL) {
-  // Convert the Drupal path to lowercase
-  $path = empty($compare_path) ? drupal_strtolower(drupal_get_path_alias($_GET['q'])) : $compare_path;
-  // Compare the lowercase internal and lowercase path alias (if any).
-  $page_match = drupal_match_path($path, $pages);
-  if ($path != $_GET['q']) {
-    $page_match = $page_match || drupal_match_path($_GET['q'], $pages);
-  }
-  return $page_match;
 }

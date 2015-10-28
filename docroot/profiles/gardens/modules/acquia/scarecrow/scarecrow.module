@@ -30,7 +30,7 @@ function scarecrow_menu() {
   );
   $items['user/1/follow'] = $items['user/1/shortcuts'] = $items['user/1/track'] = $items['user/1/contact'];
 
-  // Scarecrow configuration. Restricted to Gardens Admin.
+  // Scarecrow configuration. Restricted to Site Factory admin.
   $items['admin/config/system/scarecrow'] = array(
     'title' => 'Drupal Gardens security',
     // For now, this is the only configuration setting on the form. Update the
@@ -128,10 +128,11 @@ function scarecrow_is_site_owner() {
 }
 
 /**
- * Determine whether the current user is the Gardens administrator (user 1).
+ * Determines whether the current user is the Site Factory administrator.
  *
  * @return <boolean>
- *   TRUE if the current user is the Gardens administrator, FALSE otherwise.
+ *   TRUE if the current user is the Site Factory administrator,
+ *   FALSE otherwise.
  */
 function scarecrow_is_gardens_admin() {
   return $GLOBALS['user']->uid == 1;
@@ -1149,7 +1150,7 @@ function scarecrow_disallowed_modules() {
   //   access or settings.php. If TRUE, in-development modules can be enabled
   //   even in the production environment, so use with extreme caution.
   // - scarecrow_show_unreleased_modules_on_gsteamer can be set via the UI by
-  //   the Gardens admin user on admin/config/system/scarecrow. If TRUE,
+  //   the Site Factory admin user on admin/config/system/scarecrow. If TRUE,
   //   in-development modules can be enabled in a development environment only.
   //   This is a useful setting to enable on sites used for mid-sprint review
   //   demonstrations.
@@ -1801,8 +1802,8 @@ function scarecrow_user_presave(&$edit, $account, $category) {
 /**
  * Preprocess function for theme_status_report.
  *
- * Removes irrelevant nags (but still displays them to Gardens admins, who can
- * do something about them).
+ * Removes irrelevant nags (but still displays them to Site Factory admins,
+ * who can do something about them).
  */
 function scarecrow_preprocess_status_report(&$variables) {
   if (!user_access('administer software updates')) {

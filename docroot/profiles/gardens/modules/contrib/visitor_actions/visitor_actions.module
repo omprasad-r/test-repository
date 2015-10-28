@@ -116,15 +116,10 @@ function visitor_actions_form_alter(&$form, &$form_state, $form_id) {
  * Submit callback to fire the 'form_submit' event.
  */
 function visitor_actions_form_submit_callback($form, &$form_state) {
-  $context = $form_state['values'];
-  // Remove unneeded form_values from the context.
-  unset($context['form_token'], $context['form_build_id']);
-  if (isset($context['op'])) {
-    unset($context['op']);
-  }
-  if (isset($context['submit'])) {
-    unset($context['submit']);
-  }
+  $context = array(
+    'form_id' => $form['#form_id'],
+    'path' => $_GET['q']
+  );
   // Trigger event "Submit any form"
   visitor_actions_trigger_event('form_submit', $context);
   // Get all server-side form submit actions that have been added for the given
@@ -248,24 +243,56 @@ function visitor_actions_page_build(&$page) {
 
 /**
  * Returns whether the supplied list of pages includes a match for
- * the current comparison page.
+ * the current page. This function handles both language prefixes and aliases.
  *
- * @param $pages
- *   String containing a set of pages separated by \n, \r or \r\n.
+ * The following truth table assumes:
+ *  1. There are "en" and "fr" languages.
+ *  2. "en" is default (i.e. "node/1" is the same as "en/node/1").
+ *  3. "node/1" is aliased to "my_node".
+ *
+ * Table - How actual URLs would map to patterns
+ * URL \ pattern | node/1 | node/* | my_node | en/node/1 | en/my_node | fr/node/1 | fr/my_node
+ * --------------------------------------------------------------------------------------------
+ * node/1        |   T    |   T    |    T    |    T      |     T      |     F     |     F
+ * my_node       |   T    |   T    |    T    |    T      |     T      |     F     |     F
+ * en/node/1     |   T    |   T    |    T    |    T      |     T      |     F     |     F
+ * en/my_node    |   T    |   T    |    T    |    T      |     T      |     F     |     F
+ * fr/node/1     |   T    |   T    |    T    |    F      |     F      |     T     |     T
+ * fr/my_node    |   T    |   T    |    T    |    F      |     F      |     T     |     T
+ *
+ * @param string $page_paths
+ *   String containing a set of page paths separated by \n, \r, or \r\n.
  * @param string $compare_path
  *   The internal page path for comparison if different than the current path.
  * @return bool
  *   Returns TRUE if the current path is matched, FALSE otherwise.
  */
-function visitor_actions_match_page($pages, $compare_path = NULL) {
-  // Convert the Drupal path to lowercase
-  $path = empty($compare_path) ? drupal_strtolower(drupal_get_path_alias($_GET['q'])) : $compare_path;
-  // Compare the lowercase internal and lowercase path alias (if any).
-  $page_match = drupal_match_path($path, $pages);
-  if ($path != $_GET['q']) {
-    $page_match = $page_match || drupal_match_path($_GET['q'], $pages);
+function visitor_actions_match_page($page_paths, $compare_path = NULL) {
+  // For all targeted paths, keep the ones that are 1) language-less, or 2) of the
+  // current language. Toss out the rest.
+  global $language;
+  $language_list = language_list();
+  $page_paths_array = preg_split('~\R~', $page_paths);
+  foreach ($page_paths_array as $page_path_index => $page_path) {
+    // Need to check if language_url_split_prefix() exists because the language may not be enabled.
+    $path_data = function_exists('language_url_split_prefix') ? language_url_split_prefix($page_path, $language_list) : array(false, $page_path);
+    list($path_language, $path_under_language) = $path_data;
+    // Toss all targeted paths out, but ...
+    unset($page_paths_array[$page_path_index]);
+    // Add back only the targeted paths that are 1) language-less, or 2) of the current language.
+    if (empty($path_language) || $path_language->language === $language->language) {
+      $page_paths_array[$page_path_index] = $path_under_language;
+    }
   }
-  return $page_match;
+  $filtered_page_paths = implode("\n", $page_paths_array);
+
+  // The current path is the internal path, without language prefix.
+  $current_path = empty($compare_path) ? current_path() : $compare_path;
+  // The alias path is of the internal path, without language prefix.
+  $alias_path = drupal_get_path_alias($current_path);
+
+  // Attempt to match the internal and the alias matches - either match works.
+  return drupal_match_path($current_path, $filtered_page_paths) || drupal_match_path($alias_path, $filtered_page_paths);
 }
 
 /**
@@ -422,25 +449,26 @@ function visitor_actions_unpack_action($record) {
  *   An array representing an action.
  */
 function visitor_actions_save_action($action) {
-  $fields = (array) $action;
+  $action = (array) $action;
   // Ensure the machine name has only valid characters.
-  $fields['machine_name'] = preg_replace('/[^a-z0-9_]+/', '_', drupal_strtolower($fields['machine_name']));
-  $fields += array(
+  $action['machine_name'] = preg_replace('/[^a-z0-9_]+/', '_', drupal_strtolower($action['machine_name']));
+  $action += array(
     'module' => 'visitor_actions',
   );
-  if (is_array($fields['data'])) {
-    $fields['data'] = serialize($fields['data']);
+  if (is_array($action['data'])) {
+    $action['data'] = serialize($action['data']);
   }
   try {
     db_merge('visitor_actions_actions')
       ->key(array('machine_name' => $action['machine_name']))
-      ->fields($fields)
+      ->fields($action)
       ->execute();
   }
   catch (Exception $e) {
     drupal_set_message(t('There was a problem saving the visitor action @action_name', array('@action_name' => $action['machine_name'])), 'error');
     return FALSE;
   }
+  module_invoke_all('visitor_actions_save_action', $action);
   return TRUE;
 }
 
@@ -721,4 +749,74 @@ function visitor_actions_visitor_actions_actionable_element() {
     ),
   );
   return $info;
+}
+
+
+/**
+ * An element level validator to validate that a path is valid and that the user
+ * has access to the path.
+ *
+ * @param array $element
+ *   The form element to check. The form element may optionally include:
+ *   - #allow_external:  Boolean to indicate if external urls are allowed
+ *     (defaults to TRUE).
+ *   - #allow_dynamic: Boolean indicating if wildcard characters are allowed
+ *     for dynamic urls (defaults to FALSE).
+ * @param array $form_state
+ *   The current form state.
+ */
+function visitor_actions_form_element_path_validate($element, &$form_state) {
+  $value = $element['#value'];
+  if (empty($value)) {
+    return;
+  }
+  // Set defaults.
+  $element['#allow_external'] = isset($element['#allow_external']) ? $element['#allow_external'] : TRUE;
+  $element['#allow_dynamic'] = isset($element['#allow_dynamic']) ? $element['#allow_dynamic'] : FALSE;
+
+  // Get an array of paths to validate.
+  $validate = array();
+  if ($element['#type'] === 'textarea') {
+    foreach (preg_split('~[\r\n]+~', $value) as $line) {
+      if (empty($line)) {
+        continue;
+      }
+      $validate[] = $line;
+    }
+  }
+  else {
+    $validate[] = $value;
+  }
+  // Check each line and stop after adding an error message to avoid duplicate
+  // processing and messaging.
+  foreach ($validate as $path) {
+    if ($path === '<front>') {
+      continue;
+    }
+    // Check for external links.
+    if ($element['#allow_external'] == FALSE && url_is_external($path)) {
+      form_error($element, t('External paths are not allowed for %element', array(
+        '%element' => empty($element['#title']) ? $element['#name'] : $element['#title']
+      )));
+      break;
+    }
+
+    // Check if path is valid. drupal_valid_path checks for dynamic paths
+    // using % as the wildcard and is broken at that. As a result we test using
+    // the non-dynamic portion.
+    $dynamic = substr($path, -2) === '/*';
+    $static_path = $dynamic && $element['#allow_dynamic'] ? substr($path, 0, -2) : $path;
+    $language_list = language_list();
+    // Need to check if language_url_split_prefix() exists because the language may not be enabled.
+    $path_data = function_exists('language_url_split_prefix') ? language_url_split_prefix($static_path, $language_list) : array(false, $static_path);
+    list($language, $path_under_language) = $path_data;
+    $path_language = $language ? $language->language : NULL;
+    // If the given path does not match any internal or alias path, error out.
+    if (!drupal_valid_path(drupal_get_normal_path($path_under_language, $path_language))) {
+      form_error($element, t('You have specified an invalid path for %element', array(
+        '%element' => empty($element['#title']) ? $element['#name'] : $element['#title']
+      )));
+      break;
+    }
+  }
 }

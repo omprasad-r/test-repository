@@ -9,6 +9,8 @@
         var chosenWidth = '940px';
         if ($(this).hasClass('acquia-lift-chosen-select-half')) {
           chosenWidth = '470px';
+        } else if ($(this).hasClass('acquia-lift-chosen-select-third')) {
+          chosenWidth = '470px';
         }
         var options = {
           width: chosenWidth
@@ -47,33 +49,16 @@
   Drupal.behaviors.acquiaLiftCampaignEdit = {
     attach: function (context, settings) {
       // Add a handler to the "Reset data" button to warn the user before resetting the data.
-      $('#personalize-acquia-lift-reset input[type="submit"]').once('acquia-lift-reset').each(function() {
-        // Overwrite beforeSubmit of the ajax event.
-        Drupal.ajax[this.id].options.beforeSubmit = function(form_values, $element, options) {
-          if (confirm(Drupal.t('This action will delete all existing data for this campaign and cannot be undone. Are you sure you want to continue?'))) {
-            return true;
-          } else {
-            return false;
-          }
+      $('.personalize-wizard-process-bar-actions .acquia-lift-reset').once('acquia-lift-reset').click(function(e) {
+        if (confirm(Drupal.t('This action will delete all existing data for this personalization and cannot be undone. Are you sure you want to continue?'))) {
+          return true;
+        } else {
+          e.stopImmediatePropagation();
+          return false;
         }
       });
     }
-  }
-
-  /**
-   * Adjust fills for percentage line fill components.
-   */
-  Drupal.behaviors.acquia_lift_percentage_label = {
-    attach: function(context, settings) {
-      $('.acquia-lift-distribution .distribution-graphic .fill', context).once().each(function() {
-        var percent = $(this).attr('data-acquia-lift-fill');
-        if (isNaN(parseFloat(percent))) {
-          return;
-        }
-        $(this).css('width', percent + '%');
-      });
-    }
-  }
+  };
 
   /**
    * Adjusts the display of high-low components.
@@ -111,7 +96,7 @@
         $bounds.css('left', scaleLow + 'px');
       });
     }
-  }
+  };
 
   /**
    * Remove any duplicated message display areas.
@@ -124,5 +109,44 @@
       }
       $priorMessages = $('div.messages').not($newMessages).hide();
     }
+  };
+
+  /**
+   * Campaign list display.
+   */
+  Drupal.behaviors.acquiaLiftCampaignList = {
+    attach: function (context, settings) {
+      $('#personalize-personalizations-list').once('acquia-lift-campaign-list', function () {
+        $('.acquia-lift-personalize-list-campaign .acquia-lift-campaign-title', this).on('click', function () {
+          var $audienceRows = $(this).parent().nextUntil('.acquia-lift-personalize-list-campaign');
+          // Cannot perform slide jquery animations on table rows so we have
+          // to wrap the cell contents in something that we can animate.
+          if ($audienceRows.hasClass('element-hidden')) {
+            $audienceRows.find('td')
+              .wrapInner('<div style="display: block; display: none;" />')
+              .parent()
+              .removeClass('element-hidden')
+              .find('td > div')
+              .slideDown(400, function() {
+                $(this).parent().parent().removeClass('element-hidden');
+                $(this).contents().unwrap();
+                console.log('complete');
+              });
+            $(this).addClass('acquia-lift-is-open');
+          } else {
+            $audienceRows.find('td')
+              .wrapInner('<div style="display: block;">')
+              .parent()
+              .find('td > div')
+              .slideUp(400, function () {
+                $(this).parent().parent().addClass('element-hidden');
+                $(this).contents().unwrap();
+              });
+            $(this).removeClass('acquia-lift-is-open');
+          }
+        });
+      });
+    }
   }
+
 })(Drupal.jQuery);

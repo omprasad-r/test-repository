@@ -17,6 +17,7 @@ var _tcwq = _tcwq || [];
 
   Drupal.behaviors.acquia_lift_profiles = {
     'attach': function (context, settings) {
+      settings.acquia_lift_profiles = settings.acquia_lift_profiles || {};
       Drupal.acquia_lift_profiles.init(settings);
       Drupal.acquia_lift_profiles.addActionListener(settings);
       Drupal.acquia_lift_profiles.processServerSideActions(settings);
@@ -34,11 +35,8 @@ var _tcwq = _tcwq || [];
         visitorSegments = {};
         for (var i = 0; i < segments.length; i++){
           visitorSegments[segments[i]] = 1;
-          // Store this in localStorage so it can be retrieved for use as Lift
-          // visitor context.
-          Drupal.personalize.visitor_context_write(segments[i], plugin, 1);
         }
-        // Go through all available segments and add an entry in localStorage for
+        // Go through all available segments and add an entry in visitorSegments for
         // each one that the visitor does *not* have.
         if (Drupal.settings.acquia_lift_profiles.available_segments) {
           for (var j in Drupal.settings.acquia_lift_profiles.available_segments) {
@@ -46,27 +44,13 @@ var _tcwq = _tcwq || [];
               var segmentName = Drupal.settings.acquia_lift_profiles.available_segments[j];
               if (!visitorSegments.hasOwnProperty(segmentName)) {
                 visitorSegments[segmentName] = 0;
-                Drupal.personalize.visitor_context_write(segmentName, plugin, 0);
               }
             }
           }
         }
         return visitorSegments;
       },
-      'retrieve': function(settings) {
-        var i, val, segmentName, segments = settings.available_segments;
-        for (i in segments) {
-          if (segments.hasOwnProperty(i)) {
-            segmentName = segments[i];
-            if (visitorSegments === null || !visitorSegments.hasOwnProperty(segmentName)) {
-              val = Drupal.personalize.visitor_context_read(segmentName, plugin);
-              if (val !== null) {
-                visitorSegments = visitorSegments || {};
-                visitorSegments[segmentName] = val;
-              }
-            }
-          }
-        }
+      'retrieve': function() {
         return visitorSegments;
       },
       'reset': function() {
@@ -79,10 +63,14 @@ var _tcwq = _tcwq || [];
   Drupal.personalize.visitor_context = Drupal.personalize.visitor_context || {};
   Drupal.personalize.visitor_context.acquia_lift_profiles_context = {
     'getContext': function(enabled) {
+      if ($.cookie('tc_dnt') === "true") {
+        return {};
+      }
+
       var i, j, context_values = {};
-      // First check to see if we have the acquia_lift_profiles segments already stored
-      // locally.
-      var cached = segmentCache.retrieve(Drupal.settings.acquia_lift_profiles);
+      // First check to see if we have the acquia_lift_profiles segments stored
+      // already.
+      var cached = segmentCache.retrieve();
       if (cached) {
         for (i in enabled) {
           if (enabled.hasOwnProperty(i) && cached.hasOwnProperty(i)) {
@@ -108,7 +96,14 @@ var _tcwq = _tcwq || [];
         };
 
         // Register our callback for receiving segments.
+        // TODO: "onLoad" should happen before "init" and "pushTrack". However,
+        // current JS executing sequence is incorrect, therefore we are patching
+        // _tcwq by slotting "onLoad" in between "init" and "pushTrack".
+        var pushTrack = _tcwq.length > 0 ? _tcwq.pop() : null;
         _tcwq.push(["onLoad", segmentsCallback]);
+        if (pushTrack) {
+          _tcwq.push(pushTrack);
+        }
         callbackRegistered = true;
       });
     }
@@ -129,7 +124,7 @@ var _tcwq = _tcwq || [];
     if (identityCaptured) {
       return;
     }
-    _tcaq.push( [ 'captureIdentity', identifier, identityType, {'evalSegments': true}] );
+    _tcaq.push( [ 'captureIdentity', identifier, identityType ] );
     identityCaptured = true;
   };
 
@@ -156,8 +151,7 @@ var _tcwq = _tcwq || [];
    */
   Drupal.acquia_lift_profiles = (function(){
 
-    // Keeps track of processed listeners so we don't subscribe them more than once.
-    var processedListeners = {}, initialized = false, initializing = false;
+    var processedListeners = {}, processedDecisions = {}, initialized = false, initializing = false, pageFieldValues = {};
     var agentNameToLabel = {};
 
     /**
@@ -176,10 +170,12 @@ var _tcwq = _tcwq || [];
 
     return {
       'init': function(settings) {
-        if (initialized || initializing) {
+        if (initialized || initializing || !settings.acquia_lift_profiles.hasOwnProperty('account_name')) {
           return;
         }
         initializing = true;
+        _tcaq.push(['setAccount', settings.acquia_lift_profiles.account_name]);
+
         if ( settings.personalize && settings.personalize.agent_map ) {
           var agent_map = settings.personalize.agent_map;
           for (var agent_name in agent_map) {
@@ -190,7 +186,7 @@ var _tcwq = _tcwq || [];
             }
           }
         }
-        var mappings = settings.acquia_lift_profiles.udfMappings, context_separator = settings.acquia_lift_profiles.udfMappingContextSeparator, plugins = {}, udfValues = {}, reverseMapping = {};
+        var mappings = settings.acquia_lift_profiles.mappings, context_separator = settings.acquia_lift_profiles.mappingContextSeparator, plugins = {}, reverseMapping = {};
         for(var type in mappings) {
           if (mappings.hasOwnProperty(type)) {
             for (var udf in mappings[type]) {
@@ -215,6 +211,9 @@ var _tcwq = _tcwq || [];
         }
 
         var callback = function(contextValues) {
+          if (initialized) {
+            return;
+          }
           for (var pluginName in contextValues) {
             if (contextValues.hasOwnProperty(pluginName)) {
               for (var contextName in contextValues[pluginName]) {
@@ -224,7 +223,7 @@ var _tcwq = _tcwq || [];
                     // Set this is as the value for all UDFs that use this context.
                     for (var i in reverseMapping[fullContextName]) {
                       if (reverseMapping[fullContextName].hasOwnProperty(i)) {
-                        udfValues[reverseMapping[fullContextName][i]] = contextValues[pluginName][contextName];
+                        pageFieldValues[reverseMapping[fullContextName][i]] = contextValues[pluginName][contextName];
                       }
                     }
                   }
@@ -248,7 +247,7 @@ var _tcwq = _tcwq || [];
             'author':'',
             'evalSegments': true,
             'trackingId': trackingId
-          }, settings.acquia_lift_profiles.pageContext, udfValues);
+          }, settings.acquia_lift_profiles.pageContext, pageFieldValues);
           _tcaq.push( [ 'captureView', 'Content View', pageInfo ] );
 
           if(settings.acquia_lift_profiles.hasOwnProperty('identity')) {
@@ -275,7 +274,14 @@ var _tcwq = _tcwq || [];
           };
 
           // Register our callback for receiving segments.
+          // TODO: "onLoad" should happen before "init" and "pushTrack". However,
+          // current JS executing sequence is incorrect, therefore we are patching
+          // _tcwq by slotting "onLoad" in between "init" and "pushTrack".
+          var pushTrack = _tcwq.length > 0 ? _tcwq.pop() : null;
           _tcwq.push(["onLoad", segmentsCallback]);
+          if (pushTrack) {
+            _tcwq.push(pushTrack);
+          }
           callbackRegistered = true;
         }
       },
@@ -288,8 +294,16 @@ var _tcwq = _tcwq || [];
        * @param eventName
        */
       'processEvent': function(eventName, settings, context) {
+        var extra = {
+          evalSegments: true
+        };
+        // Add the field and UDF values to the extra info we're sending about the event. The assumption
+        // here is that this event is being processed *after* the initial page view capture has
+        // already retrieved all the visitor context valuess. Since this happens asynchronously
+        // it is not guaranteed that this is the case.
+        $.extend(extra, pageFieldValues);
         // Send to acquia_lift_profiles.
-        _tcaq.push(['capture', eventName, {'evalSegments': true}]);
+        _tcaq.push(['capture', eventName, extra]);
         // If it's a special event with some other callback associated with it, call that
         // callback as well.
         if (typeof this.specialEvents[eventName] == 'function') {
@@ -298,16 +312,21 @@ var _tcwq = _tcwq || [];
       },
 
       'processPersonalizeDecision':function(e, $option_set, decision, osid, agent_name) {
+        // Only send this if it has never been sent or the decision has changed due to
+        // new targeting conditions being met.
+        if (processedDecisions.hasOwnProperty(agent_name) && processedDecisions[agent_name] == decision) {
+          return;
+        }
         if (decision == 'control-variation') {
           decision = 'Control';
         }
-
-        _tcaq.push(['capture', 'Campaign Action', {'targetcampaignid':agent_name, 'targetcampaignname':getAgentLabel(agent_name), 'targetofferid': decision, 'targetactionname':decision, 'evalSegments': true } ]);
+        processedDecisions[agent_name] = decision;
+        _tcaq.push(['capture', 'Campaign Action', {'targetcampaignid':agent_name, 'targetcampaignname':getAgentLabel(agent_name), 'targetofferid': decision, 'targetactionname':decision } ]);
 
       },
 
       'processSentGoalToAgent':function(e, agent_name, goal_name, goal_value) {
-        _tcaq.push(['capture', goal_name, {'targetcampaignid':agent_name, 'targetcampaignname':getAgentLabel(agent_name), 'targetgoalvalue':goal_value, 'evalSegments': true}]);
+        _tcaq.push(['capture', goal_name, {'targetcampaignid':agent_name, 'targetcampaignname':getAgentLabel(agent_name), 'targetgoalvalue':goal_value}]);
       },
       /**
        * Add an action listener for client-side goal events.
@@ -373,6 +392,7 @@ var _tcwq = _tcwq || [];
         initializing = false;
         agentNameToLabel = {};
         identityCaptured = false;
+        pageFieldValues = {};
         $(document).unbind('personalizeDecision', this["processPersonalizeDecision"]);
         $(document).unbind('sentGoalToAgent', this["processSentGoalToAgent"]);
       }

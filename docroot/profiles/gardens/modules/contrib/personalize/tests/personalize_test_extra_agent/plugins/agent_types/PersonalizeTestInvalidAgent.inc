@@ -5,7 +5,7 @@
  * and scenarios.
  */
 
-class PersonalizeTestInvalidAgent extends PersonalizeAgentBase implements PersonalizeExplicitTargetingInterface, PersonalizeAutoTargetingInterface {
+class PersonalizeTestInvalidAgent extends PersonalizeAgentBase implements PersonalizeExplicitTargetingInterface {
 
   /**
    * Implements PersonalizeAgentInterface::create().
@@ -28,13 +28,6 @@ class PersonalizeTestInvalidAgent extends PersonalizeAgentBase implements Person
    */
   public static function explicitTargetingSupportMultiple() {
     return PersonalizeExplicitTargetingInterface::EXPLICIT_TARGETING_MULTIPLE_BOTH;
-  }
-
-  /**
-   * Implements PersonalizeAutoTargetingInterface::constrainExplicitTargetingContexts
-   */
-  public static function constrainExplicitTargetingContexts() {
-    return FALSE;
   }
 
   /**

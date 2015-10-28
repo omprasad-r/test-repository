@@ -106,11 +106,71 @@ class PersonalizeUrlContextTest extends DrupalWebTestCase {
 
     // Add visitor context to a test agent.
     $agent = personalize_agent_load('test-agent');
-    $agent->data['visitor_context']['querystring_context'] = array(
-      'utm_campaign' => 'utm_campaign',
-      'referrer_url' => 'referrer_url',
-      'original_referrer_url' => 'original_referrer_url',
+
+    // Create a generic option set.
+    $option_set = array(
+      'agent' => $agent->machine_name,
+      'plugin' => 'test',
+      'label' => $this->randomName(),
+      'options' => array(
+        array(
+          'option_id' => 'option-A',
+          'option_label' => 'Option A',
+        ),
+        array(
+          'option_id' => 'option-B',
+          'option_label' => 'Option B',
+        ),
+      ),
     );
+    $option_set = personalize_option_set_save((object) $option_set);
+    // Add targeting to the option set.
+    module_load_include('inc', 'personalize', 'personalize.admin');
+    module_load_include('inc', 'personalize', 'personalize.admin.campaign');
+    // Ensure that we get the expected targeting values available for use by our
+    // agent for fixed targeting.
+    $targeting_values = personalize_get_targeting_options_for_agent($agent);
+    // This simulates having selected our fields from the dropdown list.
+    $form_state = array(
+      'values' => array(
+        'option_sets' => array(
+          'option_set_1' => array(
+            'options' => array(
+              'option-A' => array(
+                'explicit_targeting' => array(
+                  'mapping' => array(
+                    'contexts' => array(
+                      array(
+                        'context' => 'querystring_context__utm_campaign',
+                        'value' => array(
+                          'operator' => 'equals',
+                          'match' => '',
+                        ),
+                      ),
+                      array(
+                        'context' => 'querystring_context__referrer_url',
+                        'value' => array(
+                          'operator' => 'equals',
+                          'match' => '',
+                        ),
+                      ),
+                      array(
+                        'context' => 'querystring_context__original_referrer_url',
+                        'value' => array(
+                          'operator' => 'equals',
+                          'match' => '',
+                        ),
+                      ),
+                    )
+                  )
+                )
+              )
+            )
+          )
+        )
+      )
+    );
+    personalize_campaign_wizard_submit_targeting(array(), $form_state, $agent);
     personalize_agent_set_status($agent->machine_name, PERSONALIZE_STATUS_RUNNING);
 
     $this->resetAll();

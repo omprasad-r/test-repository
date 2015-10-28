@@ -5,7 +5,7 @@ use Behat\Behat\Context\SnippetAcceptingContext;
 use Behat\Gherkin\Node\TableNode;
 use Behat\Behat\Hook\Scope\AfterStepScope;
 use Behat\Mink\Driver\Selenium2Driver;
-use Behat\Mink\Element\NodeElement;
+use Behat\Testwork\Hook\Scope\BeforeSuiteScope;
 use Behat\Behat\Hook\Scope\BeforeScenarioScope;
 use Behat\Behat\Hook\Scope\AfterScenarioScope;
 
@@ -18,11 +18,14 @@ class FeatureContext extends RawDrupalContext implements SnippetAcceptingContext
    * Stores the context parameters that are passed in for the test suite.
    * Parameters include default values for:
    *   - temp_path: The path to temporary location where files, such as error
-   *     screenshots, can be written.  Default value: /tmp/behat
+   *     screenshots, can be written. Default value: /tmp
    */
-  protected $context_parameters = array(
-    'temp_path' => '/tmp/behat',
-  );
+  protected $context_parameters = array();
+
+  /**
+   * Stores contexts.
+   */
+  protected $contexts = array();
 
   /**
    * Stores campaigns at start of scenario for comparison with those at the end.
@@ -48,17 +51,29 @@ class FeatureContext extends RawDrupalContext implements SnippetAcceptingContext
   /****************************************************
    *        H O O K S
    ***************************************************/
+
+  /**
+   * Perform before scenario actions:
+   * - Gather all contexts so they can be reused in the current context.
+   *
+   * @BeforeScenario
+   */
+  public function beforeScenario(BeforeScenarioScope $scope) {
+    // Gather all contexts.
+    $contexts = $scope->getEnvironment()->getContexts();
+    foreach ($contexts as $context) {
+      $context_class_name = get_class($context);
+      $this->contexts[$context_class_name] = $context;
+    }
+  }
+
   /**
    * Gets a reference to current campaigns, option sets, goals, etc. for
    * tracking purposes.
    *
    * @BeforeScenario @campaign
    */
-  public function before(BeforeScenarioScope $event) {
-    // Clear any currently active campaign contexts.
-    personalize_set_campaign_context('');
-    // Make sure unibar can update status.
-    variable_set('acquia_lift_unibar_allow_status_change', TRUE);
+  public function beforeScenarioCampaign(BeforeScenarioScope $scope) {
     $this->campaigns = personalize_agent_load_multiple();
     $this->actions = visitor_actions_custom_load_multiple();
   }
@@ -69,7 +84,7 @@ class FeatureContext extends RawDrupalContext implements SnippetAcceptingContext
    *
    * @AfterScenario @campaign
    */
-  public function after(AfterScenarioScope $event) {
+  public function afterScenarioCampaign(AfterScenarioScope $event) {
     $original_campaigns = $this->campaigns;
     $all_campaigns = personalize_agent_load_multiple(array(), array(), TRUE);
     foreach ($all_campaigns as $name => $campaign) {
@@ -83,11 +98,35 @@ class FeatureContext extends RawDrupalContext implements SnippetAcceptingContext
     }
 
     $original_actions = $this->actions;
-    $all_actions = visitor_actions_custom_load_multiple();
+    $all_actions = visitor_actions_custom_load_multiple(array(), FALSE, TRUE);
     foreach ($all_actions as $name => $action) {
       if (!isset($original_actions[$name])) {
         visitor_actions_delete_action($name);
       }
+    }
+  }
+
+  /**
+   * For javascript enabled scenarios, always wait for AJAX before clicking.
+   *
+   * @BeforeStep
+   */
+  public function beforeJavascriptStep($event) {
+    $text = $event->getStep()->getText();
+    if (preg_match('/(follow|press|click|submit|hover|select)/i', $text)) {
+      $this->spinUntilAjaxIsFinished();
+    }
+  }
+
+  /**
+   * For javascript enabled scenarios, always wait for AJAX after clicking.
+   *
+   * @AfterStep
+   */
+  public function afterJavascriptStep($event) {
+    $text = $event->getStep()->getText();
+    if (preg_match('/(follow|press|click|submit|hover|select)/i', $text)) {
+      $this->spinUntilAjaxIsFinished();
     }
   }
 
@@ -141,7 +180,75 @@ class FeatureContext extends RawDrupalContext implements SnippetAcceptingContext
       }
       $agent->data = $data;
       $saved = personalize_agent_save($agent);
-      personalize_agent_set_status($saved->machine_name, PERSONALIZE_STATUS_RUNNING);
+      // Clear out any existing option sets/goals if this agent already existed.
+      $option_sets = personalize_option_set_load_by_agent($agent->machine_name);
+      foreach($option_sets as $option_set) {
+        personalize_option_set_delete($option_set->osid);
+      }
+      $goals = personalize_goal_load_by_conditions(array('agent' => $agent->machine_name));
+      foreach ($goals as $goal_id => $goal) {
+        personalize_goal_delete($goal_id);
+      }
+      personalize_agent_set_status($saved->machine_name, PERSONALIZE_STATUS_NOT_STARTED);
+    }
+  }
+
+  /**
+   * @Given /^the "([^"]*)" personalization has the "([^"]*)" status$/
+   */
+  public function setCampaignStatus($agent_name, $status_name) {
+    $statuses = personalize_get_agent_status_map();
+    $status = array_search($status_name, $statuses);
+    if ($status === FALSE) {
+      throw new \Exception(sprintf('Status %s is invalid.', $status_name));
+    }
+    $agent = personalize_agent_load($agent_name);
+    if ($agent->plugin == 'acquia_lift_target') {
+      module_load_include('inc', 'acquia_lift', 'acquia_lift.admin');
+      // Implement the targeting before changing the status.
+      $agent_data = personalize_agent_load($agent_name);
+      acquia_lift_implement_targeting($agent_data);
+    }
+    personalize_agent_set_status($agent_name, $status);
+  }
+
+
+  /**
+   * @Given /^goals:$/
+   *
+   * Requires each row to have at least:
+   * - action_name: The machine_name for the goal.
+   * - agent: The campagin for the goal
+   * - label: The display name for the goal if it does not a pre-existing
+   *   visitor action.
+   * Optional values:
+   * - plugin: The type of goal, defaults to page.
+   * - event: The event on for the type of goal, defaults to views.
+   * - pages: The pages to limit for the goal, defaults to ''.
+   * - value: The value for the goal, defaults to 1.
+   */
+  public function createGoals(TableNode $goalsTable) {
+    foreach ($goalsTable->getHash() as $goalHash) {
+      $goal = (object) $goalHash;
+      $goal_value = isset($goal->value) ? $goal->value : 1;
+
+      $actions = visitor_actions_get_actions();
+
+      if (!isset($actions[$goal->action_name])) {
+        $action = array(
+          'label' => $goal->label,
+          'machine_name' => $goal->action_name,
+          'plugin' => isset($goal->plugin) ? $goal->plugin : 'page',
+          'client_side' => 0,
+          'identifier' => '',
+          'event' => isset($goal->event) ? $goal->event : 'views',
+          'pages' => isset($goal->pages) ? $goal->pages : '',
+          'data' => array(),
+          'limited_use' => 1,
+        );
+        visitor_actions_save_action($action);
+      }
+      personalize_goal_save($goal->agent, $goal->action_name, $goal_value);
     }
   }
 
@@ -159,19 +266,11 @@ class FeatureContext extends RawDrupalContext implements SnippetAcceptingContext
       $option_set->executor = 'personalizeElements';
       $content_options = explode(',', $option_set->content);
       $options = array();
-      $context_values = array();
-      // Grab explicit targeting values if specified.
-      if (!empty($option_set->targeting)) {
-        $contexts = variable_get('personalize_url_querystring_contexts', array());
-        if (isset($contexts[$option_set->targeting])) {
-          foreach ($contexts[$option_set->targeting] as $value) {
-            $context_values[] = $option_set->targeting . '::' . $value;
-          }
-        }
-      }
+      $context_values = empty($option_set->targeting) ? array() : $this->convertContexts(explode(',', $option_set->targerting));
       foreach ($content_options as $index => $content) {
         $content = trim($content);
         $option = array(
+          'option_id' => 'option-' . ($index + 1),
           'option_label' => personalize_generate_option_label($index),
           'personalize_elements_content' => $content,
         );
@@ -186,14 +285,53 @@ class FeatureContext extends RawDrupalContext implements SnippetAcceptingContext
       array_unshift($options, $control_option);
       $option_set->options = $options;
       personalize_option_set_save($option_set);
-      personalize_agent_set_status($option_set->agent, PERSONALIZE_STATUS_RUNNING);
     }
   }
 
+  /**
+   * @Given /^audiences:$/
+   */
+  public function createAudiences(TableNode $elementsTable) {
+    module_load_include('inc', 'acquia_lift', 'acquia_lift.admin');
+    foreach ($elementsTable->getHash() as $audienceHash) {
+      $audience = (object) $audienceHash;
+      $label = $audience->label;
+      $agent_name = $audience->agent;
+      $context_values = empty($audience->context) ? array() : $this->convertContexts(explode(',', $audience->context));
+      $weight = isset($audience->weight) ? $audience->weight : 50;
+      $strategy = isset($audience->strategy) ? $audience->strategy : 'OR';
+      acquia_lift_target_audience_save($label, $agent_name, $context_values, $strategy, $weight);
+    }
+  }
+
+  /**
+   * @Given /^targeting:$/
+   */
+  public function createTargeting(TableNode $targetingTable) {
+    module_load_include('inc', 'acquia_lift', 'acquia_lift.admin');
+    $targeting = array();
+    foreach ($targetingTable->getHash() as $targetingHash) {
+      $targeting[$targetingHash['agent']][$targetingHash['audience']] = explode(',', $targetingHash['options']);
+    }
+    foreach ($targeting as $agent => $agent_targeting) {
+      $agent_data = personalize_agent_load($agent);
+      acquia_lift_save_targeting_structure($agent_data, $agent_targeting);
+    }
+  }
 
   /****************************************************
    *        A S S E R T I O N S
    ***************************************************/
+  /**
+   * @When /^I check the "([^”]*)" radio button$/
+   */
+  public function iCheckTheRadioButton($radioLabel) {
+    $radioButton = $this->getSession()->getPage()->findField($radioLabel);
+    if (null === $radioButton) {
+      throw new \Exception(sprintf('Cannot find radio button %s', $radioLabel));
+    }
+    $this->getSession()->getDriver()->click($radioButton->getXPath());
+  }
 
   /**
    * @Then I should see :count for the :type count
@@ -300,6 +438,25 @@ class FeatureContext extends RawDrupalContext implements SnippetAcceptingContext
   }
 
   /**
+   * @Then :variation_set set :variation variation :link link is disabled
+   *
+   * @throws \Exception
+   *   If the menu or link cannot be found.
+   */
+  public function assertRegionVariationHasLinkDisabled($variation_set, $variation, $link) {
+    $css = $this->getVariationLinkCss($variation_set, $variation, $link);
+    // Now find the link and return it.
+    $element = $this->findElementInRegion($css, 'lift_tray');
+    if (empty($element)) {
+      throw new \Exception(sprintf('Cannot load the link "%s" for set "%s" and variation "%s" on page %s using selector %s.', $link, $variation_set, $variation, $this->getSession()->getCurrentUrl(), $css));
+    }
+    if (!$element->hasClass('acquia-lift-disabled')) {
+      throw new \Exception(sprintf('The link "%s" for set "%s" and variation "%s" on page %s using selector %s is not disabled.', $link, $variation_set, $variation, $this->getSession()->getCurrentUrl(), $css));
+    }
+    return $element;
+  }
+
+  /**
    * @When I click :link link for the :variation_set set :variation variation
    *
    * @throws \Exception
@@ -313,104 +470,86 @@ class FeatureContext extends RawDrupalContext implements SnippetAcceptingContext
   }
 
   /**
-   * @Then the variation edit mode is :state
+   * @Then the :field field should contain text that has :needle
+   *
+   * @throws \Exception
+   *   If the the substring cannot be found in the given field.
    */
-  public function assertVariationEditMode($expected_state) {
-    if (!in_array($expected_state, array('active','inactive','hidden','disabled'))) {
-      throw new \Exception(sprintf('Invalid expected state for variation toggle: %s', $expected_state));
-    }
-    $element = $this->findElementInRegion('#acquia-lift-menu-page-variation-toggle', 'lift_tray');
-    if (empty($element)) {
-      throw new \Exception(sprintf('The variation toggle edit link cannot be found on the page %s', $this->getSession()->getCurrentUrl()));
-    }
-    $current_state = 'inactive';
-    if ($element->hasClass('acquia-lift-page-variation-toggle-hidden')) {
-      $current_state = 'hidden';
-    }
-    else if ($element->hasClass('acquia-lift-page-variation-toggle-active')) {
-      $current_state = 'active';
-    }
-    else if ($element->hasClass('acquia-lift-page-variation-toggle-disabled')) {
-      $current_state = 'disabled';
-    }
-    if ($current_state !== $expected_state) {
-      throw new \Exception(sprintf('The variation toggle edit link is currently in the %s state and not the expected %s state.', $current_state, $expected_state));
+  public function assertFieldContains($field, $needle) {
+    $node = $this->assertSession()->fieldExists($field);
+    $haystack = $node->getValue();
+    if (strpos($haystack, $needle) === false) {
+      throw new \Exception(sprintf('The field "%s" value is "%s", but we are looking for "%s".', $field, $haystack, $needle));
     }
   }
 
   /**
-   * @Then the :field field should contain the site title
+   * @Then I should see :selector element in the :region region is :state for editing
    *
    * @throws \Exception
-   *   If the region or element cannot be found or does not have the specified
-   *   class.
-
+   *   If the region or element cannot be found or is not in a specified state.
    */
-  public function assertFieldHasSiteTitle($field) {
-    // Read the site name dynamically.
-    $site_name = variable_get('site_name', "Default site name");
-    $mink = $this->getMink();
-    $mink->assertSession()->fieldValueEquals($field, $site_name);
-  }
-
-  /**
-   * @Then :selector element in the :region region should have :class class
-   *
-   * @throws \Exception
-   *   If the region or element cannot be found or does not have the specified
-   *   class.
-   */
-  public function assertRegionElementHasClass($selector, $region, $class) {
+  public function assertRegionElementIsInState($selector, $region, $state) {
+    $state_class = array(
+      'highlighted' => 'acquia-lift-element-variation-item',
+      'available' => 'visitor-actions-ui-enabled',
+    );
+    if (!isset($state_class[$state])) {
+      $state_options_array = array_keys($state_class);
+      $state_options_string = implode(', ', $state_options_array);
+      throw new \Exception(sprintf('The element state "%s" is not defined. Available options are "%s".', $state, $state_options_string));
+    }
     $element = $this->findElementInRegion($selector, $region);
     if (empty($element)) {
-      throw new \Exception(sprintf('The element "%s" was not found in the region "%s" on the page %s', $selector, $region, $this->getSession()->getCurrentUrl()));
+      throw new \Exception(sprintf('The element "%s" was not found in the region "%s" on the page %s.', $selector, $region, $this->getSession()->getCurrentUrl()));
     }
+    $class = $state_class[$state];
     if (!$element->hasClass($class)) {
-      throw new \Exception(sprintf('The element "%s" in region "%s" on the page %s does not have class "%s".', $selector, $region, $this->getSession()->getCurrentUrl(), $class));
+      throw new \Exception(sprintf('The element "%s" in region "%s" on the page %s is not in "%s" state.', $selector, $region, $this->getSession()->getCurrentUrl(), $state));
     }
-  }
-
-  /**
-   * @When I wait for messagebox to close
-   */
-  public function waitForMessageboxClose() {
-    $region = $this->getRegion('messagebox');
-    if (empty($region)) {
-      return;
-    }
-    $this->getSession()->wait(5000, 'jQuery("#acquia-lift-message-box").hasClass("element-hidden")');
   }
 
   /**
    * @When I wait for Lift to synchronize
    */
   public function waitForLiftSynchronize() {
-    $this->getSession()->wait(5000, '(typeof(jQuery)=="undefined" || (0 === jQuery.active && 0 === Drupal.acquiaLift.queueCount))');
+    $this->spinUntilLiftCampaignsAreSynchronized();
   }
 
   /**
-   * @Then I should see the link :link visible in the :region( region)
+   * @Then I should visibly see the link :link in the :region( region)
    *
    * @throws \Exception
    *   If region or link within it cannot be found or is hidden.
    */
   public function assertLinkVisibleRegion($link, $region) {
-    $result = $this->findLinkInRegion($link, $region);
-    if (empty($result) || !$result->isVisible()) {
+    $results = $this->findLinksInRegion($link, $region);
+    if (empty($results)) {
       throw new \Exception(sprintf('No link to "%s" in the "%s" region on the page %s', $link, $region, $this->getSession()->getCurrentUrl()));
     }
+    foreach ($results as $result) {
+      if ($result->isVisible()) {
+        return;
+      }
+    }
+    throw new \Exception(sprintf('No link to "%s" is visible in the "%s" region on the page %s', $link, $region, $this->getSession()->getCurrentUrl()));
   }
 
   /**
-   * @Then I should not see the link :link visible in the :region( region)
+   * @Then I should not visibly see the link :link in the :region( region)
    *
    * @throws \Exception
    *   If link is found in region and is visible.
    */
   public function assertNotLinkVisibleRegion($link, $region) {
-    $result = $this->findLinkInRegion($link, $region);
-    if (!empty($result) && $result->isVisible()) {
-      throw new \Exception(sprintf('Link to "%s" in the "%s" region on the page %s', $link, $region, $this->getSession()->getCurrentUrl()));
+    $result = $this->findLinksInRegion($link, $region);
+    if (empty($results)) {
+      return;
+    }
+    foreach($result as $element) {
+      if ($element->isVisible()) {
+        throw new \Exception(sprintf('Link to "%s" in the "%s" region on the page %s', $link, $region, $this->getSession()->getCurrentUrl()));
+      }
     }
   }
 
@@ -457,19 +596,65 @@ class FeatureContext extends RawDrupalContext implements SnippetAcceptingContext
    * @Given /^menu item "([^"]*)" should be "(active|inactive)"$/
    */
   public function assertMenuItemInactive($link, $status) {
-    $class = 'acquia-lift-menu-disabled';
-    $element = $this->findLinkInRegion($link, 'lift_tray');
-    if (empty($element)) {
+    $elements = $this->findLinksInRegion($link, 'lift_tray');
+    if (empty($elements)) {
       throw new \Exception(sprintf('The link element %s was not found on the page %s', $link, $this->getSession()->getCurrentUrl()));
     }
-    if ($element->hasClass($class)) {
-      if ($status === 'active') {
-        throw new \Exception(sprintf('The link element %s on page %s is inactive but should be active.', $link, $this->getSession()->getCurrentUrl()));
+    $found = FALSE;
+    foreach ($elements as $element) {
+      /**
+       * This logis is not ideal.  It would be better to actually only check each
+       * visible item and then report directly based on whether the item was
+       * inactive or active, however, there is a selenium bug that is treating
+       * both "Add variation set" links and "Add goal" links as invisible even
+       * when one is shown on the screen.
+       */
+      $found = TRUE;
+      if ($element->hasClass('acquia-lift-menu-disabled') || $element->hasClass('acquia-lift-disabled')) {
+        if ($status === 'inactive') {
+          $found = TRUE;
+          continue;
+        }
+      }
+      else if ($status === 'active') {
+        $found = TRUE;
+        continue;
       }
     }
-    else if ($status === 'inactive') {
-      throw new \Exception(sprintf('The link element %s on page %s is active but should be inactive.', $link, $this->getSession()->getCurrentUrl()));
+    if (!$found) {
+      throw new \Exception(sprintf('The link element %s was not %s on the page %s', $link, $status, $this->getSession()->getCurrentUrl()));
     }
+  }
+
+  /**
+   * @Then I should see the visitor action edit link for the :action action
+   */
+  public function assertVisitorActionEditLink($action_name) {
+    $element = $this->getVisitorActionEditLink($action_name);
+    if (empty($element)) {
+      throw new \Exception(sprintf('The edit link for %s action was not found in the %s region on page %s', $action_name, 'campaign_workflow_form', $this->getSession()->getCurrentUrl()));
+    }
+  }
+
+  /**
+   * @Then I should not see the visitor action edit link for the :action action
+   */
+  public function assertNoVisitorActionEditLink($action_name) {
+    $element = $this->getVisitorActionEditLink($action_name);
+    if (!empty($element)) {
+      throw new \Exception(sprintf('The edit link for %s action was found in the %s region on page %s', $action_name, 'campaign_workflow_form', $this->getSession()->getCurrentUrl()));
+    }
+  }
+
+  /**
+   * @When I click the visitor action edit link for the :action action
+   */
+  public function assertVisitorActionEditLinkClick($action_name) {
+    $element = $this->getVisitorActionEditLink($action_name);
+    if (empty($element)) {
+      throw new \Exception(sprintf('The edit link for %s action was not found in the %s region on page %s', $action_name, 'campaign_workflow_form', $this->getSession()->getCurrentUrl()));
+    }
+    $element->click();
   }
 
   /**
@@ -489,8 +674,8 @@ class FeatureContext extends RawDrupalContext implements SnippetAcceptingContext
    * @Then I should see the message :text in the messagebox
    */
   public function assertTextInMessagebox($text) {
-    // Wait for the message box to be shown.
-    $this->getSession()->wait(5000, "(jQuery('#acquia-lift-message-box').length > 0 && jQuery('#acquia-lift-message-box').hasClass('acquia-lift-messagebox-shown'))");
+    $this->spinUntilMessageBoxIsPopulated();
+
     $script = "return jQuery('#acquia-lift-message-box').find('.message').text();";
     $message = $this->getSession()->evaluateScript($script);
     if (strpos($message, $text) === FALSE) {
@@ -499,16 +684,119 @@ class FeatureContext extends RawDrupalContext implements SnippetAcceptingContext
   }
 
   /**
-   * @Then I wait for :seconds seconds
+   * @When I move the :variation variation to the :audience audience
    */
-  public function iWaitSeconds($seconds) {
-    $ms = $seconds * 1000;
-    $this->getSession()->wait($ms);
+  public function assignVariationFromUnassigned($variation, $audience) {
+    $variation_element = $this->getAssignableVariation($variation);
+    $to_audience_element = $this->getAudienceElement($audience);
+    if (empty($variation_element)) {
+      throw new \Exception(sprintf('Cannot find variation "%s" in available options.', $variation));
+    }
+    if (empty($to_audience_element)) {
+      throw new \Exception(sprintf('Cannot find audience "%s" to move variation to.', $audience));
+    }
+    $to_audience_drop_zone = $to_audience_element->find('css', '.acquia-lift-targeting-droppable');
+    if (empty($to_audience_drop_zone)) {
+      throw new \Exception(sprintf('Cannot find drop zone for audience "%s".', $audience));
+    }
+    $variation_element->dragTo($to_audience_drop_zone);
+  }
+
+  /**
+   * @When I :action the :variation variation from the :from_audience audience to the :to_audience audience
+   */
+  public function assignVariationToAudience($action, $variation, $from_audience, $to_audience) {
+    $valid_actions = array('move', 'copy');
+    if (!in_array($action, $valid_actions)) {
+      throw new \Exception(sprintf('Invalid action "%s" supplied for variation assignment.  Valid actions are: %s.', $action, implode(', ', $valid_actions)));
+    }
+    $from_audience_element = $this->getAudienceElement($from_audience);
+    $to_audience_element = $this->getAudienceElement($to_audience);
+    if (empty($from_audience_element)) {
+      throw new \Exception(sprintf('The "%s" audience cannot be found on the current page.', $from_audience));
+    }
+    if (empty($to_audience_element)) {
+      throw new \Exception(sprintf('The "%s" audience cannot be found on the current page.', $to_audience));
+    }
+    $from_variations_list = $from_audience_element->findAll('css', '.acquia-lift-draggable-variations li');
+    foreach ($from_variations_list as $variation_element) {
+      $variation_list_item = $variation_element->getText();
+      if (strpos($variation_list_item, $variation) === 0) {
+        $variation_draggable = $action == 'move' ? $variation_element : $variation_element->find('css', '.acquia-lift-targeting-duplicate-icon');
+        break;
+      }
+    }
+    if (empty($variation_draggable)) {
+      throw new \Exception(sprintf('The "%s" variation cannot be found in the list of variations for "%s" audience as a draggable option.', $variation, $from_audience));
+    }
+    $to_audience_drop_zone = $to_audience_element->find('css', '.acquia-lift-targeting-droppable');
+    $variation_draggable->dragTo($to_audience_drop_zone);
+  }
+
+  /**
+   * @Then :variation variation should be assigned to the :audience audience
+   */
+  public function assertAudienceHasVariation($variation_label, $audience_label) {
+    $escaped_variation = $this->getSession()->getSelectorsHandler()->xpathLiteral($variation_label);
+    $audience_element = $this->getAudienceElement($audience_label);
+    if (empty($audience_element)) {
+      throw new \Exception(sprintf('The "%s" audience container cannot be found on the page.', $audience_label));
+    }
+    $variation_select = $audience_element->find('css', 'select[name*=assignment]');
+    $variation_option = $variation_select->find('named', array('option', $escaped_variation));
+    if (empty($variation_option)) {
+      throw new \Exception(sprintf('The "%s" variation cannot be found in the "%s" audience variation select options.', $variation_label, $audience_label));
+    }
+    if (!$variation_option->isSelected()) {
+      throw new \Exception(sprintf('The "%s" variation is not selected for the "%s" audience.', $variation_label, $audience_label));
+    }
+    $variations_list = $audience_element->find('css', '.acquia-lift-draggable-variations');
+    $variation_display = $variations_list->find('named', array('content', $escaped_variation));
+    if (empty($variation_display)) {
+      throw new \Exception(sprintf('The "%s" variation is not displayed for "%s" audience.', $variation_label, $audience_label));
+    }
+  }
+
+  /**
+   * @Then :variation variation should not be assigned to the :audience audience
+   */
+  public function assertAudienceHasNoVariation($variation_label, $audience_label) {
+    $escaped_variation = $this->getSession()->getSelectorsHandler()->xpathLiteral($variation_label);
+    $audience_element = $this->getAudienceElement($audience_label);
+    if (empty($audience_element)) {
+      throw new \Exception(sprintf('The "%s" audience container cannot be found on the page.', $audience_label));
+    }
+    $variation_select = $audience_element->find('css', 'select[name*=assignment]');
+    $variation_option = $variation_select->find('named', array('option', $escaped_variation));
+    if (empty($variation_option)) {
+      throw new \Exception(sprintf('The "%s" variation cannot be found in the "%s" audience variation select options.', $variation_label, $audience_label));
+    }
+    if ($variation_option->isSelected()) {
+      throw new \Exception(sprintf('The "%s" variation is selected for the "%s" audience.', $variation_label, $audience_label));
+    }
+    $variations_list = $audience_element->find('css', '.acquia-lift-draggable-variations');
+    $variation_display = $variations_list->find('named', array('content', $escaped_variation));
+    if (!empty($variation_display)) {
+      throw new \Exception(sprintf('The "%s" variation is displayed for "%s" audience.', $variation_label, $audience_label));
+    }
   }
 
   /****************************************************
    *        H E L P E R  F U N C T I O N S
    ***************************************************/
+
+  /**
+   * Helper function to get the visitor action edit link for a particular action
+   *
+   * @param string $action_name
+   *   The machine name for the visitor action
+   * @return \Behat\Mink\Element\NodeElement|null
+   *   The element node for the link or null if not found.
+   */
+  public function getVisitorActionEditLink($action_name) {
+    $id = '#edit-visitor-action-' . $action_name;
+    return $this->findElementInRegion($id, 'campaign_workflow_form');
+  }
 
   /**
    * Helper function to generate the css for a variation action link.
@@ -530,62 +818,42 @@ class FeatureContext extends RawDrupalContext implements SnippetAcceptingContext
     }
     $campaign = $this->getCurrentCampaign();
     if (empty($campaign)) {
-      throw new \Exception(sprintf('Cannot determine the current campaign for variation set %s.', $variation_set));
+      throw new \Exception(sprintf('Cannot determine the current personalization for variation set %s.', $variation_set));
     }
     $agent_instance = personalize_agent_load_agent($campaign);
     if (empty($agent_instance)) {
-      throw new \Exception(sprintf('Cannot load the current agent instance for campaign %s.', $campaign));
+      throw new \Exception(sprintf('Cannot load the current agent instance for personalization %s.', $campaign));
     }
-    $option_sets = personalize_option_set_load_by_agent($campaign);
-    if ($agent_instance instanceof AcquiaLiftSimpleAB) {
-      // One decision with many variations.
-      $option_set = reset($option_sets);
-      foreach ($option_set->options as $index => $option) {
-        if ($option['option_label'] == $variation) {
-          break;
-        }
-      }
-      $css = '.acquia-lift-menu-item[data-acquia-lift-personalize-agent="' . $campaign . '"]';
-      switch ($link) {
-        case "rename":
-          $css .= ' a.acquia-lift-variation-rename';
-          break;
-        case "delete":
-          $css .= ' a.acquia-lift-variation-delete';
-          break;
-        default:
-          throw new \Exception(sprintf('Campaign %s does not support edit links for variations.', $campaign));
-      }
-      $css .= '[data-acquia-lift-personalize-page-variation="' . $index . '"]';
-    }
-    else {
-      // Standard option set names displayed.
-      foreach ($option_sets as $option_set) {
-        if ($option_set->label == $variation_set) {
-          $osid = $option_set->osid;
-          foreach ($option_set->options as $option) {
-            if ($option['option_label'] == $variation) {
-              $option_id = $option['option_id'];
-              break;
-            }
+    $option_sets = personalize_option_set_load_by_agent($campaign, TRUE);
+    foreach ($option_sets as $option_set) {
+      if ($option_set->label == $variation_set) {
+        $osid = $option_set->osid;
+        foreach ($option_set->options as $option) {
+          if ($option['option_label'] == $variation) {
+            $option_id = $option['option_id'];
+            break;
           }
-          break;
         }
+        break;
       }
-      $css = '.acquia-lift-menu-item[data-acquia-lift-personalize-option-set="' . personalize_stringify_osid($osid) . '"]';
-      switch ($link) {
-        case "edit":
-          $css .= ' a.acquia-lift-variation-edit';
-          break;
-        case "rename":
-          $css .= ' a.acquia-lift-variation-rename';
-          break;
-        case "delete":
-          $css .= ' a.acquia-lift-variation-delete';
-          break;
-      }
-      $css .= '[data-acquia-lift-personalize-option-set-option="' . $option_id . '"]';
     }
+    if (empty($osid)) {
+      throw new \Exception(sprintf('Cannot load the option set %s for personalization %s.', $variation_set, $campaign));
+    }
+    $css = '.acquia-lift-menu-item[data-acquia-lift-personalize-option-set="' . personalize_stringify_osid($osid) . '"]';
+    switch ($link) {
+      case "edit":
+        $css .= ' a.acquia-lift-variation-edit';
+        break;
+      case "rename":
+        $css .= ' a.acquia-lift-variation-rename';
+        break;
+      case "delete":
+        $css .= ' a.acquia-lift-variation-delete';
+        break;
+    }
+    $css .= '[data-acquia-lift-personalize-option-set-option="' . $option_id . '"]';
+
     return $css;
   }
 
@@ -626,14 +894,29 @@ class FeatureContext extends RawDrupalContext implements SnippetAcceptingContext
    *   The element node for the link or null if not found.
    */
   private function findLinkInRegion($link, $region) {
-    $session = $this->getSession();
     $regionObj = $this->getRegion($region);
-    $xpath = $session->getSelectorsHandler()->selectorToXpath('link', $link);
+    $element = $regionObj->findLink($link);
+    return $element;
+  }
 
-    $element = $regionObj->find('xpath', $xpath);
-    if (empty($element)) {
-      throw new \Exception(sprintf('Could not find element in %region using xpath %s', $region, $xpath));
-    }
+  /**
+   * Helper function to return any link in a particular region marching the
+   * link by id, title, text, or alt.
+   *
+   * @param string $link
+   *   link id, title, text or image alt
+   * @param $region
+   *   region identifier from configuration.
+   *
+   * @return array|null
+   *   An array of  \Behat\Mink\Element\NodeElement objects.
+   */
+  private function findLinksInRegion($link, $region) {
+    $regionObj = $this->getRegion($region);
+    $session = $this->getSession();
+    $escapedValue = $session->getSelectorsHandler()->xpathLiteral($link);
+    $elements = $regionObj->findAll('named', array('link', $escapedValue));
+    return $elements;
   }
 
   /**
@@ -653,8 +936,7 @@ class FeatureContext extends RawDrupalContext implements SnippetAcceptingContext
   }
 
   /**
-   * Helper function to retrieve a region defined in the configuration file
-   * from the browser output.
+   * Thin wrapper over Drupal MinkContext's getRegion function.
    *
    * @param $region
    *   The region identifier to load.
@@ -666,12 +948,7 @@ class FeatureContext extends RawDrupalContext implements SnippetAcceptingContext
    *   If the region cannot be found on the current page.
    */
   private function getRegion($region) {
-    $mink = $this->getMink();
-    $regionObj = $mink->getSession()->getPage()->find('region', $region);
-    if (empty($regionObj)) {
-      throw new \Exception(sprintf('The region %s was not found on the page %s', $region, $this->getSession()->getCurrentUrl()));
-    }
-    return $regionObj;
+    return $this->contexts['Drupal\DrupalExtension\Context\MinkContext']->getRegion($region);
   }
 
   /**
@@ -728,5 +1005,143 @@ class FeatureContext extends RawDrupalContext implements SnippetAcceptingContext
   private function getCurrentCampaign() {
     $script = 'return Drupal.settings.personalize.activeCampaign;';
     return $this->getMink()->getSession()->evaluateScript($script);
+  }
+
+  /**
+   * Helper function to retrieve a specific audience targeting element for the
+   * current campaign.
+   *
+   * @param $audience_label
+   *   The audience label assigned.
+   * @return NodeElement|null
+   *   The element found for the audience container or null if not found.
+   * @throws Exception
+   *   If the audience is not part of the current campaign.
+   */
+  private function getAudienceElement($audience_label) {
+    $agent_name = $this->getCurrentCampaign();
+    module_load_include('inc', 'acquia_lift', 'acquia_lift.admin');
+    $option_set = acquia_lift_get_option_set_for_targeting($agent_name);
+    if (!isset($option_set->targeting)) {
+      throw new \Exception(sprintf('The current agent "%s" does not have any audiences available.', $agent_name));
+    }
+    $audiences = array();
+    foreach ($option_set->targeting as $audience_id => $audience) {
+      $audiences[$audience['label']] = $audience_id;
+    }
+    if (!isset($audiences[$audience_label])) {
+      throw new \Exception(sprintf('The current agent "%s" does not have an audience named "%s".', $agent_name, $audience_label));
+    }
+    return $this->findElementInRegion('#edit-audiences-existing-' . $audiences[$audience_label], 'campaign_workflow_form');
+  }
+
+  /**
+   * Helper function to retrieve a specific variation from the available
+   * variations list.
+   *
+   * @param $variation
+   *   The label of the variation
+   * @throws Exception
+   *   If the variation is not available within the available variations.
+   */
+  private function getAssignableVariation($variation) {
+    $variations_list = $this->findElementInRegion('.form-item-variations-options-assignment', 'campaign_workflow_form');
+    if (empty($variations_list)) {
+      throw new \Exception('Could not find the variations bucket area for all variations.');
+    }
+    $variation_items = $variations_list->findAll('css', '.acquia-lift-draggable-variations li');
+    foreach ($variation_items as $variation_element) {
+      $variation_list_item = $variation_element->getText();
+      if (strpos($variation_list_item, $variation) === 0) {
+        return $variation_element;
+      }
+    }
+    return NULL;
+  }
+
+  /**
+   * Generates the targeting contexts based on a list of context values
+   * @param array $feature_contexts
+   *   Feature contexts to be added
+   * @return array
+   *   The context values formatted for Lift.
+   */
+  private function convertContexts($feature_contexts) {
+    $context_values = array();
+    // Grab explicit targeting values if specified.
+    if (!empty($values)) {
+      $contexts = variable_get('personalize_url_querystring_contexts', array());
+      foreach ($feature_contexts as $context) {
+        if (isset($contexts[$context])) {
+          foreach ($contexts[$context] as $value) {
+            $context_values[] = $context . '::' . $value;
+          }
+        }
+      }
+    }
+    return $context_values;
+  }
+
+  /****************************************************
+   *        S P I N  F U N C T I O N S
+   ***************************************************/
+  /**
+   * Keep retrying assertion for a defined number of iterations.
+   *
+   * @param closure $lambda           Callback.
+   * @param integer $attemptThreshold Number of attempts to execute the command.
+   *
+   * @throws \Exception If attemptThreshold is met.
+   *
+   * @return mixed
+   */
+  private function spin($lambda, $attemptThreshold = 15) {
+    for ($iteration = 0; $iteration <= $attemptThreshold; $iteration++) {
+      try {
+        if (call_user_func($lambda)) {
+          return;
+        }
+      } catch (\Exception $exception) {
+        // do nothing
+      }
+
+      sleep(1);
+    }
+  }
+
+  /**
+   * Spin JavaScript evaluation.
+   *
+   * @param string  $assertionScript  Assertion script
+   * @param integer $attemptThreshold Number of attempts to execute the command.
+   */
+  private function spinJavaScriptEvaluation($assertionScript, $attemptThreshold = 15) {
+    $this->spin(function () use ($assertionScript) {
+      return $this->getMink()->getSession()->evaluateScript('return ' . $assertionScript);
+    }, $attemptThreshold);
+  }
+
+  /**
+   * Spin until the Ajax is finished.
+   */
+  private function spinUntilAjaxIsFinished() {
+    $assertionScript = '(typeof(jQuery)=="undefined" || (0 === jQuery.active && 0 === jQuery(\':animated\').length));';
+    $this->spinJavaScriptEvaluation($assertionScript);
+  }
+
+  /**
+   * Spin until the message box is populated.
+   */
+  private function spinUntilMessageBoxIsPopulated() {
+    $assertionScript = "(jQuery('#acquia-lift-message-box').length > 0 && jQuery('#acquia-lift-message-box').hasClass('acquia-lift-messagebox-shown'));";
+    $this->spinJavaScriptEvaluation($assertionScript);
+  }
+
+  /**
+   * Spin until the Lift Campaigns are synchronized.
+   */
+  private function spinUntilLiftCampaignsAreSynchronized() {
+    $assertionScript = '(typeof(jQuery)=="undefined" || (0 === jQuery.active && 0 === Drupal.acquiaLift.queueCount));';
+    $this->spinJavaScriptEvaluation($assertionScript);
   }
 }

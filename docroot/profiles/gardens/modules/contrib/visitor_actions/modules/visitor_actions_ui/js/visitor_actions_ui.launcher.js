@@ -12,7 +12,7 @@ Drupal.behaviors.visitorActionsEditorLauncher = {
     // disabled, the JavaScript resources to build the edit mode will be
     // loaded.
     if (!getAppView()) {
-      var $triggers = $('[href="' + Drupal.settings.basePath + Drupal.settings.pathPrefix + 'admin/structure/visitor_actions/add"]')
+      var $triggers = $('[href*="' + Drupal.settings.basePath + Drupal.settings.pathPrefix + 'admin/structure/visitor_actions/add"]')
       var $placeholders = $triggers.once('visitor-actions-ui-launcher');
       // Filter out the triggers that have been processed and unbind them.
       if ($placeholders.length) {
@@ -115,7 +115,7 @@ Drupal.behaviors.visitorActionsEditorLauncher = {
               // conservative here.
               attachVisitorActionsToggleEditMode();
               // Find one of the triggers and click it.
-              $('[href="/admin/structure/visitor_actions/add"]').eq(0).trigger('click.visitorActionsUI');
+              $('[href*="' + Drupal.settings.basePath + Drupal.settings.pathPrefix + 'admin/structure/visitor_actions/add"]').eq(0).trigger('click.visitorActionsUI');
             }
           }
         });
@@ -139,7 +139,7 @@ Drupal.behaviors.visitorActionsEditorLauncher = {
 function attachVisitorActionsToggleEditMode () {
   var $onceler = $('body').once('visitor-actions-ui');
   if ($onceler.length) {
-    var trigger = '[href="/admin/structure/visitor_actions/add"]';
+    var trigger = '[href*="' + Drupal.settings.basePath + Drupal.settings.pathPrefix + 'admin/structure/visitor_actions/add"]';
 
     $(document).delegate(trigger, 'click.visitorActionsUI', function (event) {
 

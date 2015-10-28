@@ -674,7 +674,7 @@ function gardens_limits_file_validate($file) {
 function gardens_limits_storage_limit_text($context = 'basic', $level = 'error') {
   global $user;
 
-  // Show detailed text only to site owners and the Gardens admin.
+  // Show detailed text only to site owners and the Site Factory admin.
   if (intval($user->uid) === 1 || in_array($user->uid, scarecrow_list_site_owner_uids())) {
     $limit = gardens_limits_storage_limit();
     $used = gardens_limits_storage_used();

@@ -45,7 +45,7 @@
        *   True if showing the highlight, false if no highlight should be shown.
        */
       highlightAnchor: function(show) {
-        var highlightClass = 'acquia-lift-page-variation-item';
+        var highlightClass = 'acquia-lift-element-variation-item';
         if (!this.anchor) {
           return;
         }
@@ -83,7 +83,7 @@
       },
 
       /**
-       * Deactivates the view and the page variation process.
+       * Deactivates the view and the element variation process.
        */
       deactivate: function () {
         this.$watchElements.DOMSelector("stopWatching");
@@ -114,7 +114,7 @@
       },
 
       /**
-       * Creates a contextual page variation selection menu at the specified
+       * Creates a contextual element variation selection menu at the specified
        * element.
        */
       createContextualMenu: function (element, selector) {
@@ -124,7 +124,7 @@
           selector: selector,
           id: 'acquia-lift-modal-variation-type-select'
         });
-        var dialogView = new Drupal.acquiaLiftVariations.views.PageVariationMenuView({
+        new Drupal.acquiaLiftVariations.views.ElementVariationMenuView({
           el: element,
           model: this.contextualMenuModel
         });
@@ -235,42 +235,46 @@
         var $input = this.$el.find('[name=personalize_elements_content]');
         var variation = this.model.get('variation');
 
-        // Don't show the title field for page variations.
-        if (this.appModel.isPageModelMode()) {
-          this.$el.find('[name="title"]').val(this.model.get('typeLabel')).closest('.form-item').hide();
-        }
-
         this.$el.find('[name="selector"]').val(selector);
         this.$el.find('[name="pages"]').val(Drupal.settings.visitor_actions.currentPath);
         this.$el.find('[name="agent"]').val(Drupal.settings.personalize.activeCampaign);
         // Call any variation type specific callbacks.
         $(document).trigger('acquiaLiftVariationTypeForm', [type, selector, $input]);
 
-        // Override the form submission handler to verify the selector only
-        // matches a single DOM element.
-        Drupal.ajax['edit-variation-type-submit-form'].options.beforeSubmit = function (form_values, $element, options) {
-          var $selectorInput = $('[name="selector"]', $element),
-            selector = $selectorInput.val(),
-            matches = 0,
-            message = '';
-          // If the selector wasn't shown then it doesn't need to be validated.
+        /**
+         * Validates that the selector entered is valid and matches a single
+         * DOM element on the page.
+         *
+         * This also handles displaying messaging for any errors.
+         *
+         * @param $selectorInput
+         *   The jQuery element for the selector input
+         * @returns {boolean}
+         *   True if valid, false if invalid.
+         */
+        function verifySelector($selectorInput) {
+          // If the selector input isn't shown, then no need to validate input.
           if ($selectorInput.length == 0) {
             return true;
           }
+          var selector = $selectorInput.val(),
+            matches = 0,
+            message = '';
 
           function displaySelectorError(message) {
+            var $form = $selectorInput.closest('form');
             $selectorInput.addClass('error');
-            if ($('.acquia-lift-js-message', $element).length == 0) {
+            if ($('.acquia-lift-js-message', $form).length == 0) {
               var errorHtml = '<div class="acquia-lift-js-message"><div class="messages error">';
               errorHtml += '<h2 class="element-invisible">' + Drupal.t('Error message') + '</h2>';
               errorHtml += '<span class="messages text"></span></div></div>';
-              $element.prepend(errorHtml);
+              $form.prepend(errorHtml);
             }
             $('.acquia-lift-js-message .messages.error .messages.text').text(message);
             // Make sure the selector is visible for user to edit.
             if (!$selectorInput.is(':visible')) {
               $selectorInput.closest('div').slideToggle();
-              $element.parent().find('.acquia-lift-selector-edit').text(Drupal.t('Hide selector'));
+              $form.parent().find('.acquia-lift-selector-edit').text(Drupal.t('Hide selector'));
             }
             $selectorInput.focus();
           }
@@ -295,8 +299,19 @@
           message += ' ' + Drupal.t('Enter a selector that matches a single element, and then click "Save".');
           displaySelectorError(message);
           return false;
-        };
+        }
 
+        // Override the form submission handler to verify the selector only
+        // matches a single DOM element.
+        $('input[type="submit"].form-submit',this.$el).each(function() {
+          Drupal.ajax[this.id].options.beforeSubmit = function (form_values, $element, options) {
+            var $selectorInput = $('[name="selector"]', $element);
+            return verifySelector($selectorInput);
+          };
+        });
+
+        // Validate the initial selector value.
+        verifySelector(this.$el.find('[name="selector"]'));
       },
 
       /**
@@ -312,7 +327,7 @@
      * Contextual menu view to allow selection of the type of variation to
      * create.
      */
-    PageVariationMenuView: Dialog.views.ElementDialogView.extend({
+    ElementVariationMenuView: Dialog.views.ElementDialogView.extend({
       className: 'acquia-lift-context-menu',
 
       /**
@@ -386,7 +401,7 @@
      */
     VariationTypeMenuListView: Backbone.View.extend({
       tagName: 'ul',
-      className: 'acquia-lift-page-variation-list',
+      className: 'acquia-lift-element-variation-list',
 
       /**
        * {@inheritDoc}
@@ -397,7 +412,7 @@
       },
 
       /**
-       * Renders a single page variation menu item.
+       * Renders a single element variation menu item.
        */
       renderItem: function (model) {
         var itemView = new Drupal.acquiaLiftVariations.views.VariationTypeMenuListItemView({model: model});

@@ -82,7 +82,7 @@ function personalize_fields_form_field_ui_field_edit_form_alter(&$form, &$form_s
     ctools_include('plugins');
     // Make sure we have at least one agent type available.
     $agent_types = personalize_get_agent_types();
-    $agent_type_options = $agent_type_form_options = array();
+    $agent_type_options = array();
     $agent_data = new stdClass();
     $agent_data->data = array();
     foreach ($agent_types as $name => $info) {
@@ -92,12 +92,10 @@ function personalize_fields_form_field_ui_field_edit_form_alter(&$form, &$form_s
       if ($class = ctools_plugin_load_class('personalize', 'agent_type', $name, 'handler')) {
         // Add this option to the options for the "agent type" dropdown.
         $agent_type_options[$name] = $name;
-        // Get the agent type's options form elements
-        $agent_type_form_options[$name] = call_user_func_array(array($class, 'optionsForm'), array($agent_data, array('field', 'settings', 'personalize', 'options', $name)));
       }
     }
     if (empty($agent_type_options)) {
-      drupal_set_message(t('You don\'t have any campaign types enabled. Please enable the personalize_target module or another module that provides a campaign type.'), 'error');
+      drupal_set_message(t('You don\'t have any personalization types enabled. Please enable the personalize_target module or another module that provides a personalization type.'), 'error');
       return;
     }
     // Add a state to the form elements to make sure they only appear when the
@@ -114,25 +112,12 @@ function personalize_fields_form_field_ui_field_edit_form_alter(&$form, &$form_s
     else {
       $form['field']['settings']['personalize']['agent_type'] = array(
         '#type' => 'select',
-        '#title' => t('Campaign Type'),
+        '#title' => t('Personalization Type'),
         '#options' => $agent_type_options,
         '#default_value' => isset($field['settings']['personalize']['agent_type']) ? $field['settings']['personalize']['agent_type'] : '',
-        '#description' => t('Choose which type of campaign to create.'),
+        '#description' => t('Choose which type of personalization to create.'),
       );
       personalize_form_element_add_states($state, $form['field']['settings']['personalize']['agent_type']);
-    }
-
-    // Add the agent-type-specific form elements to the form, to be shown only if the
-    // agent type in question is selected.
-    $form['field']['settings']['personalize']['options'] = array('#tree' => TRUE);
-    foreach ($agent_type_form_options as $agent_type => $options) {
-      $children = element_children($options);
-      foreach ($children as $child) {
-        $option = &$options[$child];
-        $option['#states'] = array('visible' => array(':input[name="field[settings][personalize][agent_type]"]' => array('value' => $agent_type)));
-        personalize_form_element_add_states($state, $option);
-      }
-      $form['field']['settings']['personalize']['options'][$agent_type] = $options;
     }
   }
 }
@@ -324,7 +309,9 @@ function personalize_fields_add_personalized_fields(&$form, &$form_state, $entit
 
     // Load the Option Sets if we have an entity id and entity.
     if ($entity_id && ($option_set = _personalize_fields_get_option_set_for_field($entity_type, $entity_id, $key))) {
-      personalize_warn_if_running($option_set->agent);
+      // Add the option set id to the field data.
+      $form[$key]['#attributes']['data-personalize-agent'] = $option_set->agent;
+      $form[$key]['#attributes']['data-personalize-osid'] = $option_set->osid;
       // Add the content variation field data for each option.
       foreach ($option_set->options as $option) {
         if (isset($limit_option_ids) && !in_array($option['option_id'], $limit_option_ids)) {
@@ -364,6 +351,8 @@ function personalize_fields_add_personalized_fields(&$form, &$form_state, $entit
               // This option has been removed from the form.
               continue;
             }
+            $form[$collection_field_name][$collection_field_language][$collection_field_index][$subfield_name]['#attributes']['data-personalize-agent'] = $option_set->agent;
+            $form[$collection_field_name][$collection_field_language][$collection_field_index][$subfield_name]['#attributes']['data-personalize-osid'] = $option_set->osid;
             $form[$collection_field_name][$collection_field_language][$collection_field_index][$subfield_name][$subfield_language][$field_counter] += array('personalize_fields_option_id' => array(
               '#type' => 'value',
               '#value' => $option['option_id'],
@@ -577,7 +566,9 @@ function personalize_fields_process_form_option_sets($entity_type, $entity, $fie
   // it will be processed on hook_entity_insert.
   if ($entity_id && isset($option_set->is_new)) {
     try {
-      personalize_fields_option_set_save($option_set, $entity_type, $entity, $field_name);
+      if (personalize_fields_option_set_prepare($option_set, $entity_type, $entity_id, $entity, $field_name)) {
+        personalize_fields_option_set_save($option_set, $entity_type, $entity_id, $field_name);
+      }
     }
     catch(PersonalizeFieldsException $e) {
       drupal_set_message($e->getMessage(), 'error');
@@ -650,11 +641,11 @@ function personalize_fields_form_personalize_admin_form_alter(&$form, &$form_sta
 }
 
 /**
- * Saves an Option Set to the database.
+ * Prepares a personalize fields Option Set for saving to the DB.
  *
- * This function should be used rather than a direct personalize_option_set_save()
- * call when saving Option Sets for fields. This updates both the actual Option
- * Set, as well as the table that links entities to Option Sets.
+ * This will cause the option set to be deleted if there are now fewer than 2
+ * field values. It also contains logic for creating a new agent for the option
+ * set if the new_agent_title property is set on the option set.
  *
  * @param $option_set
  *   An object representing the Option Set to be saved.
@@ -665,18 +656,17 @@ function personalize_fields_form_personalize_admin_form_alter(&$form, &$form_sta
  * @param $field_name
  *   The name of the field the Option Set is tied to.
  */
-function personalize_fields_option_set_save($option_set, $entity_type, $entity, $field_name) {
-  list($entity_id) = entity_extract_ids($entity_type, $entity);
+function personalize_fields_option_set_prepare($option_set, $entity_type, $entity_id, $entity, $field_name) {
 
   // If this is a new option set and there's only one option, abort.
   if (isset($option_set->is_new) && count($option_set->options) < 2) {
-    return;
+    return FALSE;
   }
   elseif (count($option_set->options) < 2) {
     // Removing all but one value from a personalized multi-value field means
     // the field is no longer personalized, so delete the Option Set.
     personalize_option_set_delete($option_set->osid);
-    return;
+    return FALSE;
   }
 
   if (!isset($option_set->agent) && isset($option_set->new_agent_title)) {
@@ -694,11 +684,11 @@ function personalize_fields_option_set_save($option_set, $entity_type, $entity, 
     $field = field_info_field($field_name);
 
     if (!isset($field['settings']['personalize']['agent_type'])) {
-      throw new PersonalizeFieldsException(t('No campaign type has been configured for this field. Please go to the field settings and specify the campaign type to use.'));
+      throw new PersonalizeFieldsException(t('No personalization type has been configured for this field. Please go to the field settings and specify the personalization type to use.'));
     }
     $plugin = personalize_get_agent_type($field['settings']['personalize']['agent_type']);
     if (empty($plugin)) {
-      throw new PersonalizeFieldsException(t('The campaign type specified for this field does not exist. Please go to the field settings and choose an existing campaign type.'));
+      throw new PersonalizeFieldsException(t('The personalization type specified for this field does not exist. Please go to the field settings and choose an existing personalization type.'));
     }
     $agent_type = $field['settings']['personalize']['agent_type'];
     $basic_info = array(
@@ -724,11 +714,32 @@ function personalize_fields_option_set_save($option_set, $entity_type, $entity, 
       $option_set->agent = $new_agent->machine_name;
     }
     else {
-      drupal_set_message('There was a problem saving the new campaign', 'error');
-      return;
+      drupal_set_message('There was a problem saving the new personalization', 'error');
+      return FALSE;
     }
   }
   $option_set->label = personalize_fields_generate_option_set_label($entity_type, $entity_id, $entity, $field_name);
+  return TRUE;
+}
+
+/**
+ * Saves a personalize_fields option set to the DB for a particular entity field
+ *.
+ * This function should be used rather than a direct personalize_option_set_save()
+ * call when saving Option Sets for fields. This adds the necessary data properties
+ * to the Option Set, as well storing an entry for it in the cache.
+ *
+ * @param $option_set
+ *   The stdClass object representing the option set.
+ * @param $entity_type
+ *   The type of entity the field is attached to.
+ * @param $entity_id
+ *   The ID of the entity.
+ * @param $field_name
+ *   The field name
+ * @throws \PersonalizeException
+ */
+function personalize_fields_option_set_save($option_set, $entity_type, $entity_id, $field_name) {
   $option_set->data['personalize_fields_entity_type'] = $entity_type;
   $option_set->data['personalize_fields_entity_id'] = $entity_id;
   $option_set->data['personalize_fields_field_name'] = $field_name;
@@ -770,7 +781,10 @@ function personalize_fields_entity_insert($entity, $type) {
   if (isset($entity->option_sets)) {
     foreach($entity->option_sets as $field_name => $option_set) {
       try {
-        personalize_fields_option_set_save($option_set, $type, $entity, $field_name);
+        list($entity_id) = entity_extract_ids($type, $entity);
+        if (personalize_fields_option_set_prepare($option_set, $type, $entity_id, $entity, $field_name)) {
+          personalize_fields_option_set_save($option_set, $type, $entity_id, $field_name);
+        }
       }
       catch(PersonalizeFieldsException $e) {
         drupal_set_message($e->getMessage(), 'error');
@@ -794,7 +808,9 @@ function personalize_fields_entity_update($entity, $type) {
     foreach($entity->option_sets as $field_name => $option_set) {
       if (isset($updates[$key]) && !empty($updates[$key][$field_name])) {
         try {
-          personalize_fields_option_set_save($option_set, $type, $entity, $field_name);
+          if (personalize_fields_option_set_prepare($option_set, $type, $entity_id, $entity, $field_name)) {
+            personalize_fields_option_set_save($option_set, $type, $entity_id, $field_name);
+          }
         }
         catch(PersonalizeFieldsException $e) {
           drupal_set_message($e->getMessage(), 'error');
@@ -1196,20 +1212,37 @@ function _personalize_fields_get_cid_for_field($entity_type, $entity_id, $field_
  * TRUE, then this will return TRUE even if the value is an empty value.
  */
 function _personalize_fields_option_has_value($option, $empty = FALSE) {
+  $option_value = personalize_fields_get_option_value($option);
+  return !empty($option_value) || $empty;
+}
+
+/**
+ * Helper function to retrieve the value portion from a personalize field.
+ *
+ * @param $option
+ *   The option array representing the field.  This can be either the form
+ *   render array or the form state values.
+ * @param mixed
+ *   If a form render array is pasesd, then this will be the renderable value
+ *   child.  If a form state values array is passed then this will be the
+ *   actual value.  An empty value could be a 0 for ids, an empty array, or
+ *   an empty string and therefore values should be checked using empty().
+ */
+function personalize_fields_get_option_value($option) {
   if (!is_array($option)) {
-    return FALSE;
+    return array();
   }
   // Supports all fields that use a 'value' column.
   if (array_key_exists('value', $option)) {
-    return !empty($option['value']) || $empty;
+    return $option['value'];
   }
   // Supports file fields.
   if (array_key_exists('fid', $option)) {
-    return (int) $option['fid'] > 0 || $empty;
+    return $option['fid'];
   }
   // Supports entity_reference fields.
   if (array_key_exists('target_id', $option)) {
-    return !empty($option['target_id']) || $empty;
+    return $option['target_id'];
   }
-  return FALSE;
+  return array();
 }

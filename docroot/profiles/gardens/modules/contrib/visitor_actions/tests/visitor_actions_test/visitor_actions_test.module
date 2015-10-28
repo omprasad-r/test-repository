@@ -108,6 +108,47 @@ function visitor_actions_test_visitor_actions_info() {
       'event' => 'submit_server',
       'pages' => '',
     ),
+    // Test fixtures that are specifically for testing pages filters.
+    'node/13579' => array(
+      'plugin' => 'link',
+      'label' => t('node/13579'),
+      'client_side' => TRUE,
+      'pages' => 'node/13579',
+      'identifier' => '.click-test',
+      'event' => 'click'
+    ),
+    'node/*' => array(
+      'plugin' => 'link',
+      'label' => t('node/*'),
+      'client_side' => TRUE,
+      'pages' => 'node/*',
+      'identifier' => '.click-test',
+      'event' => 'click'
+    ),
+    'my_node_13579' => array(
+      'plugin' => 'link',
+      'label' => t('my_node_13579'),
+      'client_side' => TRUE,
+      'pages' => 'my_node_13579',
+      'identifier' => '.click-test',
+      'event' => 'click'
+    ),
+    'fr/node/13579' => array(
+      'plugin' => 'link',
+      'label' => t('fr/node/13579'),
+      'client_side' => TRUE,
+      'pages' => 'fr/node/13579',
+      'identifier' => '.click-test',
+      'event' => 'click'
+    ),
+    'fr/my_node_13579' => array(
+      'plugin' => 'link',
+      'label' => t('fr/my_node_13579'),
+      'client_side' => TRUE,
+      'pages' => 'fr/my_node_13579',
+      'identifier' => '.click-test',
+      'event' => 'click'
+    ),
   );
   return $actions;
 }

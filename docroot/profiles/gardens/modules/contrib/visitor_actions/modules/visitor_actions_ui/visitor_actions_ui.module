@@ -233,6 +233,7 @@ function visitor_actions_ui_library() {
     'version' => VERSION,
     'js' => array(
       $path . '/js/visitor_actions_ui.selector.js' => array('group' => JS_LIBRARY),
+      $path . '/js/jquery/selectorator.js' => array('group' => JS_LIBRARY),
     ),
     'dependencies' => array(
       array('system', 'jquery'),
@@ -284,11 +285,11 @@ function visitor_actions_ui_library_alter(&$libraries, $module) {
   }
   if ($jquery_version && $module == 'visitor_actions_ui') {
     // If the version of jQuery is old, we need to add `on` and `off`.
-    if ($jquery_version < '1.7') {
+    if (version_compare($jquery_version, '1.7', '<')) {
       $libraries['action.editor']['js'][$path . '/js/jquery/ducktape.events.js'] = array('group' => JS_LIBRARY);
     }
     // Prior to jQuery 1.6, jQuery.fn.proxy did not curry additional args.
-    if ($jquery_version < '1.6') {
+    if (version_compare($jquery_version, '1.6', '<')) {
       $libraries['action.editor']['js'][$path . '/js/jquery/ducktape.proxy.js'] = array('group' => JS_LIBRARY);
     }
   }

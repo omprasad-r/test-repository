@@ -8,3 +8,10 @@
 #personalized-block-variations table tr td {
   vertical-align: top;
 }
+
+.personalize-blocks-inline,
+.personalize-blocks-inline label,
+.personalize-blocks-inline div,
+.personalize-blocks-inline input {
+  display: inline-block;
+}

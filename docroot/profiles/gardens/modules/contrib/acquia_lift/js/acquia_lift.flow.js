@@ -12,16 +12,16 @@
         $(this).on('click', function(e) {
           var $link = $(this).find('a.acquia-lift-type-select');
           // Special handling based on href values.
-          if ($link.attr('href') == settings.basePath + settings.pathPrefix + 'admin/structure/visitor_actions') {
+          if (stringEndsWith($link.attr('href'), settings.basePath + settings.pathPrefix + 'admin/structure/visitor_actions/add-in-context')) {
             // Trigger goals in context.
             $('#acquiaLiftVisitorActionsConnector').find('a').trigger('click');
-            Drupal.CTools.Modal.dismiss();
+            $('.acquia-lift-modal .close', context).trigger('click');
             e.preventDefault();
             e.stopImmediatePropagation();
-          } else if ($link.attr('href') == settings.basePath + settings.pathPrefix + 'admin/structure/personalize/variations/personalize-elements/add') {
+          } else if (stringEndsWith($link.attr('href'), settings.basePath + settings.pathPrefix + 'admin/structure/personalize/variations/personalize-elements/add')) {
             // Trigger variations in context.
             $(document).trigger('acquiaLiftElementVariationModeTrigger', [{start: true}]);
-            Drupal.CTools.Modal.dismiss();
+            $('.acquia-lift-modal .close', context).trigger('click');
             e.preventDefault();
             e.stopImmediatePropagation();
           } else if ($link.hasClass('ctools-use-modal')) {
@@ -73,7 +73,7 @@
       var $selectorInput = $variationTypeForm.find('input[name="selector"]');
 
       if ($variationTypeForm.length > 0 && $selectorInput.length > 0) {
-        var editLink = '<a class="acquia-lift-selector-edit">' + Drupal.t('Edit selector') + '</a>';
+        var editLink = '<a id="acquia-lift-selector-edit" class="acquia-lift-selector-edit">' + Drupal.t('Edit selector') + '</a>';
         var $selector =  $selectorInput.closest('div');
         $variationTypeForm.parent().find('h2').append(editLink);
         $variationTypeForm.parent().find('.acquia-lift-selector-edit').on('click', function(e) {
@@ -87,7 +87,7 @@
 
       // Populate the pages input with the current page.
       // The form is sent as the context so we can't check within it.
-      var $pageGoalForm = $('#acquia-lift-create-goal-type-form').not('acquia-lift-processed');
+      var $pageGoalForm = $('#acquia-lift-goal-type-create-form').not('acquia-lift-processed');
       if ($pageGoalForm.length > 0) {
         $pageGoalForm.find('input[name="pages"]').val(Drupal.settings.visitor_actions.currentPath);
         $pageGoalForm.addClass('acquia-lift-processed');
@@ -107,6 +107,31 @@
 
   function hidePageVisitorActionsButton() {
     $('#visitor-actions-ui-actionable-elements-without-identifiers').hide();
+  }
+
+  function stringEndsWith(str, suffix) {
+    return str.indexOf(suffix, str.length - suffix.length) !== -1;
+  }
+
+  /**
+   * Provide the HTML to create the modal dialog.
+   */
+  Drupal.theme.prototype.AcquiaLiftModalDialog = function () {
+    var html = ''
+    html += '  <div id="ctools-modal">'
+    html += '    <div class="ctools-modal-content acquia-lift-modal">' // panels-modal-content
+    html += '      <div class="modal-header">';
+    html += '        <a class="close" href="#">';
+    html +=            Drupal.CTools.Modal.currentSettings.closeText + Drupal.CTools.Modal.currentSettings.closeImage;
+    html += '        </a>';
+    html += '        <span id="modal-title" class="modal-title">&nbsp;</span>';
+    html += '      </div>';
+    html += '      <div id="modal-content" class="modal-content">';
+    html += '      </div>';
+    html += '    </div>';
+    html += '  </div>';
+
+    return html;
   }
 
 }(Drupal.jQuery, Drupal));
@@ -166,18 +191,15 @@
   };
 
   /**
-   * A command to trigger the page element selection process.
+   * A command to trigger the element selection process.
    *
    * The response should include a data object with the following keys:
-   * - start: Boolean indicating if page variation mode should be on (true)
+   * - start: Boolean indicating if element variation mode should be on (true)
    *   or off (false).
-   * - type: Indicates the type of variation mode: one of 'page' or 'element'.
    */
   Drupal.ajax.prototype.commands.acquia_lift_variation_toggle = function (ajax, response, status) {
     if (response.data.start) {
       initializeApplication();
-      // Set the model to page or element variation mode.
-      Drupal.acquiaLiftVariations.app.appModel.setModelMode(response.data.type === 'page');
       Drupal.acquiaLiftVariations.app.appModel.set('editMode', true);
       Drupal.acquiaLiftVariations.app.appModel.set('variation', null);
     } else {
@@ -199,14 +221,11 @@
    * same selector/variation type.
    *
    * The response should include a data object with the following keys:
-   * - type: Indicates the type of variation mode: one of 'page' or 'element'.
    * - variationType: The type of variation, e.g., editText, addClass, etc.
    * - selector: The selector for the affected DOM element.
    * - agentName: The machine name of the current campaign.
-   * If type == page:
    * - variationIndex:  The variation index to edit.  A variationIndex of -1
    *   indicates creating a new variation.
-   * If type == element
    * - osid: (optional) the option set id of an existing option set that is
    *   being modified either by adding a variation or by editing a variation
    *   within.
@@ -238,24 +257,12 @@
     initializeApplication();
     // Set up the variation model for editing.
     var variation = null;
-    if (data.type === 'page') {
-      Drupal.acquiaLiftVariations.app.appModel.setModelMode(true);
-      if (data.variationIndex && data.variationIndex >= 0) {
-        variation = new Drupal.acquiaLiftVariations.models.PageVariationModel({
-          variationIndex: data.variationIndex,
-          agentName: data.agentName,
-          selector: data.selector
-        });
-      }
-    } else {
-      Drupal.acquiaLiftVariations.app.appModel.setModelMode(false);
-      if (data.variationIndex && data.variationIndex != -1) {
-        variation = new Drupal.acquiaLiftVariations.models.ElementVariationModel({
-          optionId: data.variationIndex,
-          agentName: data.agentName,
-          osid: data.osid
-        });
-      }
+    if (data.variationIndex && data.variationIndex != -1) {
+      variation = new Drupal.acquiaLiftVariations.models.ElementVariationModel({
+        optionId: data.variationIndex,
+        agentName: data.agentName,
+        osid: data.osid
+      });
     }
     Drupal.acquiaLiftVariations.app.appModel.set('variation', variation);
     Drupal.acquiaLiftVariations.app.appModel.set('editMode', true);
@@ -294,27 +301,12 @@
   }
 
   /**
-   * Add an event listener for a page variation mode trigger request.
-   *
-   * This utilizes the custom toggle command in order to allow front-end and
-   * back-end requests for the functionality to be handled the same way.
-   */
-  $(document).on('acquiaLiftPageVariationModeTrigger', function(e, data) {
-    data['type'] = 'page';
-    var response = {
-      data: data
-    };
-    Drupal.ajax.prototype.commands.acquia_lift_variation_toggle(Drupal.ajax, response, 200);
-  });
-
-  /**
    * Add an event listener for an element variation set mode trigger request.
    *
    * This utilizes the custom toggle command in order to allow front-end
    * and back-end requests for the functionality to be handled the same way.
    */
   $(document).on('acquiaLiftElementVariationModeTrigger', function(e, data) {
-    data['type'] = 'element';
     var response = {
       data: data
     };
@@ -332,12 +324,29 @@
    * - variationIndex: (Optional) The choice id for the option to edit.
    */
   $(document).on('acquiaLiftElementVariationEdit', function(e, data) {
-    data['type'] = 'element';
     var response = {
       data: data
     };
     Drupal.ajax.prototype.commands.acquia_lift_variation_edit(Drupal.ajax, response, 200);
   });
+
+  /**
+   * Look for any behavior initialization information in the Drupal settings.
+   */
+  Drupal.behaviors.acquiaLiftVariations = {
+    attach: function (context, settings) {
+      if (settings.acquia_lift.toolbarEditMode) {
+        $('body').once('acquia-lift-variations', function () {
+          response = {
+            data: {
+              start: true
+            }
+          };
+          Drupal.ajax.prototype.commands.acquia_lift_variation_toggle(Drupal.ajax, response, 200);
+        });
+      }
+    }
+  }
 
 
 }(Drupal.jQuery, Drupal));
@@ -352,67 +361,17 @@
 
   Drupal.acquiaLiftVariations.models = Drupal.acquiaLiftVariations.models || {};
 
-  /**
-   * Base model for a variation that can be shown or edited.
-   *
-   * Models that extend this class are responsible for setting the "option"
-   * property which holds a reference to the option within an option set
-   * settings that represents this variation.
-   */
-  Drupal.acquiaLiftVariations.models.BaseVariationModel = Backbone.Model.extend({
-    // Each type of variation overrides this to return the index for the
-    // variation.  -1 indicates a new variation.
-    getVariationNumber: function () {
-      return -1;
-    },
-
-    getVariationLabel: function () {
-      var option = this.get('option');
-      return option ? option.option_label : Drupal.t('Variation');
-    },
-
-    getContent: function () {
-      var option = this.get('option');
-      return option ? option.personalize_elements_content : '';
-    }
-  });
-
   $.extend(Drupal.acquiaLiftVariations.models, {
   /**
      * Backbone model for the variations process.
      */
     AppModel: Backbone.Model.extend({
-      MODEL_MODE_PAGE: 'page',
-      MODEL_MODE_ELEMENT: 'element',
-
       defaults: {
         // If this app is being loaded, it is because it is being launched into
         // an edit mode.
         editMode: true,
-        modelMode: this.MODEL_MODE_PAGE,
-        // The current variation being edited.
-        // This will be a model that extends the BaseVariationModel class.
+        // The current ElementVariationModel that's being edited.
         variation: null
-      },
-
-      /**
-       * Set the model mode.
-       *
-       * The mode can be either page-level variations (used for simple a/b
-       * tests) or individual variations (used for all other campaigns).
-       */
-      setModelMode: function (pageLevel) {
-        this.set('modelMode', pageLevel ? this.MODEL_MODE_PAGE : this.MODEL_MODE_ELEMENT);
-      },
-
-      /**
-       * Determine if the model is in page variation mode or element mode.
-       *
-       * @returns boolean
-       * True if page variation mode, false otherwise.
-       */
-      isPageModelMode: function () {
-        return this.get('modelMode') === this.MODEL_MODE_PAGE;
       },
 
       /**
@@ -454,7 +413,7 @@
     /**
      * The model for a variation within a personalize elements option set.
      */
-    ElementVariationModel: Drupal.acquiaLiftVariations.models.BaseVariationModel.extend({
+    ElementVariationModel: Backbone.Model.extend({
       defaults: {
         osid: null,
         optionId: null,
@@ -477,38 +436,16 @@
 
       getVariationNumber: function () {
         return this.get('optionId');
-      }
-    }),
-
-    /**
-     * The model for a variation within a page variation.
-     */
-    PageVariationModel: Drupal.acquiaLiftVariations.models.BaseVariationModel.extend({
-      defaults: {
-        agentName: null,
-        variationIndex: -1,
-        selector: null,
-        option: null
       },
 
-      initialize: function () {
-        var variationIndex = this.get('variationIndex'),
-          agentName = this.get('agentName'),
-          selector = this.get('selector'),
-          that = this;
-
-        // Find the right option set for this agent and selector.
-        _.each(Drupal.settings.personalize.option_sets, function(option_set) {
-          if (option_set.agent === agentName && option_set.selector === selector) {
-            if (option_set.options.hasOwnProperty(variationIndex)) {
-              that.set('option', option_set.options[variationIndex]);
-            }
-          }
-        });
+      getVariationLabel: function () {
+        var option = this.get('option');
+        return option ? option.option_label : Drupal.t('Variation');
       },
 
-      getVariationNumber: function () {
-        return this.get('variationIndex');
+      getContent: function () {
+        var option = this.get('option');
+        return option ? option.personalize_elements_content : '';
       }
     })
   });
@@ -560,7 +497,7 @@
           // No limits in place so include by default.
           return true;
         }))
-      },
+      }
     })
   };
 
@@ -655,7 +592,7 @@
        *   True if showing the highlight, false if no highlight should be shown.
        */
       highlightAnchor: function(show) {
-        var highlightClass = 'acquia-lift-page-variation-item';
+        var highlightClass = 'acquia-lift-element-variation-item';
         if (!this.anchor) {
           return;
         }
@@ -693,7 +630,7 @@
       },
 
       /**
-       * Deactivates the view and the page variation process.
+       * Deactivates the view and the element variation process.
        */
       deactivate: function () {
         this.$watchElements.DOMSelector("stopWatching");
@@ -724,7 +661,7 @@
       },
 
       /**
-       * Creates a contextual page variation selection menu at the specified
+       * Creates a contextual element variation selection menu at the specified
        * element.
        */
       createContextualMenu: function (element, selector) {
@@ -734,7 +671,7 @@
           selector: selector,
           id: 'acquia-lift-modal-variation-type-select'
         });
-        var dialogView = new Drupal.acquiaLiftVariations.views.PageVariationMenuView({
+        new Drupal.acquiaLiftVariations.views.ElementVariationMenuView({
           el: element,
           model: this.contextualMenuModel
         });
@@ -845,42 +782,46 @@
         var $input = this.$el.find('[name=personalize_elements_content]');
         var variation = this.model.get('variation');
 
-        // Don't show the title field for page variations.
-        if (this.appModel.isPageModelMode()) {
-          this.$el.find('[name="title"]').val(this.model.get('typeLabel')).closest('.form-item').hide();
-        }
-
         this.$el.find('[name="selector"]').val(selector);
         this.$el.find('[name="pages"]').val(Drupal.settings.visitor_actions.currentPath);
         this.$el.find('[name="agent"]').val(Drupal.settings.personalize.activeCampaign);
         // Call any variation type specific callbacks.
         $(document).trigger('acquiaLiftVariationTypeForm', [type, selector, $input]);
 
-        // Override the form submission handler to verify the selector only
-        // matches a single DOM element.
-        Drupal.ajax['edit-variation-type-submit-form'].options.beforeSubmit = function (form_values, $element, options) {
-          var $selectorInput = $('[name="selector"]', $element),
-            selector = $selectorInput.val(),
-            matches = 0,
-            message = '';
-          // If the selector wasn't shown then it doesn't need to be validated.
+        /**
+         * Validates that the selector entered is valid and matches a single
+         * DOM element on the page.
+         *
+         * This also handles displaying messaging for any errors.
+         *
+         * @param $selectorInput
+         *   The jQuery element for the selector input
+         * @returns {boolean}
+         *   True if valid, false if invalid.
+         */
+        function verifySelector($selectorInput) {
+          // If the selector input isn't shown, then no need to validate input.
           if ($selectorInput.length == 0) {
             return true;
           }
+          var selector = $selectorInput.val(),
+            matches = 0,
+            message = '';
 
           function displaySelectorError(message) {
+            var $form = $selectorInput.closest('form');
             $selectorInput.addClass('error');
-            if ($('.acquia-lift-js-message', $element).length == 0) {
+            if ($('.acquia-lift-js-message', $form).length == 0) {
               var errorHtml = '<div class="acquia-lift-js-message"><div class="messages error">';
               errorHtml += '<h2 class="element-invisible">' + Drupal.t('Error message') + '</h2>';
               errorHtml += '<span class="messages text"></span></div></div>';
-              $element.prepend(errorHtml);
+              $form.prepend(errorHtml);
             }
             $('.acquia-lift-js-message .messages.error .messages.text').text(message);
             // Make sure the selector is visible for user to edit.
             if (!$selectorInput.is(':visible')) {
               $selectorInput.closest('div').slideToggle();
-              $element.parent().find('.acquia-lift-selector-edit').text(Drupal.t('Hide selector'));
+              $form.parent().find('.acquia-lift-selector-edit').text(Drupal.t('Hide selector'));
             }
             $selectorInput.focus();
           }
@@ -905,8 +846,19 @@
           message += ' ' + Drupal.t('Enter a selector that matches a single element, and then click "Save".');
           displaySelectorError(message);
           return false;
-        };
+        }
 
+        // Override the form submission handler to verify the selector only
+        // matches a single DOM element.
+        $('input[type="submit"].form-submit',this.$el).each(function() {
+          Drupal.ajax[this.id].options.beforeSubmit = function (form_values, $element, options) {
+            var $selectorInput = $('[name="selector"]', $element);
+            return verifySelector($selectorInput);
+          };
+        });
+
+        // Validate the initial selector value.
+        verifySelector(this.$el.find('[name="selector"]'));
       },
 
       /**
@@ -922,7 +874,7 @@
      * Contextual menu view to allow selection of the type of variation to
      * create.
      */
-    PageVariationMenuView: Dialog.views.ElementDialogView.extend({
+    ElementVariationMenuView: Dialog.views.ElementDialogView.extend({
       className: 'acquia-lift-context-menu',
 
       /**
@@ -996,7 +948,7 @@
      */
     VariationTypeMenuListView: Backbone.View.extend({
       tagName: 'ul',
-      className: 'acquia-lift-page-variation-list',
+      className: 'acquia-lift-element-variation-list',
 
       /**
        * {@inheritDoc}
@@ -1007,7 +959,7 @@
       },
 
       /**
-       * Renders a single page variation menu item.
+       * Renders a single element variation menu item.
        */
       renderItem: function (model) {
         var itemView = new Drupal.acquiaLiftVariations.views.VariationTypeMenuListItemView({model: model});
@@ -1094,7 +1046,7 @@
 
   /**
    * Define editInContext behaviors to define what happens when creating
-   * a particular personalize_element page variation in context.
+   * a particular personalize_element element variation in context.
    */
   Drupal.acquiaLiftVariations.personalizeElements = Drupal.acquiaLiftVariations.personalizeElements || {};
 
@@ -1274,6 +1226,276 @@
     $(window).trigger('resize');
   }
 
+  // CTools.Modal.modalContent inner-scoped functions.
+  // Get a list of the tabbable elements in the modal content.
+  var getTabbableElements = function () {
+    var tabbableElements = $('#modalContent :tabbable'),
+      radioButtons = tabbableElements.filter('input[type="radio"]');
+
+    // The list of tabbable elements from jQuery is *almost* right. The
+    // exception is with groups of radio buttons. The list from jQuery will
+    // include all radio buttons, when in fact, only the selected radio button
+    // is tabbable, and if no radio buttons in a group are selected, then only
+    // the first is tabbable.
+    if (radioButtons.length > 0) {
+      // First, build up an index of which groups have an item selected or not.
+      var anySelected = {};
+      radioButtons.each(function () {
+        var name = this.name;
+
+        if (typeof anySelected[name] === 'undefined') {
+          anySelected[name] = radioButtons.filter('input[name="' + name + '"]:checked').length !== 0;
+        }
+      });
+
+      // Next filter out the radio buttons that aren't really tabbable.
+      var found = {};
+      tabbableElements = tabbableElements.filter(function () {
+        var keep = true;
+
+        if (this.type == 'radio') {
+          if (anySelected[this.name]) {
+            // Only keep the selected one.
+            keep = this.checked;
+          }
+          else {
+            // Only keep the first one.
+            if (found[this.name]) {
+              keep = false;
+            }
+            found[this.name] = true;
+          }
+        }
+
+        return keep;
+      });
+    }
+
+    return tabbableElements.get();
+  };
+
+  // Keyboard and focus event handler ensures only modal elements gain focus.
+  var modalEventHandler = function( event ) {
+    var target = null;
+    if ( event ) { //Mozilla
+      target = event.target;
+    } else { //IE
+      event = window.event;
+      target = event.srcElement;
+    }
+
+    var parents = $(target).parents().get();
+    for (var i = 0; i < parents.length; ++i) {
+      var position = $(parents[i]).css('position');
+      if (position == 'absolute' || position == 'fixed') {
+        return true;
+      }
+    }
+
+    if ($(target).is('#modalContent, body') || $(target).filter('*:visible').parents('#modalContent').length) {
+      // Allow the event only if target is a visible child node
+      // of #modalContent.
+      return true;
+    }
+    else {
+      getTabbableElements()[0].focus();
+    }
+
+    event.preventDefault();
+  };
+
+  // Keypress handler Ensures you can only TAB to elements within the modal.
+  // Based on the pseudo-code from WAI-ARIA 1.0 Authoring Practices section
+  // 3.3.1 "Trapping Focus".
+  var modalTabTrapHandler = function (evt) {
+    // We only care about the TAB key.
+    if (evt.which != 9) {
+      return true;
+    }
+
+    var tabbableElements = getTabbableElements(),
+      firstTabbableElement = tabbableElements[0],
+      lastTabbableElement = tabbableElements[tabbableElements.length - 1],
+      singleTabbableElement = firstTabbableElement == lastTabbableElement,
+      node = evt.target;
+
+    // If this is the first element and the user wants to go backwards, then
+    // jump to the last element.
+    if (node == firstTabbableElement && evt.shiftKey) {
+      if (!singleTabbableElement) {
+        lastTabbableElement.focus();
+      }
+      return false;
+    }
+    // If this is the last element and the user wants to go forwards, then
+    // jump to the first element.
+    else if (node == lastTabbableElement && !evt.shiftKey) {
+      if (!singleTabbableElement) {
+        firstTabbableElement.focus();
+      }
+      return false;
+    }
+    // If this element isn't in the dialog at all, then jump to the first
+    // or last element to get the user into the game.
+    else if ($.inArray(node, tabbableElements) == -1) {
+      // Make sure the node isn't in another modal (ie. WYSIWYG modal).
+      var parents = $(node).parents().get();
+      for (var i = 0; i < parents.length; ++i) {
+        var position = $(parents[i]).css('position');
+        if (position == 'absolute' || position == 'fixed') {
+          return true;
+        }
+      }
+
+      if (evt.shiftKey) {
+        lastTabbableElement.focus();
+      }
+      else {
+        firstTabbableElement.focus();
+      }
+    }
+  };
+
+  var setSize = function(context, winWidth, winHeight) {
+    var width = 0;
+    var height = 0;
+
+    if (Drupal.CTools.Modal.currentSettings.modalSize.type === 'scale') {
+      width = $(window).width() * Drupal.CTools.Modal.currentSettings.modalSize.width;
+      height = $(window).height() * Drupal.CTools.Modal.currentSettings.modalSize.height;
+    }
+    else {
+      width = Drupal.CTools.Modal.currentSettings.modalSize.width;
+      height = Drupal.CTools.Modal.currentSettings.modalSize.height;
+    }
+
+    if (Drupal.CTools.Modal.currentSettings.modalSize.type === 'dynamic') {
+      // Use the additional pixels for creating the width and height.
+      $('div.ctools-modal-content', context).css({
+        'min-width': Drupal.CTools.Modal.currentSettings.modalSize.width,
+        'min-height': Drupal.CTools.Modal.currentSettings.modalSize.height,
+        'width': 'auto',
+        'height': 'auto',
+        'max-height': (winHeight / 2) * 1.8 + 'px',
+        'max-width': (winWidth / 2) * 1.8 + 'px',
+        'overflow': 'auto'
+      });
+      $('#modalContent').css({'width': 'auto'});
+      $('div.ctools-modal-content .modal-content', context).css("overflow", "visible");
+    }
+    else {
+      // Use the additional pixels for creating the width and height.
+      $('div.ctools-modal-content', context).css({
+        'width': width + Drupal.CTools.Modal.currentSettings.modalSize.addWidth + 'px',
+        'height': height + Drupal.CTools.Modal.currentSettings.modalSize.addHeight + 'px'
+      });
+      $('#modalContent', context).css({
+        'width': width + Drupal.CTools.Modal.currentSettings.modalSize.addWidth + 'px',
+        'height': height + Drupal.CTools.Modal.currentSettings.modalSize.addHeight + 'px'
+      });
+      $('div.ctools-modal-content .modal-content', context).css({
+        'width': (width - Drupal.CTools.Modal.currentSettings.modalSize.contentRight) + 'px',
+        'height': (height - Drupal.CTools.Modal.currentSettings.modalSize.contentBottom) + 'px'
+      });
+    }
+  };
+
+  // Move and resize the modalBackdrop and modalContent on window resize.
+  var modalContentResize = function(e) {
+    // When creating the modal, it actually exists only in a theoretical
+    // place that is not in the DOM. But once the modal exists, it is in the
+    // DOM so the context must be set appropriately.
+    var context = e ? document : Drupal.CTools.Modal.modal;
+
+    // Reset the backdrop height/width to get accurate document size.
+    $('#modalBackdrop').css('height', '').css('width', '');
+
+    // Get our heights
+    var docHeight = $(document).height();
+    var docWidth = $(document).width();
+    var winHeight = $(window).height();
+    var winWidth = $(window).width();
+    var bodyWidth = $('body').width();
+    if( winWidth > bodyWidth ) winWidth = bodyWidth;
+    if( docHeight < winHeight ) docHeight = winHeight;
+
+    setSize(context, winWidth, winHeight);
+
+    // Get where we should move content to
+    var modalContent = $('#modalContent');
+
+    var height = Math.max(modalContent.outerHeight(), $('div.ctools-modal-content', context).outerHeight());
+    var width = Math.max(modalContent.outerWidth(), $('div.ctools-modal-content', context).outerWidth());
+
+    var mdcTop = Math.max($(document).scrollTop() + ( winHeight / 2 ) - (  height / 2), 10);
+    var mdcLeft = Math.max(( winWidth / 2 ) - ( width / 2), 10);
+
+    // Apply attributes to fix the position of the modal relative to current
+    // position of page. This is required when the modal is larger than the
+    // browser window. This enables the modal to scroll with the rest of the
+    // page, rather than remaining centered in the page whilst scrolling.
+    if (height > $(window).height()) {
+      if (e.type === 'resize') {
+        // Is a resize event so get the position of top relative to current
+        // position of document in browser window.
+        mdcTop = 10 + $(document).scrollTop();
+      }
+      else if (e.type === 'scroll') {
+        // Is a scroll event so maintain to current position of the modal
+        // relative to page.
+        var modalOffSet = modalContent.offset();
+        mdcTop = modalOffSet.y;
+      }
+    }
+
+    // Apply the changes
+    $('#modalBackdrop').css({'height': winHeight + 'px', 'width': winWidth + 'px', 'top': $(document).scrollTop()}).show();
+    modalContent.css('top', mdcTop + 'px').css('left', mdcLeft + 'px').show();
+  };
+
+  var oldFocus = null;
+  var currentAnimation = 'show';
+  var currentSpeed = 'fast';
+
+  // Close the open modal content and backdrop
+  function close() {
+    // Unbind the events
+    $(window).unbind('resize',  modalContentResize);
+    $('body').unbind( 'focus', modalEventHandler);
+    $('body').unbind( 'keypress', modalEventHandler );
+    $('body').unbind( 'keydown', modalTabTrapHandler );
+    $('.close').unbind('click', modalContentClose);
+    $('body').unbind('keypress', modalEventEscapeCloseHandler);
+    $(document).trigger('CToolsDetachBehaviors', $('#modalContent'));
+
+    // Set our animation parameters and use them
+    var animation = 'hide';
+    if ( currentAnimation == 'fadeIn' ) animation = 'fadeOut';
+    if ( currentAnimation == 'slideDown' ) animation = 'slideUp';
+    if ( currentAnimation == 'show' ) animation = 'hide';
+
+    // Close the content
+    $('#modalContent').hide()[animation](currentSpeed);
+
+    // Remove the content
+    $('#modalContent').remove();
+    $('#modalBackdrop').remove();
+
+    // Restore focus to where it was before opening the dialog
+    $(oldFocus).focus();
+  }
+
+  var modalContentClose = function() {
+    close();
+    return false;
+  };
+
+  var modalEventEscapeCloseHandler = function(event) {
+    if (event.keyCode == 27) {
+      close();
+      return false;
+    }
+  };
 
   /**
    * modalContent
@@ -1281,8 +1503,9 @@
    * @param css obj of css attributes
    * @param animation (fadeIn, slideDown, show)
    * @param speed (valid animation speeds slow, medium, fast or # in ms)
+   * @param modalClass class added to div#modalContent
    */
-  Drupal.CTools.Modal.modalContent = function(content, css, animation, speed) {
+  Drupal.CTools.Modal.modalContent = function(content, css, animation, speed, modalClass) {
     // If our animation isn't set, make it just show/pop
     if (!animation) {
       animation = 'show';
@@ -1293,12 +1516,14 @@
         animation = 'show';
       }
     }
+    currentAnimation = animation;
 
     if (!speed) {
       speed = 'fast';
     }
+    currentSpeed = speed;
 
-    // Build our base attributes and allow them to be overriden
+    // Build our base attributes and allow them to be overridden
     css = jQuery.extend({
       position: 'absolute',
       left: '0px',
@@ -1311,9 +1536,9 @@
     css.filter = 'alpha(opacity=' + (100 * css.opacity) + ')';
     content.hide();
 
-    // if we already ahve a modalContent, remove it
-    if ( $('#modalBackdrop')) $('#modalBackdrop').remove();
-    if ( $('#modalContent')) $('#modalContent').remove();
+    // If we already have modalContent, remove it.
+    if ($('#modalBackdrop').length) $('#modalBackdrop').remove();
+    if ($('#modalContent').length) $('#modalContent').remove();
 
     // Get our dimensions
 
@@ -1322,179 +1547,93 @@
     var docWidth = $(document).width();
     var winHeight = $(window).height();
     var winWidth = $(window).width();
+    var bodyWidth = $('body').width();
+    if( winWidth > bodyWidth ) winWidth = bodyWidth;
     if( docHeight < winHeight ) docHeight = winHeight;
 
     // Create our divs
-    $('body').append('<div id="modalBackdrop" style="z-index: 1000; display: none;"></div><div id="modalContent" style="z-index: 1001; position: absolute;">' + $(content).html() + '</div>');
+    $('body').append('<div id="modalBackdrop" class="backdrop-' + modalClass + '" style="z-index: 1000; display: none;"></div><div id="modalContent" class="modal-' + modalClass + '" style="z-index: 1001; position: absolute;">' + $(content).html() + '</div>');
 
-    setSize = function(context) {
-      var width = 0;
-      var height = 0;
+    setSize(document, winWidth, winHeight);
 
-      if (Drupal.CTools.Modal.currentSettings.modalSize.type == 'scale') {
-        width = $(window).width() * Drupal.CTools.Modal.currentSettings.modalSize.width;
-        height = $(window).height() * Drupal.CTools.Modal.currentSettings.modalSize.height;
-      } else {
-        width = Drupal.CTools.Modal.currentSettings.modalSize.width;
-        height = Drupal.CTools.Modal.currentSettings.modalSize.height;
-      }
-      if (Drupal.CTools.Modal.currentSettings.modalSize.type == 'dynamic') {
-        // Use the additionol pixels for creating the width and height.
-        $('div.ctools-modal-content', context).css({
-          'min-width': Drupal.CTools.Modal.currentSettings.modalSize.width,
-          'min-height': Drupal.CTools.Modal.currentSettings.modalSize.height,
-          'width': 'auto',
-          'height': 'auto'
-        });
-        $('#modalContent').css({'width': 'auto'});
-      } else {
-        // Use the additional pixels for creating the width and height.
-        $('div.ctools-modal-content', context).css({
-          'width': width + Drupal.CTools.Modal.currentSettings.modalSize.addWidth + 'px',
-          'height': height + Drupal.CTools.Modal.currentSettings.modalSize.addHeight + 'px'
-        });
-        $('#modalContent', context).css({
-          'width': width + Drupal.CTools.Modal.currentSettings.modalSize.addWidth + 'px',
-          'height': height + Drupal.CTools.Modal.currentSettings.modalSize.addHeight + 'px'
-        });
-        $('div.ctools-modal-content .modal-content', context).css({
-          'width': (width - Drupal.CTools.Modal.currentSettings.modalSize.contentRight) + 'px',
-          'height': (height - Drupal.CTools.Modal.currentSettings.modalSize.contentBottom) + 'px'
-        });
-      }
-    }
-
-    setSize(document);
-
-    // Keyboard and focus event handler ensures focus stays on modal elements only
-    modalEventHandler = function( event ) {
-      target = null;
-      if ( event ) { //Mozilla
-        target = event.target;
-      } else { //IE
-        event = window.event;
-        target = event.srcElement;
-      }
-
-      var parents = $(target).parents().get();
-      for (var i = 0; i < parents.length; ++i) {
-        var position = $(parents[i]).css('position');
-        if (position == 'absolute' || position == 'fixed') {
-          return true;
-        }
-      }
-      if( $(target).filter('*:visible').parents('#modalContent').size()) {
-        // allow the event only if target is a visible child node of #modalContent
-        return true;
-      }
-      if ( $('#modalContent')) $('#modalContent').get(0).focus();
-      return false;
-    };
     $('body').bind( 'focus', modalEventHandler );
     $('body').bind( 'keypress', modalEventHandler );
+
+    $('body').bind('keydown', modalTabTrapHandler);
 
     // Create our content div, get the dimensions, and hide it
     var modalContent = $('#modalContent').css('top','-1000px');
     var mdcTop = Math.max($(document).scrollTop() + ( winHeight / 2 ) - (  modalContent.outerHeight() / 2), 10);
     var mdcLeft = Math.max(( winWidth / 2 ) - ( modalContent.outerWidth() / 2), 10);
-
     $('#modalBackdrop').css(css).css('top', 0).css('height', docHeight + 'px').css('width', docWidth + 'px').show();
     modalContent.css({top: mdcTop + 'px', left: mdcLeft + 'px'}).hide()[animation](speed, function () { /* $(window).trigger('resize'); */ });
 
     // Bind a click for closing the modalContent
-    modalContentClose = function(){close(); return false;};
     $('.close').bind('click', modalContentClose);
 
     // Bind a keypress on escape for closing the modalContent
-    modalEventEscapeCloseHandler = function(event) {
-      if (event.keyCode == 27) {
-        close();
-        return false;
-      }
-    };
-
     $(document).bind('keydown', modalEventEscapeCloseHandler);
 
-    // Close the open modal content and backdrop
-    function close() {
-      // Unbind the events
-      $(window).unbind('resize',  modalContentResize);
-      $('body').unbind( 'focus', modalEventHandler);
-      $('body').unbind( 'keypress', modalEventHandler );
-      $('.close').unbind('click', modalContentClose);
-      $('body').unbind('keypress', modalEventEscapeCloseHandler);
-      $(document).trigger('CToolsDetachBehaviors', $('#modalContent'));
+    // Per WAI-ARIA 1.0 Authoring Practices, initial focus should be on the
+    // close button, but we should save the original focus to restore it after
+    // the dialog is closed.
+    oldFocus = document.activeElement;
+    $('.close').focus();
 
-      // Set our animation parameters and use them
-      if ( animation == 'fadeIn' ) animation = 'fadeOut';
-      if ( animation == 'slideDown' ) animation = 'slideUp';
-      if ( animation == 'show' ) animation = 'hide';
-
-      // Close the content
-      modalContent.hide()[animation](speed);
-
-      // Remove the content
-      $('#modalContent').remove();
-      $('#modalBackdrop').remove();
-    };
-
-    // Move and resize the modalBackdrop and modalContent on resize of the window
-    modalContentResize = function(e){
-      // When creating the modal, it actually exists only in a theoretical
-      // place that is not in the DOM.  But once the modal exists, it is in the
-      // DOM so the context must be set appropriately.
-      var context = e ? document : Drupal.CTools.Modal.modal;
-
-      setSize(context);
-
-      // Get our heights
-      var docHeight = $(document).height();
-      var docWidth = $(document).width();
-      var winHeight = $(window).height();
-      var winWidth = $(window).width();
-      if( docHeight < winHeight ) docHeight = winHeight;
-
-      // Get where we should move content to
-      var modalContent = $('#modalContent');
-
-      var height = Math.max(modalContent.outerHeight(), $('div.ctools-modal-content', context).outerHeight());
-      var width = Math.max(modalContent.outerWidth(), $('div.ctools-modal-content', context).outerWidth());
-
-      var mdcTop = Math.max($(document).scrollTop() + ( winHeight / 2 ) - (  height / 2), 10);
-      var mdcLeft = Math.max(( winWidth / 2 ) - ( width / 2), 10);
-
-      // Apply attributes to fix the position of the modal relative to current
-      // position of page. This is required when the modal is larger than the
-      // browser window. This enables the modal to scroll with the rest of the
-      // page, rather than remaining centered in the page whilst scrolling.
-      if (height > $(window).height()) {
-        if (e.type === 'resize') {
-          // Is a resize event so get the position of top relative to current
-          // position of document in browser window.
-          mdcTop = 10 + $(document).scrollTop();
-        } else if (e.type === 'scroll') {
-          // Is a scroll event so mantain to current position of the modal
-          // relative to page.
-          var modalOffSet = modalContent.offset();
-          mdcTop = modalOffSet.y;
-        }
-      }
-
-      // Apply the changes
-      $('#modalBackdrop').css({'height': winHeight + 'px', 'width': winWidth + 'px', 'top': $(document).scrollTop()}).show();
-      modalContent.css('top', mdcTop + 'px').css('left', mdcLeft + 'px').show();
-    };
     $(window).bind('resize', modalContentResize);
     $(window).bind('scroll', modalContentResize);
-
-    $('#modalContent').focus();
   };
 
-  var ctoolsUnmodalContent = Drupal.CTools.Modal.unmodalContent;
-  Drupal.CTools.Modal.unmodalContent = function (content, animation, speed) {
-    ctoolsUnmodalContent(content, animation, speed);
+  /**
+   * unmodalContent
+   * @param content (The jQuery object to remove)
+   * @param animation (fadeOut, slideUp, show)
+   * @param speed (valid animation speeds slow, medium, fast or # in ms)
+   */
+  Drupal.CTools.Modal.unmodalContent = function(content, animation, speed)
+  {
+    // If our animation isn't set, make it just show/pop
+    if (!animation) { var animation = 'show'; } else {
+      // If our animation isn't "fade" then it always is show
+      if (( animation != 'fadeOut' ) && ( animation != 'slideUp')) animation = 'show';
+    }
+    // Set a speed if we dont have one
+    if ( !speed ) var speed = 'fast';
+
+    // Unbind the events we bound
+    $(window).unbind('resize', modalContentResize);
     $(window).unbind('scroll', modalContentResize);
-  }
+    $('body').unbind('focus', modalEventHandler);
+    $('body').unbind('keypress', modalEventHandler);
+    $('body').unbind( 'keydown', modalTabTrapHandler );
+    $('.close').unbind('click', modalContentClose);
+    $('body').unbind('keypress', modalEventEscapeCloseHandler);
+    $(document).trigger('CToolsDetachBehaviors', $('#modalContent'));
+
+    // jQuery magic loop through the instances and run the animations or removal.
+    content.each(function(){
+      if ( animation == 'fade' ) {
+        $('#modalContent').fadeOut(speed, function() {
+          $('#modalBackdrop').fadeOut(speed, function() {
+            $(this).remove();
+          });
+          $(this).remove();
+        });
+      } else {
+        if ( animation == 'slide' ) {
+          $('#modalContent').slideUp(speed,function() {
+            $('#modalBackdrop').slideUp(speed, function() {
+              $(this).remove();
+            });
+            $(this).remove();
+          });
+        } else {
+          $('#modalContent').remove();
+          $('#modalBackdrop').remove();
+        }
+      }
+    });
+  };
 
   Drupal.ajax.prototype.commands.modal_display = Drupal.CTools.Modal.modal_display;
   Drupal.ajax.prototype.commands.modal_dismiss = Drupal.CTools.Modal.modal_dismiss;
