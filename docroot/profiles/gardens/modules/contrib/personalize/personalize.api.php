@@ -156,6 +156,18 @@ function hook_personalize_option_set_delete($option_set) {
 }
 
 /**
+ * Allow alteration of the element to be rendered for an option set.
+ *
+ * @param array $element
+ *   The render element by reference.
+ * @param stdClass $option_set
+ *   The option set data.
+ */
+function hook_personalize_option_set_render(&$element, $option_set) {
+
+}
+
+/**
  * Respond to an MVT being deleted.
  *
  * This hook is invoked after an MVT has been deleted from the db.
@@ -187,6 +199,24 @@ function hook_personalize_goal_save($goal_array) {
 }
 
 /**
+ * A goals is about to be changed or added to a campaign.
+ *
+ * This hook is invoked before the goal is saved to the database so
+ * modules can alter the information that is saved.
+ *
+ * @param stdClass $goal
+ *   A stdClass object representing the goal entity, with the following
+ *   properties:
+ *   - agent The name of the agent the goal was saved for.
+ *   - name The name of the action used by the goal.
+ *   - value The value of the goal.
+ *   - goal_id: (Optional) the id of the goal if it is being edited.
+ */
+function hook_personalize_goal_presave($agent) {
+
+}
+
+/**
  * Respond to ajax submission of agent-related changes.
  *
  * This hook is invoked at the end of the ajax callback when any of
@@ -210,6 +240,23 @@ function hook_personalize_form_ajax_submit($agent_data) {
  *   modified.
  */
 function hook_personalize_form_ajax_commands_alter(&$commands) {
+
+}
+
+/**
+ * Alter the links displayed within the process bar drop button when editing
+ * a campaign.
+ *
+ * @param array $links
+ *   An array of links to alter that must be suitable to be passed to the
+ *   ctools_dropbutton theme function.
+ * @param stdClass $agent_data
+ *   The campaign that is being edited for context.
+ * @param string $destination
+ *   A destination url to use in order to return to the current section of the
+ *   campaign edit process.
+ */
+function hook_personalize_campaign_action_links_alter(&$links, $agent_data, $destination) {
 
 }
 
@@ -272,20 +319,14 @@ function hook_personalize_delete_link($option_set) {
 }
 
 /**
- * Returns a render array or themed output for a report on the specified agent.
+ * Allows alteration of the wizard steps for managing a campaign.
  *
- * This hook will be invoked on the module responsible for the agent type of
- * the agent in question.
- *
- * @param stdClass $agent_data
- *   A stdClass object representing the loaded agent.
- * @param stdClass $option_set
- *   (optional) The content variation set for filtering report data.
- *
- * @return string|array
- *   Either a string of themed output or an array that can be passed to drupal_render.
+ * @param array $steps
+ *   An array of steps defining the wizard navigation.
+ * @param PersonalizeAgentInterface $agent_instance
+ *   The agent whose steps are being altered.
  */
-function hook_personalize_campaign_report($agent_data, $option_set) {
+function hook_personalize_wizard_steps_alter(&$steps, $agent_instance) {
 
 }
 

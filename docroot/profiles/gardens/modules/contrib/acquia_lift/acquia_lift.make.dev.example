@@ -6,7 +6,7 @@ api = 2
 core = 7.x
 
 projects[drupal][type] = core
-projects[drupal][version] = "7.34"
+projects[drupal][version] = "7.40"
 
 ; Modules =====================================================================
 
@@ -14,15 +14,15 @@ projects[drupal][version] = "7.34"
 ; ---------------------------------------
 projects[personalize][type] = "module"
 projects[personalize][download][type] = "git"
-projects[personalize][download][url] = "http://git.drupal.org/project/personalize.git"
-projects[personalize][download][branch] = "7.x-1.x"
+projects[personalize][download][url] = "https://github.com/acquia/personalize_module.git"
+projects[personalize][download][branch] = "7.x-2.x"
 projects[personalize][subdir] = contrib
 
 ; Contrib module: visitor_actions
 ; ---------------------------------------
 projects[visitor_actions][type] = "module"
 projects[visitor_actions][download][type] = "git"
-projects[visitor_actions][download][url] = "http://git.drupal.org/project/visitor_actions.git"
+projects[visitor_actions][download][url] = "https://github.com/acquia/visitor_actions.git"
 projects[visitor_actions][download][branch] = "7.x-1.x"
 projects[visitor_actions][subdir] = contrib
 
@@ -30,14 +30,20 @@ projects[visitor_actions][subdir] = contrib
 ; ---------------------------------------
 projects[acquia_lift][type] = "module"
 projects[acquia_lift][download][type] = "git"
-projects[acquia_lift][download][url] = "http://git.drupal.org/project/acquia_lift.git"
-projects[acquia_lift][download][branch] = "7.x-1.x"
+projects[acquia_lift][download][url] = "https://github.com/acquia/acquia_lift.git"
+projects[acquia_lift][download][branch] = "7.x-2.x"
 projects[acquia_lift][subdir] = contrib
+
+
+; Contrib module: acquia_connector
+; ---------------------------------------
+projects[acquia_connector][subdir] = contrib
+projects[acquia_connector][version] = 2.15
 
 ; Contrib module: ctools
 ; ---------------------------------------
 projects[ctools][subdir] = contrib
-projects[ctools][version] = 1.4
+projects[ctools][version] = 1.7
 
 ; Contrib module: entity
 ; ---------------------------------------
@@ -69,7 +75,7 @@ libraries[underscore][directory] = "underscore"
 ; ---------------------------------------
 libraries[chosen][destination] = "libraries"
 libraries[chosen][download][type] = "get"
-libraries[chosen][download][url] = "https://github.com/harvesthq/chosen/releases/download/1.0.0/chosen_v1.0.0.zip"
+libraries[chosen][download][url] = "https://github.com/harvesthq/chosen/releases/download/v1.1.0/chosen_v1.1.0.zip"
 libraries[chosen][directory] = "chosen"
 
 ; Library: qtip

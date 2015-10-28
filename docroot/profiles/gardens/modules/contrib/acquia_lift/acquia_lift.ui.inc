@@ -43,11 +43,6 @@ function acquia_lift_build_page(&$page) {
   $is_admin = TRUE;
   if (!path_is_admin(current_path()) && preg_match('/^admin\/structure\/block\/demo\//', current_path()) == 0) {
     $is_admin = FALSE;
-    // If the user is personalizing content in context, provide a DSM with actions
-    // to personalize or cancel out of this 'mode'.
-    if (acquia_lift_nav_message_is_set()) {
-      drupal_set_message(acquia_lift_edit_mode_personalize_in_context(), 'acquia-lift-personalize');
-    }
   }
 
   // Attach client-side controls for managing personalized content.
@@ -66,9 +61,7 @@ function acquia_lift_build_page(&$page) {
     ctools_add_css('acquia_lift.ctools.modal', 'acquia_lift');
 
     // Load data about active campaigns.
-    $include_status = variable_get('acquia_lift_unibar_allow_status_change', TRUE);
-    $settings['acquia_lift']['campaigns'] = acquia_lift_get_campaign_details($include_status);
-    $settings['acquia_lift']['allowStatusChange'] = (bool) $include_status;
+    $settings['acquia_lift']['campaigns'] = acquia_lift_get_campaign_details();
     // Load data about custom defined visitor actions.
     $actions = visitor_actions_custom_load_multiple();
     $settings['acquia_lift']['customActions'] = $actions;
@@ -76,11 +69,6 @@ function acquia_lift_build_page(&$page) {
     $settings['acquia_lift']['dom_selector_ignore'] = acquia_lift_generate_ignore_selector();
     $settings['acquia_lift']['edit_in_context_html_strip'] = variable_get('acquia_lift_html_context_strip', 1);
 
-    $pending_agents = acquia_lift_get_pending_agents();
-    if (!empty($pending_agents)) {
-      $settings['acquia_lift']['pendingMessage'][] = t('The following campaigns are being synced to Lift and will be started shortly: %agents', array('%agents' => implode(', ', $pending_agents)));
-      $page['page_top']['#attached']['library'][] = array('acquia_lift', 'acquia_lift.messagebox');
-    }
     // Add any pending messages from the query string.
     $params = drupal_get_query_parameters();
     if (!empty($params['liftpm']) && strstr($params['liftpm'], '|') !== FALSE) {
@@ -112,10 +100,8 @@ function acquia_lift_chosenify_element(&$element, $classes = array()) {
     'scope' => 'footer',
     'defer' => TRUE,
   );
-  $element['#attributes'] = array(
-    'class' => $classes,
-    'data-placeholder' => t('Choose a context...'),
-  );
+  $element['#attributes']['class'] = $classes;
+  $element['#attributes']['data-placeholder'] = t('Choose a context...');
   $element['#attached'] = array(
     'js' => array(
       $chosen_path . '/chosen.jquery.min.js' => array('group' => 'JS_LIBRARY'),
@@ -145,143 +131,89 @@ function acquia_lift_generate_ignore_selector() {
 
 /**
  * =======================================================================
- *  F U N C T I O N S  B A S E D  O N  V I S I T O R  A C T I O N S  U I
+ * S H A R E D  U I
  * =======================================================================
  */
 
-
 /**
- * Builds controls for an in-context personalization mode.
+ * Helper function to return a list of option set type metadata.
  *
- * Based on visitor_actions_ui_edit_mode_action_in_context().
- *
- * @return String
- *   The rendered string for display.
+ * @return array
+ *   An array for each type of option set available with the following keys:
+ *   - title: A title for the type of option set
+ *   - description: A brief description
+ *   - logo: a themed image that can be used to represent the option set type
+ *   - path: the link to create an option set of this type
  */
-function acquia_lift_edit_mode_personalize_in_context() {
-  $build = array(
-    'message' => array(
-      '#markup' => '<p>' . t('To personalize content in context, navigate to the page where the content you wish to personalize is, then press the %link link.', array('%link' => 'Personalize')) . '</p>',
+function acquia_lift_option_set_types_ui() {
+  $path = drupal_get_path('module', 'acquia_lift');
+  return array(
+    'block' => array(
+      'title' => t('Drupal blocks'),
+      'description' => t('This variation style allows you to display personalized content in a Drupal block, wherever it may appear on your website.'),
+      'logo' => theme('image', array(
+        'path' => $path . '/images/variation-type-block.png',
+        'alt' => t('Drupal block'),
+        'title' => t('Select this option to create a variation set from Drupal content blocks.'),
+      )),
+      'path' => 'admin/structure/personalize/variations/personalize-blocks/add',
     ),
-    'actions' => array(
-      '#theme' => 'acquia_lift_edit_mode_personalize_in_context_links',
-      '#attributes' => array(
-        'class' => array('visitor-actions-ui-actions'),
-      ),
-      'launch' => array(
-        '#type' => 'link',
-        '#title' => t('Personalize'),
-        '#href' => drupal_get_normal_path('admin/structure/personalize'),
-        '#options' => array(
-          'attributes' => array(
-            'title' => t('Highlight content that can be personalized'),
-            'role' => 'button',
-            'aria-pressed' => 'false',
-            'class' => array('acquia-lift-ignore', 'acquia-lift-personalize-trigger'),
-            'data-acquia-lift-personalize-mode' => 'content-variation',
-          ),
-        ),
-      ),
-      'cancel' => array(
-        '#type' => 'link',
-        '#title' => t('Cancel'),
-        '#href' => drupal_get_normal_path('acquia_lift/personalize_in_context/stop'),
-        '#options' => array(
-          'attributes' => array(
-            'title' => t('Home page'),
-            'class' => array('acquia-lift-ignore'),
-          ),
-        ),
-      ),
+    'element' => array(
+      'title' => t('Webpage elements'),
+      'description' => t('This variation style allows you to select an item on a webpage and modify its HTML to create new variations of the content.'),
+      'logo' => theme('image', array(
+        'path' => $path . '/images/variation-type-element.png',
+        'alt' => t('Webpage element'),
+        'title' => t('Select this option to create a variation set from web page elements.'),
+      )),
+      'path' => 'admin/structure/personalize/variations/personalize-elements/add',
     ),
   );
-
-  // Allow other modules to modify the message markup.
-  drupal_alter('acquia_lift_edit_mode_actions', $build);
-  return drupal_render($build);
 }
 
 /**
- * Toggles acquia_lift edit mode.
- */
-function acquia_lift_edit_mode_toggle() {
-  if (isset($_SESSION['acquia_lift_edit_mode'])) {
-    unset($_SESSION['acquia_lift_edit_mode']);
-  }
-  else {
-    $_SESSION['acquia_lift_edit_mode'] = 1;
-  }
-}
-
-/**
- * Disables edit mode and returns to the stored destination.
- */
-function acquia_lift_edit_mode_disable() {
-  unset($_SESSION['acquia_lift_edit_mode']);
-  $goto = '';
-  $options = array();
-  if (isset($_SESSION['acquia_lift_personalize_edit_mode_return'])) {
-    $goto = $_SESSION['acquia_lift_personalize_edit_mode_return'];
-    if (strpos($goto, '#overlay=') === 0) {
-      // If the original path was in the overlay, make sure we go back
-      // to the overlay.
-      $path = substr($goto, strlen('#overlay='));
-      $goto = current_path();
-      $options = array('fragment' => 'overlay=' . $path);
-    }
-    unset($_SESSION['acquia_lift_personalize_edit_mode_return']);
-    // The above session variable trumps any destination that has been
-    // set so we need to make sure drupal_goto() behaves correctly.
-    if (isset($_GET['destination'])) {
-      unset($_GET['destination']);
-    }
-  }
-  elseif (isset($_GET['destination'])) {
-    $goto = $_GET['destination'];
-    unset($_GET['destination']);
-  }
-  if (acquia_lift_nav_message_is_set()) {
-    acquia_lift_unset_nav_message();
-  }
-  drupal_goto($goto, $options);
-}
-
-/**
- * Page callback to start personalization edit mode.
- */
-function personalize_in_context_start() {
-  if (isset($_GET['destination'])) {
-    $_SESSION['acquia_lift_personalize_edit_mode_return'] = $_GET['destination'];
-    unset($_GET['destination']);
-  }
-  acquia_lift_set_nav_message();
-  drupal_goto();
-}
-
-/**
- * Sets the instructional message for users to navigate to where they
- * wish to add an action.
- */
-function acquia_lift_set_nav_message() {
-  $_SESSION['acquia_lift_personalize_set_message'] = 1;
-}
-
-/**
- * Checks whether the instructional navigation message is set.
+ * Helper function to return a list of goal type metadata.
  *
- * @return bool
- *   TRUE if the message is set, FALSE otherwise.
+ * @return array
+ *   An array for each goal type available wit the following keys:
+ *   - title: A title for the type of goal
+ *   - description: A brief description
+ *   - logo: a themed image that can be used to represent the goal type
  */
-function acquia_lift_nav_message_is_set() {
-  return isset($_SESSION['acquia_lift_personalize_set_message']);
-}
-
-
-/**
- * Unsets the instructional navigation message.
- */
-function acquia_lift_unset_nav_message() {
-  unset($_SESSION['acquia_lift_personalize_set_message']);
+function acquia_lift_goal_types_ui() {
+  $path = drupal_get_path('module', 'acquia_lift');
+  return array(
+    'existing' => array(
+      'title' => t('Predefined goal'),
+      'description' => t('Visitor actions that are already defined, such as signing in or submitting a form.'),
+      'path' => 'admin/structure/acquia_lift/goal/add/existing',
+      'logo' => theme('image', array(
+        'path' => $path . '/images/goal-type-predefined.png',
+        'alt' => t('Pre-existing goal'),
+        'title' => t('Select this option to create a goal from a pre-existing visitor action.'),
+      )),
+    ),
+    'element' => array(
+      'title' => t('New element goal'),
+      'description' => t('Visitor actions that involve clicking a link, hovering over a link, or submitting a form.'),
+      'path' => 'admin/structure/visitor_actions/add-in-context',
+      'logo' => theme('image', array(
+        'path' => $path . '/images/goal-type-element.png',
+        'alt' => t('Element goal'),
+        'title' => t('Select this option to create an element goal.'),
+      ))
+    ),
+    'page' => array(
+      'title' => t('New page goal'),
+      'description' => t('Visitor actions for a specific webpage that involve viewing, scrolling to the bottom of, or staying for a set timeframe.'),
+      'path' => 'admin/structure/acquia_lift/goal/add/page',
+      'logo' => theme('image', array(
+        'path' => $path . '/images/goal-type-page.png',
+        'alt' => t('Page goal'),
+        'title' => t('Select this option to create a page goal.'),
+      ))
+    ),
+  );
 }
 
 /**

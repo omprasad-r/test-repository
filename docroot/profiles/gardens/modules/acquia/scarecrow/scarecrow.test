@@ -70,7 +70,7 @@ class ScarecrowRequirementErrorsTestCase extends DrupalWebTestCase {
     variable_set('acsf_local_user_accounts', TRUE);
     menu_rebuild();
 
-    // Create a regular admin user and a Gardens admin user (the latter of
+    // Create a regular admin user and a Site Factory admin user (the latter of
     // which has 'administer software updates' permission).
     $this->admin_user = $this->drupalCreateUser(array('access administration pages', 'administer site configuration'));
     $this->gardens_admin = $this->drupalCreateUser(array('access administration pages', 'administer site configuration', 'administer software updates'));
@@ -102,7 +102,7 @@ class ScarecrowRequirementErrorsTestCase extends DrupalWebTestCase {
     $db_update_errors = $this->xpath($db_update_xpath);
     $this->assertTrue(empty($db_update_errors), t('Database update error message not found on the status report page.'));
 
-    // The Gardens admin should see error messages in both places.
+    // The Site Factory admin should see error messages in both places.
     $this->drupalLogin($this->gardens_admin);
     $this->drupalGet('admin/config');
     $this->assertText('One or more problems were detected with your Drupal installation.');

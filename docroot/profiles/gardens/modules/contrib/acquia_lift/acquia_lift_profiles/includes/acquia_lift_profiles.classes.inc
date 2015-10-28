@@ -79,7 +79,7 @@ class ALProfilesAPI {
    *
    * @return ALProfilesAPI
    */
-  public static function getInstance($account_name = '', $api_url = '', $access_key = '', $secret_key = '') {
+  public static function getInstance($account_name = '', $customer_site = '', $api_url = '', $access_key = '', $secret_key = '') {
     if (empty(self::$instance)) {
       if (drupal_valid_test_ua()) {
         self::setTestInstance();
@@ -89,6 +89,9 @@ class ALProfilesAPI {
       // from the variables.
       if (empty($account_name)) {
         $account_name = variable_get('acquia_lift_profiles_account_name', '');
+      }
+      if (empty($customer_site)) {
+        $customer_site = variable_get('acquia_lift_profiles_site_name', '');
       }
       if (empty($api_url)) {
         $api_url = variable_get('acquia_lift_profiles_api_url', '');
@@ -116,7 +119,7 @@ class ALProfilesAPI {
       if (substr($api_url, -1) === '/') {
         $api_url = substr($api_url, 0, -1);
       }
-      self::$instance = new self($account_name, $api_url, $access_key, $secret_key);
+      self::$instance = new self($account_name, $customer_site, $api_url, $access_key, $secret_key);
     }
     return self::$instance;
   }
@@ -137,9 +140,9 @@ class ALProfilesAPI {
    */
   public static function setTestInstance($broken_http_client = FALSE) {
     module_load_include('inc', 'acquia_lift_profiles', 'tests/acquia_lift_profiles.test_classes');
-    self::$instance = new self('TESTACCOUNT', 'http://api.example.com', 'testUser', 'testPass');
+    self::$instance = new self('TESTACCOUNT', 'TESTSITE', 'http://api.example.com', 'testUser', 'testPass');
     $test_data = variable_get('acquia_lift_profiles_web_test_data', array());
-    self::$instance->setHttpClient(new DummyALProfilesHttpClient($broken_http_client, $test_data));
+    self::$instance->setHttpClient(new DummyALProfilesHttpClient(ACQUIA_LIFT_TESTING_AGENT_V1, $broken_http_client, $test_data));
     self::$instance->setLogger(new AcquiaLiftTestLogger(TRUE));
   }
 
@@ -155,8 +158,9 @@ class ALProfilesAPI {
    * @param $secret_key
    *   The secret key to use for authorization.
    */
-  private function __construct($account_name, $api_url, $access_key, $secret_key) {
+  private function __construct($account_name, $site, $api_url, $access_key, $secret_key) {
     $this->accountName = $account_name;
+    $this->customerSite = $site;
     $this->apiUrl = $api_url;
     $this->accessKey = $access_key;
     $this->secretKey = $secret_key;
@@ -169,6 +173,15 @@ class ALProfilesAPI {
    */
   public function getAccountName() {
     return $this->accountName;
+  }
+
+  /**
+   * Accessor for the customerSite property.
+   *
+   * @return string
+   */
+  public function getCustomerSite() {
+    return $this->customerSite;
   }
 
   /**
@@ -276,7 +289,9 @@ class ALProfilesAPI {
    */
   public function getAuthHeader($method, $path, $parameters = array(), $headers = array()) {
     $canonical = $this->canonicalizeRequest($method, $path, $parameters, $headers, is_a($this->httpClient(), 'AcquiaLiftDrupalHttpClient'));
-    $hmac = base64_encode(hash_hmac('sha1', (string) $canonical, $this->secretKey, TRUE));
+    $binary = hash_hmac('sha1', (string) $canonical, $this->secretKey, TRUE);
+    $hex = hash_hmac('sha1', (string) $canonical, $this->secretKey, FALSE);
+    $hmac = base64_encode($binary);
     return 'HMAC ' . $this->accessKey . ':' . $hmac;
   }
 
@@ -290,10 +305,14 @@ class ALProfilesAPI {
     // First get our Authorization header.
     $headers = array('Accept' => 'application/json');
     $url = $this->generateEndpoint('segments');
-    $auth_header = $this->getAuthHeader('GET', $url, array(), $headers);
+    $params = array();
+    if (!empty($this->customerSite)) {
+      $params['customerSite'] = $this->customerSite;
+    }
+    $auth_header = $this->getAuthHeader('GET', $url, $params, $headers);
     $headers += array('Authorization' => $auth_header);
-
-    $response = $this->httpClient()->get($url, $headers);
+    $querystring = empty($this->customerSite) ? '' : '?customerSite=' . rawurlencode($this->customerSite);
+    $response = $this->httpClient()->get($url . $querystring, $headers);
     if ($response->code != 200 || !isset($response->data)) {
       if ($response->code != 200) {
         $vars = array(
@@ -332,19 +351,25 @@ class ALProfilesAPI {
     // First get our Authorization header.
     $headers = array('Accept' => 'application/json');
     $url = $this->generateEndpoint('events/' . $event_name);
-    $auth_header = $this->getAuthHeader('PUT', $url, array('label' => $event_label, 'type' => $event_type), $headers);
+    $params = array('label' => $event_label, 'type' => $event_type);
+    if (!empty($this->customerSite)) {
+      $params['customerSite'] = $this->customerSite;
+    }
+    $auth_header = $this->getAuthHeader('PUT', $url, $params, $headers);
     $headers += array('Authorization' => $auth_header);
-
-    $response = $this->httpClient()->put($url . '?label=' . rawurlencode($event_label) . '&type=' . $event_type, $headers);
+    $querystring = empty($this->customerSite) ? '?' : '?customerSite=' . rawurlencode($this->customerSite) . '&';
+    $querystring .= 'label=' . rawurlencode($event_label) . '&type=' . $event_type;
+    $response = $this->httpClient()->put($url . $querystring, $headers);
     $vars = array('eventname' => $event_name);
     $success_msg = 'The event {eventname} has been saved to Acquia Lift Profiles';
     $fail_msg = 'Could not save event {eventname} to Acquia Lift Profiles';
+    $exception_msg = 'Could not save event';
     if ($response->code == 200) {
       $this->logger()->log(PersonalizeLogLevel::INFO, $success_msg, $vars);
     }
     else {
       $this->logger()->log(PersonalizeLogLevel::ERROR, $fail_msg, $vars);
-      throw new ALProfilesException($fail_msg);
+      throw new ALProfilesException($exception_msg);
     }
   }
 
@@ -359,18 +384,25 @@ class ALProfilesAPI {
   public function deleteEvent($event_name) {
     // First get our Authorization header.
     $url = $this->generateEndpoint('events/' . $event_name);
-    $auth_header = $this->getAuthHeader('DELETE', $url);
 
-    $response = $this->httpClient()->delete($url, array('Authorization' => $auth_header));
+    $params = array();
+    $querystring = '';
+    if (!empty($this->customerSite)) {
+      $params['customerSite'] = $this->customerSite;
+      $querystring = '?customerSite=' . $this->customerSite;
+    }
+    $auth_header = $this->getAuthHeader('DELETE', $url, $params);
+    $response = $this->httpClient()->delete($url . $querystring, array('Authorization' => $auth_header));
     $vars = array('eventname' => $event_name);
     $success_msg = 'The event {eventname} was deleted from Acquia Lift Profiles';
     $fail_msg = 'Could not delete event {eventname} from Acquia Lift Profiles';
+    $exception_msg = 'Could not delete event';
     if ($response->code == 200) {
       $this->logger()->log(PersonalizeLogLevel::INFO, $success_msg, $vars);
     }
     else {
       $this->logger()->log(PersonalizeLogLevel::ERROR, $fail_msg, $vars);
-      throw new ALProfilesException($fail_msg);
+      throw new ALProfilesException($exception_msg);
     }
   }
 

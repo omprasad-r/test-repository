@@ -14,6 +14,9 @@ function acsf_init_drush_command() {
       'bootstrap' => DRUSH_BOOTSTRAP_DRUPAL_ROOT,
       'callback' => 'drush_acsf_init',
       'description' => dt('Installs/updates the non-standard Drupal components for this repository to be compatible with Acquia Site Factory. This command will update in place, so there is no harm in running it multiple times.'),
+      'options' => array(
+        'skip-default-settings' => dt('Do not overwrite the default settings.php file. Use this option when installing ACSF in a local environment.'),
+      ),
     ),
     'acsf-connect-factory' => array(
       'bootstrap' => DRUSH_BOOTSTRAP_DRUPAL_FULL,
@@ -49,6 +52,9 @@ function acsf_init_drush_command() {
       'bootstrap' => DRUSH_BOOTSTRAP_DRUPAL_ROOT,
       'callback' => 'drush_acsf_init_verify',
       'description' => dt('Verifies that acsf-init was successfully run in the current version.'),
+      'options' => array(
+        'skip-default-settings' => dt('Skip verifying the default settings.php file.'),
+      ),
     ),
     'acsf-uninstall' => array(
       'bootstrap' => DRUSH_BOOTSTRAP_DRUPAL_ROOT,
@@ -67,11 +73,17 @@ function drush_acsf_init() {
   $relative_path = str_replace(realpath(DRUPAL_ROOT) . '/', '', realpath($path));
   $repo_root = str_replace('/docroot', '', realpath(DRUPAL_ROOT));
   $lib_path = sprintf('%s/%s/acsf/acsf_init/lib', realpath(DRUPAL_ROOT), $relative_path);
+  $skip_default_settings = drush_get_option('skip-default-settings');
 
   drush_print(dt('Installing ACSF requirements.'));
 
   // Create the required directories.
   foreach (acsf_init_get_required_dirs($repo_root) as $name => $dir) {
+    // Skip '../sites/default' if --skip-default-settings is set.
+    if ($skip_default_settings && $name == 'site env default') {
+      continue;
+    }
+
     drush_print(dt('Creating directory for !name at !dir', array(
       '!name' => $name,
       '!dir' => $dir,
@@ -92,6 +104,11 @@ function drush_acsf_init() {
   // Copy the required files.
   foreach (acsf_init_get_required_files($repo_root) as $location) {
     $file = $location['filename'];
+    // Skip the default settings.php file if --skip-default-settings is set.
+    if ($skip_default_settings && $file == 'settings.php' && $location['source'] == 'sites/default') {
+      continue;
+    }
+
     $source = sprintf('%s/%s/%s', $lib_path, $location['source'], $file);
     $dest = sprintf('%s/%s', $location['dest'], $file);
     $mod = isset($location['mod']) ? $location['mod'] : FALSE;
@@ -103,6 +120,13 @@ function drush_acsf_init() {
       $confirm = drush_confirm(dt('Destination file exists, continue?'));
       if ($confirm === FALSE) {
         continue;
+      }
+      // If the file exists, it could be set to 0444, so we have to ensure that
+      // it is writable before overwriting it. The copy would fail otherwise.
+      if (!is_writable($dest)) {
+        if (!chmod($dest, 0666)) {
+          drush_log(dt('Chmod Error: !file', array('!file' => $file)), 'error', 'error');
+        };
       }
     }
     // Copy the file into the destination.
@@ -272,10 +296,16 @@ function drush_acsf_init_verify() {
   $relative_path = str_replace($drupal_root . '/', '', $path);
   $repo_root = str_replace('/docroot', '', $drupal_root);
   $lib_path = sprintf('%s/%s/acsf/acsf_init/lib', $drupal_root, $relative_path);
+  $skip_default_settings = drush_get_option('skip-default-settings');
 
   $error = FALSE;
   foreach (acsf_init_get_required_files($repo_root) as $location) {
     $file = $location['filename'];
+    // Skip the default settings.php file if --skip-default-settings is set.
+    if ($skip_default_settings && $file == 'settings.php' && $location['source'] == 'sites/default') {
+      continue;
+    }
+
     $source = sprintf('%s/%s/%s', $lib_path, $location['source'], $file);
     $dest = sprintf('%s/%s', $location['dest'], $file);
     if (!file_exists($dest)) {

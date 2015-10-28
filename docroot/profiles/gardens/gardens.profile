@@ -38,7 +38,7 @@ function gardens_form_install_configure_form_alter(&$form, $form_state) {
     $site_name = substr($site_name, 0, $pos);
   }
   $form['site_information']['site_name']['#default_value'] = $site_name;
-  $form['admin_account']['account']['name']['#default_value'] = 'Gardens admin';
+  $form['admin_account']['account']['name']['#default_value'] = 'Site Factory admin';
   $form['admin_account']['account']['mail']['#default_value'] = 'support@acquia.com';
   // Gardens doesn't use update status, so don't confuse developers who might
   // be installing Gardens by hand and otherwise select it accidentally.

@@ -12,16 +12,16 @@
         $(this).on('click', function(e) {
           var $link = $(this).find('a.acquia-lift-type-select');
           // Special handling based on href values.
-          if ($link.attr('href') == settings.basePath + settings.pathPrefix + 'admin/structure/visitor_actions') {
+          if (stringEndsWith($link.attr('href'), settings.basePath + settings.pathPrefix + 'admin/structure/visitor_actions/add-in-context')) {
             // Trigger goals in context.
             $('#acquiaLiftVisitorActionsConnector').find('a').trigger('click');
-            Drupal.CTools.Modal.dismiss();
+            $('.acquia-lift-modal .close', context).trigger('click');
             e.preventDefault();
             e.stopImmediatePropagation();
-          } else if ($link.attr('href') == settings.basePath + settings.pathPrefix + 'admin/structure/personalize/variations/personalize-elements/add') {
+          } else if (stringEndsWith($link.attr('href'), settings.basePath + settings.pathPrefix + 'admin/structure/personalize/variations/personalize-elements/add')) {
             // Trigger variations in context.
             $(document).trigger('acquiaLiftElementVariationModeTrigger', [{start: true}]);
-            Drupal.CTools.Modal.dismiss();
+            $('.acquia-lift-modal .close', context).trigger('click');
             e.preventDefault();
             e.stopImmediatePropagation();
           } else if ($link.hasClass('ctools-use-modal')) {
@@ -73,7 +73,7 @@
       var $selectorInput = $variationTypeForm.find('input[name="selector"]');
 
       if ($variationTypeForm.length > 0 && $selectorInput.length > 0) {
-        var editLink = '<a class="acquia-lift-selector-edit">' + Drupal.t('Edit selector') + '</a>';
+        var editLink = '<a id="acquia-lift-selector-edit" class="acquia-lift-selector-edit">' + Drupal.t('Edit selector') + '</a>';
         var $selector =  $selectorInput.closest('div');
         $variationTypeForm.parent().find('h2').append(editLink);
         $variationTypeForm.parent().find('.acquia-lift-selector-edit').on('click', function(e) {
@@ -87,7 +87,7 @@
 
       // Populate the pages input with the current page.
       // The form is sent as the context so we can't check within it.
-      var $pageGoalForm = $('#acquia-lift-create-goal-type-form').not('acquia-lift-processed');
+      var $pageGoalForm = $('#acquia-lift-goal-type-create-form').not('acquia-lift-processed');
       if ($pageGoalForm.length > 0) {
         $pageGoalForm.find('input[name="pages"]').val(Drupal.settings.visitor_actions.currentPath);
         $pageGoalForm.addClass('acquia-lift-processed');
@@ -107,6 +107,31 @@
 
   function hidePageVisitorActionsButton() {
     $('#visitor-actions-ui-actionable-elements-without-identifiers').hide();
+  }
+
+  function stringEndsWith(str, suffix) {
+    return str.indexOf(suffix, str.length - suffix.length) !== -1;
+  }
+
+  /**
+   * Provide the HTML to create the modal dialog.
+   */
+  Drupal.theme.prototype.AcquiaLiftModalDialog = function () {
+    var html = ''
+    html += '  <div id="ctools-modal">'
+    html += '    <div class="ctools-modal-content acquia-lift-modal">' // panels-modal-content
+    html += '      <div class="modal-header">';
+    html += '        <a class="close" href="#">';
+    html +=            Drupal.CTools.Modal.currentSettings.closeText + Drupal.CTools.Modal.currentSettings.closeImage;
+    html += '        </a>';
+    html += '        <span id="modal-title" class="modal-title">&nbsp;</span>';
+    html += '      </div>';
+    html += '      <div id="modal-content" class="modal-content">';
+    html += '      </div>';
+    html += '    </div>';
+    html += '  </div>';
+
+    return html;
   }
 
 }(Drupal.jQuery, Drupal));

@@ -52,7 +52,7 @@ class PersonalizeFieldsTest extends PersonalizeBaseTest {
     $this->drupalGet('node/add/article');
     $this->drupalPost(NULL, NULL, t('Add another item'));
     $this->drupalPost(NULL, $edit, t('Save'));
-    $this->assertText('No campaign type has been configured for this field. Please go to the field settings and specify the campaign type to use.');
+    $this->assertText('No personalization type has been configured for this field. Please go to the field settings and specify the personalization type to use.');
 
     $old_instance = field_info_instance('node', 'article_headline', 'article');
     field_delete_instance($old_instance);
@@ -69,7 +69,7 @@ class PersonalizeFieldsTest extends PersonalizeBaseTest {
     $this->drupalGet('node/add/article');
     $this->drupalPost(NULL, NULL, t('Add another item'));
     $this->drupalPost(NULL, $edit, t('Save'));
-    $this->assertText('The campaign type specified for this field does not exist. Please go to the field settings and choose an existing campaign type.');
+    $this->assertText('The personalization type specified for this field does not exist. Please go to the field settings and choose an existing personalization type.');
 
     $old_instance = field_info_instance('node', 'article_headline', 'article');
     field_delete_instance($old_instance);
@@ -85,8 +85,8 @@ class PersonalizeFieldsTest extends PersonalizeBaseTest {
     $this->drupalGet('node/add/article');
     $this->drupalPost(NULL, NULL, t('Add another item'));
     $this->drupalPost(NULL, $edit, t('Save'));
-    $this->assertNoText('The campaign type specified for this field does not exist. Please go to the field settings and choose an existing campaign type.');
-    $this->assertNoText('No campaign type has been configured for this field. Please go to the field settings and specify the campaign type to use.');
+    $this->assertNoText('The personalization type specified for this field does not exist. Please go to the field settings and choose an existing personalization type.');
+    $this->assertNoText('No personalization type has been configured for this field. Please go to the field settings and specify the personalization type to use.');
     // Assert that we can load the new option set from the db.
     $option_sets = personalize_option_set_load_multiple(FALSE, array('agent' => 'article-personalizable-headline'));
     $this->assertEqual(1, count($option_sets));
@@ -132,7 +132,7 @@ class PersonalizeFieldsTest extends PersonalizeBaseTest {
     $this->drupalGet('node/add/article');
     $this->drupalPost(NULL, NULL, t('Add another item'));
     $this->drupalPost(NULL, $edit, t('Save'));
-    $this->assertNoText('The campaign type specified for this field does not exist. Please go to the field settings and choose an existing campaign type.');
+    $this->assertNoText('The personalization type specified for this field does not exist. Please go to the field settings and choose an existing personalization type.');
     $nid = $this->getNidFromCurrentUrl();
     // The agent machine name will have been generated based on the entity type
     // and field label.
@@ -941,7 +941,11 @@ class PersonalizeFieldsTest extends PersonalizeBaseTest {
         'option_label' => personalize_fields_generate_option_label(2, array('value' => 'third value'))
       )
     );
-    personalize_fields_option_set_save($option_set, 'node', $node, 'article_headline');
+    $entity_id = $node->nid;
+    if (personalize_fields_option_set_prepare($option_set, 'node', $entity_id, $node, 'article_headline')) {
+      personalize_fields_option_set_save($option_set, 'node', $entity_id, 'article_headline');
+    }
+
     $first_osid = 'osid-' . $option_set->osid;
     $this->resetAll();
 

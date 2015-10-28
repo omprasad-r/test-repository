@@ -120,7 +120,7 @@ function visitor_actions_form($form, &$form_state, $actionable_element = NULL, $
 
   $form['machine_name'] = array(
     '#type' => 'machine_name',
-    '#maxlength' => 32,
+    '#maxlength' => 64,
     '#machine_name' => array(
       'exists' => 'visitor_actions_action_name_exists',
       'source' => array('title'),
@@ -143,9 +143,12 @@ function visitor_actions_form($form, &$form_state, $actionable_element = NULL, $
   );
   $form['advanced']['pages'] = array(
     '#type' => 'textarea',
+    '#element_validate' => array('visitor_actions_form_element_path_validate'),
     '#title' => t('Pages'),
+    '#allow_dynamic' => TRUE,
+    '#allow_external' => FALSE,
     '#default_value' => isset($_GET['path']) ? urldecode($_GET['path']) : (isset($action['pages']) ? $action['pages'] : ''),
-    '#description' => t("Specify pages by using their paths or leave blank to apply to all pages. Enter one path per line. The '*' character is a wildcard. Example paths are %blog for the blog page and %blog-wildcard for every personal blog. %front is the front page.", array('%blog' => 'blog', '%blog-wildcard' => 'blog/*', '%front' => '<front>')),
+    '#description' => t("Specify pages by using one path per line. The '*' character is a wildcard. Example paths are %blog for the blog page and %blog-wildcard for every personal blog. %front is the front page. If the URL's language prefix is skipped, all languages of the same URL will be selected.", array('%blog' => 'blog', '%blog-wildcard' => 'blog/*', '%front' => '<front>')),
   );
   $form['advanced']['reusable'] = array(
     '#type' => 'checkbox',
@@ -270,17 +273,6 @@ function visitor_actions_form_validate($form, &$form_state) {
       $matched = preg_match_all($re, $form_state['values']['identifier'][$plugin], $matches);
       if ($matched > 0) {
         form_set_error('identifier[' . $plugin . ']', t('The selector cannot contain tags.'));
-      }
-    }
-
-    // Validate any page limits.
-    foreach(preg_split('~[\r\n]+~', $form_state['values']['pages']) as $line){
-      if(empty($line)) {
-        continue;
-      }
-      if (!valid_url($line) && $line !== '<front>') {
-        form_set_error('pages', t('The selected pages must contain valid paths.'));
-        break;
       }
     }
   }

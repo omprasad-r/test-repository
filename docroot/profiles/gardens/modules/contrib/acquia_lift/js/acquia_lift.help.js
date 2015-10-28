@@ -16,11 +16,6 @@
               trigger = $('<span class="acquia-lift-help">'),
               positionTooltip = 'bottomMiddle';
 
-          // The tooltip will run out of room on the right.
-          if ($(this).is(':last-child')) {
-            positionTooltip = 'bottomRight';
-          }
-
           $(trigger).qtip({
             content: text,
             position: {
@@ -33,7 +28,7 @@
               screen: true
             },
             style: {
-              tip: true,
+              tip: true
             }
           });
           $(this).append(trigger);

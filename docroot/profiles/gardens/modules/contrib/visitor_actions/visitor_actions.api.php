@@ -87,6 +87,15 @@ function hook_visitor_action_subscribe($action) {
 }
 
 /**
+ * Respond to an action being saved.
+ *
+ * Invoked after a custom action is saved to the database.
+ */
+function hook_visitor_actions_save_action() {
+
+}
+
+/**
  * Respond to deletion of an action.
  *
  * Invoked after a custom action is deleted from the database.

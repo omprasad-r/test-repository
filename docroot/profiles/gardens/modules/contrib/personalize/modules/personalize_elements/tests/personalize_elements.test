@@ -65,6 +65,7 @@ class PersonalizeElementsTest extends PersonalizeBaseTest {
   function testPersonalizeElementsAdmin() {
     // Remember the first option in the form should always be the control.
     $options_count_error = t('You must have at least 2 variations for a content variation set.');
+    $success_message = t('The variation set was saved.');
     $admin_user = $this->drupalCreateUser(array('access administration pages', 'administer site configuration', 'access content', 'manage personalized content'));
     $this->drupalLogin($admin_user);
     $edit = array(
@@ -76,10 +77,31 @@ class PersonalizeElementsTest extends PersonalizeBaseTest {
     $this->drupalPost('admin/structure/personalize/variations/personalize-elements/add', $edit, $this->getButton('save'));
     $this->assertText('You must choose an operation');
 
-    $edit['variation_type'] = 'appendHtml';
+    $edit['variation_type'] = 'editText';
     $this->assertFieldByName('options[0][option_label]', PERSONALIZE_CONTROL_OPTION_LABEL);
     $this->drupalPost('admin/structure/personalize/variations/personalize-elements/add', $edit, $this->getButton('save'));
     $this->assertText($options_count_error);
+    $this->assertNoText($success_message);
+    $edit['add_control_option'] = TRUE;
+    $edit['options[1][option_label]'] = 'first-option';
+    $edit['options[1][personalize_elements_content]'] = 'text changes';
+    $this->drupalPost(NULL, $edit, $this->getButton('save'));
+    $this->assertNoText($options_count_error);
+    $this->assertText($success_message);
+    $option_sets = personalize_option_set_load_multiple(FALSE, array(), TRUE);
+    $option_set = reset($option_sets);
+    $this->assertEqual(2, count($option_set->options));
+    personalize_option_set_delete($option_set->osid);
+    $this->resetAll();
+
+    $this->drupalGet('admin/structure/personalize/variations/personalize-elements/add');
+    $edit = array(
+      'agent_select' => 'test-agent',
+      'title' => $this->randomName(),
+      'selector' => '#some-id',
+      'add_control_option' => FALSE,
+      'variation_type' => 'appendHtml',
+    );
     $this->drupalPost(NULL, array(), $this->getButton('add_another'));
     $this->assertFieldByName('options[2][option_label]', personalize_generate_option_label(1));
     $edit['options[1][option_label]'] = 'first-option';
@@ -87,6 +109,8 @@ class PersonalizeElementsTest extends PersonalizeBaseTest {
     $edit['options[2][option_label]'] = 'second-option';
     $edit['options[2][personalize_elements_content]'] = '<div>other content</div>';
     $this->drupalPost(NULL, $edit, $this->getButton('save'));
+    $this->assertNoText($options_count_error);
+    $this->assertText($success_message);
 
     $option_sets = personalize_option_set_load_multiple(FALSE, array(), TRUE);
     $option_set = reset($option_sets);
@@ -185,7 +209,7 @@ class PersonalizeElementsTest extends PersonalizeBaseTest {
     // entered.
     $edit = array(
       'pages_all' => 1,
-      'pages' => 'about',
+      'pages' => 'node',
     );
     $this->drupalPost("admin/structure/personalize/variations/personalize-elements/manage/{$option_set->osid}/edit", $edit, $this->getButton('save'));
     $this->drupalGet("admin/structure/personalize/variations/personalize-elements/manage/{$option_set->osid}/edit");
@@ -194,20 +218,33 @@ class PersonalizeElementsTest extends PersonalizeBaseTest {
     $edit['pages_all'] = 0;
     $this->drupalPost(NULL, $edit, $this->getButton('save'));
     $this->drupalGet("admin/structure/personalize/variations/personalize-elements/manage/{$option_set->osid}/edit");
-    $this->assertFieldByName('pages', 'about');
+    $this->assertFieldByName('pages', 'node');
 
     // Now edit  and specify '<front>' as the path.
     $edit = array(
       'pages' => '<front>',
     );
     $this->drupalPost("admin/structure/personalize/variations/personalize-elements/manage/{$option_set->osid}/edit", $edit, $this->getButton('save'));
-    $this->assertNoText('The selected pages must contain valid paths.');
+    $this->assertNoText('You have specified an invalid path for Pages');
     // Now edit the action and specify an invalid path.
     $edit = array(
       'pages' => 'some invalid url',
     );
     $this->drupalPost("admin/structure/personalize/variations/personalize-elements/manage/{$option_set->osid}/edit", $edit, $this->getButton('save'));
-    $this->assertText('The selected pages must contain valid paths.');
+    $this->assertText('You have specified an invalid path for Pages');
+
+    // Now delete an option via the delete callback.
+    $this->drupalPost('admin/structure/personalize/variations/personalize-elements/manage/' . $option_set->osid . '/option-c/delete', array(), t('Delete'));
+    $option_set = personalize_option_set_load($option_set->osid, TRUE);
+    $this->assertEqual(2, count($option_set->options));
+    $has_option_c = FALSE;
+    foreach ($option_set->options as $option) {
+      if ($option['option_id'] == 'option-c') {
+        $has_option_c = TRUE;
+        break;
+      }
+    }
+    $this->assertFalse($has_option_c);
   }
 
   /**
@@ -324,7 +361,6 @@ class PersonalizeElementsTest extends PersonalizeBaseTest {
     $edit = array(
       'agent_select' => PERSONALIZE_NEW_AGENT_FORM_VALUE,
       'agent_basic_info[title]' => $agent_name,
-      'agent_basic_info[options][test_agent][use_client_side_goal_processing]' => FALSE,
       'title' => $this->randomName(),
       'variation_type' => 'appendHtml',
       'selector' => '#some-id',
@@ -336,7 +372,6 @@ class PersonalizeElementsTest extends PersonalizeBaseTest {
     $this->resetAll();
     if ($agent = personalize_agent_load_agent($machine_name)) {
       $this->assertTrue($agent instanceof PersonalizeTestAgent);
-      $this->assertFalse($agent->useClientSideGoalDelivery());
     }
     else {
       $this->fail("The agent was not saved");
@@ -573,14 +608,14 @@ class PersonalizeElementsTest extends PersonalizeBaseTest {
    * @return string
    *   The text of the button
    */
-  protected function getButton($type = '') {
+  protected function getButton($type = '', $context = array()) {
     switch ($type) {
       case 'add_another':
         return t('Add variation');
       case 'save':
         return t('Save');
       default:
-        return $type;
+        return parent::getButton($type, $context);
     }
   }
 

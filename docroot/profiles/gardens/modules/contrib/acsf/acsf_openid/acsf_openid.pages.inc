@@ -66,22 +66,26 @@ function acsf_openid_authentication_page() {
     $identity = $response['openid.claimed_id'];
     $account_by_openid = user_external_load($identity);
     if (!isset($account_by_openid->uid)) {
+      $account_discovery = NULL;
       // If we did not find the user by OpenID, look the user up by email.
       $sreg_values = openid_extract_namespace($response, OPENID_NS_SREG, 'sreg');
       if (!empty($sreg_values['email'])) {
-        $account_by_email = user_load_by_mail($sreg_values['email']);
-        if ($account_by_email) {
-          // If this user was found by email but not by OpenID, make sure the
-          // account does not have another OpenID assigned (in case factory
-          // email address changes that are not yet propagated). One account
-          // should only have at most one OpenID (factory user) assigned in
-          // the Site Factory.
-          $user_already_has_openid = db_query("SELECT 1 FROM {authmap} WHERE module = 'openid' AND uid = :uid", array(':uid' => $account_by_email->uid))->fetchField();
-          if (!$user_already_has_openid) {
-            // If no OpenID is assigned to this user, then at this point we
-            // should add the current OpenID.
-            user_set_authmaps($account_by_email, array('authname_openid' => $identity));
-          }
+        $account_discovery = user_load_by_mail($sreg_values['email']);
+      }
+      if (!$account_discovery && !empty($sreg_values['nickname'])) {
+        $account_discovery = user_load_by_name($sreg_values['nickname']);
+      }
+      if ($account_discovery) {
+        // If this user was found by email but not by OpenID, make sure the
+        // account does not have another OpenID assigned (in case factory
+        // email address changes that are not yet propagated). One account
+        // should only have at most one OpenID (factory user) assigned in
+        // the Site Factory.
+        $user_already_has_openid = db_query("SELECT 1 FROM {authmap} WHERE module = 'openid' AND uid = :uid", array(':uid' => $account_discovery->uid))->fetchField();
+        if (!$user_already_has_openid) {
+          // If no OpenID is assigned to this user, then at this point we
+          // should add the current OpenID.
+          user_set_authmaps($account_discovery, array('authname_openid' => $identity));
         }
       }
     }
