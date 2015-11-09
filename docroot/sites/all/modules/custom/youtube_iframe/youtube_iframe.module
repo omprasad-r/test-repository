@@ -86,8 +86,8 @@ function youtube_iframe_field_formatter_view($entity_type, $entity, $field, $ins
           $video_id = youtube_iframe_embed_url($item['value']);
           $element[$delta] = array(
             '#type' => 'markup',
-            '#markup' => t('<iframe width="@width" height="@height"
-src="http://www.youtube.com/embed/@vid?autoplay=@autoplay">
+            '#markup' => t('<iframe id="player-@vid" width="@width" height="@height" frameborder="0" 
+src="http://www.youtube.com/embed/@vid?autoplay=@autoplay&rel=0&enablejsapi=1">
 </iframe>', array('@vid' => $video_id, '@height' => $hieght,
               '@width' => $width, '@autoplay' => $autoplay)),
           );
@@ -132,7 +132,7 @@ function youtube_iframe_file_formatter_view($file, $display, $langcode) {
   $youtube_video = explode('youtube://v/', $file->uri);
   if ($scheme == 'youtube' && empty($file->override['wysiwyg'])) {
     $element = array(
-      '#markup' => t('<iframe width="@width" height="@height"
+      '#markup' => t('<iframe id="player-@vid" width="@width" height="@height"
 src="http://www.youtube.com/embed/@vid?autoplay=@autoplay">
 </iframe>', array('@vid' => $youtube_video[1], '@height' => $display['settings']['height'],
         '@width' => $display['settings']['width'], '@autoplay' => $display['settings']['autoplay'])),
