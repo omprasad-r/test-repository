@@ -23,8 +23,8 @@ function media_youtube_preprocess_media_youtube_video(&$variables) {
   $variables['autoplay'] = $variables['autoplay'] ? 1 : 0;
   $variables['fullscreen'] = $variables['fullscreen'] ? 'true' : 'false';
   $variables['wmode'] = isset($variables['wmode']) ? $variables['wmode'] : media_youtube_variable_get('wmode');
-
-  $variables['wrapper_id'] = 'media_youtube_' . $variables['video_id'] . '_' . $variables['id'];
+  // echo $variables['video_id']; die;
+  $variables['wrapper_id'] = 'player-' . $variables['video_id'];
 
   // For users with JavaScript, these object and embed tags will be replaced
   // by an iframe, so that we can support users without Flash.
@@ -41,9 +41,9 @@ OUTPUT;
   $settings = array(
     'media_youtube' => array(
       $variables['wrapper_id'] => array(
-        'video_id' => $variables['video_id'],
+        'video_id' => $variables['video_id'] . '?&rel=0&enablejsapi=1',
         'fullscreen' => $variables['fullscreen'],
-        'id' => $variables['wrapper_id'] .'_iframe',
+        'id' => $variables['wrapper_id'],
       ),
     ),
   );
