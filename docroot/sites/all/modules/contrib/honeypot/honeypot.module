@@ -184,12 +184,13 @@ function honeypot_add_form_protection(&$form, &$form_state, $options = array()) 
   if (in_array('honeypot', $options)) {
     // Get the element name (default is generic 'url').
     $honeypot_element = variable_get('honeypot_element_name', 'url');
+    $honeypot_label = variable_get('honeypot_element_label', t('Leave this field blank'));
 
     // Build the honeypot element.
     $honeypot_class = $honeypot_element . '-textfield';
-    $form[$honeypot_element] = array(
+   $form[$honeypot_element] = array(
       '#type' => 'textfield',
-      '#title' => t('Leave this field blank'),
+      '#title' => $honeypot_label,
       '#size' => 20,
       '#weight' => 100,
       '#attributes' => array('autocomplete' => 'off'),

@@ -37,6 +37,13 @@ function honeypot_admin_form($form, &$form_state) {
     '#required' => TRUE,
     '#size' => 30,
   );
+  $form['configuration']['honeypot_element_label'] = array(
+        '#type' => 'textfield',
+        '#title' => t('Honeypot element form label'),
+        '#default_value' => variable_get('honeypot_element_label', 'Leave this field blank'),
+        '#size' => 255,
+        '#description' => t("Label for front end - Default is 'Leave this field blank'"),
+      );
   $form['configuration']['honeypot_time_limit'] = array(
     '#type' => 'textfield',
     '#title' => t('Honeypot time limit'),
