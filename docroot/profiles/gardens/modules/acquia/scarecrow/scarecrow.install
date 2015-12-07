@@ -1769,3 +1769,12 @@ function scarecrow_update_11207() {
     }
   }
 }
+
+/**
+ * Enable dblog_disable module on all sites, all stages.
+ */
+function scarecrow_update_11208() {
+  if (!module_exists('dblog_disable')) {
+    module_enable(array('dblog_disable'), FALSE);
+  }
+}

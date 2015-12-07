@@ -109,17 +109,26 @@ function drush_acsf_init() {
       continue;
     }
 
-    $source = sprintf('%s/%s/%s', $lib_path, $location['source'], $file);
     $dest = sprintf('%s/%s', $location['dest'], $file);
-    $mod = isset($location['mod']) ? $location['mod'] : FALSE;
-    drush_print(dt('Copying !file to !dest.', array(
-      '!file' => $source,
-      '!dest' => $dest,
-    )));
-    if (file_exists($dest)) {
-      $confirm = drush_confirm(dt('Destination file exists, continue?'));
-      if ($confirm === FALSE) {
-        continue;
+    // Some files only contain a destination as they are already in place.
+    if (isset($location['source']) && isset($location['dest'])) {
+      $source = sprintf('%s/%s/%s', $lib_path, $location['source'], $file);
+      drush_print(dt('Copying !file to !dest.', array(
+        '!file' => $source,
+        '!dest' => $dest,
+      )));
+      if (file_exists($dest)) {
+        $confirm = drush_confirm(dt('Destination file exists, continue?'));
+        if ($confirm === FALSE) {
+          continue;
+        }
+      }
+      // Copy the file into the destination.
+      if (copy($source, $dest)) {
+        drush_log(dt('Copy Success: !file', array('!file' => $file)), 'success', 'success');
+      }
+      else {
+        drush_log(dt('Copy Error: !file', array('!file' => $file)), 'error', 'error');
       }
       // If the file exists, it could be set to 0444, so we have to ensure that
       // it is writable before overwriting it. The copy would fail otherwise.
@@ -129,14 +138,9 @@ function drush_acsf_init() {
         };
       }
     }
-    // Copy the file into the destination.
-    if (copy($source, $dest)) {
-      drush_log(dt('Copy Success: !file', array('!file' => $file)), 'success', 'success');
-    }
-    else {
-      drush_log(dt('Copy Error: !file', array('!file' => $file)), 'error', 'error');
-    }
+
     // Chmod the file if required.
+    $mod = isset($location['mod']) ? $location['mod'] : FALSE;
     if ($mod && chmod($dest, $mod)) {
       drush_log(dt('Chmod Success: !file', array('!file' => $file)), 'success', 'success');
     }
@@ -146,7 +150,12 @@ function drush_acsf_init() {
   }
 
   // Verify that the files are in sync.
-  drush_acsf_init_verify();
+  clearstatcache();
+  $result = drush_acsf_init_verify();
+
+  if ($result) {
+    drush_print(dt('Be sure to commit any changes to your repository before deploying.'));
+  }
 }
 
 /**
@@ -306,27 +315,56 @@ function drush_acsf_init_verify() {
       continue;
     }
 
-    $source = sprintf('%s/%s/%s', $lib_path, $location['source'], $file);
     $dest = sprintf('%s/%s', $location['dest'], $file);
-    if (!file_exists($dest)) {
-      $error = TRUE;
-      drush_set_error('FILE MISSING', dt('The file !file is missing.', array(
-        '!file' => $file,
-      )));
+    // Some files only contain a destination as they are already in place.
+    if (isset($location['source']) && isset($location['dest'])) {
+      $source = sprintf('%s/%s/%s', $lib_path, $location['source'], $file);
+      if (!file_exists($dest)) {
+        $error = TRUE;
+        drush_set_error('FILE MISSING', dt('The file !file is missing.', array(
+          '!file' => $file,
+        )));
+      }
+      elseif (md5_file($source) != md5_file($dest)) {
+        $error = TRUE;
+        drush_set_error('FILE OUT OF DATE', dt('The file !file is out of date.', array(
+          '!file' => $file,
+        )));
+      }
     }
-    elseif (md5_file($source) != md5_file($dest)) {
-      $error = TRUE;
-      drush_set_error('FILE OUT OF DATE', dt('The file !file is out of date.', array(
-        '!file' => $file,
-      )));
+
+    // Verify the file is executable.
+    // Note: The approach here is to not check for the exact file perms (in
+    // other words to not test against the 'mod' element), since git - by
+    // design - does not respect anything beyond a simple executable bit, the
+    // other perms may be filesystem/OS-dependent, and can't be guaranteed to be
+    // consistent.
+    if (file_exists($dest) && !empty($location['test_executable'])) {
+      $dest_permissions = fileperms($dest);
+      // We do want to test the owner executable bit, and the group executable
+      // bit as well.
+      // e.g. to test whether the owner has execute permission, it is the case
+      // of testing with: 00000000 01000000 (which is 0100 in octal, 64 in
+      // decimal).
+      if (($dest_permissions & (0100 | 0010)) != (0100 | 0010)) {
+        $error = TRUE;
+        drush_set_error('INCORRECT FILE MODE', dt('The file !file is not executable. Make this file executable for the owner and group, then commit it again.', array(
+          '!file' => $file,
+        )));
+      }
     }
   }
 
   if ($error) {
     drush_print(dt('Please run drush acsf-init to correct these problems and commit the resulting code changes.'));
+    return FALSE;
   }
   else {
+    // The Site Factory code deployment uses this string to determine if the
+    // acsf-init has been properly run. If this is changed, also ensure that
+    // the check in VcsVerifyAcsf matches.
     drush_log(dt('acsf-init required files ok'), 'success');
+    return TRUE;
   }
 }
 
@@ -336,10 +374,13 @@ function drush_acsf_init_verify() {
 function drush_acsf_uninstall() {
   drush_print('Removing ACSF requirements.');
 
+  $repo_root = str_replace('/docroot', '', DRUPAL_ROOT);
   foreach (acsf_init_get_required_files($repo_root) as $location) {
     $file = $location['filename'];
     $dest = sprintf('%s/%s', $location['dest'], $file);
-    if (file_exists($dest)) {
+
+    // Some files only contain a destination as they are already in place.
+    if (isset($location['src']) && file_exists($dest)) {
       $confirm = drush_confirm(dt('Delete !file?', array('!file' => $dest)));
       if ($confirm === FALSE) {
         continue;
@@ -372,6 +413,18 @@ function acsf_init_get_required_dirs($repo_root) {
  * Lists all required files to create/delete.
  */
 function acsf_init_get_required_files($repo_root) {
+  // Path to the ACSF module file.
+  $acsf_path = dirname(__DIR__);
+
+  // Array elements should use the following guidelines:
+  // - Use the 'source' element to indicate where the file should be copied
+  //   from. Note: Some files do not have a source as they are already in place.
+  // - Use the 'dest' element to specify where the file will be copied to.
+  // - Use the 'mod' element to describe an octal for the file permissions -
+  //   must be chmod() compatible. e.g. 0755
+  // - Use the 'test_executable' element to enforce testing executability of the
+  //   file. "Executable" files are expected to be owner and group executable.
+
   return array(
     array(
       'filename' => 'README.md',
@@ -382,13 +435,15 @@ function acsf_init_get_required_files($repo_root) {
       'filename' => '000-acquia_required_scrub.php',
       'source' => 'cloud_hooks/common/post-db-copy',
       'dest' => sprintf('%s/hooks/common/post-db-copy', $repo_root),
-      'mod' => 0751,
+      'mod' => 0750,
+      'test_executable' => TRUE,
     ),
     array(
       'filename' => '000-acquia-deployment.php',
       'source' => 'cloud_hooks/common/pre-web-activate',
       'dest' => sprintf('%s/hooks/common/pre-web-activate', $repo_root),
-      'mod' => 0751,
+      'mod' => 0750,
+      'test_executable' => TRUE,
     ),
     array(
       'filename' => 'db_connect.php',
@@ -445,6 +500,18 @@ function acsf_init_get_required_files($repo_root) {
       'source' => 'sites/default',
       'dest' => sprintf('%s/sites/default', DRUPAL_ROOT),
       'mod' => 0644,
+    ),
+    array(
+      'filename' => 'acsf_cron',
+      'dest' => $acsf_path . '/scripts',
+      'mod' => 0550,
+      'test_executable' => TRUE,
+    ),
+    array(
+      'filename' => 'acsf_ssh',
+      'dest' => $acsf_path . '/scripts',
+      'mod' => 0550,
+      'test_executable' => TRUE,
     ),
   );
 
