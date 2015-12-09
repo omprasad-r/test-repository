@@ -154,21 +154,26 @@ function gardens_misc_system_info_alter(&$info, $file, $type) {
  * Implements hook_css_alter().
  */
 function gardens_misc_css_alter(&$css) {
+  $colorbox_path = drupal_get_path('module', 'colorbox');
+  if (module_exists('libraries')) {
+    $colorbox_lib_path = libraries_get_path('colorbox');
+  }
+
   // If both colorbox library's stylesheet and colorbox module's stylesheet
   // exist, remove colorbox module's stylesheet. If only colorbox module's
   // stylesheet exists, replace it with the stylesheet from colorbox library.
-  if (isset($css['sites/all/modules/colorbox/styles/default/colorbox_default_style.css'])) {
-    unset($css['sites/all/modules/colorbox/styles/default/colorbox_default_style.css']);
+  if (isset($css[$colorbox_path . '/styles/default/colorbox_style.css']) && !empty($colorbox_lib_path)) {
+    unset($css[$colorbox_path . '/styles/default/colorbox_style.css']);
 
-    if (!isset($css['sites/all/libraries/colorbox/example1/colorbox.css'])) {
-      $css['sites/all/libraries/colorbox/example1/colorbox.css'] = array(
+    if (!isset($css[$colorbox_lib_path . '/example1/colorbox.css'])) {
+      $css[$colorbox_lib_path . '/example1/colorbox.css'] = array(
         'type' => 'file',
         'group' => -100,
         'weight' => 0.1,
         'every_page' => FALSE,
         'media' => 'screen',
         'preprocess' => TRUE,
-        'data' => 'sites/all/libraries/colorbox/example1/colorbox.css',
+        'data' => $colorbox_lib_path . '/example1/colorbox.css',
         'browsers' => array(
           'ie' => TRUE,
           '!ie' => TRUE,
