@@ -2,29 +2,25 @@
 
 Drupal.behaviors.initColorbox = {
   attach: function (context, settings) {
-    if (!$.isFunction($.colorbox)) {
+    if (!$.isFunction($.colorbox) || typeof settings.colorbox === 'undefined') {
       return;
     }
 
     if (settings.colorbox.mobiledetect && window.matchMedia) {
       // Disable Colorbox for small screens.
-      mq = window.matchMedia("(max-device-width: " + settings.colorbox.mobiledevicewidth + ")");
+      var mq = window.matchMedia("(max-device-width: " + settings.colorbox.mobiledevicewidth + ")");
       if (mq.matches) {
         return;
       }
     }
-
     $('.colorbox', context)
       .once('init-colorbox').each(function(){
         $(this).colorbox(settings.colorbox);
       });
+    $(context).bind('cbox_complete', function () {
+      Drupal.attachBehaviors('#cboxLoadedContent');
+    });
   }
 };
-
-{
-  $(document).bind('cbox_complete', function () {
-    Drupal.attachBehaviors('#cboxLoadedContent');
-  });
-}
 
 })(jQuery);
