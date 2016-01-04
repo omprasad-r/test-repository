@@ -1,0 +1,150 @@
+<?php
+
+/**
+ * @file
+ * Install related functions for bundle aggregation module.
+ */
+
+/**
+ * Implements hook_schema().
+ */
+function bundle_aggregation_schema() {
+  $schema = array();
+  $schema['bundle_aggregation_bundles'] = array(
+    'description' => t('A list of bundles.'),
+    'fields' => array(
+      'bundle_id' => array(
+        'description' => t('Bundle ID'),
+        'type' => 'varchar',
+        'length' => 255,
+        'not null' => TRUE,
+      ),
+      'bundle_type' => array(
+        'description' => t('Numeric representation of bundle types'),
+        'type' => 'int',
+        'unsigned' => TRUE,
+        'not null' => TRUE,
+        'default' => 0,
+      ),
+      'path' => array(
+        'description' => t('File path'),
+        'type' => 'varchar',
+        'length' => 255,
+        'not null' => TRUE,
+      ),
+      'bundle_version' => array(
+        'description' => t('The version tracks when a bundle changes without a full rebuild.'),
+        'type' => 'int',
+        'unsigned' => TRUE,
+        'not null' => TRUE,
+        'default' => 0,
+      ),
+      'cache_version' => array(
+        'description' => t('The version tracks when full bundle rebuild is triggered.'),
+        'type' => 'int',
+        'unsigned' => TRUE,
+        'not null' => TRUE,
+        'default' => 0,
+      ),
+      'files' => array(
+        'description' => t('Serialized file list.'),
+        'type' => 'text',
+        'not null' => TRUE,
+        'serialize' => TRUE,
+      ),
+    ),
+    'primary key' => array('bundle_id'),
+    'indexes' => array(
+      'path_idx' => array('path'),
+    ),
+  );
+  $schema['bundle_aggregation_bundle_cleanup'] = array(
+    'description' => t('A list of bundles to be cleaned up.'),
+    'fields' => array(
+      'id' => array(
+        'description' => t('Primary key'),
+        'type' => 'serial',
+        'unsigned' => TRUE,
+        'not null' => TRUE,
+      ),
+      'path' => array(
+        'description' => t('File path to be cleaned up.'),
+        'type' => 'varchar',
+        'length' => 255,
+        'not null' => TRUE,
+      ),
+      'timestamp' => array(
+        'description' => t('Timestamp when the bundle were queued up for cleanup.'),
+        'type' => 'int',
+        'unsigned' => TRUE,
+        'not null' => TRUE,
+        'default' => 0,
+      ),
+    ),
+    'primary key' => array('id'),
+    'indexes' => array(
+      'cleanup_time_idx' => array('timestamp'),
+    ),
+  );
+  $caches = array(
+    'cache_bundle_aggregation_locks' => t('Cache table to handle global locking of bundle aggregation.'),
+    'cache_bundle_aggregation' => t('Cache table to store aggregated bundles.'),
+  );
+  foreach ($caches as $cache_table => $description) {
+    $schema[$cache_table] = drupal_get_schema_unprocessed('system', 'cache');
+    $schema[$cache_table]['description'] = $description;
+  }
+  return $schema;
+}
+
+/**
+ * Implements hook_install().
+ */
+function bundle_aggregation_install() {
+  db_update('system')
+    ->fields(array('weight' => 1000))
+    ->condition('name', 'bundle_aggregation')
+    ->execute();
+}
+
+/**
+ * Implements hook_uninstall().
+ */
+function bundle_aggregation_uninstall() {
+  variable_del('bundle_aggregation_enabled');
+  variable_del('bundle_aggregation_rebuild_time');
+  variable_del('bundle_aggregation_hierarchic_caching');
+  variable_del('bundle_aggregation_hierarchic_cache_ttl');
+  variable_del('bundle_aggregation_bundle_grace_period');
+  variable_del('bundle_aggregation_bundle_cleanup_limit');
+  variable_del('bundle_aggregation_css_key_fragments');
+  variable_del('bundle_aggregation_js_key_fragments');
+}
+
+/**
+ * Implements hook_disable().
+ */
+function bundle_aggregation_disable() {
+  variable_set('bundle_aggregation_enabled', FALSE);
+}
+
+/**
+ * Adds index on path in bundle_aggregation_bundles table.
+ */
+function bundle_aggregation_update_7001() {
+  db_add_index('bundle_aggregation_bundles', 'path_idx', array('path'));
+}
+
+/**
+ * Migrates variables.
+ */
+function bundle_aggregation_update_7002() {
+  $hierarchic_caching = variable_get('bundle_aggregation_hierarhic_caching', FALSE);
+  if ($hierarchic_caching !== FALSE) {
+    variable_set('bundle_aggregation_hierarchic_caching', $hierarchic_caching);
+  }
+  $hierarchic_ttl = variable_get('bundle_aggregation_hierarhic_cache_ttl', 86400);
+  if ($hierarchic_ttl !== 86400) {
+    variable_set('bundle_aggregation_hierarchic_cache_ttl', $hierarchic_ttl);
+  }
+}
