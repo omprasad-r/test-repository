@@ -26,9 +26,12 @@ class AcsfDuplicationScrubModuleDisableHandler extends AcsfEventHandler {
       // process, and enabled only for scrubbing.
       module_disable($enable_for_scrub);
 
-      // Uninstall these modules. Drupal will drop their tables and any orphaned
-      // data remaining in them.
-      drupal_uninstall_modules($enable_for_scrub);
+      $options = $this->event->context['scrub_options'];
+      if (!$options['retain_modules']) {
+        // Uninstall these modules. Drupal will drop their tables and any
+        // orphaned data remaining in them.
+        drupal_uninstall_modules($enable_for_scrub);
+      }
     }
   }
 
