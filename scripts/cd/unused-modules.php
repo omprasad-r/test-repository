@@ -30,7 +30,9 @@ class unusedModules {
     if($log_file_location) {
       file_put_contents($log_file_location . '/pm-unused-module-list_' . date("j.n.Y") . '.txt', $output, FILE_APPEND);
     }
-    file_put_contents('./pm-unused-module-list_' . date("j.n.Y") . '.txt', $output, FILE_APPEND);
+    else {
+      file_put_contents('./pm-unused-module-list_' . date("j.n.Y") . '.txt', $output, FILE_APPEND);
+    }
   }
 
   /**
