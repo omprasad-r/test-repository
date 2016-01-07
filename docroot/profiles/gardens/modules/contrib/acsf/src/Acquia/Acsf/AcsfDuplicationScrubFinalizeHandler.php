@@ -25,6 +25,10 @@ class AcsfDuplicationScrubFinalizeHandler extends AcsfEventHandler {
       ))
       ->execute();
 
+    // Clear the caches to ensure that the registries and other structural data
+    // is rebuilt.
+    drupal_flush_all_caches();
+
     // Clear any in-progress multistep forms that are not normally wiped during
     // cache-clear. The other caches are expected to be cleared externally from
     // this process.
