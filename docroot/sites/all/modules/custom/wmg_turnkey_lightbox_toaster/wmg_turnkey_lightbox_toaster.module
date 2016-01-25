@@ -1,0 +1,7 @@
+<?php
+/**
+ * @file
+ * Code for the WMG Turnkey Lightbox Toaster feature.
+ */
+
+include_once 'wmg_turnkey_lightbox_toaster.features.inc';
