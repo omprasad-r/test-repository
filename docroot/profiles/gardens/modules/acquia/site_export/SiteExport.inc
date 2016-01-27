@@ -35,6 +35,16 @@ class SiteExport {
   }
 
   /**
+   * Returns the path to the directory where export files are created.
+   *
+   * @return string
+   *   The path to the working directory, including trailing slash.
+   */
+  public static function rootDirectory() {
+    return 'temporary://site-export/';
+  }
+
+  /**
    * Export docroot and database as a single tar.gz file.
    *
    * The site-specific files will be replaced with a script that uses
@@ -50,9 +60,12 @@ class SiteExport {
 
     $this->verifyTarVersion();
 
+    // Create the working directory inside the site-export root (which will
+    // make sure the site-export root exists too).
+    $working_dir = $this->createWorkingDirectory();
+
     $tarfile_uri = $this->createRandomURI('tar');
     $tarfile = drupal_realpath($tarfile_uri);
-    $working_dir = $this->createWorkingDirectory();
 
     $this->createTarArchive($tarfile);
     $this->addDrupalFiles($tarfile);
@@ -447,9 +460,13 @@ class SiteExport {
    * @param string $tarfile
    *   The path to the tar file that should be compressed.
    * @param string $tarfile_uri
-   *   The URI to the tar file.
+   *   The URI to the tar file. (The two arguments must match; basically
+   *   $tarfile must be equal to the 'realpath()' of $tarfile_uri.)
+   *
    * @return string
    *   The URI of the compressed file.
+   *
+   * @throws \Exception
    */
   private function compressArchive($tarfile, $tarfile_uri = NULL) {
     $gzip_cmd = 'gzip ' . $tarfile;
@@ -789,13 +806,17 @@ EOT;
    * Creates a random name for a temporary file.
    *
    * @param string $ext
-   *   An extension for the file. Defaults to "tmp" (e.g. 1234.tmp).
+   *   An extension for the file. Defaults to "tmp" (e.g. ebcqmevqcaih.tmp).
    * @return string
    *   The URI to the temporary file.
    */
   private function createRandomURI($ext = 'tmp') {
-    $temp_name = preg_replace('/([ ])/e', 'chr(rand(97,122))', '            ');
-    return 'temporary://' . $temp_name . ($ext === '' ? '' : ".$ext");
+    // Basename is 12 lowercase letters.
+    $temp_name = '';
+    for ($i = 0; $i < 12; $i++) {
+      $temp_name .= chr(mt_rand(97, 122));
+    }
+    return self::rootDirectory() . $temp_name . ($ext === '' ? '' : ".$ext");
   }
 
   /**
@@ -1123,16 +1144,24 @@ EOT;
   }
 
   /**
-   * Creates a temporary working directory for assets that need to be generated during site export and then added to the tar file.
+   * Creates a temporary working directory.
+   *
+   * This will be used for assets that need to be generated during site export
+   * and then added to the tar file.
    *
    * @return string
-   *   The path to the temporary working directory.
+   *   The local path to the temporary working directory or '' in case of error.
+   *
+   * @throws \Exception
    */
   private function createWorkingDirectory() {
     $directory_uri = $this->createRandomURI('');
-    $path = drupal_realpath($directory_uri);
-    mkdir($path);
-    return $path;
+    // The parent directory may not exist yet. drupal_realpath() would return
+    // FALSE in that case, so pass in the 'stream uri' to mkdir.
+    if (!mkdir($directory_uri, 0755, TRUE)) {
+      throw new Exception('Creation of export working directory failed.');
+    }
+    return drupal_realpath($directory_uri);
   }
 
   /**
