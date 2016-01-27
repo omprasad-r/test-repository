@@ -43,6 +43,20 @@ function site_export_init() {
   // not be a problem.  Next release, not during a hotfix.
 }
 
+/**
+ * Implements hook_exit().
+ */
+function site_export_exit() {
+  site_export_cleanup_registered_files();
+}
+
+/**
+ * Implements hook_cron().
+ */
+function site_export_cron() {
+  site_export_cleanup_old_files();
+}
+
 function site_export_page() {
   $out = '';
   $out .= l(t('Export your site files and code'), 'admin/config/system/site-export/site');
@@ -160,16 +174,18 @@ function site_export_call_gardener($form, &$form_state) {
  *
  * This function is called by the export-s3 drush task.
  *
- * @param {boolean} $exclude_site_files
+ * @param bool $exclude_site_files
  *   Indicates whether the site's files directory contents should be excluded
  *   from the archive.  If the files are excluded, a curl script will be
  *   provided to download the files.  This is an optional parameter, with the
  *   default setting such that the files will be included in the archive.
  *
- * @return {String}
+ * @return string
  *   The URI of the tarball.
  */
 function site_export_export_both($exclude_site_files = FALSE) {
+  site_export_cleanup_old_files();
+
   site_export_set_limits();
   include_once dirname(__FILE__) . '/SiteExport.inc';
   $exporter = new SiteExport($exclude_site_files);
@@ -179,16 +195,113 @@ function site_export_export_both($exclude_site_files = FALSE) {
 
 /**
  * Initiates a file transfer for the export.
+ *
+ * This is a form submit function, so errors result in a drupal_set_message().
  */
 function site_export_export_both_download() {
-  $output_tarball_uri = site_export_export_both(_site_export_should_exclude_site_files());
+  // Create output tarball with a certain name.
+  try {
+    $output_tarball_uri = site_export_export_both(_site_export_should_exclude_site_files());
+  }
+  catch (Exception $e) {
+    drupal_set_message($e->getMessage(), 'error');
+    return;
+  }
+
+  // Get random filename for export (which is only a hint to the browser on how
+  // to save it; the filename is not used locally on the server).
   $export_name = SiteExport::createFilename('site_export');
+
+  // Register the name for later cleanup. (We can't do it after file_transfer()
+  // because that does a drupal_exit().)
+  $uris = &drupal_static('site_export_cleanup_registered_files', array());
+  $uris[] = $output_tarball_uri;
 
   $headers = array(
     'Content-type' =>  'application/tar/gz',
     'Content-Disposition' => 'attachment; filename="' . $export_name . '.tar.gz"',
   );
   file_transfer($output_tarball_uri, $headers);
+}
+
+/**
+ * Cleans up any files registered with this function.
+ */
+function site_export_cleanup_registered_files() {
+  $uris = &drupal_static(__FUNCTION__, array());
+  foreach ($uris as $uri) {
+    drupal_unlink($uri);
+  }
+}
+
+/**
+ * Cleans up any files related to site exports still lingering by accident.
+ *
+ * Since the directory contents differ per server (the export directory is not
+ * on shared storage), there's no single perfect place to call this from.
+ */
+function site_export_cleanup_old_files() {
+  // Files related to site exports can be, on the root level of the site-export
+  // directory:
+  // - tar.gz files (that were left because a process died before hook_exit()
+  //   could remove the file)
+  // - tar files (a process died before compressing the tar archive)
+  // - randomly named directories and their contents (a process died before
+  //   tarring them up and executing 'rm -rf' on the directory).
+
+  include_once dirname(__FILE__) . '/SiteExport.inc';
+  $root = drupal_realpath(SiteExport::rootDirectory());
+  if (file_exists($root) && ($handle = opendir($root))) {
+    // Don't touch files older than 2 hours. This should be enough to
+    // accommodate slow download (and certainly tar creation).
+    $minimum_age = 7200;
+    $files = 0;
+    $dirs = 0;
+    $error = FALSE;
+
+    while (($dir_entry = readdir($handle)) !== FALSE) {
+      $path = "$root/$dir_entry";
+      if (REQUEST_TIME - filemtime($path) > $minimum_age) {
+
+        // Having different methods of cleaning up files vs. directories may be
+        // overkill. On the other hand, this way we can see better which kind of
+        // process left files lying around.
+        if (is_file($path)) {
+          if (drupal_unlink($path)) {
+            $files++;
+          }
+          else {
+            $error = TRUE;
+          }
+        }
+
+        if (is_dir($path)) {
+          // Recursively delete directory in the same way as SiteExport does.
+          $output = array();
+          $return_val = 0;
+          exec('rm -rf ' . escapeshellarg($path), $output, $return_val);
+          if ($return_val) {
+            $error = TRUE;
+          }
+          else {
+            $dirs++;
+          }
+        }
+      }
+    }
+    closedir($handle);
+
+    // Log actions. Create 2 separate logs for easier translatability.
+    if ($files) {
+      watchdog('site_export', "@count export files cleaned up.", array('@count' => $files));
+    }
+    if ($dirs) {
+      watchdog('site_export', "@count export directories cleaned up.", array('@count' => $dirs));
+    }
+    if ($error) {
+      watchdog('site_export', "Some cleanup operation(s) yielded errors; not all files may have been removed.", array());
+    }
+  }
 }
 
 /**
