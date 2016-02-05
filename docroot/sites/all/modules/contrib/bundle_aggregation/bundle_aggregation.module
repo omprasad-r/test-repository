@@ -1,0 +1,812 @@
+<?php
+
+/**
+ * @file
+ * Scalable CSS and JS bundle aggregation.
+ */
+
+/**
+ * Bundle type - CSS.
+ */
+define('BUNDLE_AGGREGATION_CSS_BUNDLE', 1);
+
+/**
+ * Bundle type - JS.
+ */
+define('BUNDLE_AGGREGATION_JS_BUNDLE', 2);
+
+/**
+ * Implements hook_menu().
+ */
+function bundle_aggregation_menu() {
+  $items = array();
+
+  $items['admin/config/development/bundle-aggregation'] = array(
+    'title' => 'Bundle aggregation',
+    'description' => 'Configure and administer aggregated bundles.',
+    'page callback' => 'drupal_get_form',
+    'page arguments' => array('bundle_aggregation_admin_settings'),
+    'access arguments' => array('administer bundle aggregation settings'),
+    'file' => 'bundle_aggregation.admin.inc',
+    'type' => MENU_NORMAL_ITEM,
+  );
+  $items['admin/config/development/bundle-aggregation/settings'] = array(
+    'title' => 'Settings',
+    'description' => 'Settings for CSS/JS bundle generation.',
+    'type' => MENU_DEFAULT_LOCAL_TASK,
+  );
+  $items['admin/config/development/bundle-aggregation/bundles'] = array(
+    'title' => 'Aggregated bundles',
+    'description' => 'View and modify the aggregated bundles.',
+    'page callback' => 'bundle_aggregation_admin_bundle_handling',
+    'access arguments' => array('administer bundle aggregation'),
+    'file' => 'bundle_aggregation.admin.inc',
+    'type' => MENU_LOCAL_TASK,
+  );
+  $items['admin/config/development/bundle-aggregation/bundles/%bundle_aggregation_bundle'] = array(
+    'title' => 'Administer bundle',
+    'page callback' => 'drupal_get_form',
+    'page arguments' => array('bundle_aggregation_admin_bundle_form', 5),
+    'access arguments' => array('administer bundle aggregation'),
+    'file' => 'bundle_aggregation.admin.inc',
+    'type' => MENU_CALLBACK,
+  );
+
+  return $items;
+}
+
+/**
+ * Implements hook_permission().
+ */
+function bundle_aggregation_permission() {
+  return array(
+    'administer bundle aggregation' => array(
+      'title' => t('Administer aggregated bundles'),
+      'description' => t('Reorder, remove files from aggregated bundles.'),
+    ),
+    'administer bundle aggregation settings' => array(
+      'title' => t('Administer bundle aggregation settings'),
+      'description' => t('Configure settings for the bundle aggregation module.'),
+    ),
+    'use inactive bundle aggregation' => array(
+      'title' => t('Use inactive bundle aggregation'),
+      'description' => t('Allows the use of the bundle aggregation feature while it is inactive with the bundle_aggregation GET parameter.'),
+    ),
+    'administer bundle aggregation technical settings' => array(
+      'title' => t('Administer bundle aggregation technical settings'),
+      'description' => t('Configure technical settings for the bundle aggregation module.'),
+    ),
+  );
+}
+
+/**
+ * Implements hook_theme().
+ */
+function bundle_aggregation_theme($existing, $type, $theme, $path) {
+  return array(
+    'bundle_aggregation_admin_bundle_form' => array(
+      'render element' => 'form',
+      'file' => 'bundle_aggregation.admin.inc',
+    ),
+  );
+}
+
+/**
+ * Determine the page id for bundle generation.
+ *
+ * Every page type has a unique need of CSS and JS files, so every page will get
+ * its own set of bundles determined by the page id.
+ */
+function bundle_aggregation_page_id_get() {
+  $menu_item = menu_get_item();
+  $page_id = $menu_item['path'];
+  drupal_alter('bundle_aggregation_page_id', $page_id);
+  return str_replace('/', '#', $page_id);
+}
+
+/**
+ * Create a CSS bundle key.
+ *
+ * Bundles are identified by keys, which are built up from fragments, like
+ * page_id, group value, browser dependaency and for what media the bundle is
+ * intended for. The fragments can be disabled on the admin interface to create
+ * more generalised bundles.
+ *
+ * @param $page_id
+ *   string Page id determined by bundle_aggregation_page_id_get().
+ * @param $css_group
+ *   array Data structure containing an attached CSS file or CSS group.
+ *
+ * @return
+ *   string Bundle key.
+ */
+function bundle_aggregation_css_bundle_key_create($page_id, $css_group) {
+  global $theme;
+
+  $allowed_css_key_fragments = variable_get('bundle_aggregation_css_key_fragments', NULL);
+  $bundle_keys = array('css', $theme);
+  foreach (bundle_aggregation_available_css_key_fragments_get() as $css_key_fragment => $label) {
+    if (!isset($allowed_css_key_fragments) || in_array($css_key_fragment, $allowed_css_key_fragments)) {
+      switch ($css_key_fragment) {
+        case 'page':
+          $bundle_keys[] = $css_group['every_page'] ? '' : $page_id;
+          break;
+
+        case 'group':
+        case 'media':
+          $bundle_keys[] = $css_group[$css_key_fragment];
+          break;
+
+        case 'browser':
+          $browser_fragments = array();
+          ksort($css_group['browsers']);
+          foreach ($css_group['browsers'] as $browser => $browser_rule) {
+            $browser_fragments[] = $browser . '#' . $browser_rule;
+          }
+          $bundle_keys[] = implode('#', $browser_fragments);
+          break;
+      }
+    }
+  }
+  return implode(':', $bundle_keys);
+}
+
+/**
+ * Create a JS bundle key.
+ *
+ * Bundles are identified by keys, which are built up from fragments, like
+ * page_id, group value, browser dependency and for what media the bundle is
+ * intended for. The fragments can be disabled on the admin interface to create
+ * more generalised bundles.
+ *
+ * @param $page_id
+ *   string Page id determined by bundle_aggregation_page_id_get().
+ * @param $javascript
+ *   array Data structure containing an attached JS file.
+ *
+ * @return
+ *   string Bundle key.
+ */
+function bundle_aggregation_js_bundle_key_create($page_id, $javascript) {
+  global $theme;
+
+  $allowed_js_key_fragments = variable_get('bundle_aggregation_js_key_fragments', NULL);
+  $bundle_keys = array('js', $theme);
+  foreach (bundle_aggregation_available_js_key_fragments_get() as $js_key_fragment => $label) {
+    if (!isset($allowed_js_key_fragments) || in_array($js_key_fragment, $allowed_js_key_fragments)) {
+      if ($js_key_fragment == 'page') {
+        $bundle_keys[] = $javascript['every_page'] ? '' : $page_id;
+      }
+      else {
+        $bundle_keys[] = $javascript[$js_key_fragment];
+      }
+    }
+  }
+  return implode(':', $bundle_keys);
+}
+
+/**
+ * Determine if bundle aggregation is allowed to aggregate.
+ *
+ * This helper function serves several purposes:
+ * - allows the previously existing aggregation to stay in place while this
+ *   module is being configured
+ * - allows privileged users to test out the aggregation without disturbing the
+ *   visitors
+ * - allows privileged users to queue up bundles for generation ahead of time to
+ *   protect the visitors from getting pages with lots of JS / CSS includes
+ */
+function bundle_aggregation_is_enabled() {
+  return variable_get('bundle_aggregation_enabled', FALSE) || (user_access('use inactive bundle aggregation') && !empty($_GET['bundle_aggregation']));
+}
+
+/**
+ * Implements hook_element_info_alter().
+ *
+ * CSS files are being collected either directly with drupal_add_css() or
+ * indirectly with drupal_render() which calls drupal_process_attached() on the
+ * #attached files. The files themselves by default are included on the pages by
+ * calling drupal_get_css() from template_process_html() which sets up an
+ * element called 'styles' (defined in system.module) to be rendered. The
+ * element defines several keys: #pre_render, #group_callback,
+ * #aggregate_callback. The #pre_render function - drupal_pre_render_styles() -
+ * invokes the callback functions and constructs the HTML representation.
+ *
+ * While drupal_get_css() allows us to replaces files with our bundles, just
+ * like we do with JS, altering happens sooner than the pre_render meaning we
+ * would have to group the files ourselves which would be done in the end anyway
+ * by core. Also there are modules which alter the CSS file list during
+ * pre_render phase, so interacting with hook_css_alter could be way too early.
+ */
+function bundle_aggregation_element_info_alter(&$types) {
+  if (!empty($types['styles']) && bundle_aggregation_is_enabled()) {
+    $types['styles']['#aggregate_callback'] = 'bundle_aggregation_css_bundle';
+  }
+}
+
+/**
+ * CSS aggregation into bundle.
+ */
+function bundle_aggregation_css_bundle(&$css_groups) {
+  $css_groups = _bundle_aggregation_bundle_discovery(BUNDLE_AGGREGATION_CSS_BUNDLE, $css_groups, TRUE);
+}
+
+/**
+ * Implements hook_js_alter().
+ *
+ * JS files are being collected either directly with drupal_add_js() or
+ * indirectly with drupal_render() which calls drupal_process_attached() on the
+ * #attached files. The files themselves by default are included on the pages by
+ * calling drupal_get_js() from template_process_html(). After allowing the
+ * files to be altered drupal_get_js() goes over the attached JS files and
+ * generates their HTML representation and possibly aggregating the files if
+ * preprocessing is allowed.
+ *
+ * The altering allows us to insert our own bundles and remove files which are
+ * handled in them.
+ */
+function bundle_aggregation_js_alter(&$javascripts) {
+  if (bundle_aggregation_is_enabled()) {
+    $javascripts = _bundle_aggregation_bundle_discovery(BUNDLE_AGGREGATION_JS_BUNDLE, $javascripts);
+  }
+}
+
+/**
+ * Replace attached CSS/JS files with bundles.
+ *
+ * Find suitable bundles based on the provided file list. The file list may be
+ * ungrouped or grouped as well. The files are associated with bundles based on
+ * the file attachment settings. If an attached file is missing from the
+ * associated bundle then the bundle is going to be queued for regeneration and
+ * the file will be attached to the page as a standalone file.
+ *
+ * @param $bundle_type
+ *   integer Numeric representation of the bundle type. See the constants at the
+ *   top of the module. For example BUNDLE_AGGREGATION_JS_BUNDLE.
+ * @param $file_list
+ *   array The list of attached files or list of groups of attached files.
+ * @param $file_list_is_grouped
+ *   boolean Set to TRUE if the $file_list contains the already grouped files.
+ *
+ * @return
+ *   array The modified CSS/JS file list which contains the bundles.
+ *
+ * @see bundle_aggregation_js_bundle_key_create
+ * @see bundle_aggregation_css_bundle_key_create
+ */
+function _bundle_aggregation_bundle_discovery($bundle_type, $file_list, $file_list_is_grouped = FALSE) {
+  $pretty_bundle_type = bundle_aggregation_pretty_bundle_type($bundle_type);
+
+  // We are not always allowed to aggregate files.
+  // Variables used: preprocess_css preprocess_js.
+  $preprocess_allowed = (variable_get('preprocess_' . $pretty_bundle_type, FALSE) && (!defined('MAINTENANCE_MODE') || MAINTENANCE_MODE != 'update'));
+
+  if ($preprocess_allowed) {
+    switch ($bundle_type) {
+      case BUNDLE_AGGREGATION_CSS_BUNDLE:
+        $bundle_key_generator = 'bundle_aggregation_css_bundle_key_create';
+        break;
+
+      case BUNDLE_AGGREGATION_JS_BUNDLE:
+        $bundle_key_generator = 'bundle_aggregation_js_bundle_key_create';
+        break;
+    }
+    // The bundle key depends on the page id.
+    $page_id = bundle_aggregation_page_id_get();
+    // Variables used: drupal_css_cache_version drupal_js_cache_version.
+    $cache_version = variable_get('drupal_' . $pretty_bundle_type . '_cache_version', 1);
+
+    // If the files are not yet grouped (JS) then determine what bundle a file
+    // would belong to. Already grouped files (CSS) are not handled here.
+    $groups = $file_list_is_grouped ? $file_list : array();
+    if (!$groups) {
+      uasort($file_list, 'drupal_sort_css_js');
+      foreach ($file_list as $file_structure) {
+        if ($file_structure['type'] == 'file' && $file_structure['preprocess']) {
+          $bundle_key = $bundle_key_generator($page_id, $file_structure);
+          if (empty($groups[$bundle_key])) {
+            $groups[$bundle_key] = $file_structure;
+            // The file_structure has the path to the file in the 'data' key. At
+            // the moment we are gathering files in the 'items' key to group them
+            // up, so 'data' key doesnt have any use for us.
+            unset($groups[$bundle_key]['data']);
+            // Bundle versions we are handling ourselves.
+            $groups[$bundle_key]['version'] = NULL;
+          }
+          $groups[$bundle_key]['items'][] = $file_structure;
+        }
+      }
+    }
+
+    // Build up the altered file list which will hopefully hold the bundles.
+    $altered_file_list = array();
+    // Need to maintain which bundle has been used so far and which hasnt. This
+    // is especially needed when we get an ungrouped list of files.
+    $groups_handled = array();
+    foreach ($file_list as $delta => $file_structure) {
+      if ($file_structure['type'] == 'file' && $file_structure['preprocess']) {
+        $bundle_key = $bundle_key_generator($page_id, $file_structure);
+        // If we have found a file which belongs to a bundle which was handled
+        // earlier then there is nothing more to do. Skip.
+        if (!in_array($bundle_key, $groups_handled)) {
+          $groups_handled[] = $bundle_key;
+          // If we did the grouping then the $groups is keyed by bundle_key,
+          // otherwise $group is same as $file_list so $delta can be used to
+          // access the group settings.
+          $group_key = $file_list_is_grouped ? $delta : $bundle_key;
+          $bundle_info = bundle_aggregation_bundle_get($bundle_key, $bundle_type, $groups[$group_key]['items'], $cache_version);
+          if (!empty($bundle_info['bundle_path'])) {
+            // There is a bundle we can use, yay.
+            $path = $bundle_info['bundle_path'];
+            $altered_file_list[$path] = $groups[$group_key];
+            // The files belonging to the group are no longer needed.
+            unset($altered_file_list[$path]['items']);
+            $altered_file_list[$path]['data'] = $bundle_info['bundle_path'];
+            // Kill further aggregation attempts. Dont want core to do anything.
+            $altered_file_list[$path]['preprocess'] = FALSE;
+          }
+          if (!empty($bundle_info['missed_files'])) {
+            // There are files which are not yet included in the bundle but
+            // queue processing will correct that wrong at a later time, until
+            // then, just serve the individual files.
+            if (!$file_list_is_grouped) {
+              // When the file list is ungrouped, we have to keep the final list
+              // ungrouped as well, so we push the missing files to the array.
+              foreach ($bundle_info['missed_files'] as $missed_file) {
+                // Kill further aggregation attempts. Dont want core to do anything.
+                $missed_file['preprocess'] = FALSE;
+                $altered_file_list[$missed_file['data']] = $missed_file;
+              }
+            }
+            else {
+              // The files were grouped, so we just add an other group which
+              // contain the missed files.
+              $altered_file_list[$bundle_key . ':missed'] = $file_structure;
+              $altered_file_list[$bundle_key . ':missed']['items'] = $bundle_info['missed_files'];
+              // Kill further aggregation attempts. Dont want core to do anything.
+              $altered_file_list[$bundle_key . ':missed']['preprocess'] = FALSE;
+            }
+          }
+        }
+      }
+      else {
+        $altered_file_list[$delta] = $file_structure;
+      }
+    }
+  }
+  return $preprocess_allowed ? $altered_file_list : $file_list;
+}
+
+/**
+ * Fetch a bundle that covers a set of files and determines the missing ones.
+ *
+ * The function will fetch the related bundle, if there is any, and determine
+ * if any of the files are missing from the bundle, in which case the bundle is
+ * queued for regeneration.
+ *
+ * @param $bundle_key
+ *   string The bundle identification string.
+ * @param $bundle_type
+ *   integer Numeric representation of the bundle type. See the constants at the
+ *   top of the module. For example BUNDLE_AGGREGATION_JS_BUNDLE.
+ * @param $files
+ *   Array of associated arrays where the file path appears on the 'data' key.
+ * @param $cache_version
+ *   integer A version number which can be used to trigger a complete bundle
+ *   regeneration.
+ *
+ * @return
+ *   array containing two keys:
+ *    - bundle_path - contains the path of the bundle if one is found, or an
+ *      empty string otherwise
+ *    - missed_files - contains the array of files which are missing from the
+ *      bundle.
+ */
+function bundle_aggregation_bundle_get($bundle_key, $bundle_type, $files, $cache_version) {
+  $bundle_info = array(
+    'bundle_path' => '',
+    'missed_files' => array(),
+  );
+  $bundle_data = bundle_aggregation_bundle_load($bundle_key);
+  if ($bundle_data) {
+    // No matter how incomplete a bundle is, we will serve it to avoid possible
+    // bundle generation stampede.
+    $bundle_info['bundle_path'] = $bundle_data['path'];
+  }
+  // Find any missing files from the bundle.
+  foreach ($files as $file_structure) {
+    if (!$bundle_data || !isset($bundle_data['files'][$file_structure['data']])) {
+      $bundle_info['missed_files'][] = $file_structure;
+    }
+  }
+  // Need to rebuild the bundle if it doesnt exist yet, exists but it's
+  // considered stale, exists but some files are missing from it.
+  if (!$bundle_data || $cache_version != $bundle_data['cache_version'] || !empty($bundle_info['missed_files'])) {
+    // Avoid flooding the queue with rebuild requests by issuing a lock. If we
+    // get the lock then we queue the bundle up for rebuilding. If we the lock
+    // is already taken, then we'll assume the rebuilding will happen soon, but
+    // we wont wait for it to avoid httpd processes building up. Rebuilding
+    // happens on cron_queue which has a set of time for a task to complete.
+    // The lock's TTL will equal to this time to give the process a chance to
+    // complete.
+    $lock_name = 'bundle_aggregation_rebuild_lock_' . $bundle_key;
+    // Oh joy, Drupal locks are released when the page finishes, so we have to
+    // use something else to detect locking.
+    if (!cache_get($lock_name, 'cache_bundle_aggregation_locks')) {
+      cache_set($lock_name, TRUE, 'cache_bundle_aggregation_locks', variable_get('bundle_aggregation_rebuild_time', 60));
+      $rebuild_info = array(
+        'bundle_type' => $bundle_type,
+        'bundle_key' => $bundle_key,
+        'cache_version' => $cache_version,
+        'missed_files' => !empty($bundle_info['missed_files']),
+        'file_list' => $files,
+      );
+      DrupalQueue::get('bundle_aggregation_bundle_rebuilding')->createItem($rebuild_info);
+    }
+  }
+  return $bundle_info;
+}
+
+/**
+ * Load bundle data.
+ *
+ * Loads the bundle from cache. If the cache misses then it is loaded from the
+ * database and the cache is repopulated.
+ *
+ * @param $bundle_key
+ *   string Bundle key.
+ *
+ * @return
+ *   Array of the loaded bundle or NULL.
+ */
+function bundle_aggregation_bundle_load($bundle_key) {
+  // If hierarchic caching is used / enabled the local bundle cache will have
+  // its own TTL, and the recently changed bundles will be stored in a global
+  // cache bin.
+  $hierarchic_caching = variable_get('bundle_aggregation_hierarchic_caching', FALSE);
+  $cache_ttl = $hierarchic_caching ? variable_get('bundle_aggregation_hierarchic_cache_ttl', 86400) : CACHE_PERMANENT;
+  if ($hierarchic_caching && ($recently_updated_bundles = cache_get('bundle_aggregation_recently_updated_bundles', 'cache_bundle_aggregation_locks'))) {
+    $recently_updated_bundles = $recently_updated_bundles->data;
+  }
+  else {
+    $recently_updated_bundles = NULL;
+  }
+  $bundle_data = NULL;
+  $cache = cache_get($bundle_key, 'cache_bundle_aggregation');
+  if (isset($cache->data)) {
+    $bundle_data = $cache->data;
+    // With hierarchic caching, where webheads will have their local cache bins,
+    // it is possible that the bundle data gets refreshed but the change doesnt
+    // propagate to other webheads' local caches. To stop the cache getting
+    // stale the recently updated bundles will be globally cached to allow
+    // comparing the cached bundle's version to the newest version.
+    if ($recently_updated_bundles && isset($recently_updated_bundles[$bundle_key]) && $recently_updated_bundles[$bundle_key]['version'] != $bundle_data['cache_version'] . '_' . $bundle_data['bundle_version']) {
+      $bundle_data = NULL;
+    }
+  }
+  // When the bundle data couldnt be fetched due to a cache miss, or the cache
+  // needs to be updated we grab the data from the database.
+  if (!isset($bundle_data)) {
+    $bundle_data = db_select('bundle_aggregation_bundles', 'b')
+      ->fields('b')
+      ->condition('bundle_id', $bundle_key)
+      ->execute()
+      ->fetchAssoc();
+    if ($bundle_data) {
+      $bundle_data['files'] = unserialize($bundle_data['files']);
+      if (!is_array($bundle_data['files'])) {
+        $bundle_data['files'] = array();
+      }
+      cache_set($bundle_key, $bundle_data, 'cache_bundle_aggregation', $cache_ttl);
+    }
+  }
+  return $bundle_data;
+}
+
+/**
+ * Save bundle data.
+ *
+ * @param $bundle_data
+ *   array Fully loaded bundle. If the 'new' key is set it will be considered
+ *   as a new bundle, otherwise as an existing bundle that needs to be updated.
+ */
+function bundle_aggregation_bundle_save($bundle_data) {
+  drupal_write_record('bundle_aggregation_bundles', $bundle_data, empty($bundle_data['new']) ? array('bundle_id') : array());
+  unset($bundle_data['new']);
+  // If hierarchic caching is used / enabled the local bundle cache will have
+  // its own TTL, and the recently changed bundles will be stored in a global
+  // cache bin.
+  $hierarchic_caching = variable_get('bundle_aggregation_hierarchic_caching', FALSE);
+  $cache_ttl = $hierarchic_caching ? variable_get('bundle_aggregation_hierarchic_cache_ttl', 86400) : CACHE_PERMANENT;
+  if ($hierarchic_caching) {
+    $recently_updated_bundles = cache_get('bundle_aggregation_recently_updated_bundles', 'cache_bundle_aggregation_locks');
+    $recently_updated_bundles = $recently_updated_bundles ? $recently_updated_bundles->data : array();
+    // Remove old entries.
+    $recently_updated_bundles = array_filter($recently_updated_bundles, '_bundle_aggregation_filter_recently_updated_bundles');
+    // Store the bundle version which can be used to decide if the local cached
+    // bundle is outdated. Store the update timestamp as well, to be able to
+    // determine when the entry can be dropped.
+    $recently_updated_bundles[$bundle_data['bundle_id']] = array(
+      'version' => $bundle_data['cache_version'] . '_' . $bundle_data['bundle_version'],
+      'updated' => REQUEST_TIME,
+    );
+    cache_set('bundle_aggregation_recently_updated_bundles', $recently_updated_bundles, 'cache_bundle_aggregation_locks');
+  }
+  $cache = cache_set($bundle_data['bundle_id'], $bundle_data, 'cache_bundle_aggregation', $cache_ttl);
+}
+
+/**
+ * Determine if a bundle update is old enough to drop from the global cache.
+ */
+function _bundle_aggregation_filter_recently_updated_bundles($item) {
+  return $item['updated'] >= REQUEST_TIME - variable_get('bundle_aggregation_hierarchic_cache_ttl', 86400);
+}
+
+/**
+ * Implements hook_cron_queue_info().
+ */
+function bundle_aggregation_cron_queue_info() {
+  return array(
+    'bundle_aggregation_bundle_rebuilding' => array(
+      'worker callback' => 'bundle_aggregation_bundle_rebuilding',
+      'time' => variable_get('bundle_aggregation_rebuild_time', 60),
+    ),
+  );
+}
+
+/**
+ * Cron queue worker to handle bundle rebuilding.
+ */
+function bundle_aggregation_bundle_rebuilding($rebuild_info) {
+  $bundle_data = bundle_aggregation_bundle_load($rebuild_info['bundle_key']);
+  $bundle_changed = FALSE;
+  // No bundle exists with this key yet, so we have to initialize it.
+  if (!$bundle_data) {
+    $bundle_changed = TRUE;
+    $bundle_data = array(
+      'bundle_id' => $rebuild_info['bundle_key'],
+      'bundle_type' => $rebuild_info['bundle_type'],
+      'path' => '',
+      'bundle_version' => 0,
+      'cache_version' => $rebuild_info['cache_version'],
+      'files' => array(),
+      'new' => TRUE,
+    );
+  }
+  elseif (isset($rebuild_info['cache_version']) && $bundle_data['cache_version'] < $rebuild_info['cache_version']) {
+    // The bundle may already exist, but it may be outdated.
+    $bundle_changed = TRUE;
+    $bundle_data['bundle_version'] = 0;
+    $bundle_data['cache_version'] = $rebuild_info['cache_version'];
+  }
+  if (!empty($rebuild_info['force_rebuild'])) {
+    // The files have been reordered or removed from the bundle and the changes
+    // have been saved into the DB.
+    $bundle_changed = TRUE;
+    if (isset($rebuild_info['removed_files'])) {
+      foreach ($rebuild_info['removed_files'] as $path) {
+        unset($bundle_data['files'][$path]);
+      }
+    }
+    if (isset($rebuild_info['reordered_files'])) {
+      foreach ($rebuild_info['reordered_files'] as $path => $weight) {
+        $bundle_data['files'][$path] = $weight;
+      }
+    }
+  }
+  else {
+    // We have a file list in $bundle_data and we have a file list in the
+    // $rebuild_info['file_list']. Need to combine these two.
+    foreach ($rebuild_info['file_list'] as $delta => $file_structure) {
+      if (!isset($bundle_data['files'][$file_structure['data']])) {
+        $bundle_changed = TRUE;
+        $bundle_data['files'][$file_structure['data']] = $delta;
+      }
+    }
+  }
+
+  if ($bundle_changed) {
+    $bundle_data['bundle_version']++;
+    // If CSS / JS gzip compression is enabled, clean URLs are enabled (which
+    // means that rewrite rules are working) and the zlib extension is
+    // available then create a gzipped version of this file. This file is
+    // served conditionally to browsers that accept gzip using .htaccess
+    // rules. See drupal_build_js_cache() and drupal_build_css_cache().
+    $gzip_compression_allowed = variable_get('clean_url', 0) && extension_loaded('zlib');
+    switch ($rebuild_info['bundle_type']) {
+      case BUNDLE_AGGREGATION_CSS_BUNDLE:
+        $bundle_content = bundle_aggregation_css_bundle_content_generate($bundle_data);
+        $gzip_compression_allowed = $gzip_compression_allowed && variable_get('css_gzip_compression', TRUE);
+        break;
+
+      case BUNDLE_AGGREGATION_JS_BUNDLE:
+        $bundle_content = bundle_aggregation_js_bundle_content_generate($bundle_data);
+        $gzip_compression_allowed = $gzip_compression_allowed && variable_get('js_gzip_compression', TRUE);
+        break;
+    }
+
+    $pretty_bundle_type = bundle_aggregation_pretty_bundle_type($rebuild_info['bundle_type']);
+
+    // Create the directory within the files folder.
+    $path = 'public://' . $pretty_bundle_type;
+    file_prepare_directory($path, FILE_CREATE_DIRECTORY);
+
+    // Prefix filename to prevent blocking by firewalls which reject files
+    // starting with "ad*", and create the file.
+    $filename = $pretty_bundle_type . '_' . drupal_hash_base64(implode(':', array_keys($bundle_data['files']))) . '_' . $bundle_data['cache_version'] . '_' . $bundle_data['bundle_version'] . '.' . $pretty_bundle_type;
+    $old_bundle_file = !empty($bundle_data['path']) ? $bundle_data['path'] : FALSE;
+    $bundle_data['path'] = $path . '/' . $filename;
+    if (file_unmanaged_save_data($bundle_content, $bundle_data['path'], FILE_EXISTS_REPLACE)) {
+      bundle_aggregation_bundle_save($bundle_data);
+      if ($gzip_compression_allowed) {
+        if (!file_exists($bundle_data['path'] . '.gz')) {
+          // Ignore an error saving the file. Requests will fall back
+          // to the non-gzip copy of the file we have already written.
+          file_unmanaged_save_data(gzencode($bundle_content, 9, FORCE_GZIP), $bundle_data['path'] . '.gz', FILE_EXISTS_REPLACE);
+        }
+      }
+
+      // Queue up the old bundle for clean up.
+      if ($old_bundle_file) {
+        $cleanup = array(
+          'path' => $old_bundle_file,
+          'timestamp' => REQUEST_TIME,
+        );
+        drupal_write_record('bundle_aggregation_bundle_cleanup', $cleanup);
+      }
+    }
+    else {
+      watchdog('bundle_aggregation', 'Failed to save aggregated bundle.');
+    }
+  }
+  cache_clear_all('bundle_aggregation_rebuild_lock_' . $bundle_data['bundle_id'], 'cache_bundle_aggregation_locks');
+}
+
+/**
+ * Generate CSS bundle content.
+ *
+ * Content generation mostly taken from drupal_build_css_cache().
+ *
+ * @param $bundle_data
+ *   array Loaded bundle data.
+ *
+ * @return
+ *   string Concatenated content of the CSS files.
+ */
+function bundle_aggregation_css_bundle_content_generate($bundle_data) {
+  $bundle_content = '';
+  asort($bundle_data['files']);
+  foreach ($bundle_data['files'] as $file_path => $weight) {
+    $contents = drupal_load_stylesheet($file_path, TRUE);
+
+    // Build the base URL of this CSS file: start with the full URL.
+    $css_base_url = file_create_url($file_path);
+    // Move to the parent.
+    $css_base_url = substr($css_base_url, 0, strrpos($css_base_url, '/'));
+    // Simplify to a relative URL if the stylesheet URL starts with the base URL
+    // of the website.
+    if (substr($css_base_url, 0, strlen($GLOBALS['base_root'])) == $GLOBALS['base_root']) {
+      $css_base_url = substr($css_base_url, strlen($GLOBALS['base_root']));
+    }
+
+    _drupal_build_css_path(NULL, $css_base_url . '/');
+    // Anchor all paths in the CSS with its base URL, ignoring external and absolute paths.
+    $bundle_content .= preg_replace_callback('/url\(\s*[\'"]?(?![a-z]+:|\/+)([^\'")]+)[\'"]?\s*\)/i', '_drupal_build_css_path', $contents);
+  }
+
+  // Per the W3C specification at http://www.w3.org/TR/REC-CSS2/cascade.html#at-import,
+  // @import rules must proceed any other style, so we move those to the top.
+  $regexp = '/@import[^;]+;/i';
+  preg_match_all($regexp, $bundle_content, $matches);
+  $bundle_content = preg_replace($regexp, '', $bundle_content);
+  $bundle_content = implode('', $matches[0]) . $bundle_content;
+  return $bundle_content;
+}
+
+/**
+ * Generate JS bundle content.
+ *
+ * Content generation mostly taken from drupal_build_js_cache().
+ *
+ * @param $bundle_data
+ *   array Loaded bundle data.
+ *
+ * @return
+ *   string Concatenated content of the JS files.
+ */
+function bundle_aggregation_js_bundle_content_generate($bundle_data) {
+  $bundle_content = '';
+  foreach ($bundle_data['files'] as $path => $weight) {
+    if (is_file($path)) {
+      $javascript = file_get_contents($path);
+      drupal_alter('bundle_aggregation_js', $javascript, $path);
+      // Append a ';' and a newline after each JS file to prevent them from running together.
+      $bundle_content .= $javascript . ";\n";
+    }
+  }
+  return $bundle_content;
+}
+
+/**
+ * Implements hook_cron().
+ *
+ * Cleanup old bundles.
+ */
+function bundle_aggregation_cron() {
+  $rs = db_select('bundle_aggregation_bundle_cleanup', 'b')
+    ->fields('b', array('id', 'path'))
+    ->condition('timestamp', REQUEST_TIME - variable_get('bundle_aggregation_bundle_grace_period', 86400), '<=')
+    ->range(0, variable_get('bundle_aggregation_bundle_cleanup_limit', 20))
+    ->execute();
+  foreach ($rs as $row) {
+    if (file_unmanaged_delete($row->path)) {
+      db_delete('bundle_aggregation_bundle_cleanup')
+        ->condition('id', $row->id)
+        ->execute();
+    }
+  }
+  // With hierarchical cache we maintain a list of recently updated bundles to
+  // keep the local caches up to date. This list needs pruning over time, but to
+  // avoid conflicts, only touch it when the queue is empty.
+  if (variable_get('bundle_aggregation_hierarchic_caching', FALSE) && DrupalQueue::get('bundle_aggregation_bundle_rebuilding')->numberOfItems() == 0) {
+    if ($recently_updated_bundles = cache_get('bundle_aggregation_recently_updated_bundles', 'cache_bundle_aggregation_locks')) {
+      $recently_updated_bundles = $recently_updated_bundles ? $recently_updated_bundles->data : array();
+      // Remove old entries.
+      $recently_updated_bundles = array_filter($recently_updated_bundles, '_bundle_aggregation_filter_recently_updated_bundles');
+      cache_set('bundle_aggregation_recently_updated_bundles', $recently_updated_bundles, 'cache_bundle_aggregation_locks');
+    }
+  }
+}
+
+/**
+ * Returns the pretty bundle type for a given bundle_type.
+ *
+ * @param $bundle_type
+ *   integer Numeric representation of the bundle type. See the constants at the
+ *   top of the module. For example BUNDLE_AGGREGATION_JS_BUNDLE.
+ *
+ * @return
+ *   Either of 'css', 'js' or NULL.
+ */
+function bundle_aggregation_pretty_bundle_type($bundle_type) {
+  switch ($bundle_type) {
+    case BUNDLE_AGGREGATION_CSS_BUNDLE:
+      return 'css';
+
+    case BUNDLE_AGGREGATION_JS_BUNDLE:
+      return 'js';
+  }
+}
+
+/**
+ * Return the available CSS bundle key fragments.
+ *
+ * Helper function to keep the key fragments in the same order.
+ *
+ * @return
+ *   array Available bundle key fragments for CSS bundles.
+ */
+function bundle_aggregation_available_css_key_fragments_get() {
+  return array(
+    'page' => t('Page id'),
+    'group' => t('CSS grouping'),
+    'media' => t('What media the CSS is intended for'),
+    'browser' => t('What browser the CSS is intended for'),
+  );
+}
+
+/**
+ * Return the available JS bundle key fragments.
+ *
+ * Helper function to keep the key fragments in the same order.
+ *
+ * @return
+ *   array Available bundle key fragments for JS bundles.
+ */
+function bundle_aggregation_available_js_key_fragments_get() {
+  return array(
+    'scope' => t('The intended place for the Javascript'),
+    'page' => t('Page id'),
+    'group' => t('JS grouping'),
+  );
+}
