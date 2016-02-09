@@ -19,36 +19,46 @@ Drupal.behaviors.GardensFeaturesColorboxResize = {
 
     $(document).unbind('cbox_complete.gardens_features');
     $(document).bind('cbox_complete.gardens_features', function() {
-      var img = new Image(),
+      // A small pause because if the image is not cached, some browsers will
+      // occassionaly report a img.width and img.height of 0 immediately after
+      // the img.onload fires.
+      setTimeout($.proxy(function () {
+        var img = new Image(),
           loadedImage = $('#cboxLoadedContent').find('img'),
           resizeHandlerClass,
           resizeHandler,
           colorbox = $.colorbox;
 
-      // Create a new DOM element so we can extract the real image dimensions.
-      img.src = loadedImage.attr('src');
+        // Create a new DOM element so we can extract the real image dimensions.
+        img.src = loadedImage.attr('src');
 
-      // Avoid unwanted scrollbars.
-      $('#cboxLoadedContent').css('overflow', 'hidden');
+        // Avoid unwanted scrollbars.
+        $('#cboxLoadedContent').css('overflow', 'hidden');
 
-      // Undo Responsivizer's fluid images technique.
-      loadedImage.css('max-width', 'none');
+        // Undo Responsivizer's fluid images technique.
+        loadedImage.css('max-width', 'none');
 
-      // Set up a resize handler to resize Colorbox.
-      resizeHandlerClass = new Drupal.gardensFeaturesColorbox(img, loadedImage, colorbox);
-      resizeHandler = $.proxy(resizeHandlerClass.delayUpdate, resizeHandlerClass);
+        // Set up a resize handler to resize Colorbox.
+        resizeHandlerClass = new Drupal.gardensFeaturesColorbox(img, loadedImage, colorbox);
+        resizeHandler = $.proxy(resizeHandlerClass.delayUpdate, resizeHandlerClass);
 
-      // Update the size of Colorbox on initial load.
-      resizeHandlerClass.update(img, loadedImage, colorbox);
+        // Update the size of Colorbox on initial load.
+        // Some browsers set the width and height property after the image is
+        // loaded. So wait for the 'onload' event to ensure that the image
+        // dimensions are known before attempting a resize.
+        img.onload = function () {
+          resizeHandlerClass.update(img, loadedImage, colorbox);
+        }
 
-      // If the orientation changes, resize Colorbox.
-      if (window.orientation !== undefined) {
-        window.onorientationchange = resizeHandler;
-      }
+        // If the orientation changes, resize Colorbox.
+        if (window.orientation !== undefined) {
+          window.onorientationchange = resizeHandler;
+        }
 
-      // If the window is resized, resize Colorbox.
-      $(window).unbind('resize.gardens_features');
-      $(window).bind('resize.gardens_features', resizeHandler);
+        // If the window is resized, resize Colorbox.
+        $(window).unbind('resize.gardens_features');
+        $(window).bind('resize.gardens_features', resizeHandler);
+      }, this), 100);
     });
   }
 };
@@ -60,6 +70,8 @@ Drupal.behaviors.GardensFeaturesColorboxResize = {
  * the orientation change and resize event handlers.
  */
 Drupal.gardensFeaturesColorbox = function(img, loadedImage, colorbox) {
+  this.timer = 0;
+
   this.$image = img;
   this.$loadedImage = loadedImage;
   this.$colorbox = colorbox;
