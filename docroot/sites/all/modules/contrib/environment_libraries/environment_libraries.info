@@ -1,0 +1,19 @@
+name = Environment Libraries 
+description = Manage JS & CSS libraries via UI and manage via context or blocks. Use environment configurations allow multiple variants.
+core = 7.x
+configure = admin/config/system/environment_libraries
+
+dependencies[] = entity
+dependencies[] = libraries
+//optional integrations
+;dependencies[] = ctools
+;dependencies[] = chosen
+;dependencies[] = context
+;dependencies[] = features
+
+; Information added by Drupal.org packaging script on 2016-02-15
+version = "7.x-1.0-beta1"
+core = "7.x"
+project = "environment_libraries"
+datestamp = "1455551940"
+

@@ -1,0 +1,83 @@
+.form-type-environment-library header {
+  max-width: 100%;
+}
+.form-type-environment-library header .form-item {
+  display: inline-block;
+  vertical-align: top;
+  margin-right: 2em;
+}
+.form-type-environment-library .fieldset-wrapper {
+  position: relative;
+}
+.form-type-environment-library .environment--tag {
+  min-width: 4em;
+  background-color: #c3c3c3;
+  border-radius: 3px;
+  display: inline-block;
+  text-align: center;
+  position: absolute;
+  margin: 0.5em;
+  right: 0;
+  opacity: 0.6;
+}
+.form-type-environment-library .environment--tag.local {
+  background-color: powderblue;
+}
+.form-type-environment-library .environment--tag.dev {
+  background-color: seagreen;
+}
+.form-type-environment-library .environment--tag.qa {
+  background-color: gold;
+}
+.form-type-environment-library .environment--tag.stage {
+  background-color: orange;
+}
+.form-type-environment-library .environment--tag.prod {
+  background-color: red;
+}
+.form-type-environment-library .environment .url-wrapper {
+  position: relative;
+  display: inline-block;
+  margin-right: 1em;
+}
+.form-type-environment-library .environment .form-type-textfield {
+  display: inline-block;
+}
+.form-type-environment-library .environment .form-type-checkbox {
+  display: inline-block;
+  vertical-align: top;
+}
+.form-type-environment-library .environment.current .form-type-textfield input {
+  box-shadow: 0 0 5px #51cbee;
+  border: 1px solid #51cbee;
+}
+.form-type-environment-library .environment-library--file .form-type-select {
+  display: inline-block;
+  margin-right: 2em;
+}
+.form-type-environment-library .environment-library--file .form-type-select label,
+.form-type-environment-library .environment-library--file .form-type-select select {
+  display: inline-block;
+  width: auto;
+}
+.form-type-environment-library .form-item-environment-libraries-library-expose-block {
+  margin: 1em 0;
+}
+.form-type-environment-library .form-item-environment-libraries-library-expose-block .description {
+  display: inline-block;
+  margin: 0;
+}
+.form-type-environment-library .chosen-results li {
+  max-width: 100%;
+}
+
+form#environment-libraries-form-settings #edit-environment-libraries-environment-current .form-item {
+  display: inline-block;
+}
+
+.environment-libraries--list-libraries th:first-child {
+  width: 15%;
+}
+.environment-libraries--list-libraries th:last-child {
+  width: 15%;
+}

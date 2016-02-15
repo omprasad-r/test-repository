@@ -1,0 +1,145 @@
+<?php
+/**
+ * @file
+ * Module install / uninstall
+ */
+
+// ## Module Install / Uninstall
+/**
+ * Module install.
+ */
+function environment_libraries_install() {
+  $t = get_t();
+  drupal_set_message(
+    $t("You may now manage Libraries settings are available under !link",
+      array('!link' => l($t('Administer > Configuration > Environment Libraries'), 'admin/config/system/environment_libraries'))
+    )
+  );
+}
+
+/**
+ * Module uninstall.
+ */
+function environment_libraries_uninstall() {
+  variable_del("environment_libraries_environment_current");
+  variable_del("environment_libraries_module_dependencies");
+}
+
+// ## Version Update Hooks
+/**
+ * 7.x-1.0 :: 1.0 release - remove tagfield in favor of chosen.
+ */
+function environment_libraries_7010() {
+
+  if (module_exists('tagfield')) {
+    module_disable('tagfield');
+  }
+  variable_del("environment_libraries_library_files");
+}
+
+/**
+ * 7.x-0.4 :: beta 0.4 schema update !will DELETE ALL libraries.
+ */
+function environment_libraries_7004() {
+
+  drupal_uninstall_schema("environment_libraries");
+  drupal_install_schema("environment_libraries");
+}
+
+// ## Environment Libraries Entity Schema
+/**
+ * Database table definition.
+ *
+ * Implements hook_schema().
+ */
+function environment_libraries_schema() {
+  $schema = array();
+
+  // ### Library Entity
+  $schema['environment_libraries_library'] = array(
+    'description' => 'The base table for an environment_libraries_library entity.',
+    'fields' => array(
+      'lid' => array(
+        'description' => 'Primary key of the environment_libraries_library.',
+        'type' => 'serial',
+        'unsigned' => TRUE,
+        'not null' => TRUE,
+      ),
+      'title' => array(
+        'description' => 'The administrative title for the environment_libraries_library.',
+        'type' => 'varchar',
+        'length' => 255,
+        'not null' => TRUE,
+      ),
+      'machine_name' => array(
+        'description' => 'The unique name for the environment_libraries_library.',
+        'type' => 'varchar',
+        'length' => 255,
+        'not null' => TRUE,
+      ),
+      'module' => array(
+        'description' => 'The machine_name for the module defining the library.',
+        'type' => 'varchar',
+        'length' => 255,
+        'not null' => FALSE,
+      ),
+      'dependencies' => array(
+        'description' => 'A comma separated list of machine_names of dependent libraries.',
+        'type' => 'varchar',
+        'length' => 1028,
+        'not null' => FALSE,
+        'default' => '',
+      ),
+      'environment' => array(
+        'description' => 'The environment to use to load this library and it\'s dependencies',
+        'type' => 'varchar',
+        'length' => 128,
+        'not null' => FALSE,
+      ),
+      'expose_block' => array(
+        'description' => 'A flag to expose a block to load this library.',
+        'type' => 'int',
+        'size' => 'tiny',
+        'not null' => FALSE,
+        'default' => 0,
+      ),
+      'config' => array(
+        'description' => 'A JSON associative array of library configuration.',
+        'type' => 'blob',
+        'not null' => TRUE,
+        'serialize' => TRUE,
+      ),
+      // Additional properties are just things that are common to all entities
+      // and don't require field storage.
+      'item_description' => array(
+        'description' => 'A user defined library with multiple environment configurations.',
+        'type' => 'varchar',
+        'length' => 255,
+        'not null' => TRUE,
+        'default' => '',
+      ),
+      'created' => array(
+        'description' => 'The Unix timestamp of the entity creation time.',
+        'type' => 'int',
+        'not null' => TRUE,
+        'default' => 0,
+      ),
+    ),
+    'primary key' => array('lid'),
+    'unique keys' => array(
+      'machine_name' => array('machine_name'),
+    ),
+    'indexes' => array(
+      'dx_machine_name' => array('machine_name'),
+      'idx_module' => array('module'),
+    ),
+  );
+
+  // ### Create Caches
+  // TODO Do we need our own cache bin? cache_environment_libraries
+  $cache_schema = drupal_get_schema_unprocessed('system', 'cache');
+  $cache_schema['description'] = "Cache table used by environment_libraries.";
+  $schema['cache_entity_environment_libraries_library'] = $cache_schema;
+
+  return $schema;
+}

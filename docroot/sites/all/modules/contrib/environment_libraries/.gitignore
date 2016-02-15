@@ -1,0 +1,4 @@
+.DS_STORE
+.sass-cache
+docs
+node_modules

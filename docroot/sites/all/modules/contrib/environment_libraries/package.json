@@ -1,0 +1,17 @@
+{
+  "name": "environment_libraries",
+  "version": "1.0.0",
+  "description": "Manage external css & jss through Drupal admin UI & Contexts. Files support multiple versions based on prod/stage/dev environments for easier development on live Sitefactory servers.",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git@bitbucket.org:interscoperecords/environment_libraries"
+  },
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "docco": "^0.7.0"
+  }
+}

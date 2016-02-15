@@ -1,0 +1,90 @@
+
+
+.form-type-environment-library{
+  header{
+    max-width:100%;
+    .form-item{
+      display:inline-block;
+      vertical-align:top;
+      margin-right: 2em;
+    }
+  }
+  .fieldset-wrapper{
+    position:relative;
+  }
+  .environment--tag{
+    min-width:4em;
+    background-color:#c3c3c3;
+    border-radius:3px;
+    display:inline-block;
+    text-align:center;
+    position:absolute;
+    margin: 0.5em;
+    right: 0;
+    opacity: 0.6;
+
+    &.local{ background-color:powderblue; }
+    &.dev{ background-color:seagreen;  }
+    &.qa{ background-color:gold;  }
+    &.stage{ background-color:orange;  }
+    &.prod{ background-color:red; }
+   }
+  .environment{
+    .url-wrapper{ position:relative; display:inline-block; margin-right: 1em;}
+    .form-type-textfield{
+      display:inline-block;
+    }
+    .form-type-checkbox{
+      display:inline-block;
+      vertical-align:top;
+    }
+
+    &.current .form-type-textfield input{
+      box-shadow: 0 0 5px rgba(81, 203, 238, 1);
+      border: 1px solid rgba(81, 203, 238, 1);
+    }
+  }
+
+  .environment-library--file{
+    .form-type-select{
+      display: inline-block;
+      margin-right: 2em;
+      label, select{
+        display:inline-block;
+        width:auto;
+      }
+    }
+  }
+
+  .form-item-environment-libraries-library-expose-block{
+    margin: 1em 0;
+    .description{
+      display: inline-block;
+      margin: 0;
+    }
+  }
+
+  .chosen-results{
+    li{
+      max-width:100%;
+    }
+  }
+
+}
+
+form#environment-libraries-form-settings{
+  #edit-environment-libraries-environment-current {
+    .form-item{
+      display:inline-block;
+    }
+  }
+}
+
+.environment-libraries--list-libraries{
+  th:first-child{
+    width:15%;
+  }
+  th:last-child{
+    width:15%;
+  }
+}

@@ -1,0 +1,213 @@
+<?php
+/**
+ * @file
+ * Define environment_libraries module functions.
+ */
+
+// # Environment Libraries Module
+module_load_include('inc', 'environment_libraries', 'environment_libraries.admin');
+module_load_include('inc', 'environment_libraries', 'environment_libraries.blocks');
+module_load_include('inc', 'environment_libraries', 'environment_libraries.context');
+module_load_include('inc', 'environment_libraries', 'environment_libraries.class');
+module_load_include('inc', 'environment_libraries', 'environment_libraries.entity');
+module_load_include('inc', 'environment_libraries', 'environment_libraries.features');
+module_load_include('inc', 'environment_libraries', 'environment_libraries.form');
+module_load_include('inc', 'environment_libraries', 'environment_libraries.form_element');
+module_load_include('inc', 'environment_libraries', 'environment_libraries.libraries');
+module_load_include('inc', 'environment_libraries', 'environment_libraries.permissions');
+module_load_include('inc', 'environment_libraries', 'environment_libraries.theme');
+use Environment_Libraries\LibraryUtils;
+
+// ## Environment Functions
+/**
+ * Define environments from highest to lowest priority ie. (production => staging => dev).
+ *
+ * @return array
+ *   environments
+ */
+function environment_libraries_environments() {
+  return LibraryUtils::get_environments();
+}
+
+/**
+ * Get the current site (or library) environment.
+ *
+ * @param object $library
+ *    Library entity.
+ *
+ * @return string
+ *   environment
+ */
+function environment_libraries_environment_current($library = NULL) {
+  return LibraryUtils::current_environment($library);
+}
+
+/**
+ * Download/Synchronize/Cache tracking code file locally.
+ *
+ * Modified from google analytics module by way of Acquia javascript_libraries.
+ *
+ * @param string $uri
+ *   The full URL to the external javascript file.
+ * @param string $lid
+ *   Library id.
+ * @param bool $sync_cached_file
+ *   Synchronize tracking code and update if remote file have changed.
+ *
+ * @return mixed
+ *   The path to the local javascript file on success, boolean FALSE on failure.
+ */
+function environment_libraries_cache($uri, $lid, $sync_cached_file = FALSE) {
+  // ## Library Remote File Local Cache
+  // Create a local file cache of remote files in the
+  // environment_libraries folder.
+  $path = 'public://environment_libraries';
+
+  if (substr($uri, -strlen('.css')) === '.css') {
+    $ext = '.css';
+  }
+  elseif (substr($uri, -strlen('.js')) === '.js') {
+    $ext = '.js';
+  }
+
+  $file_destination = $path . '/env_' . drupal_hash_base64($uri) . $ext;
+  $file_exists = file_exists($file_destination);
+  // If the file exists, we can assume success.
+  $success = $file_exists;
+
+  if (!$file_exists || $sync_cached_file) {
+    // Download the library.
+    $uri = LibraryUtils::http_url($uri);
+    $result = drupal_http_request($uri);
+
+    if ($result->code != 200) {
+      watchdog('environment_libraries', 'Error fetching remote file @uri HTTP code: @code.', array('@uri' => $uri, '@code' => $result->code), WATCHDOG_ERROR);
+      return FALSE;
+    }
+    if ($file_exists) {
+      // Only do a (potentially somewhat slow/expensive) file write
+      // if the content changed.
+      $current_contents = file_get_contents($file_destination);
+      if ($result->data != $current_contents) {
+        // Save updated javascript file to disk.
+        $success = environment_libraries_file_unmanaged_save_data($result->data, $file_destination);
+        watchdog('environment_libraries', 'Locally cached environment library has been updated.', array(), WATCHDOG_INFO);
+        drupal_clear_js_cache();
+        module_invoke('environment_libraries_cache', $uri, $lid);
+      }
+    }
+    elseif (file_prepare_directory($path, FILE_CREATE_DIRECTORY)) {
+      // There is no need to flush JS here as core refreshes JS caches
+      // automatically if new files are added.
+      $success = environment_libraries_file_unmanaged_save_data($result->data, $file_destination);
+      // watchdog('environment_libraries', 'Locally cached environment library has been saved.', array(), WATCHDOG_INFO);
+    }
+  }
+  if ($success) {
+    // Return the local JS file path.
+    return $file_destination;
+  }
+  return FALSE;
+}
+
+/**
+ * Save environment library file.
+ *
+ * @see javascript_libraries
+ */
+function environment_libraries_file_unmanaged_save_data($data, $destination) {
+  // Create a temporary file and then move it in place.
+  $destination_tmp = $destination . '-tmp-' . uniqid(getmypid(), TRUE);
+  if (file_unmanaged_save_data($data, $destination_tmp, FILE_EXISTS_REPLACE)) {
+    return @rename($destination_tmp, $destination);
+  }
+  return FALSE;
+}
+
+/**
+ * Implements hook_preprocess_page().
+ */
+function environment_libraries_preprocess_page(&$variables, $hook) {
+  // Add Page-level module css / js.
+  if (path_is_admin(current_path())) {
+    $module_path = drupal_get_path("module", "environment_libraries");
+    drupal_add_css($module_path . '/css/environment_libraries.css',
+      array('type' => 'file', 'scope' => 'header', 'group' => CSS_THEME));
+    drupal_add_js($module_path . '/js/environment_libraries.admin.js',
+      array('type' => 'file', 'scope' => 'footer'));
+
+  }
+}
+
+// ## Cron, cache clear, drush, etc
+/**
+ * Rebuild the library cache files.
+ *
+ * Implements hook_cron().
+ */
+function environment_libraries_cron() {
+  environment_libraries_flush_caches();
+}
+
+/**
+ * Implements hook_flush_caches().
+ */
+function environment_libraries_flush_caches() {
+  $env_libraries = environment_libraries_library_load_multiple(FALSE, array('expose_block' => 1));
+  foreach ($env_libraries as $library) {
+    // Rebuild the cached file version of this asset.
+    $library_files = LibraryUtils::list_files($library);
+    foreach ($library_files as $library_file) {
+      environment_libraries_cache($library_file['url'], $library->lid, TRUE);
+    }
+  }
+  // Clear our entity cache.
+  return array('cache_entity_environment_libraries_library');
+}
+
+/**
+ * Implements hook_ctools_plugin_api().
+ */
+function environment_libraries_ctools_plugin_api($owner, $api) {
+  if ($owner == 'environment_libraries' && $api == 'default_environment_libraries_library') {
+    return array('version' => 1);
+  }
+}
+
+/**
+ * Implements hook_help().
+ */
+function environment_libraries_help($path, $arg) {
+
+  switch ($path) {
+    case 'admin/help#environment_libraries':
+      $filepath = dirname(__FILE__) . '/README.md';
+      if (file_exists($filepath)) {
+        $readme = file_get_contents($filepath);
+      }
+      else {
+        $filepath = dirname(__FILE__) . '/README.txt';
+        if (file_exists($filepath)) {
+          $readme = file_get_contents($path);
+        }
+      }
+      if (!isset($readme)) {
+        return NULL;
+      }
+      if (module_exists('markdown')) {
+        $filters = module_invoke('markdown', 'filter_info');
+        $info = $filters['filter_markdown'];
+
+        if (function_exists($info['process callback'])) {
+          $output = $info['process callback']($readme, NULL);
+        }
+        else {
+          $output = '<pre>' . filter_xss_admin($readme) . '</pre>';
+        }
+      }
+      else {
+        $output = '<pre>' . filter_xss_admin($readme) . '</pre>';
+      }
+      return $output;
+  }
+}
