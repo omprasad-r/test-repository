@@ -1,0 +1,7 @@
+<?php
+/**
+ * @file
+ * Code for the WMG Turnkey Onesheet feature.
+ */
+
+include_once 'wmg_turnkey_onesheet.features.inc';
