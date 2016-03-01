@@ -1,0 +1,57 @@
+diff --git a/bakery.module b/bakery.module
+index 3dc48d1..5f5eb5d 100644
+--- a/bakery.module
++++ b/bakery.module
+@@ -170,20 +170,24 @@ function bakery_user_update(&$edit, $account, $category) {
+     $payload = drupal_http_build_query(array($type => $data));
+     unset($_SESSION['bakery']);
+     // now update the slaves
++    // WMG-484 - Adding a condition for non Drupal sites should not execute codeblock
++    
++    if (variable_get('bakery_slaves_non_drupal') == 0) {
+     $slaves = variable_get('bakery_slaves', array());
+-    foreach ($slaves as $slave) {
+-      $options = array(
+-        'headers' => array('Content-Type' => 'application/x-www-form-urlencoded; charset=utf-8'),
+-        'method' => 'POST',
+-        'data' => $payload,
+-      );
+-      $result = drupal_http_request($slave .'bakery/update', $options);
+-      if ($result->code != 200) {
+-        drupal_set_message(t('Error %error for site at %url', array('%error' => $result->code .' '. $result->error, '%url' => $slave)));
+-      }
+-      else {
+-        drupal_set_message($result->data);
+-        // TODO: Roll back the change.
++      foreach ($slaves as $slave) {
++        $options = array(
++          'headers' => array('Content-Type' => 'application/x-www-form-urlencoded; charset=utf-8'),
++          'method' => 'POST',
++          'data' => $payload,
++        );
++        $result = drupal_http_request($slave . 'bakery/update', $options);
++        if ($result->code != 200) {
++          drupal_set_message(t('Error %error for site at %url', array('%error' => $result->code . ' ' . $result->error, '%url' => $slave)));
++        }
++        else {
++          drupal_set_message($result->data);
++          // TODO: Roll back the change.
++        }
+       }
+     }
+     if ($user->uid === $account->uid) {
+@@ -506,7 +510,13 @@ function bakery_settings($form, &$form_state) {
+     '#default_value' => implode("\n", variable_get('bakery_slaves', array())),
+     '#description' => t('Specify any slave sites in your bakery network that you want to update if a user changes email or username on the master. Enter one site per line, in the form "http://sub.example.com/".'),
+   );
+-
++  // Updates and solution implemented from WMG-484 ticket
++  $form['bakery_slaves_non_drupal'] = array(
++    '#type' => 'checkbox',
++    '#title' => 'Are slaves non-drupal site(s)?',
++    '#default_value' => variable_get('bakery_slaves_non_drupal', 0),
++    '#description' => t('By checking this you ensure all the bakery slaves sites are non-Drupal sites, so the sync from backery module doese not happen'),
++  );
+   $form['bakery_help_text'] = array(
+     '#type' => 'textarea',
+     '#title' => 'Help text for users with synch problems.',
