@@ -144,9 +144,12 @@ function _dblog_get_message_types() {
  * Note: Some values may be truncated to meet database column size restrictions.
  */
 function dblog_watchdog(array $log_entry) {
+  if (!function_exists('drupal_substr')) {
+    require_once DRUPAL_ROOT . '/includes/unicode.inc';
+  }
 
   // Ensure the type is trimmed to fit in the db column
-  $type = substr($log_entry['type'], 0, 64);
+  $type = drupal_substr($log_entry['type'], 0, 64);
 
   // Check the severity filter to see if this message is allowed. We must load
   // common.inc before calling functions from it, since hook_watchdog() can be
@@ -185,10 +188,10 @@ function dblog_watchdog(array $log_entry) {
       'message' => $log_entry['message'],
       'variables' => serialize($log_entry['variables']),
       'severity' => $log_entry['severity'],
-      'link' => substr($log_entry['link'], 0, 255),
+      'link' => drupal_substr($log_entry['link'], 0, 255),
       'location' => $log_entry['request_uri'],
       'referer' => $log_entry['referer'],
-      'hostname' => substr($log_entry['ip'], 0, 128),
+      'hostname' => drupal_substr($log_entry['ip'], 0, 128),
       'timestamp' => $log_entry['timestamp'],
     ))
     ->execute();
