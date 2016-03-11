@@ -1,0 +1,179 @@
+diff --git a/user_restrictions.module b/user_restrictions.module
+index 9437c00..478a3df 100755
+--- a/user_restrictions.module
++++ b/user_restrictions.module
+@@ -16,28 +16,40 @@ function user_restrictions_cron() {
+  * Implements hook_form_FORM_ID_alter() for user_login().
+  */
+ function user_restrictions_form_user_login_alter(&$form, &$form_state) {
+-  $form['#validate'][] = 'user_restrictions_login_form_validate';
++  $allowed_forms = variable_get('user_restriction_config', array());
++  if (array_search($form['#form_id'], $allowed_forms, TRUE)) {
++    $form['#validate'][] = 'user_restrictions_login_form_validate';
++  }
+ }
+ 
+ /**
+  * Implements hook_form_FORM_ID_alter() for user_login_block().
+  */
+ function user_restrictions_form_user_login_block_alter(&$form, &$form_state) {
+-  $form['#validate'][] = 'user_restrictions_login_form_validate';
++  $allowed_forms = variable_get('user_restriction_config', array());
++  if (array_search('user_login', $allowed_forms, TRUE)) {
++    $form['#validate'][] = 'user_restrictions_login_form_validate';
++  }
+ }
+ 
+ /**
+  * Implements hook_form_FORM_ID_alter() for user_profile_form().
+  */
+ function user_restrictions_form_user_profile_form_alter(&$form, &$form_state) {
+-  $form['#validate'][] = 'user_restrictions_user_profile_form_validate';
++  $allowed_forms = variable_get('user_restriction_config', array());
++  if (array_search($form['#form_id'], $allowed_forms, TRUE)) {
++    $form['#validate'][] = 'user_restrictions_user_profile_form_validate';
++  }
+ }
+ 
+ /**
+  * Implements hook_form_FORM_ID_alter() for user_register_form().
+  */
+ function user_restrictions_form_user_register_form_alter(&$form, &$form_state) {
+-  $form['#validate'][] = 'user_restrictions_user_register_form_validate';
++  $allowed_forms = variable_get('user_restriction_config', array());
++  if (array_search($form['#form_id'], $allowed_forms, TRUE)) {
++    $form['#validate'][] = 'user_restrictions_user_register_form_validate';
++  }
+ }
+ 
+ /**
+diff --git a/user_restrictions_ui.admin.inc b/user_restrictions_ui.admin.inc
+index 797ad23..df9e6d6 100644
+--- a/user_restrictions_ui.admin.inc
++++ b/user_restrictions_ui.admin.inc
+@@ -15,15 +15,9 @@ function user_restrictions_ui_delete_rule_form($form, &$form_state, $rule) {
+   $access_types = $rule->getTypeOptions();
+   $form = array('#rule' => serialize($rule));
+ 
+-  $output = confirm_form($form,
+-    t(
+-      'Are you sure you want to delete the @type rule for %mask?',
+-      array('@type' => $access_types[$rule->type], '%mask' => $rule->mask)
+-    ),
+-    'admin/config/people/user-restrictions',
+-    t('This action cannot be undone.'),
+-    t('Delete'),
+-    t('Cancel')
++  $output = confirm_form($form, t(
++          'Are you sure you want to delete the @type rule for %mask?', array('@type' => $access_types[$rule->type], '%mask' => $rule->mask)
++      ), 'admin/config/people/user-restrictions', t('This action cannot be undone.'), t('Delete'), t('Cancel')
+   );
+ 
+   return $output;
+@@ -77,7 +71,7 @@ function user_restrictions_ui_edit_rule_form($form, &$form_state, $rule = NULL)
+     '#description' => t('%ampersand: Matches any number of characters, even zero characters.<br />%underscore: Matches exactly one character.', array('%ampersand' => '%', '%underscore' => '_')),
+     '#required' => TRUE,
+   );
+-  
++
+   $expire_options = array(0 => t('Never'));
+   if ($rule->expire) {
+     $expire_options['-1'] = format_interval($rule->expire - REQUEST_TIME);
+@@ -114,7 +108,7 @@ function user_restrictions_ui_edit_rule_form_validate($form, &$form_state) {
+   $rule = unserialize($form['#rule']);
+   if ($rule->exists($form_state['values']) && !$rule->urid) {
+     form_set_error('mask', t('The mask value has been already used in a rule.'));
+-  }  
++  }
+ }
+ 
+ /**
+@@ -128,10 +122,10 @@ function user_restrictions_ui_edit_rule_form_submit($form, &$form_state) {
+   $rule->type = $form_state['values']['type'];
+   $rule->mask = $form_state['values']['mask'];
+   if ($form_state['values']['expire'] != -1) {
+-    $rule->expire = $rule->expire ?  $rule->expire + REQUEST_TIME : 0;
++    $rule->expire = $rule->expire ? $rule->expire + REQUEST_TIME : 0;
+   }
+   $rule->save();
+-  
++
+   drupal_set_message(t('The access rule has been saved.'));
+ }
+ 
+@@ -204,7 +198,7 @@ function user_restrictions_ui_overview_form($form, &$form_state) {
+ function user_restrictions_ui_check_email_validate($form, &$form_state) {
+   if (empty($form_state['values']['value'])
+       || !valid_email_address($form_state['values']['value'])) {
+-    form_set_error('value',t('The entered value is not a valid email address.'));
++    form_set_error('value', t('The entered value is not a valid email address.'));
+   }
+ }
+ 
+@@ -221,7 +215,7 @@ function user_restrictions_ui_check_email_submit($form, &$form_state) {
+   }
+   else {
+     drupal_set_message(
+-      t('The e-mail address %mail is allowed.', array('%mail' => $form_state['values']['value']))
++        t('The e-mail address %mail is allowed.', array('%mail' => $form_state['values']['value']))
+     );
+   }
+ }
+@@ -238,7 +232,37 @@ function user_restrictions_ui_check_username_submit($form, &$form_state) {
+   }
+   else {
+     drupal_set_message(
+-      t('The username %name is allowed.', array('%name' => $form_state['values']['value']))
++        t('The username %name is allowed.', array('%name' => $form_state['values']['value']))
+     );
+   }
+ }
++
++/*
++ * Page callback: user restriction settings.
++ */
++
++function user_restriction_ui_settings_form($form, &$form_state) {
++
++  $user_forms = array('user_login' => 'User Login form',
++    'user_profile_form' => 'User Profile Form',
++    'user_register_form' => 'Registration Form');
++  $form['user_restriction_config'] = array(
++    '#type' => 'checkboxes',
++    '#title' => t('Please select the forms you need restrictions to apply.'),
++    '#default_value' => variable_get('user_restriction_config', array()),
++    '#options' => $user_forms,
++    '#required' => TRUE,
++  );
++  $notes_for_siteadmin = 'By checking the checkboxes for respective form(s) you 
++    your rules created for restriction will activate for the site';
++  $notes_for_siteadmin .= 'If you have old users on your website you create
++    a new rule with the pattern which match to your old users account, they 
++    would not be able to login so when checking the User login form, you must 
++    be aware with this issue.';
++  $form['from'] = array(
++    '#type' => 'item',
++    '#title' => t('Notes:'),
++    '#markup' => check_markup($notes_for_siteadmin),
++  );
++  return system_settings_form($form);
++}
+diff --git a/user_restrictions_ui.module b/user_restrictions_ui.module
+index c21d7a8..ec42c12 100644
+--- a/user_restrictions_ui.module
++++ b/user_restrictions_ui.module
+@@ -65,5 +65,14 @@ function user_restrictions_ui_menu() {
+     'file' => 'user_restrictions_ui.admin.inc',
+   );
+ 
++  $items['admin/config/people/user-restrictions/config'] = array(
++    'title' => 'Configuration',
++    'page callback' => 'drupal_get_form',
++    'page arguments' => array('user_restriction_ui_settings_form'),
++    'access arguments' => $edit_restrictions,
++    'file' => 'user_restrictions_ui.admin.inc',
++    'type' => MENU_LOCAL_TASK,
++  );
++
+   return $items;
+ }
