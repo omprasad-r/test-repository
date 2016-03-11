@@ -65,5 +65,14 @@ function user_restrictions_ui_menu() {
     'file' => 'user_restrictions_ui.admin.inc',
   );
 
+  $items['admin/config/people/user-restrictions/config'] = array(
+    'title' => 'Configuration',
+    'page callback' => 'drupal_get_form',
+    'page arguments' => array('user_restriction_ui_settings_form'),
+    'access arguments' => $edit_restrictions,
+    'file' => 'user_restrictions_ui.admin.inc',
+    'type' => MENU_LOCAL_TASK,
+  );
+
   return $items;
 }

@@ -16,28 +16,40 @@ function user_restrictions_cron() {
  * Implements hook_form_FORM_ID_alter() for user_login().
  */
 function user_restrictions_form_user_login_alter(&$form, &$form_state) {
-  $form['#validate'][] = 'user_restrictions_login_form_validate';
+  $allowed_forms = variable_get('user_restriction_config', array());
+  if (array_search($form['#form_id'], $allowed_forms, TRUE)) {
+    $form['#validate'][] = 'user_restrictions_login_form_validate';
+  }
 }
 
 /**
  * Implements hook_form_FORM_ID_alter() for user_login_block().
  */
 function user_restrictions_form_user_login_block_alter(&$form, &$form_state) {
-  $form['#validate'][] = 'user_restrictions_login_form_validate';
+  $allowed_forms = variable_get('user_restriction_config', array());
+  if (array_search('user_login', $allowed_forms, TRUE)) {
+    $form['#validate'][] = 'user_restrictions_login_form_validate';
+  }
 }
 
 /**
  * Implements hook_form_FORM_ID_alter() for user_profile_form().
  */
 function user_restrictions_form_user_profile_form_alter(&$form, &$form_state) {
-  $form['#validate'][] = 'user_restrictions_user_profile_form_validate';
+  $allowed_forms = variable_get('user_restriction_config', array());
+  if (array_search($form['#form_id'], $allowed_forms, TRUE)) {
+    $form['#validate'][] = 'user_restrictions_user_profile_form_validate';
+  }
 }
 
 /**
  * Implements hook_form_FORM_ID_alter() for user_register_form().
  */
 function user_restrictions_form_user_register_form_alter(&$form, &$form_state) {
-  $form['#validate'][] = 'user_restrictions_user_register_form_validate';
+  $allowed_forms = variable_get('user_restriction_config', array());
+  if (array_search($form['#form_id'], $allowed_forms, TRUE)) {
+    $form['#validate'][] = 'user_restrictions_user_register_form_validate';
+  }
 }
 
 /**
