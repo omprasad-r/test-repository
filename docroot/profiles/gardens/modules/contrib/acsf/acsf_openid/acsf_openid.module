@@ -359,7 +359,16 @@ function acsf_openid_ax_uri_mapping() {
     'http://axschema.org/media/image/default' => array('picture', 'account'),
     // Date of the picture's last modification, so we can avoid downloading it.
     'http://drupalgardens.com/axschema/picture_time' => array('picture_time'),
-    // Role to be granted on the site.
+    // Roles to be granted on the site. The 'role_name' attribute can hold only
+    // a single role name (which can't be changed because it needs to be
+    // backward compatibile with older site code bases) so we now have a new
+    // 'role_names' attribute that contains one or multiple TAB separated roles.
+    'http://drupalgardens.com/axschema/role_names' => array('role_names'),
+    // We still need to ask factories <= 2.39 (which do not know 'role_names'
+    // and will silently discard the attribute request for it) for 'role_name'.
+    // We could determine the factory version but that takes an API call so we
+    // choose not to.
+    // @todo Remove 'role_name' when we know no older factories exist anymore.
     'http://drupalgardens.com/axschema/role_name' => array('role_name'),
   );
 }
@@ -402,6 +411,7 @@ function acsf_openid_update_ax_data(array $response, $account) {
   $picture_uri = '';
   $picture_time = 0;
   $role_name = NULL;
+  $role_names = array();
 
   foreach ($mapping as $ax_uri => $local_ax_field) {
     // The response has values for some fields we requested. We assume the
@@ -422,6 +432,12 @@ function acsf_openid_update_ax_data(array $response, $account) {
 
         case 'role_name':
           $role_name = $response['openid.ax.value.role_name'];
+          break;
+
+        case 'role_names':
+          if ($response['openid.ax.value.role_names']) {
+            $role_names = explode("\t", $response['openid.ax.value.role_names']);
+          }
           break;
 
         default:
@@ -483,13 +499,18 @@ function acsf_openid_update_ax_data(array $response, $account) {
     $edit['account']['picture'] = $account->picture;
   }
 
-  // Grant the role to the account.
-  if ($role_name) {
+  // Grant the roles to the account. $role_names overrides $role_name (though in
+  // practice only one of them is returned).
+  if (!$role_names && $role_name) {
+    $role_names = array($role_name);
+  }
+  foreach ($role_names as $role_name) {
     $role = user_role_load_by_name($role_name);
     if ($role && !isset($account->roles[$role->rid])) {
-      $new_roles = $account->roles;
-      $new_roles[$role->rid] = $role->rid;
-      $edit['account']['roles'] = $new_roles;
+      if (!isset($edit['account']['roles'])) {
+        $edit['account']['roles'] = $account->roles;
+      }
+      $edit['account']['roles'][$role->rid] = $role->rid;
       drupal_set_message(t('Site Factory assigned the "@role_name" role to the account.', array(
         '@role_name' => $role_name,
       )));
