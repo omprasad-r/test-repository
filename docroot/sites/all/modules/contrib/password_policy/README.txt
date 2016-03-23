@@ -48,6 +48,19 @@ Install as you would normally install a contributed Drupal module. See
 https://drupal.org/documentation/install/modules-themes/modules-7
 for further information.
 
+SCALABILITY
+-----------
+The password expiration rule is checked on cron. If you have a large number
+of users, this check can consume a lot of time and system resources. It's
+possible to disable running this check in cron by setting a variable
+password_policy_process_on_cron to FALSE, e.g. in settings.php:
+
+  $conf['password_policy_process_on_cron'] = FALSE;
+
+Then you should manually run the policy at a time when system resources are
+more likely to be available (e.g. at night) with a Drush command like:
+
+  drush ev "password_policy_process_expirations();"
 
 LIMITATIONS
 -----------
