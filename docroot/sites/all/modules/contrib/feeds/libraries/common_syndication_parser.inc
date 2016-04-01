@@ -39,18 +39,6 @@ function common_syndication_parser_parse($string) {
 }
 
 /**
- * Get the cached version of the <var>$url</var>
- */
-function _parser_common_syndication_cache_get($url) {
-  $cache_file = _parser_common_syndication_sanitize_cache() . '/' . md5($url);
-  if (file_exists($cache_file)) {
-    $file_content = file_get_contents($cache_file);
-    return unserialize($file_content);
-  }
-  return FALSE;
-}
-
-/**
  * Determine the feed format of a SimpleXML parsed object structure.
  *
  * @param $xml
@@ -85,32 +73,32 @@ function _parser_common_syndication_feed_format_detect($xml) {
 /**
  * Parse atom feeds.
  */
-function _parser_common_syndication_atom10_parse($feed_xml) {
+function _parser_common_syndication_atom10_parse($feed_XML) {
   $parsed_source = array();
 
   $ns = array(
     "georss" => "http://www.georss.org/georss",
   );
 
-  $base = $feed_xml->xpath("@base");
+  $base = $feed_XML->xpath("@base");
   $base = (string) array_shift($base);
   if (!valid_url($base, TRUE)) {
     $base = FALSE;
   }
 
   // Detect the title
-  $parsed_source['title'] = isset($feed_xml->title) ? _parser_common_syndication_title("{$feed_xml->title}") : "";
+  $parsed_source['title'] = isset($feed_XML->title) ? _parser_common_syndication_title("{$feed_XML->title}") : "";
   // Detect the description
-  $parsed_source['description'] = isset($feed_xml->subtitle) ? "{$feed_xml->subtitle}" : "";
+  $parsed_source['description'] = isset($feed_XML->subtitle) ? "{$feed_XML->subtitle}" : "";
 
-  $parsed_source['link'] = _parser_common_syndication_link($feed_xml->link);
+  $parsed_source['link'] = _parser_common_syndication_link($feed_XML->link);
   if (valid_url($parsed_source['link']) && !valid_url($parsed_source['link'], TRUE) && !empty($base)) {
     $parsed_source['link'] = $base . $parsed_source['link'];
   }
 
   $parsed_source['items'] = array();
 
-  foreach ($feed_xml->entry as $news) {
+  foreach ($feed_XML->entry as $news) {
 
     $original_url = NULL;
     $guid = !empty($news->id) ? "{$news->id}" : NULL;
@@ -177,17 +165,15 @@ function _parser_common_syndication_atom10_parse($feed_xml) {
       }
     }
 
-    $author_found = FALSE;
+    $original_author = '';
     if (!empty($news->source->author->name)) {
       $original_author = "{$news->source->author->name}";
-      $author_found = TRUE;
     }
     elseif (!empty($news->author->name)) {
       $original_author = "{$news->author->name}";
-      $author_found = TRUE;
     }
-    if (!empty($feed_xml->author->name) && !$author_found) {
-      $original_author = "{$feed_xml->author->name}";
+    elseif (!empty($feed_XML->author->name)) {
+      $original_author = "{$feed_XML->author->name}";
     }
 
     $original_url = _parser_common_syndication_link($news->link);
@@ -242,7 +228,7 @@ function _parser_common_syndication_atom10_parse($feed_xml) {
  *
  * @see http://web.resource.org/rss/1.0/
  */
-function _parser_common_syndication_RDF10_parse($feed_xml) {
+function _parser_common_syndication_RDF10_parse($feed_XML) {
   // Declare some canonical standard prefixes for well-known namespaces:
   static $canonical_namespaces = array(
     'rdf'      => 'http://www.w3.org/1999/02/22-rdf-syntax-ns#',
@@ -258,10 +244,10 @@ function _parser_common_syndication_RDF10_parse($feed_xml) {
   );
 
   // Get all namespaces declared in the feed element.
-  $namespaces = $feed_xml->getNamespaces(TRUE);
+  $namespaces = $feed_XML->getNamespaces(TRUE);
 
   // Process the <rss:channel> resource containing feed metadata:
-  foreach ($feed_xml->children($canonical_namespaces['rss'])->channel as $rss_channel) {
+  foreach ($feed_XML->children($canonical_namespaces['rss'])->channel as $rss_channel) {
     $parsed_source = array(
       'title'       => _parser_common_syndication_title((string) $rss_channel->title),
       'description' => (string) $rss_channel->description,
@@ -272,7 +258,7 @@ function _parser_common_syndication_RDF10_parse($feed_xml) {
   }
 
   // Process each <rss:item> resource contained in the feed:
-  foreach ($feed_xml->children($canonical_namespaces['rss'])->item as $rss_item) {
+  foreach ($feed_XML->children($canonical_namespaces['rss'])->item as $rss_item) {
 
     // Extract all available RDF statements from the feed item's RDF/XML
     // tags, allowing for both the item's attributes and child elements to
@@ -351,7 +337,7 @@ function _parser_common_syndication_RDF10_item($rdf_data, $mappings) {
 /**
  * Parse RSS2.0 feeds.
  */
-function _parser_common_syndication_RSS20_parse($feed_xml) {
+function _parser_common_syndication_RSS20_parse($feed_XML) {
 
   $ns = array(
     "content" => "http://purl.org/rss/1.0/modules/content/",
@@ -361,14 +347,14 @@ function _parser_common_syndication_RSS20_parse($feed_xml) {
 
   $parsed_source = array();
   // Detect the title.
-  $parsed_source['title'] = isset($feed_xml->channel->title) ? _parser_common_syndication_title("{$feed_xml->channel->title}") : "";
+  $parsed_source['title'] = isset($feed_XML->channel->title) ? _parser_common_syndication_title("{$feed_XML->channel->title}") : "";
   // Detect the description.
-  $parsed_source['description'] = isset($feed_xml->channel->description) ? "{$feed_xml->channel->description}" : "";
+  $parsed_source['description'] = isset($feed_XML->channel->description) ? "{$feed_XML->channel->description}" : "";
   // Detect the link.
-  $parsed_source['link'] = isset($feed_xml->channel->link) ? "{$feed_xml->channel->link}" : "";
+  $parsed_source['link'] = isset($feed_XML->channel->link) ? "{$feed_XML->channel->link}" : "";
   $parsed_source['items'] = array();
 
-  foreach ($feed_xml->xpath('//item') as $news) {
+  foreach ($feed_XML->xpath('//item') as $news) {
     $title = $body = $original_author = $original_url = $guid = '';
 
     $category = $news->xpath('category');

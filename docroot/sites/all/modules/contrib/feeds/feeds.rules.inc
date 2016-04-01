@@ -37,7 +37,7 @@ function feeds_rules_event_info() {
     $entity_type = $processor->entityType();
     $label = isset($entity_info[$entity_type]['label']) ? $entity_info[$entity_type]['label'] : $entity_type;
 
-    $info['feeds_import_' . $importer->id] = array(
+    $info['feeds_import_'. $importer->id] = array(
       'label' => t('Before saving an item imported via @name.', array('@name' => $importer->config['name'])),
       'group' => t('Feeds'),
       'variables' => array(
@@ -52,7 +52,7 @@ function feeds_rules_event_info() {
     );
     // Add bundle information if the node processor is used.
     if ($processor instanceof FeedsNodeProcessor) {
-      $info['feeds_import_' . $importer->id]['variables'][$entity_type]['bundle'] = $processor->bundle();
+      $info['feeds_import_'. $importer->id]['variables'][$entity_type]['bundle'] = $processor->bundle();
     }
   }
   return $info;
