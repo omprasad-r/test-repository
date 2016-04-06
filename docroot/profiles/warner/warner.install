@@ -1,0 +1,11 @@
+<?php
+
+/**
+ * Implements hook_install().
+ */
+function warner_install() {
+  // Disable 'media_youtube' module if it was enabled previously.
+  if (module_exists('media_youtube')) {
+    module_disable(array('media_youtube'), FALSE);
+  }
+}
