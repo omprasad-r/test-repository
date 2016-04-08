@@ -5,6 +5,9 @@
  * Configuration file for Drupal's multi-site directory aliasing feature.
  */
 
+// Load SimpleRest classes, needed for sending requests to the Site Factory.
+include_once dirname(__FILE__) . '/SimpleRest.php';
+
 // Bail out if we're not on an Acquia server.
 if (function_exists('is_acquia_host') && !is_acquia_host()) {
   return;
@@ -15,6 +18,10 @@ if (function_exists('is_acquia_host') && !is_acquia_host()) {
 define('GARDENS_SITE_DATA_USE_APC', (get_cfg_var('gardens.disable_apc_for_sites_php') != 1));
 // TTL set to 30 minutes to allow a cron to run full refreshes.
 define('GARDENS_SITE_DATA_TTL', 1800);
+
+// The path (template) to the lock file that should be checked when sites.json
+// is unreadable. Sitegroup + env need to be filled.
+define('GARDENS_SITE_JSON_ALERT_LOCK_TEMPLATE', '/mnt/tmp/%s.%s/.sites-json-alert');
 
 // Populate $_ENV if we are running cli.
 if ((!isset($_ENV['AH_SITE_NAME']) || !isset($_ENV['AH_SITE_GROUP']) || !isset($_ENV['AH_SITE_ENVIRONMENT'])) && file_exists('/var/www/site-scripts/site-info.php')) {
@@ -116,6 +123,8 @@ function gardens_site_data_build_data(array $site, array $map) {
  */
 function gardens_site_data_get_site_from_file($domain) {
   $result = 0;
+  // This function does not seem to be used. Issues with the sites.json in here
+  // is not handled.
   if ($map = gardens_site_data_load_file()) {
     if (!empty($map['sites'][$domain])) {
       $result = gardens_site_data_build_data($map['sites'][$domain], $map);
@@ -155,12 +164,17 @@ function gardens_site_data_refresh_one($domain) {
 function gardens_site_data_refresh_domains(array $domains) {
   $location = gardens_site_data_get_filepath();
   $data = array();
+  $json_read_failure = FALSE;
   foreach ($domains as $domain) {
     $domain = trim($domain);
     // Shell out to grep to find the relevant line of the json file.
-    $result = trim(shell_exec(sprintf("grep %s %s --no-filename --color=never --context=0", escapeshellarg($domain), escapeshellarg($location))));
+    exec(sprintf("grep %s %s --no-filename --color=never --context=0", escapeshellarg($domain), escapeshellarg($location)), $output_array, $exit_code);
+    $result = trim(implode("\n", $output_array));
 
     if (empty($result)) {
+      if ($exit_code !== 0) {
+        $json_read_failure = TRUE;
+      }
       // Log an explicit fail in APC if we cannot find the domain, so that we
       // can take advantage of APC caching the "fail" also. To do this, cache an
       // integer literal zero for any failed domain.
@@ -209,7 +223,12 @@ function gardens_site_data_refresh_domains(array $domains) {
           }
           else {
             $data[$domain] = 0;
+            // 'Read failure' is a missing domain; the file as a whole is OK.
+            $json_read_failure = $domain;
           }
+        }
+        else {
+          $json_read_failure = TRUE;
         }
       }
       else {
@@ -220,7 +239,23 @@ function gardens_site_data_refresh_domains(array $domains) {
     if (GARDENS_SITE_DATA_USE_APC) {
       gardens_site_data_cache_set($domain, $data[$domain]);
     }
+
+    if ($json_read_failure) {
+      // Report the read failure. Since it involves contacting the Site Factory
+      // it should be done in a way that does not affect pageload.
+      $reported_domain = $json_read_failure === TRUE ? '' : $json_read_failure;
+      drupal_register_shutdown_function('gardens_site_data_json_alert_flag_set', $reported_domain);
+      // Bail to prevent repeated failures.
+      break;
+    }
   }
+
+  if (!$json_read_failure && gardens_site_data_json_alert_flag_check()) {
+    // Clear the flag. Since it involves contacting the Site Factory it should
+    // be done in a way that does not affect pageload.
+    drupal_register_shutdown_function('gardens_site_data_json_alert_flag_clear');
+  }
+
   return $data;
 }
 
@@ -258,4 +293,259 @@ function gardens_site_data_cache_get($domain) {
     $result = apc_fetch($domain_key);
   }
   return $result;
+}
+
+/**
+ * (Re)checks for a fatal issue with the sites.json file.
+ *
+ * This function is not the only location where issues are determined; it's used
+ * to doublecheck the exact type of issue / doublecheck for a race condition,
+ * after an issue was initially detected outside this function.
+ *
+ * @param string $domain
+ *   Domain name, if the issue was found for one specific domain only. This
+ *   implies that the file as a whole could be read/decoded.
+ *
+ * @return string
+ *   Type of issue encountered. Empty string means the sites.json file is OK
+ *   (or is missing, which is also OK).
+ */
+function gardens_site_data_sites_json_issue_type_get($domain = '') {
+  $issue_type = '';
+  $sites_json_path = gardens_site_data_get_filepath();
+  // If sites.json is missing completely then this script is being executed
+  // outside of an ACSF infrastructure in which case no alert is needed.
+  if (file_exists($sites_json_path)) {
+    // Check if sites.json is readable.
+    if (!is_readable($sites_json_path)) {
+      $issue_type = 'file_unreadable';
+    }
+    // Check if the file's contents are inaccessible.
+    if (!$issue_type) {
+      // Try to read sites.json and see if it succeeds and what kind of error
+      // we get back if it fails. There is a fail which we need to ignore: when
+      // the sites.json is being rewritten for a short period of time the
+      // following error will be returned:
+      //   head: cannot open `/mnt/files/balazs.01live/files-private/sites.json'
+      //   for reading: Structure needs cleaning
+      // To make sure we are only triggering an alert in case of a Gluster split
+      // brain, redirect the stderr to stdout and look for the indicator
+      // message: 'Input/output error'.
+      exec(sprintf('head -n1 %s 2>&1', escapeshellarg($sites_json_path)), $output_array, $exit_code);
+      $output = implode('', $output_array);
+      if ($exit_code !== 0 && strpos($output, 'Input/output error') !== FALSE) {
+        $issue_type = 'gluster_split_brain';
+      }
+    }
+    // Check if the file's contents are invalid JSON. Both 'missing site data'
+    // and 'invalid JSON string' get the same issue type.
+    if (!$issue_type) {
+      $map = gardens_site_data_load_file();
+      $issue = $domain ? empty($map['sites'][$domain]) : !$map;
+      if ($issue) {
+        $issue_type = 'invalid_json_data';
+      }
+    }
+  }
+
+  return $issue_type;
+}
+
+/**
+ * Tries to set a flag, marking that an issue with sites.json exists.
+ *
+ * This function is not supposed to be used for checking that there is an issue
+ * with sites.json; it should only be called if an issue exists.
+ *
+ * As we do not have a DB connection, and we assume gluster is the primary
+ * suspect for issues, the lock will live on the ephemeral disk. If something
+ * strange happens while setting the flag (like the file cannot be opened or
+ * written to), the function will always return empty string, and no logging/
+ * alerting is done at all. We basically have a choice between this and flooding
+ * watchdog/syslog/the factory with alerts.
+ *
+ * @param string $domain
+ *   Domain name, if the issue was found for one specific domain only. This
+ *   implies that the file as a whole could be read/decoded.
+ */
+function gardens_site_data_json_alert_flag_set($domain = '') {
+  $lock_file = sprintf(GARDENS_SITE_JSON_ALERT_LOCK_TEMPLATE, $_ENV['AH_SITE_GROUP'], $_ENV['AH_SITE_ENVIRONMENT']);
+
+  if (!file_exists($lock_file)) {
+    // Create/open file, do not generate an error in race conditions (two
+    // processes opening the file at the same time).
+    $fh = fopen($lock_file, 'c');
+    if ($fh) {
+      // Get (exclusive, non-blocking) lock. Note we assume we can actually rely
+      // on flock; see multithreading notes in the php.net docs.
+      if (flock($fh, LOCK_EX | LOCK_NB)) {
+        // Something more evasive than the 'fopen()' race condition: what
+        // happens just around the time a sites.json issue stops existing? Could
+        // one slow process that still thinks there is an issue, be delayed and
+        // execute this code just _after_ another process removed the flag? That
+        // would result in a superfluous alert being sent out at that time. To
+        // prevent this, we repeat the check. (We often would need to do this
+        // check anyway, somewhere, if we did not know the issue type yet.)
+        $issue_type = gardens_site_data_sites_json_issue_type_get($domain);
+
+        // Send the alert to the Site Factory.
+        $alert_sent = FALSE;
+        if ($issue_type) {
+          $response = gardens_site_data_alert_send('sites_json', $issue_type);
+          if ($response->code == 200 && !empty($response->body['received'])) {
+            $alert_sent = TRUE;
+          }
+        }
+
+        // Remove the lock file if issue has gone away or the alert was not
+        // processed by the Site Factory.
+        if (!$alert_sent) {
+          // Remove the lock file (name; the file/handle itself is still
+          // locked/open, which is fine).
+          unlink($lock_file);
+        }
+
+        // Release the lock.
+        flock($fh, LOCK_UN);
+      }
+      fclose($fh);
+    }
+  }
+}
+
+/**
+ * Checks if a 'sites.json alert' flag exists.
+ *
+ * @return bool
+ *   TRUE on if the flag exists.
+ */
+function gardens_site_data_json_alert_flag_check() {
+  $lock_file = sprintf(GARDENS_SITE_JSON_ALERT_LOCK_TEMPLATE, $_ENV['AH_SITE_GROUP'], $_ENV['AH_SITE_ENVIRONMENT']);
+  return file_exists($lock_file);
+}
+
+/**
+ * Clears a 'sites.json alert' flag.
+ */
+function gardens_site_data_json_alert_flag_clear() {
+  $lock_file = sprintf(GARDENS_SITE_JSON_ALERT_LOCK_TEMPLATE, $_ENV['AH_SITE_GROUP'], $_ENV['AH_SITE_ENVIRONMENT']);
+
+  if (file_exists($lock_file)) {
+    // To prevent a situation where a slow process would remove the file just
+    // after it was created (i.e. the reverse of what is documented in
+    // gardens_site_data_json_alert_flag_set()), we lock the file and check
+    // again, and only remove the file if no issues were encountered. This isn't
+    // exactly symmetric in the sense that we have no domain name, so: if domain
+    // specific information was just lost somehow, then a slow process has a
+    // higher chance of clearing the flag when it shouldn't. The effect: two
+    // alerts would be sent out in sequence (because the flag is set, cleared
+    // here, and then set again). That is less problematic than the reverse,
+    // which would send out an alert at the moment the domain specific error was
+    // just solved.
+    $fh = @fopen($lock_file, 'r+');
+    if ($fh) {
+      if (flock($fh, LOCK_EX | LOCK_NB)) {
+        // Make sure that the issue is gone.
+        $issue_type = gardens_site_data_sites_json_issue_type_get();
+
+        // Send an all fine message to the Site Factory if the issue is gone.
+        $alert_sent = FALSE;
+        if (!$issue_type) {
+          $response = gardens_site_data_alert_send('sites_json', 'all_fine');
+          if ($response->code == 200 && !empty($response->body['received'])) {
+            $alert_sent = TRUE;
+          }
+        }
+
+        // Clear the flag if the all fine message was sent and processed.
+        if ($alert_sent) {
+          // There is no problem with unlinking a locked file; the file name
+          // gets freed up (while the 'orphaned' file itself is still locked).
+          // Removing a (locked) file like this does not introduce a race
+          // condition, if all processes try to lock the file in an exclusive
+          // and non-blocking manner. So unlinking the file should never fail.
+          // If it does, we could try to log to watchdog/syslog but that would
+          // completely flood the logs.
+          @unlink($lock_file);
+        }
+        // We could release the lock here but if the file is already unlinked
+        // that won't do much useful - and if it's not, we may be better off
+        // keeping it locked.
+      }
+      fclose($fh);
+    }
+  }
+}
+
+/**
+ * Returns the shared credentials.
+ *
+ * @param string $site
+ *   The hosting sitegroup name.
+ * @param string $env
+ *   The hosting environment name.
+ *
+ * @return Acquia\SimpleRest\SimpleRestCreds
+ *   The credentials.
+ *
+ * @throws Exception
+ *   If the credentials cannot be read for any reason.
+ */
+function gardens_site_data_shared_creds_get($site, $env) {
+  $ini_file = sprintf('/mnt/files/%s.%s/nobackup/sf_shared_creds.ini', $site, $env);
+  if (file_exists($ini_file)) {
+    $data = parse_ini_file($ini_file, TRUE);
+    if (!empty($data) && !empty($data['gardener'])) {
+      return new Acquia\SimpleRest\SimpleRestCreds($data['gardener']['username'],
+        $data['gardener']['password'],
+        $data['gardener']['url']);
+    }
+  }
+  throw new Exception(sprintf('Unable to read credentials from %s.', $ini_file));
+}
+
+/**
+ * Alerts the Site Factory on possible sites.json issues.
+ *
+ * @param string $scope
+ *   The scope type. (Currently only 'sites_json' scope type is accepted by the
+ *   Site Factory.)
+ * @param string $issue_type
+ *   The issue type.
+ *
+ * @return Acquia\SimpleRest\SimpleRestResponse
+ *   The response.
+ */
+function gardens_site_data_alert_send($scope, $issue_type) {
+  // The SF REST API endpoint.
+  $endpoint = 'site-api/v1/sf-alert';
+  // The hosting site group name.
+  $site = $_ENV['AH_SITE_GROUP'];
+  // The hosting environment name.
+  $env = $_ENV['AH_SITE_ENVIRONMENT'];
+  // The fully qualified webnode name.
+  $webnode = gethostname();
+
+  try {
+    $parameters = array(
+      'scope' => $scope,
+      'data' => array(
+        'issue_type' => $issue_type,
+        'site_group' => $site,
+        'site_env' => $env,
+        'server' => $webnode,
+        'timestamp' => REQUEST_TIME,
+      ),
+    );
+    $creds = gardens_site_data_shared_creds_get($site, $env);
+    $message = new Acquia\SimpleRest\SimpleRestMessage($site, $env);
+    $response = $message->send('POST', $endpoint, $parameters, $creds);
+  }
+  catch (Exception $e) {
+    $error_message = sprintf('Sending alert to Site Factory failed: %s', $e->getMessage());
+    syslog(LOG_ERR, $error_message);
+    $response = new Acquia\SimpleRest\SimpleRestResponse($endpoint, 500, array('message' => $error_message));
+  }
+
+  return $response;
 }
