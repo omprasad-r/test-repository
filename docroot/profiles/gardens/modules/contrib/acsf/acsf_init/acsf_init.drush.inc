@@ -491,6 +491,11 @@ function acsf_init_get_required_files($repo_root) {
       'dest' => sprintf('%s/sites/g', DRUPAL_ROOT),
     ),
     array(
+      'filename' => 'SimpleRest.php',
+      'source' => 'sites/g',
+      'dest' => sprintf('%s/sites/g', DRUPAL_ROOT),
+    ),
+    array(
       'filename' => 'sites.inc',
       'source' => 'sites/g',
       'dest' => sprintf('%s/sites/g', DRUPAL_ROOT),
