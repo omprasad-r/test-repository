@@ -450,6 +450,46 @@ function wmg_turnkey_lightbox_toaster_field_default_field_instances() {
     ),
   );
 
+  // Exported field_instance: 'node-wmg_turnkey_lightbox-field_data_ext'
+  $field_instances['node-wmg_turnkey_lightbox-field_data_ext'] = array(
+    'bundle' => 'wmg_turnkey_lightbox',
+    'default_value' => NULL,
+    'deleted' => 0,
+    'description' => '',
+    'display' => array(
+      'default' => array(
+        'label' => 'above',
+        'module' => 'text',
+        'settings' => array(),
+        'type' => 'text_default',
+        'weight' => 15,
+      ),
+      'teaser' => array(
+        'label' => 'above',
+        'settings' => array(),
+        'type' => 'hidden',
+        'weight' => 0,
+      ),
+    ),
+    'entity_type' => 'node',
+    'field_name' => 'field_data_ext',
+    'label' => 'Data ext',
+    'required' => 0,
+    'settings' => array(
+      'text_processing' => 0,
+      'user_register_form' => FALSE,
+    ),
+    'widget' => array(
+      'active' => 1,
+      'module' => 'text',
+      'settings' => array(
+        'size' => 60,
+      ),
+      'type' => 'text_textfield',
+      'weight' => 14,
+    ),
+  );
+
   // Exported field_instance: 'node-wmg_turnkey_lightbox-field_display_rate'
   $field_instances['node-wmg_turnkey_lightbox-field_display_rate'] = array(
     'bundle' => 'wmg_turnkey_lightbox',
@@ -894,10 +934,51 @@ function wmg_turnkey_lightbox_toaster_field_default_field_instances() {
     ),
   );
 
+  // Exported field_instance: 'node-wmg_turnkey_lightbox-field_trigger_id'
+  $field_instances['node-wmg_turnkey_lightbox-field_trigger_id'] = array(
+    'bundle' => 'wmg_turnkey_lightbox',
+    'default_value' => NULL,
+    'deleted' => 0,
+    'description' => '',
+    'display' => array(
+      'default' => array(
+        'label' => 'above',
+        'module' => 'text',
+        'settings' => array(),
+        'type' => 'text_default',
+        'weight' => 14,
+      ),
+      'teaser' => array(
+        'label' => 'above',
+        'settings' => array(),
+        'type' => 'hidden',
+        'weight' => 0,
+      ),
+    ),
+    'entity_type' => 'node',
+    'field_name' => 'field_trigger_id',
+    'label' => 'Trigger Id',
+    'required' => 0,
+    'settings' => array(
+      'text_processing' => 0,
+      'user_register_form' => FALSE,
+    ),
+    'widget' => array(
+      'active' => 1,
+      'module' => 'text',
+      'settings' => array(
+        'size' => 60,
+      ),
+      'type' => 'text_textfield',
+      'weight' => 13,
+    ),
+  );
+
   // Translatables
   // Included for use with string extractors like potx.
   t('Body');
   t('Checking Preview Mode will only show the toaster to logged-in administrators. This allows you to preview the toaster before pushing live. To make the toaster public, leave this box unchecked. ');
+  t('Data ext');
   t('Description');
   t('Display rate');
   t('Displayed in milliseconds, the is how long the toaster will display before disappearing. ');
@@ -922,6 +1003,7 @@ function wmg_turnkey_lightbox_toaster_field_default_field_instances() {
   t('Timeout');
   t('Title field for the email signup.');
   t('Toaster Position');
+  t('Trigger Id');
   t('What is the Label List ID?');
   t('What is the Newsletter ID?');
 

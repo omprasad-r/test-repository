@@ -68,6 +68,30 @@ function wmg_turnkey_lightbox_toaster_field_default_field_bases() {
     'type' => 'link_field',
   );
 
+  // Exported field_base: 'field_data_ext'
+  $field_bases['field_data_ext'] = array(
+    'active' => 1,
+    'cardinality' => 1,
+    'deleted' => 0,
+    'entity_types' => array(),
+    'field_name' => 'field_data_ext',
+    'field_permissions' => array(
+      'type' => 0,
+    ),
+    'indexes' => array(
+      'format' => array(
+        0 => 'format',
+      ),
+    ),
+    'locked' => 0,
+    'module' => 'text',
+    'settings' => array(
+      'max_length' => 255,
+    ),
+    'translatable' => 0,
+    'type' => 'text',
+  );
+
   // Exported field_base: 'field_display_rate'
   $field_bases['field_display_rate'] = array(
     'active' => 1,
@@ -368,6 +392,30 @@ function wmg_turnkey_lightbox_toaster_field_default_field_bases() {
     'deleted' => 0,
     'entity_types' => array(),
     'field_name' => 'field_toaster_timeout',
+    'field_permissions' => array(
+      'type' => 0,
+    ),
+    'indexes' => array(
+      'format' => array(
+        0 => 'format',
+      ),
+    ),
+    'locked' => 0,
+    'module' => 'text',
+    'settings' => array(
+      'max_length' => 255,
+    ),
+    'translatable' => 0,
+    'type' => 'text',
+  );
+
+  // Exported field_base: 'field_trigger_id'
+  $field_bases['field_trigger_id'] = array(
+    'active' => 1,
+    'cardinality' => 1,
+    'deleted' => 0,
+    'entity_types' => array(),
+    'field_name' => 'field_trigger_id',
     'field_permissions' => array(
       'type' => 0,
     ),

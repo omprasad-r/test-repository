@@ -399,6 +399,18 @@ function wmg_turnkey_lightbox_toaster_views_default_views() {
   $handler->display->display_options['fields']['field_mailing_list_title']['field'] = 'field_mailing_list_title';
   $handler->display->display_options['fields']['field_mailing_list_title']['label'] = '';
   $handler->display->display_options['fields']['field_mailing_list_title']['element_label_colon'] = FALSE;
+  /* Field: Content: Data ext */
+  $handler->display->display_options['fields']['field_data_ext']['id'] = 'field_data_ext';
+  $handler->display->display_options['fields']['field_data_ext']['table'] = 'field_data_field_data_ext';
+  $handler->display->display_options['fields']['field_data_ext']['field'] = 'field_data_ext';
+  $handler->display->display_options['fields']['field_data_ext']['label'] = '';
+  $handler->display->display_options['fields']['field_data_ext']['element_label_colon'] = FALSE;
+  /* Field: Content: Trigger Id */
+  $handler->display->display_options['fields']['field_trigger_id']['id'] = 'field_trigger_id';
+  $handler->display->display_options['fields']['field_trigger_id']['table'] = 'field_data_field_trigger_id';
+  $handler->display->display_options['fields']['field_trigger_id']['field'] = 'field_trigger_id';
+  $handler->display->display_options['fields']['field_trigger_id']['label'] = '';
+  $handler->display->display_options['fields']['field_trigger_id']['element_label_colon'] = FALSE;
   $handler->display->display_options['defaults']['sorts'] = FALSE;
   /* Sort criterion: Content: Updated date */
   $handler->display->display_options['sorts']['changed']['id'] = 'changed';
