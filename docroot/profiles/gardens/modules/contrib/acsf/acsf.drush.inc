@@ -76,6 +76,10 @@ function acsf_drush_command() {
       ),
       'bootstrap' => DRUSH_BOOTSTRAP_DRUSH, // No bootstrap at all.
     ),
+    'acsf-low-level-cache-clear-all' => array(
+      'description' => dt('Clears cache on the site without doing a full Drupal bootstrap.'),
+      'bootstrap' => DRUSH_BOOTSTRAP_DRUPAL_DATABASE,
+    ),
   );
 }
 
@@ -449,4 +453,54 @@ function drush_acsf_version_get($path = NULL) {
     $version = isset($info['acsf_version']) ? $info['acsf_version'] : '0.1';
   }
   print $version;
+}
+
+/**
+ * Command callback: Clears all cache on the site.
+ *
+ * This command is called during staging to ensure that the production site's
+ * cache does not interfere with the data scrubbing.
+ *
+ * In certain cases a stale cache could break even a 'drush cc all' call because
+ * it is running a full Drupal bootstrap, which also includes running hook_init
+ * functions. Ideally this command would bootstrap to the lowest necessary phase
+ * and flush the cache bins. However the list of cache bins can be extended by
+ * the modules, so in a way this command would need higher bootstrap.
+ *
+ * For the time being we will handle two cases: database cache and memcache. The
+ * script will truncate all cache tables without using the module list and will
+ * send a flush all command to the memcache servers if their settings are
+ * present in the hosting settings files.
+ */
+function drush_acsf_low_level_cache_clear_all() {
+  // Handle database cache.
+  // Find all tables that starts with cache. The db_find_tables() does not
+  // consider table prefixes. Since this function is a best effort cache clear,
+  // we will accept this limitation for the time being.
+  $cache_tables = db_find_tables('cache%');
+  foreach ($cache_tables as $cache_table) {
+    if (db_table_exists($cache_table)) {
+      drush_print(dt('Truncating cache table: @table', array('@table' => $cache_table)));
+      db_truncate($cache_table)->execute();
+    }
+  }
+
+  // Handle memcache.
+  if (!empty($GLOBALS['conf']['memcache_servers'])) {
+    foreach ($GLOBALS['conf']['memcache_servers'] as $server => $bin) {
+      $server_data = parse_url($server);
+      if (!empty($server_data['host']) && !empty($server_data['port'])) {
+        // The -w option on the nc command ensures that the command will timeout
+        // after 10 seconds to avoid hanging the whole process.
+        $command = sprintf('echo "flush_all" | nc -w 10 %s %s', escapeshellarg($server_data['host']), escapeshellarg($server_data['port']));
+        exec($command, $output_array, $exit_code);
+        drush_print(dt('Flushing memcache on @server:@port. Exit code: @exit_code. Output: @output.', array(
+          '@server' => $server_data['host'],
+          '@port' => $server_data['port'],
+          '@exit_code' => $exit_code,
+          '@output' => implode("\n", $output_array),
+        )));
+      }
+    }
+  }
 }
