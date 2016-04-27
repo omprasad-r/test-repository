@@ -66,6 +66,19 @@ $new_domain = "$site_name.$url_suffix";
 $cache_directory = sprintf('/mnt/tmp/%s.%s/drush_tmp_cache/%s', $site, $env, md5($new_domain));
 shell_exec(sprintf('mkdir -p %s', escapeshellarg($cache_directory)));
 
+// Clear all caches on the site without doing a full Drupal bootstrap.
+$command = sprintf(
+  'CACHE_PREFIX=%s \drush6 -r /var/www/html/%s.%s/docroot -i %s -l %s acsf-low-level-cache-clear-all',
+  escapeshellarg($cache_directory),
+  escapeshellarg($site),
+  escapeshellarg($env),
+  escapeshellarg($acsf_location),
+  escapeshellarg($new_domain)
+);
+fwrite(STDERR, "Executing: $command;\n");
+$result = shell_exec($command);
+print $result;
+
 // Execute the scrub.
 $command = sprintf(
   'CACHE_PREFIX=%s \drush6 @%s.%s -r /var/www/html/%s.%s/docroot -l %s -y acsf-site-scrub',
