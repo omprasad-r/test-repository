@@ -54,13 +54,6 @@ class FeedsJSONPathParser extends FeedsParser {
     if (!is_array($array)) {
       throw new Exception(t('There was an error decoding the JSON document.'));
     }
-
-    // Check if context has at least 2 dimensions
-    $dimensions = explode('.', $source_config['context']);
-    if(count($dimensions) < 3) {
-      $array = array($array);
-    }
-
     require_once feeds_jsonpath_parser_library_path();
 
     $all_items = $this->jsonPath($array, $source_config['context']);
