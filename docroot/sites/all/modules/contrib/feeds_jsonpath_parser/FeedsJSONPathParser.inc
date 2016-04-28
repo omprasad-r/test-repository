@@ -430,7 +430,7 @@ class FeedsJSONPathParser extends FeedsParser {
    * @return true|null
    *   Returns true if the item should be skipped.
    */
-  protected function invokeHook(array &$item, FeedsSource $source) {
+  protected function invokeHook(&$item, FeedsSource $source) {
     foreach (module_implements('feeds_jsonpath_parser_filter') as $module) {
       $function = $module . '_feeds_jsonpath_parser_filter';
       if ($function($item, $source) === TRUE) {
