@@ -50,7 +50,8 @@ Drupal.FieldGroup.Effects.processAccordion = {
       });
 
       wrapper.accordion({
-        heightStyle: "content",
+        heightStyle: "content", // jQuery UI >= v1.9
+        autoHeight: false,      // jQuery UI < v1.9
         active: active_index,
         collapsible: true,
         changestart: function(event, ui) {
