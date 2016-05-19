@@ -193,6 +193,11 @@ class AcsfSshWrapper {
       $command = base64_decode($command);
     }
 
+    // Wipe existing log files before the process is started,
+    // so if it is slow / is killed and never overwrites out/err logs, there
+    // can be no confusion about old log files belonging to the current process.
+    $this->removeLogFiles();
+
     // NOTE: You cannot append commands to this without breaking the exit code.
     $command = sprintf('%s > %s 2> %s', $command, $this->getLogFile('out'), $this->getLogFile('err'));
 
