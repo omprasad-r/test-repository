@@ -1,0 +1,3 @@
+name = Akamai Configuration Status
+description = Detects when the website is not properly configured for Akamai CDN. (Please note that the result are only valid for production)
+core = 7.x

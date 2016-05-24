@@ -1,0 +1,26 @@
+<?php
+
+/**
+ * Implement hook_menu_alter().
+ */
+function akamai_config_status_menu_alter(&$items) {
+  print_r($items);
+  $access_callbacks = array(
+    'admin/config/system/akamai' => TRUE,
+    'admin/config/system/akamai/settings' => TRUE,
+    'admin/config/system/akamai/refresh' => TRUE,
+  );
+  _scarecrow_alter_menu_tree_access_callbacks($items, $access_callbacks);
+}
+
+/**
+ * Implements hook_module_implements_alter().
+ */
+function akamai_config_status_module_implements_alter(&$implementations, $hook) {
+  if ($hook == 'menu_alter') {
+    $module = 'akamai_config_status';
+    $group = array($module => $implementations[$module]);
+    unset($implementations[$module]);
+    $implementations = $implementations + $group;
+  }
+}

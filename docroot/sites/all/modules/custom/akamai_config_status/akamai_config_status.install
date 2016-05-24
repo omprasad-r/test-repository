@@ -1,0 +1,35 @@
+<?php
+
+/**
+ * Implements hook_requirements().
+ */
+function akamai_config_status_requirements($phase) {
+  $req = array();
+  if ($phase == 'runtime') {
+    $req['wmg_custom_akamai'] = array();
+    global $base_url;
+    $dns = dns_get_record($base_url, DNS_A);
+    $akamaized = FALSE;
+    foreach ($dns as $record) {
+      if (strpos($record['host'], 'akamai') !== FALSE) {
+        $akamaized = TRUE;
+        break;
+      }
+    }
+    if ($akamaized) {
+      $reqs['wmg_custom_akamai'] = array(
+        'title' => t('Akamai is configured properly.'),
+        'description' => t('The site\'s custom domain name resolves to an Akamai address, which means that (assuming the site is working at all) Akamai is fronting all incoming requests.'),
+        'severity' => REQUIREMENT_OK,
+      );
+    }
+    else {
+      $reqs['wmg_custom_akamai'] = array(
+        'title' => t('Akamai is not configured properly.'),
+        'description' => t('The site\'s custom domain name does not resolve to an Akamai address, which means that Akamai is not fronting all incoming requests.  Please file a ticket with Acquia Support to resolve this situation. Also note that the result are only valid for production'),
+        'severity' => REQUIREMENT_ERROR,
+      );
+    }
+  }
+  return $reqs;
+}
