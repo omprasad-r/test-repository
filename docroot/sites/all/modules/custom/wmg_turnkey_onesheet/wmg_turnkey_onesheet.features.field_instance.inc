@@ -10,6 +10,90 @@
 function wmg_turnkey_onesheet_field_default_field_instances() {
   $field_instances = array();
 
+  // Exported field_instance:
+  // 'field_collection_item-field_footer_links-field_footer_image'
+  $field_instances['field_collection_item-field_footer_links-field_footer_image'] = array(
+    'bundle' => 'field_footer_links',
+    'deleted' => 0,
+    'description' => '',
+    'display' => array(
+      'default' => array(
+        'label' => 'above',
+        'module' => 'media',
+        'settings' => array(
+          'file_view_mode' => 'default',
+        ),
+        'type' => 'media',
+        'weight' => 1,
+      ),
+    ),
+    'entity_type' => 'field_collection_item',
+    'field_name' => 'field_footer_image',
+    'label' => 'Footer Image',
+    'required' => 0,
+    'settings' => array(
+      'file_extensions' => 'jpg jpeg gif png txt doc xls pdf ppt pps odt ods odp mp3 mov m4v mp4 mpeg avi ogg oga ogv wmv ico',
+      'user_register_form' => FALSE,
+    ),
+    'widget' => array(
+      'active' => 1,
+      'module' => 'media',
+      'settings' => array(
+        'allowed_schemes' => array(
+          'feed' => 0,
+          'http' => 0,
+          'https' => 0,
+          'oembed' => 0,
+          'public' => 'public',
+        ),
+        'allowed_types' => array(
+          'audio' => 0,
+          'default' => 0,
+          'image' => 'image',
+          'video' => 0,
+        ),
+        'progress_indicator' => 'throbber',
+      ),
+      'type' => 'media_generic',
+      'weight' => 2,
+    ),
+  );
+
+  // Exported field_instance:
+  // 'field_collection_item-field_footer_links-field_footer_link'
+  $field_instances['field_collection_item-field_footer_links-field_footer_link'] = array(
+    'bundle' => 'field_footer_links',
+    'default_value' => NULL,
+    'deleted' => 0,
+    'description' => '',
+    'display' => array(
+      'default' => array(
+        'label' => 'above',
+        'module' => 'text',
+        'settings' => array(),
+        'type' => 'text_default',
+        'weight' => 0,
+      ),
+    ),
+    'entity_type' => 'field_collection_item',
+    'field_name' => 'field_footer_link',
+    'label' => 'Link',
+    'required' => 0,
+    'settings' => array(
+      'text_processing' => 0,
+      'user_register_form' => FALSE,
+    ),
+    'widget' => array(
+      'active' => 1,
+      'module' => 'text',
+      'settings' => array(
+        'size' => 60,
+      ),
+      'type' => 'text_textfield',
+      'weight' => 1,
+    ),
+  );
+
   // Exported field_instance: 'node-turnkey_onesheet-body'
   $field_instances['node-turnkey_onesheet-body'] = array(
     'bundle' => 'turnkey_onesheet',
@@ -57,7 +141,7 @@ function wmg_turnkey_onesheet_field_default_field_instances() {
         'summary_rows' => 5,
       ),
       'type' => 'text_textarea_with_summary',
-      'weight' => 12,
+      'weight' => 13,
     ),
   );
 
@@ -206,7 +290,7 @@ function wmg_turnkey_onesheet_field_default_field_instances() {
         'size' => 100,
       ),
       'type' => 'text_textfield',
-      'weight' => 14,
+      'weight' => 15,
     ),
   );
 
@@ -256,6 +340,97 @@ function wmg_turnkey_onesheet_field_default_field_instances() {
     ),
   );
 
+  // Exported field_instance: 'node-turnkey_onesheet-field_font_family'
+  $field_instances['node-turnkey_onesheet-field_font_family'] = array(
+    'bundle' => 'turnkey_onesheet',
+    'default_value' => NULL,
+    'deleted' => 0,
+    'description' => '',
+    'display' => array(
+      'default' => array(
+        'label' => 'above',
+        'module' => 'text',
+        'settings' => array(),
+        'type' => 'text_default',
+        'weight' => 23,
+      ),
+      'node_gallery_node_thumbnail' => array(
+        'label' => 'above',
+        'settings' => array(),
+        'type' => 'hidden',
+        'weight' => 0,
+      ),
+      'teaser' => array(
+        'label' => 'above',
+        'settings' => array(),
+        'type' => 'hidden',
+        'weight' => 0,
+      ),
+    ),
+    'entity_type' => 'node',
+    'field_name' => 'field_font_family',
+    'label' => 'Font family',
+    'required' => 0,
+    'settings' => array(
+      'text_processing' => 0,
+      'user_register_form' => FALSE,
+    ),
+    'widget' => array(
+      'active' => 1,
+      'module' => 'text',
+      'settings' => array(
+        'size' => 60,
+      ),
+      'type' => 'text_textfield',
+      'weight' => 8,
+    ),
+  );
+
+  // Exported field_instance: 'node-turnkey_onesheet-field_font_size'
+  $field_instances['node-turnkey_onesheet-field_font_size'] = array(
+    'bundle' => 'turnkey_onesheet',
+    'default_value' => NULL,
+    'deleted' => 0,
+    'description' => '',
+    'display' => array(
+      'default' => array(
+        'label' => 'above',
+        'module' => 'text',
+        'settings' => array(),
+        'type' => 'text_default',
+        'weight' => 22,
+      ),
+      'node_gallery_node_thumbnail' => array(
+        'label' => 'above',
+        'settings' => array(),
+        'type' => 'hidden',
+        'weight' => 0,
+      ),
+      'teaser' => array(
+        'label' => 'above',
+        'settings' => array(),
+        'type' => 'hidden',
+        'weight' => 0,
+      ),
+    ),
+    'entity_type' => 'node',
+    'field_name' => 'field_font_size',
+    'label' => 'Font size',
+    'required' => FALSE,
+    'settings' => array(
+      'text_processing' => 0,
+      'user_register_form' => FALSE,
+    ),
+    'widget' => array(
+      'module' => 'text',
+      'settings' => array(
+        'size' => 60,
+      ),
+      'type' => 'text_textfield',
+      'weight' => 7,
+    ),
+  );
+
   // Exported field_instance: 'node-turnkey_onesheet-field_footer_links'
   $field_instances['node-turnkey_onesheet-field_footer_links'] = array(
     'bundle' => 'turnkey_onesheet',
@@ -301,7 +476,7 @@ function wmg_turnkey_onesheet_field_default_field_instances() {
       'module' => 'field_collection',
       'settings' => array(),
       'type' => 'field_collection_embed',
-      'weight' => 13,
+      'weight' => 14,
     ),
   );
 
@@ -433,7 +608,7 @@ function wmg_turnkey_onesheet_field_default_field_instances() {
       'absolute_url' => 1,
       'attributes' => array(
         'class' => '',
-        'configurable_class' => 0,
+        'configurable_class' => 1,
         'configurable_title' => '',
         'rel' => '',
         'target' => 'default',
@@ -457,7 +632,7 @@ function wmg_turnkey_onesheet_field_default_field_instances() {
       'module' => 'link',
       'settings' => array(),
       'type' => 'link_field',
-      'weight' => 7,
+      'weight' => 9,
     ),
   );
 
@@ -570,7 +745,7 @@ function wmg_turnkey_onesheet_field_default_field_instances() {
         'progress_indicator' => 'throbber',
       ),
       'type' => 'image_image',
-      'weight' => 11,
+      'weight' => 12,
     ),
   );
 
@@ -616,7 +791,7 @@ function wmg_turnkey_onesheet_field_default_field_instances() {
         'rows' => 5,
       ),
       'type' => 'text_textarea',
-      'weight' => 10,
+      'weight' => 11,
     ),
   );
 
@@ -668,16 +843,17 @@ function wmg_turnkey_onesheet_field_default_field_instances() {
           'https' => 0,
           'oembed' => 'oembed',
           'public' => 0,
+          'youtube' => 0,
         ),
         'allowed_types' => array(
           'audio' => 0,
-          'default' => 0,
+          'default' => 'default',
           'image' => 0,
           'video' => 'video',
         ),
       ),
       'type' => 'gardens_media_video',
-      'weight' => 8,
+      'weight' => 10,
     ),
   );
 
@@ -689,9 +865,13 @@ function wmg_turnkey_onesheet_field_default_field_instances() {
   t('Background Image');
   t('FOOTER LINKS - ADD MANAGEMENT & LABEL LOGOS / LINKS FOOTER LINKS - ADD MANAGEMENT & LABEL LOGOS / LINKS');
   t('Font Color');
+  t('Font family');
+  t('Font size');
+  t('Footer Image');
   t('HIGHLIGHTS - ADD PRESS QUOTES, STATS, & OTHER NOTEWORTHY INFO');
   t('Hover Color');
   t('LINKS - WEBSITE & SOCIALS');
+  t('Link');
   t('Link Color');
   t('Logo Image');
   t('PHOTO - UPLOAD UP TO 3 IMAGES');

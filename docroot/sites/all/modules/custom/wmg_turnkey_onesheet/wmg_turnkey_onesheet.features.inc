@@ -12,6 +12,30 @@ function wmg_turnkey_onesheet_views_api($module = NULL, $api = NULL) {
 }
 
 /**
+ * Implements hook_image_default_styles().
+ */
+function wmg_turnkey_onesheet_image_default_styles() {
+  $styles = array();
+
+  // Exported image style: turnkey_logo.
+  $styles['turnkey_logo'] = array(
+    'label' => 'Turnkey logo',
+    'effects' => array(
+      191 => array(
+        'name' => 'image_resize',
+        'data' => array(
+          'width' => 100,
+          'height' => 100,
+        ),
+        'weight' => 1,
+      ),
+    ),
+  );
+
+  return $styles;
+}
+
+/**
  * Implements hook_node_info().
  */
 function wmg_turnkey_onesheet_node_info() {
