@@ -1,0 +1,10 @@
+name = "Migrate Instagram"
+description = "Module to import contents from instagram feed"
+package = "Migration"
+core = "7.x"
+
+dependencies[] = migrate
+
+;  include the files that contain your Migrate classes
+files[] = migrate_instagram.module
+files[] = migrate_instagram.migrate.inc

@@ -1,0 +1,35 @@
+<?php
+
+/**
+ * Implements hook_menu().
+ */
+function migrate_instagram_menu()
+{
+    $items['admin/content/migrate/importurl'] = array(
+        'title' => 'Instagram migrate settings',
+        'page callback' => 'drupal_get_form',
+        'page arguments' => array(
+            'migrate_instagram_form'
+        ),
+        'access arguments' => array(
+            'access migrate_instagram forms'
+        ),
+        //'access callback' => TRUE,
+        'type' => MENU_LOCAL_TASK,
+        'file' => 'migrate_instagram.migrate.inc',
+        'weight' => 90,
+    );
+    return $items;
+}
+
+/**
+ * Implements hook_permission().
+ */
+function migrate_instagram_permission()
+{
+    return array(
+        'access migrate_instagram forms' => array(
+            'title' => t('Import access to the users')
+        )
+    );
+}
