@@ -126,9 +126,13 @@ class SimpleRestMessage {
     }
 
     $response_code = curl_getinfo($curl, CURLINFO_HTTP_CODE);
-    curl_close($curl);
-
     $response_body = json_decode($response, TRUE);
+
+    if (!is_array($response_body)) {
+      $response_body = array();
+    }
+
+    curl_close($curl);
 
     return new SimpleRestResponse($endpoint, $response_code, $response_body);
   }
