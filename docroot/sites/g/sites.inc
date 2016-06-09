@@ -241,16 +241,22 @@ function gardens_site_data_refresh_domains(array $domains) {
     }
 
     if ($json_read_failure) {
-      // Report the read failure. Since it involves contacting the Site Factory
-      // it should be done in a way that does not affect pageload.
-      $reported_domain = $json_read_failure === TRUE ? '' : $json_read_failure;
-      drupal_register_shutdown_function('gardens_site_data_json_alert_flag_set', $reported_domain);
+      // Report the read failure, only if Drupal is bootstrapped. We skip
+      // reporting for other requests because these have a relatively high
+      // probability of getting sites.json read failures (e.g. apc_rebuild.php
+      // run from FlushDomains WIPs when sites.json has just been changed).
+      if (function_exists('drupal_register_shutdown_function')) {
+        // Since reporting involves contacting the Site Factory it should be
+        // done in a way that does not affect pageload.
+        $reported_domain = $json_read_failure === TRUE ? '' : $json_read_failure;
+        drupal_register_shutdown_function('gardens_site_data_json_alert_flag_set', $reported_domain);
+      }
       // Bail to prevent repeated failures.
       break;
     }
   }
 
-  if (!$json_read_failure && gardens_site_data_json_alert_flag_check()) {
+  if (!$json_read_failure && gardens_site_data_json_alert_flag_check() && function_exists('drupal_register_shutdown_function')) {
     // Clear the flag. Since it involves contacting the Site Factory it should
     // be done in a way that does not affect pageload.
     drupal_register_shutdown_function('gardens_site_data_json_alert_flag_clear');

@@ -76,7 +76,7 @@ function main($argv, $argc) {
     // Assume we will fail until proven otherwise.
     $success = FALSE;
     // Send Site Factory request.
-    $attempts = 3;
+    $attempts = $max_attempts = 6;
     do {
       $response = request_theme_files($site, $env, $webnode);
       if ($verbose) {
@@ -108,6 +108,7 @@ function main($argv, $argc) {
           break;
         }
       }
+      sleep(10 * ($max_attempts - $attempts));
     } while ($attempts-- > 0);
 
     if (!$success) {
@@ -362,10 +363,14 @@ class SimpleRestMessage {
       throw new Exception(sprintf('Error reaching url "%s" with method "%s." Returned error "%s."', $full_url, $method, $error));
     }
 
-    $response_code = curl_getinfo($curl, CURLINFO_HTTP_CODE);
-    curl_close($curl);
-
     $response_body = json_decode($response, TRUE);
+    $response_code = curl_getinfo($curl, CURLINFO_HTTP_CODE);
+
+    if (!is_array($response_body)) {
+      $response_body = array();
+    }
+
+    curl_close($curl);
 
     return new SimpleRestResponse($endpoint, $response_code, $response_body);
   }
