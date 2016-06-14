@@ -66,12 +66,6 @@ function wmg_turnkey_onesheet_views_default_views() {
   $handler->display->display_options['fields']['field_video_embed_youtube_vimeo']['delta_offset'] = '0';
   $handler->display->display_options['fields']['field_video_embed_youtube_vimeo']['multi_type'] = 'ul';
   $handler->display->display_options['fields']['field_video_embed_youtube_vimeo']['separator'] = '';
-  /* Field: Broken/missing handler */
-  $handler->display->display_options['fields']['field_photo_upload_up_to_3_image']['id'] = 'field_photo_upload_up_to_3_image';
-  $handler->display->display_options['fields']['field_photo_upload_up_to_3_image']['table'] = 'field_data_field_photo_upload_up_to_3_image';
-  $handler->display->display_options['fields']['field_photo_upload_up_to_3_image']['field'] = 'field_photo_upload_up_to_3_image';
-  $handler->display->display_options['fields']['field_photo_upload_up_to_3_image']['label'] = '';
-  $handler->display->display_options['fields']['field_photo_upload_up_to_3_image']['element_label_colon'] = FALSE;
   /* Field: Content: Background Image */
   $handler->display->display_options['fields']['field_background_image']['id'] = 'field_background_image';
   $handler->display->display_options['fields']['field_background_image']['table'] = 'field_data_field_background_image';
@@ -128,116 +122,6 @@ function wmg_turnkey_onesheet_views_default_views() {
     'turnkey_onesheet' => 'turnkey_onesheet',
   );
 
-  /* Display: Page */
-  $handler = $view->new_display('page', 'Page', 'page');
-  $handler->display->display_options['enabled'] = FALSE;
-  $handler->display->display_options['defaults']['footer'] = FALSE;
-  /* Footer: Global: Text area */
-  $handler->display->display_options['footer']['area']['id'] = 'area';
-  $handler->display->display_options['footer']['area']['table'] = 'views';
-  $handler->display->display_options['footer']['area']['field'] = 'area';
-  $handler->display->display_options['footer']['area']['content'] = '<style>
-.page-onesheet #page {
-  background:#000000 url("http://sandbox.wmg-gardens.com/sites/g/files/g2000005091/f/201510/bg-repeat.jpg");
-  color:white;
-}
-
-.page-onesheet div#content-inner .views-field.views-field-field-links-website-socials a:hover {
-    color: white;
-}
-</style>';
-  $handler->display->display_options['footer']['area']['format'] = 'script';
-  $handler->display->display_options['footer']['area']['tokenize'] = TRUE;
-  $handler->display->display_options['defaults']['fields'] = FALSE;
-  /* Field: Content: Logo Image */
-  $handler->display->display_options['fields']['field_logo_image']['id'] = 'field_logo_image';
-  $handler->display->display_options['fields']['field_logo_image']['table'] = 'field_data_field_logo_image';
-  $handler->display->display_options['fields']['field_logo_image']['field'] = 'field_logo_image';
-  $handler->display->display_options['fields']['field_logo_image']['label'] = '';
-  $handler->display->display_options['fields']['field_logo_image']['element_label_colon'] = FALSE;
-  $handler->display->display_options['fields']['field_logo_image']['click_sort_column'] = 'fid';
-  $handler->display->display_options['fields']['field_logo_image']['settings'] = array(
-    'image_style' => '',
-    'image_link' => '',
-  );
-  /* Field: Content: LINKS - WEBSITE & SOCIALS */
-  $handler->display->display_options['fields']['field_links_website_socials']['id'] = 'field_links_website_socials';
-  $handler->display->display_options['fields']['field_links_website_socials']['table'] = 'field_data_field_links_website_socials';
-  $handler->display->display_options['fields']['field_links_website_socials']['field'] = 'field_links_website_socials';
-  $handler->display->display_options['fields']['field_links_website_socials']['label'] = '';
-  $handler->display->display_options['fields']['field_links_website_socials']['element_label_colon'] = FALSE;
-  $handler->display->display_options['fields']['field_links_website_socials']['click_sort_column'] = 'url';
-  $handler->display->display_options['fields']['field_links_website_socials']['delta_offset'] = '0';
-  $handler->display->display_options['fields']['field_links_website_socials']['separator'] = '';
-  /* Field: Content: VIDEO - EMBED YOUTUBE & VIMEO VIDS */
-  $handler->display->display_options['fields']['field_video_embed_youtube_vimeo']['id'] = 'field_video_embed_youtube_vimeo';
-  $handler->display->display_options['fields']['field_video_embed_youtube_vimeo']['table'] = 'field_data_field_video_embed_youtube_vimeo';
-  $handler->display->display_options['fields']['field_video_embed_youtube_vimeo']['field'] = 'field_video_embed_youtube_vimeo';
-  $handler->display->display_options['fields']['field_video_embed_youtube_vimeo']['label'] = '';
-  $handler->display->display_options['fields']['field_video_embed_youtube_vimeo']['element_label_colon'] = FALSE;
-  $handler->display->display_options['fields']['field_video_embed_youtube_vimeo']['click_sort_column'] = 'fid';
-  $handler->display->display_options['fields']['field_video_embed_youtube_vimeo']['settings'] = array(
-    'file_view_mode' => 'node_gallery_file_display',
-  );
-  $handler->display->display_options['fields']['field_video_embed_youtube_vimeo']['delta_limit'] = '2';
-  $handler->display->display_options['fields']['field_video_embed_youtube_vimeo']['delta_offset'] = '0';
-  $handler->display->display_options['fields']['field_video_embed_youtube_vimeo']['multi_type'] = 'ul';
-  $handler->display->display_options['fields']['field_video_embed_youtube_vimeo']['separator'] = '';
-  /* Field: Broken/missing handler */
-  $handler->display->display_options['fields']['field_audio_embed_spotify_soundc']['id'] = 'field_audio_embed_spotify_soundc';
-  $handler->display->display_options['fields']['field_audio_embed_spotify_soundc']['table'] = 'field_data_field_audio_embed_spotify_soundc';
-  $handler->display->display_options['fields']['field_audio_embed_spotify_soundc']['field'] = 'field_audio_embed_spotify_soundc';
-  $handler->display->display_options['fields']['field_audio_embed_spotify_soundc']['label'] = '';
-  $handler->display->display_options['fields']['field_audio_embed_spotify_soundc']['alter']['alter_text'] = TRUE;
-  $handler->display->display_options['fields']['field_audio_embed_spotify_soundc']['alter']['text'] = '<a href="[field_audio_embed_spotify_soundc]" class="sc-player"></a>';
-  $handler->display->display_options['fields']['field_audio_embed_spotify_soundc']['element_label_colon'] = FALSE;
-  /* Field: Broken/missing handler */
-  $handler->display->display_options['fields']['field_photo_upload_up_to_3_image']['id'] = 'field_photo_upload_up_to_3_image';
-  $handler->display->display_options['fields']['field_photo_upload_up_to_3_image']['table'] = 'field_data_field_photo_upload_up_to_3_image';
-  $handler->display->display_options['fields']['field_photo_upload_up_to_3_image']['field'] = 'field_photo_upload_up_to_3_image';
-  $handler->display->display_options['fields']['field_photo_upload_up_to_3_image']['label'] = '';
-  $handler->display->display_options['fields']['field_photo_upload_up_to_3_image']['element_label_colon'] = FALSE;
-  /* Field: Content: Background Image */
-  $handler->display->display_options['fields']['field_background_image']['id'] = 'field_background_image';
-  $handler->display->display_options['fields']['field_background_image']['table'] = 'field_data_field_background_image';
-  $handler->display->display_options['fields']['field_background_image']['field'] = 'field_background_image';
-  $handler->display->display_options['fields']['field_background_image']['label'] = '';
-  $handler->display->display_options['fields']['field_background_image']['exclude'] = TRUE;
-  $handler->display->display_options['fields']['field_background_image']['element_label_colon'] = FALSE;
-  $handler->display->display_options['fields']['field_background_image']['click_sort_column'] = 'fid';
-  $handler->display->display_options['fields']['field_background_image']['settings'] = array(
-    'image_style' => '',
-    'image_link' => '',
-  );
-  /* Field: Content: Body */
-  $handler->display->display_options['fields']['body']['id'] = 'body';
-  $handler->display->display_options['fields']['body']['table'] = 'field_data_body';
-  $handler->display->display_options['fields']['body']['field'] = 'body';
-  $handler->display->display_options['fields']['body']['label'] = '';
-  $handler->display->display_options['fields']['body']['element_label_colon'] = FALSE;
-  /* Field: Content: FOOTER LINKS - ADD MANAGEMENT & LABEL LOGOS / LINKS FOOTER LINKS - ADD MANAGEMENT & LABEL LOGOS / LINKS */
-  $handler->display->display_options['fields']['field_footer_links']['id'] = 'field_footer_links';
-  $handler->display->display_options['fields']['field_footer_links']['table'] = 'field_data_field_footer_links';
-  $handler->display->display_options['fields']['field_footer_links']['field'] = 'field_footer_links';
-  $handler->display->display_options['fields']['field_footer_links']['label'] = '';
-  $handler->display->display_options['fields']['field_footer_links']['element_label_colon'] = FALSE;
-  $handler->display->display_options['fields']['field_footer_links']['type'] = 'field_collection_views_view';
-  $handler->display->display_options['fields']['field_footer_links']['settings'] = array(
-    'name' => 'field_collections_footer_links',
-    'display_id' => 'block_1',
-    'add' => '',
-  );
-  $handler->display->display_options['fields']['field_footer_links']['delta_offset'] = '0';
-  $handler->display->display_options['fields']['field_footer_links']['multi_type'] = 'ul';
-  $handler->display->display_options['fields']['field_footer_links']['separator'] = '';
-  $handler->display->display_options['defaults']['sorts'] = FALSE;
-  /* Sort criterion: Content: Updated date */
-  $handler->display->display_options['sorts']['changed']['id'] = 'changed';
-  $handler->display->display_options['sorts']['changed']['table'] = 'node';
-  $handler->display->display_options['sorts']['changed']['field'] = 'changed';
-  $handler->display->display_options['sorts']['changed']['order'] = 'DESC';
-  $handler->display->display_options['path'] = 'onesheet';
-
   /* Display: Block */
   $handler = $view->new_display('block', 'Block', 'block_1');
   $handler->display->display_options['defaults']['footer'] = FALSE;
@@ -252,6 +136,9 @@ background-position: top center;
 background-size:cover;
 background-color: [field_background_color];
 color: [field_font_color];
+background-attachment: fixed;
+font-size: [field_font_size];
+font-family: [field_font_family] ;
 }
 
 .node-type-turnkey-onesheet #block-views-turnkey-onesheet-block-1 #ss-bit-narrow .bit-events tr td a ,.node-type-turnkey-onesheet #block-views-turnkey-onesheet-block-1 #ss-bit-narrow .bit-events tr.bit-bottom td a,
@@ -311,6 +198,10 @@ body.node-type-turnkey-onesheet #ss-bit-narrow tr {
 #to-bg-img {display:none;}
 
 .node-type-turnkey-onesheet #block-views-turnkey-onesheet-block-1 #ss-bit-wide .bit-events tr td a {border-radius:0px !important;}
+
+#bit-events table a {
+    font-family: [field_font_family]!important;
+}
 
 .views-field-field-footer-links {margin-top: 20px;}
 
@@ -384,14 +275,14 @@ var BITopts = {
 				this.title = "<a href=\'" + href + "\'>" + this.title + "</a>";
 			}
 		});
-jQuery(document).ready(function(){
+/*jQuery(document).ready(function(){
 	jQuery(".views-field-field-video-embed-youtube-vimeo li").each(function(){   
 		$this = jQuery(this);
 		var embedId = jQuery(this).find("embed").attr("src").split("/")[4].split("?")[0]; 
 		var player = jQuery(\'<div class="media-embed-wrapper-outer"><div class="media-embed-wrapper"><iframe width="854" height="480" src="https://www.youtube.com/embed/\'+embedId+\'" frameborder="0" allowfullscreen></iframe></div></div>\');
 		$this.append(player);	
 	})
-});
+});*/
 
 /*Setting the background image*/
 var toneBGIMG = jQuery("#to-bg-img img").attr("src");
@@ -429,9 +320,8 @@ jQuery("body.node-type-turnkey-onesheet").css("background-image","url(\'" + tone
   $handler->display->display_options['fields']['field_video_embed_youtube_vimeo']['element_label_colon'] = FALSE;
   $handler->display->display_options['fields']['field_video_embed_youtube_vimeo']['click_sort_column'] = 'fid';
   $handler->display->display_options['fields']['field_video_embed_youtube_vimeo']['settings'] = array(
-    'file_view_mode' => 'node_gallery_file_display',
+    'file_view_mode' => 'media_original',
   );
-  $handler->display->display_options['fields']['field_video_embed_youtube_vimeo']['delta_limit'] = '2';
   $handler->display->display_options['fields']['field_video_embed_youtube_vimeo']['delta_offset'] = '0';
   $handler->display->display_options['fields']['field_video_embed_youtube_vimeo']['multi_type'] = 'ul';
   $handler->display->display_options['fields']['field_video_embed_youtube_vimeo']['separator'] = '';
@@ -463,6 +353,8 @@ jQuery("body.node-type-turnkey-onesheet").css("background-image","url(\'" + tone
     'colorbox_caption_custom' => '',
   );
   $handler->display->display_options['fields']['field_photo_upload_upto_3_images']['delta_offset'] = '0';
+  $handler->display->display_options['fields']['field_photo_upload_upto_3_images']['multi_type'] = 'ul';
+  $handler->display->display_options['fields']['field_photo_upload_upto_3_images']['separator'] = '';
   /* Field: Content: Background Image */
   $handler->display->display_options['fields']['field_background_image']['id'] = 'field_background_image';
   $handler->display->display_options['fields']['field_background_image']['table'] = 'field_data_field_background_image';
@@ -547,6 +439,20 @@ jQuery("body.node-type-turnkey-onesheet").css("background-image","url(\'" + tone
   $handler->display->display_options['fields']['field_hover_color']['label'] = '';
   $handler->display->display_options['fields']['field_hover_color']['exclude'] = TRUE;
   $handler->display->display_options['fields']['field_hover_color']['element_label_colon'] = FALSE;
+  /* Field: Content: Font family */
+  $handler->display->display_options['fields']['field_font_family']['id'] = 'field_font_family';
+  $handler->display->display_options['fields']['field_font_family']['table'] = 'field_data_field_font_family';
+  $handler->display->display_options['fields']['field_font_family']['field'] = 'field_font_family';
+  $handler->display->display_options['fields']['field_font_family']['label'] = '';
+  $handler->display->display_options['fields']['field_font_family']['exclude'] = TRUE;
+  $handler->display->display_options['fields']['field_font_family']['element_label_colon'] = FALSE;
+  /* Field: Content: Font size */
+  $handler->display->display_options['fields']['field_font_size']['id'] = 'field_font_size';
+  $handler->display->display_options['fields']['field_font_size']['table'] = 'field_data_field_font_size';
+  $handler->display->display_options['fields']['field_font_size']['field'] = 'field_font_size';
+  $handler->display->display_options['fields']['field_font_size']['label'] = '';
+  $handler->display->display_options['fields']['field_font_size']['exclude'] = TRUE;
+  $handler->display->display_options['fields']['field_font_size']['element_label_colon'] = FALSE;
   $handler->display->display_options['defaults']['arguments'] = FALSE;
   /* Contextual filter: Content: Nid */
   $handler->display->display_options['arguments']['nid']['id'] = 'nid';
@@ -571,18 +477,6 @@ jQuery("body.node-type-turnkey-onesheet").css("background-image","url(\'" + tone
 [field_footer_links-revision_id]
 
 [field_footer_links]'),
-    t('Page'),
-    t('<style>
-.page-onesheet #page {
-  background:#000000 url("http://sandbox.wmg-gardens.com/sites/g/files/g2000005091/f/201510/bg-repeat.jpg");
-  color:white;
-}
-
-.page-onesheet div#content-inner .views-field.views-field-field-links-website-socials a:hover {
-    color: white;
-}
-</style>'),
-    t('<a href="[field_audio_embed_spotify_soundc]" class="sc-player"></a>'),
     t('Block'),
     t('<style>
 body.node-type-turnkey-onesheet{
@@ -591,6 +485,9 @@ background-position: top center;
 background-size:cover;
 background-color: [field_background_color];
 color: [field_font_color];
+background-attachment: fixed;
+font-size: [field_font_size];
+font-family: [field_font_family] ;
 }
 
 .node-type-turnkey-onesheet #block-views-turnkey-onesheet-block-1 #ss-bit-narrow .bit-events tr td a ,.node-type-turnkey-onesheet #block-views-turnkey-onesheet-block-1 #ss-bit-narrow .bit-events tr.bit-bottom td a,
@@ -650,6 +547,10 @@ body.node-type-turnkey-onesheet #ss-bit-narrow tr {
 #to-bg-img {display:none;}
 
 .node-type-turnkey-onesheet #block-views-turnkey-onesheet-block-1 #ss-bit-wide .bit-events tr td a {border-radius:0px !important;}
+
+#bit-events table a {
+    font-family: [field_font_family]!important;
+}
 
 .views-field-field-footer-links {margin-top: 20px;}
 
@@ -723,14 +624,14 @@ var BITopts = {
 				this.title = "<a href=\'" + href + "\'>" + this.title + "</a>";
 			}
 		});
-jQuery(document).ready(function(){
+/*jQuery(document).ready(function(){
 	jQuery(".views-field-field-video-embed-youtube-vimeo li").each(function(){   
 		$this = jQuery(this);
 		var embedId = jQuery(this).find("embed").attr("src").split("/")[4].split("?")[0]; 
 		var player = jQuery(\'<div class="media-embed-wrapper-outer"><div class="media-embed-wrapper"><iframe width="854" height="480" src="https://www.youtube.com/embed/\'+embedId+\'" frameborder="0" allowfullscreen></iframe></div></div>\');
 		$this.append(player);	
 	})
-});
+});*/
 
 /*Setting the background image*/
 var toneBGIMG = jQuery("#to-bg-img img").attr("src");

@@ -151,15 +151,17 @@ function spambot_settings_form() {
       ->fields('u', array('uid'))
       ->condition('u.uid', 1, '>')
       ->condition('u.uid', $last_uid, '<=')
+      ->countQuery()
       ->execute()
-      ->rowCount();
+      ->fetchField();
 
     $num_left = db_select('users', 'u')
       ->fields('u', array('uid'))
       ->condition('u.uid', 1, '>')
       ->condition('u.uid', $last_uid, '>')
+      ->countQuery()
       ->execute()
-      ->rowCount();
+      ->fetchField();
 
     $last_uid = db_select('users', 'u')
       ->fields('u', array('uid'))
@@ -178,8 +180,9 @@ function spambot_settings_form() {
     $num_left = db_select('users')
       ->fields('users')
       ->condition('uid', 1, '>')
+      ->countQuery()
       ->execute()
-      ->rowCount();
+      ->fetchField();
   }
 
   $text = t('Accounts checked: @checked, Accounts remaining: @remaining', array('@checked' => $num_checked, '@remaining' => $num_left));

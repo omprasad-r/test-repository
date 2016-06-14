@@ -1,0 +1,60 @@
+diff --git a/docroot/sites/all/modules/contrib/spambot/spambot.admin.inc b/docroot/sites/all/modules/contrib/spambot/spambot.admin.inc
+index efaeee0..646a0e7 100644
+--- a/docroot/sites/all/modules/contrib/spambot/spambot.admin.inc
++++ b/docroot/sites/all/modules/contrib/spambot/spambot.admin.inc
+@@ -151,15 +151,17 @@ function spambot_settings_form() {
+       ->fields('u', array('uid'))
+       ->condition('u.uid', 1, '>')
+       ->condition('u.uid', $last_uid, '<=')
++      ->countQuery()
+       ->execute()
+-      ->rowCount();
++      ->fetchField();
+ 
+     $num_left = db_select('users', 'u')
+       ->fields('u', array('uid'))
+       ->condition('u.uid', 1, '>')
+       ->condition('u.uid', $last_uid, '>')
++      ->countQuery()
+       ->execute()
+-      ->rowCount();
++      ->fetchField();
+ 
+     $last_uid = db_select('users', 'u')
+       ->fields('u', array('uid'))
+@@ -178,8 +180,9 @@ function spambot_settings_form() {
+     $num_left = db_select('users')
+       ->fields('users')
+       ->condition('uid', 1, '>')
++      ->countQuery()
+       ->execute()
+-      ->rowCount();
++      ->fetchField();
+   }
+ 
+   $text = t('Accounts checked: @checked, Accounts remaining: @remaining', array('@checked' => $num_checked, '@remaining' => $num_left));
+diff --git a/docroot/sites/all/modules/contrib/spambot/spambot.pages.inc b/docroot/sites/all/modules/contrib/spambot/spambot.pages.inc
+index fba9223..43d5a92 100644
+--- a/docroot/sites/all/modules/contrib/spambot/spambot.pages.inc
++++ b/docroot/sites/all/modules/contrib/spambot/spambot.pages.inc
+@@ -33,16 +33,18 @@ function spambot_user_spam_admin_form($form, &$form_state, $account) {
+   $node_count = db_select('node', 'n')
+     ->fields('n', array('nid'))
+     ->condition('uid', $account->uid)
++    ->countQuery()
+     ->execute()
+-    ->rowCount();
++    ->fetchField();
+ 
+   $status = t('This account has @n nodes.', array('@n' => $node_count));
+   if ($comments_enabled) {
+     $comment_count = db_select('comment', 'c')
+       ->fields('c', array('cid'))
+       ->condition('uid', $account->uid)
++      ->countQuery()
+       ->execute()
+-      ->rowCount();
++      ->fetchField();
+ 
+     $status = t('This account has @n nodes and @c comments.', array('@n' => $node_count, '@c' => $comment_count));
+   }

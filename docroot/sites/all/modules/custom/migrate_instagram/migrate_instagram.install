@@ -1,0 +1,44 @@
+<?php
+
+/**
+ * @file
+ * Install, update and uninstall functions for the migrate module.
+ */
+
+/**
+ * Implements hook_schema().
+ */
+
+function migrate_instagram_schema()
+{
+  $schema                      = array();
+  $schema['migrate_instagram'] = array(
+    'description' => 'Import URL',
+    'fields' => array(
+      'serial' => array(
+        'type' => 'serial',
+        'unsigned' => TRUE,
+        'not null' => TRUE,
+        'description' => 'Primary Key: Unique category ID.'
+      ),
+      'url' => array(
+        'type' => 'varchar',
+        'length' => 255,
+        'not null' => TRUE
+      )
+    ),
+    'primary key' => array(
+      'serial'
+    )
+  );
+  return $schema;
+}
+
+/**
+ * Implements hook_uninstall().
+ */
+ 
+ 
+ function hook_uninstall() {
+  drupal_uninstall_schema('migrate_instagram');
+}

@@ -33,16 +33,18 @@ function spambot_user_spam_admin_form($form, &$form_state, $account) {
   $node_count = db_select('node', 'n')
     ->fields('n', array('nid'))
     ->condition('uid', $account->uid)
+    ->countQuery()
     ->execute()
-    ->rowCount();
+    ->fetchField();
 
   $status = t('This account has @n nodes.', array('@n' => $node_count));
   if ($comments_enabled) {
     $comment_count = db_select('comment', 'c')
       ->fields('c', array('cid'))
       ->condition('uid', $account->uid)
+      ->countQuery()
       ->execute()
-      ->rowCount();
+      ->fetchField();
 
     $status = t('This account has @n nodes and @c comments.', array('@n' => $node_count, '@c' => $comment_count));
   }
