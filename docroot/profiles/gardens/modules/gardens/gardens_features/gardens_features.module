@@ -522,18 +522,16 @@ function gardens_features_form_alter(&$form, $form_state, $form_id) {
     }
 
     $registration_allowed = variable_get('user_register', USER_REGISTER_VISITORS_ADMINISTRATIVE_APPROVAL) != USER_REGISTER_ADMINISTRATORS_ONLY;
-    if ($registration_allowed) {
-      // Now we add the 'or register' link in, but where that goes depends on
-      // configuration.
-      if (module_exists('dialog_user')) {
-        $options['attributes'] = array('class' => array('use-ajax', 'use-dialog'));
-        $register_link = l(t('Sign up'), 'user/register/nojs', $options);
-        $forgot_password_path = 'user/password/nojs';
-      }
-      else {
-        $register_link = l(t('Sign up'), 'user/register', $options);
-        $forgot_password_path = 'user/password';
-      }
+    // Now we add the 'or register' link in, but where that goes depends on
+    // configuration.
+    if (module_exists('dialog_user')) {
+      $options['attributes'] = array('class' => array('use-ajax', 'use-dialog'));
+      $register_link = l(t('Sign up'), 'user/register/nojs', $options);
+      $forgot_password_path = 'user/password/nojs';
+    }
+    else {
+      $register_link = l(t('Sign up'), 'user/register', $options);
+      $forgot_password_path = 'user/password';
     }
 
     // Don't alter the MASt login form.
