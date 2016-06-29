@@ -38,19 +38,6 @@ class AcsfMessageTest extends PHPUnit_Framework_TestCase {
 
   /**
    * Tests that the config object must be an instance of AcsfConfig.
-   *
-   * @expectedException PHPUnit_Framework_Error
-   * @expectedExceptionMessage must be an instance of Acquia\Acsf\AcsfConfig
-   */
-  public function testAcsfMessageConfigIncompatible() {
-    // Provide an incompatible config object (which is a subclass of stdClass
-    // rather than the required AcsfConfig).
-    $config = new AcsfConfigUnitTestIncompatible('unit_test_site', 'unit_test_env');
-    $message = new AcsfMessageUnitTestSuccess('TEST', 'unit_test_endpoint', array(), $config);
-  }
-
-  /**
-   * Tests that the config object must be an instance of AcsfConfig.
    */
   public function testAcsfMessageConfigCompatible() {
     // Provide a compatible config object to check that no error is generated.

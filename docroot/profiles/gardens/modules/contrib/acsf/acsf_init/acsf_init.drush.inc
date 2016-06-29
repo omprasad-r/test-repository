@@ -185,12 +185,6 @@ function drush_acsf_connect_factory() {
     )));
   }
 
-  // If a list of roles was specified, make sure they all exist.
-  foreach ($site_owner_roles as $role) {
-    if (!user_role_load_by_name($role)) {
-      return drush_set_error(dt('The role @role does not exist.', array('@role' => $role)));
-    }
-  }
 
   // The site owner's email address may have been changed on the factory (for
   // instance, if the user updated their email address on the factory and the
@@ -251,9 +245,14 @@ function drush_acsf_connect_factory() {
     $site_owner_account->is_new = TRUE;
   }
   $site_owner_account_edit = $default_account_edit;
-  foreach ($site_owner_roles as $role) {
-    $rid = user_role_load_by_name($role)->rid;
-    $site_owner_account_edit['roles'][$rid] = 1;
+  foreach ($site_owner_roles as $role_name) {
+    $role = user_role_load_by_name($role_name);
+    if ($role) {
+      $site_owner_account_edit['roles'][$role->rid] = 1;
+    }
+    else {
+      drush_log(dt('The role @role does not exist; not adding it to the site owner.', array('@role' => $role_name)), 'warning');
+    }
   }
   // Site owners also get the administrator role.
   if (variable_get('user_admin_role', 0)) {
