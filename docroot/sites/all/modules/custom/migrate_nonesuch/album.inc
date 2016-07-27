@@ -1,9 +1,9 @@
 <?php
+
 /**
  * @file
  * Special handling to turn UPCs and prices into collection fields.
  */
- 
 class MigrateNonesuchAlbum extends DrupalNode5Migration {
   /**
    * Implements Migration::complete().
@@ -74,5 +74,44 @@ class MigrateNonesuchAlbum extends DrupalNode5Migration {
       $entity->setHostEntity('node', $node);
       $entity->save();
     }
+  }
+}
+
+class MigrateNode7NonesuchAlbum extends DrupalNode7Migration {
+  public function __construct($arguments) {
+    parent::__construct($arguments);
+  }
+
+  /**
+   * Implements Migration::complete().
+   */
+  public function complete($node, $row) {
+    $query = Database::getConnection('default', $this->sourceConnection)
+      ->select('field_data_field_upc_price', 'up');
+    $query->leftJoin('field_data_field_label', 'la', 'la.entity_id = up.field_upc_price_value');
+    $query->fields('la', array('field_label_value'));
+    $query->leftJoin('field_data_field_upc', 'ua', 'ua.entity_id = up.field_upc_price_value');
+    $query->fields('ua', array('field_upc_value'));
+    $query->leftJoin('field_data_field_price', 'p', 'p.entity_id = up.field_upc_price_value');
+    $query->fields('p', array('field_price_value'));
+    $query->condition("up.entity_id", $row->nid);
+    $results = $query->execute();
+    foreach ($results as $result) {
+      $this->addCollectionItem($node, $result->field_upc_value, $result->field_price_value, $result->field_label_value);
+    }
+  }
+
+  /**
+   * Add one upc price field collection item to a node.
+   */
+  protected function addCollectionItem($node, $upc, $price, $label) {
+    $fc_item = entity_create('field_collection_item', array('field_name' => 'field_upc_price'));
+    $fc_item->setHostEntity('node', $node);
+    $collection = entity_metadata_wrapper('field_collection_item', $fc_item);
+    $collection->field_upc_album->set($upc);
+    $collection->field_price_album->set($price);
+    $collection->field_label->set($label);
+    $collection->save();
+    node_save($node);
   }
 }
