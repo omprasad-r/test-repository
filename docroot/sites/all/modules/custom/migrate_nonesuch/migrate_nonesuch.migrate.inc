@@ -10,6 +10,12 @@
  * Implements hook_migrate_api_alter().
  */
 function migrate_nonesuch_migrate_api_alter(&$api) {
+
+  db_update('migrate_status')
+    ->fields(array('class_name' => 'MigrateNode7NonesuchAlbum'))
+    ->condition('machine_name', 'e26597eb4Nodealbums')
+    ->execute();
+
   // Make sure the album migration uses our overridden class, to handle
   // UPCs and prices.
   db_update('migrate_status')
