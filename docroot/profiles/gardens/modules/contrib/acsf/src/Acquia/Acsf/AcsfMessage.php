@@ -73,11 +73,6 @@ abstract class AcsfMessage {
       $config = new AcsfConfigDefault($ah_site, $ah_env);
     }
 
-    // Ensure that the config class is compatible.
-    if (!is_subclass_of($config, '\Acquia\Acsf\AcsfConfig')) {
-      throw new AcsfMessageMissingCredsException('The config argument must contain an AcsfConfig compatible class file.');
-    }
-
     $this->config = $config;
     $this->method = $method;
     $this->endpoint = $endpoint;

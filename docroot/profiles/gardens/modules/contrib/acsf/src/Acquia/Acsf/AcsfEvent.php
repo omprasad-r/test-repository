@@ -140,10 +140,6 @@ class AcsfEvent {
    *   The type of handler: incomplete, complete or failed.
    */
   public function pushHandler(AcsfEventHandler $handler, $type = 'incomplete') {
-    if (!is_subclass_of($handler, '\Acquia\Acsf\AcsfEventHandler')) {
-      throw new AcsfEventHandlerIncompatibleException(sprintf('The handler class "%s" is incompatible with this event, must subclass AcsfEventHandler.', get_class($handler)));
-    }
-
     if (array_key_exists($type, $this->handlers)) {
       $this->handlers[$type][] = $handler;
     }

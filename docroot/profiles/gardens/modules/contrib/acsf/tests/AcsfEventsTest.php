@@ -91,18 +91,6 @@ class UnitTest extends PHPUnit_Framework_TestCase {
   }
 
   /**
-   * Tests that incompatible handlers may not be added.
-   *
-   * @expectedException PHPUnit_Framework_Error
-   */
-  public function testAcsfEventHandlerIncompatibleClass() {
-    $event = new \Acquia\Acsf\AcsfEvent(new \Acquia\Acsf\AcsfEventDispatcher(), new \Acquia\Acsf\AcsfLog(), 'unit_test', array(), array());
-    // UnitTestDummyHandlerIncompatible erroneously extends stdClass when it
-    // should be a subclass of AcsfEventHandler.
-    $event->pushHandler(new UnitTestDummyHandlerIncompatible());
-  }
-
-  /**
    * Tests that incompatible handler types may not be used.
    *
    * @expectedException \Acquia\Acsf\AcsfEventHandlerIncompatibleException
