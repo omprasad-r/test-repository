@@ -327,8 +327,43 @@ function warner_misc_file_formatter_media_oembed_thumbnail_view($file, $display,
 function warner_misc_file_formatter_media_oembed_thumbnail_style_view($file, $display, $langcode) {
   $element = media_oembed_thumbnail_style_file_formatter_view($file, $display, $langcode);
   $scheme = file_uri_scheme($file->uri);
+
   if ($scheme == 'oembed') {
-    $element['#cache']['expire'] = CACHE_PERMANENT;
+    $url = drupal_realpath($file->uri);
+
+    // Facebook url is to be themed without image_style.
+    if (strpos($url, 'facebook')) {
+      preg_match('/\/(?:t\.\d+\/)?(\d+)\//i' , $url, $video_id);
+      $video_id = trim($video_id[0], '/');
+
+      $element = array(
+        '#cache' => array(
+          'expire' => CACHE_PERMANENT
+        ),
+        '#theme' => 'image',
+        '#path' => 'https://graph.facebook.com/' . $video_id . '/picture',
+      );
+    }
+    else if (strpos($url, 'vimeo')) {
+      $url = trim($url, '/');
+      preg_match('/\/(\d+)/i', $url, $video_id);
+      $video_id = trim($video_id[0], '/');
+
+      // Fetch vimeo thumbnail.
+      $json = file_get_contents('http://vimeo.com/api/v2/video/' . $video_id . '.json');
+      $response = drupal_json_decode($json);
+
+      $element = array(
+        '#cache' => array(
+          'expire' => CACHE_PERMANENT
+        ),
+        '#theme' => 'image',
+        '#path' => $response[0]['thumbnail_small'],
+      );
+    }
+    else {
+      $element['#cache']['expire'] = CACHE_PERMANENT;
+    }
   }
   return $element;
 }
