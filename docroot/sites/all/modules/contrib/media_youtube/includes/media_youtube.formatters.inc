@@ -80,21 +80,10 @@ function media_youtube_file_formatter_image_view($file, $display, $langcode) {
   $scheme = file_uri_scheme($file->uri);
   if ($scheme == 'youtube') {
     $wrapper = file_stream_wrapper_get_instance_by_uri($file->uri);
-    $image_style = $display['settings']['image_style'];
-    $valid_image_styles = image_style_options(FALSE);
-    if (empty($image_style) || !isset($valid_image_styles[$image_style])) {
-      $element = array(
-        '#theme' => 'image',
-        '#path' => $wrapper->getOriginalThumbnailPath(),
-      );
-    }
-    else {
-      $element = array(
-        '#theme' => 'image_style',
-        '#style_name' => $image_style,
-        '#path' => $wrapper->getLocalThumbnailPath(),
-      );
-    }
+    $element = array(
+      '#theme' => 'image',
+      '#path' => $wrapper->getOriginalThumbnailPath(),
+    );
     return $element;
   }
 }
