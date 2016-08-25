@@ -1,0 +1,179 @@
+<?php
+
+/**
+ *
+ * Include livefyre Library
+ *
+ */
+include 'Livefyre.php';
+use Livefyre\Core\Network;
+
+/**
+ *
+ * Implements hook_node_presave();
+ *
+ */
+function livefyre_collection_node_presave($node)
+{
+  
+  if ($node->type === "tour") {
+    $result         = db_select('livefyre_collection', 'lc')->fields('lc', array(
+      'networkName',
+      'networkKey',
+      'siteId',
+      'siteKey',
+      'userId',
+      'collectionName'
+    ))->OrderBy('nid', 'DESC')->execute()->fetchAssoc();
+    $networkName    = $result["networkName"];
+    $networkKey     = $result["networkKey"];
+    $siteId         = $result["siteId"];
+    $siteKey        = $result["siteKey"];
+    $userId         = $result["userId"];
+    $collectionName = $result["collectionName"];
+    
+    //Get the collection id for the particular node
+    $articleId = 'Nodes-' . $node->nid;
+    
+    $node->field_livefyre_article_id['und']['0']['value'] = 'Nodes-' . $node->nid;
+    $node->field_livefyre_site_id['und']['0']['value']    = $siteId;
+    $node->field_livefyre_network_id['und']['0']['value'] = $networkName . ".fyre.co";
+    
+    $encodedArticelId = base64_encode($articleId);
+    $curl             = curl_init();
+    $collectionIdURL  = "https://" . $networkName . ".bootstrap.fyre.co/bs3/" . $networkName . ".fyre.co/" . $siteId . "/" . $encodedArticelId . "/init";
+    curl_setopt($curl, CURLOPT_URL, $collectionIdURL);
+    curl_setopt($curl, CURLOPT_RETURNTRANSFER, true);
+    curl_setopt($curl, CURLOPT_SSL_VERIFYPEER, false);
+    $outputResult = json_decode(curl_exec($curl));
+    curl_close($curl);
+    $collectionId = $outputResult->collectionSettings->collectionId;
+    
+    
+    //Open a new network
+    $network       = Livefyre\Livefyre::getNetwork($networkName . '.fyre.co', $networkKey);
+    $site          = $network->getSite($siteId, $siteKey);
+    $userAuthToken = $network->buildUserAuthToken($userId, "Karthick", 5000);
+    
+    //Check if the collection is already created
+    if (empty($collectionId)) {
+      //Build Collection
+      $collection          = $site->buildCommentsCollection($collectionName . "-" . $node->field_event_time['und']['0']['value'] . "-" . $node->body['und']['0']['value'], $articleId, "http://acquiasandbox.com/");
+      $collectionMetaToken = utf8_encode($collection->buildCollectionMetaToken());
+      $curl                = curl_init();
+      curl_setopt_array($curl, array(
+        CURLOPT_RETURNTRANSFER => 1,
+        CURLOPT_URL => 'https://' . $networkName . '.quill.fyre.co/api/v3.0/site/' . $siteId . '/collection/create'
+      ));
+      $data_string = json_encode(array(
+        'collectionMeta' => $collectionMetaToken
+      ));
+      curl_setopt($curl, CURLOPT_CUSTOMREQUEST, "POST");
+      curl_setopt($curl, CURLOPT_POSTFIELDS, $data_string);
+      curl_setopt($curl, CURLOPT_HTTPHEADER, array(
+        'Content-Type: application/json',
+        'Content-Length: ' . strlen($data_string)
+      ));
+      curl_setopt($curl, CURLOPT_SSL_VERIFYPEER, false);
+      $resp        = curl_exec($curl);
+      $decodedResp = json_decode($resp);
+      
+      //Wait for the new collection to get processed
+      usleep(3000000);
+      
+      // Get the collection id for the newly created collection
+      $ch              = curl_init();
+      $collectionIdURL = "https://" . $networkName . ".bootstrap.fyre.co/bs3/" . $networkName . ".fyre.co/" . $siteId . "/" . $encodedArticelId . "/init";
+      curl_setopt($ch, CURLOPT_URL, $collectionIdURL);
+      curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+      curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
+      $outputRes = json_decode(curl_exec($ch));
+      curl_close($curl);
+      $collectionId = $outputRes->collectionSettings->collectionId;
+    }
+    ;
+    
+    //Collection is already there!.Create rules for the collection.
+    if (!empty($collectionId)) {
+      $convlat         = (float) $node->field_lattitude['und']['0']['value'];
+      $convlong        = (float) $node->field_longitude['und']['0']['value'];
+      $artistName      = $node->field_artist_name['und']['0']['value'];
+      $curl            = curl_init();
+      $rulesURL        = 'https://' . $networkName . '.admin.fyre.co/api/v3.0/urn:livefyre:network=' . $networkName . '.fyre.co:site=' . $siteId . ':collection=' . $collectionId . ':collectionRules/?lftoken=' . $userAuthToken;
+      $rulesArray      = array(
+        "name" => "Twitter rule",
+        "collectionId" => $collectionId,
+        "enabled" => true,
+        "premoderated" => false,
+        "source" => 2,
+        "stream" => array(
+          "query" => array(
+            "select" => array(
+              "twitter" => array(
+                "locations" => array(
+                  0 => array(
+                    "lat" => $convlat,
+                    "lon" => $convlong,
+                    "radius" => 1000
+                  )
+                ),
+                "queries" => array(
+                  "#prince"
+                )
+              )
+            )
+          )
+        )
+      );
+      //$rulesArray = array("name" => "Twitter rule", "collectionId" => $collectionId, "enabled" => true, "premoderated" => false, "source" => 2, "stream" => array("query" => array("select" => array("twitter" => array("locations" => array(0 => array("lat" => $convlat, "lon" => $convlong, "radius" => 50)), "queries" => array("#" . str_replace(' ', '', $artistName), $artistName))))));
+      //$rulesArray = array("name" => "Twitter rule specific to location ", "collectionId" => $collectionId, "enabled" => true, "premoderated" => false, "source" => 2, "stream" => array("query" => array("select" => array("twitter" => array("queries" => array($node -> body['und']['0']['value']), "trackReplies" => false)))));
+      $json_rulesArray = json_encode($rulesArray);
+      curl_setopt_array($curl, array(
+        CURLOPT_RETURNTRANSFER => 1,
+        CURLOPT_URL => $rulesURL
+      ));
+      curl_setopt($curl, CURLOPT_CUSTOMREQUEST, "POST");
+      curl_setopt($curl, CURLOPT_POSTFIELDS, $json_rulesArray);
+      curl_setopt($curl, CURLOPT_HTTPHEADER, array(
+        'Content-Type: application/json',
+        'Content-Length: ' . strlen($json_rulesArray)
+      ));
+      curl_setopt($curl, CURLOPT_SSL_VERIFYPEER, false);
+      $resp = curl_exec($curl);
+      curl_close($curl);
+    }
+  }
+}
+
+/**
+ * Implements hook_menu().
+ */
+function livefyre_collection_menu()
+{
+  $items                                 = array();
+  $items['livefyre-collection-settings'] = array(
+    'title' => 'Livefyre Collection Settings',
+    'page callback' => 'drupal_get_form',
+    'page arguments' => array(
+      'livefyre_collection_form'
+    ),
+    'access arguments' => array(
+      'access livefyre_collection forms'
+    ),
+    'type' => MENU_NORMAL_ITEM,
+    'file' => 'livefyrecollections.pages.inc'
+  );
+  return $items;
+}
+
+/**
+ * Implements hook_permission().
+ */
+function livefyre_collection_permission()
+{
+  return array(
+    'access livefyre_collection forms' => array(
+      'title' => t('Administer livefyre forms and livefyre form settings')
+    )
+  );
+}
