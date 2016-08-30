@@ -1,0 +1,78 @@
+<?php
+
+/**
+ * @file
+ * Install, update and uninstall functions for the livefyre module.
+ */
+
+/**
+ * Disable the module if Tour content type does not exist.
+ * Implements hook_requirements().
+ */
+function livefyre_collection_requirements($phase) {
+  $requirements = array();
+  if ($phase == 'install') {
+    $t = get_t();
+    $types = array_keys(node_type_get_types());
+
+    if (!in_array('tour', $types)) {
+      $requirements['livefyre_collection'] = array(
+        'description' => $t('Livefyre Collection module could not be enabled because Tour content type is missing.'),
+        'severity' => REQUIREMENT_ERROR,
+      );
+    }
+  }
+  return $requirements;
+}
+
+/**
+ * Implements hook_schema().
+ */
+function livefyre_collection_schema() {
+  $schema                        = array();
+  $schema['livefyre_collection'] = array(
+    'description' => 'Fields related to livefyre',
+    'fields' => array(
+      'nid' => array(
+        'type' => 'serial',
+        'unsigned' => TRUE,
+        'not null' => TRUE,
+        'description' => 'Primary Key: Unique category ID.'
+      ),
+      'networkName' => array(
+        'type' => 'varchar',
+        'length' => 255,
+        'not null' => TRUE
+      ),
+      'networkKey' => array(
+        'type' => 'varchar',
+        'length' => 255,
+        'not null' => TRUE
+      ),
+      'siteId' => array(
+        'type' => 'varchar',
+        'length' => 255,
+        'not null' => TRUE
+      ),
+      'siteKey' => array(
+        'type' => 'varchar',
+        'length' => 255,
+        'not null' => TRUE
+      ),
+      'userId' => array(
+        'type' => 'varchar',
+        'length' => 255,
+        'not null' => TRUE
+      ),
+      'collectionName' => array(
+        'type' => 'varchar',
+        'length' => 255,
+        'not null' => TRUE
+      )
+    ),
+    'primary key' => array(
+      'nid'
+    )
+  );
+  return $schema;
+}

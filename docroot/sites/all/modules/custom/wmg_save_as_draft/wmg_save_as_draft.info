@@ -1,0 +1,13 @@
+name = wmg save as draft
+core = 7.x
+package = Other
+version = 7.x-1.1
+project = wmg_save_as_draft
+dependencies[] = ctools
+dependencies[] = features
+dependencies[] = node
+dependencies[] = views
+features[ctools][] = views:views_default:3.0
+features[features_api][] = api:2
+features[user_permission][] = bypass node access
+features[views_view][] = save_as_draft

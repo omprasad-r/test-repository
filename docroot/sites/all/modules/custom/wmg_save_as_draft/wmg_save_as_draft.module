@@ -1,0 +1,7 @@
+<?php
+/**
+ * @file
+ * Code for the wmg save as draft feature.
+ */
+
+include_once 'wmg_save_as_draft.features.inc';

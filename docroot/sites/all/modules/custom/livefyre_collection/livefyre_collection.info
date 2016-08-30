@@ -1,0 +1,8 @@
+name = Livefyre Collection
+description = "Programmatically create livefyre collections and curate rules for tour nodes."
+core = 7.x
+
+; NEW LINE
+configure = livefyre-collection-settings
+
+
