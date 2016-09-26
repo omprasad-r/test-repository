@@ -357,6 +357,10 @@ function acsf_openid_ax_uri_mapping() {
     // Remote picture URI of the user. The handling code fetches the image and
     // saves it as a local user picture.
     'http://axschema.org/media/image/default' => array('picture', 'account'),
+    // A flag to indicate that the user logging in is the owner of the site and
+    // if the account is lacking the site's admin role then it should be granted
+    // to it.
+    'http://drupalgardens.com/axschema/is_owner' => array('is_owner'),
     // Date of the picture's last modification, so we can avoid downloading it.
     'http://drupalgardens.com/axschema/picture_time' => array('picture_time'),
     // Roles to be granted on the site. The 'role_name' attribute can hold only
@@ -412,6 +416,7 @@ function acsf_openid_update_ax_data(array $response, $account) {
   $picture_time = 0;
   $role_name = NULL;
   $role_names = array();
+  $site_owner_role_names = array();
 
   foreach ($mapping as $ax_uri => $local_ax_field) {
     // The response has values for some fields we requested. We assume the
@@ -437,6 +442,28 @@ function acsf_openid_update_ax_data(array $response, $account) {
         case 'role_names':
           if ($response['openid.ax.value.role_names']) {
             $role_names = explode("\t", $response['openid.ax.value.role_names']);
+          }
+          break;
+
+        case 'is_owner':
+          // If the account logging in is the owner of the site, then let's make
+          // sure that the account has the necessary roles.
+          if ($response['openid.ax.value.is_owner']) {
+            // The centralized role management feature above with the role_names
+            // attribute sets up an array of role names to be granted later in
+            // this function to the account logging in. To reuse the same logic
+            // gather the role names the same way. Get the Drupal 7 core
+            // variable that stores the admin role's id and check for the
+            // gardens distro specific site owner role id variable as well.
+            $rids = array(
+              variable_get('user_admin_role', 0),
+              variable_get('gardens_site_owner_role', 0),
+            );
+            foreach ($rids as $rid) {
+              if ($rid && $role = user_role_load($rid)) {
+                $site_owner_role_names[] = $role->name;
+              }
+            }
           }
           break;
 
@@ -504,6 +531,8 @@ function acsf_openid_update_ax_data(array $response, $account) {
   if (!$role_names && $role_name) {
     $role_names = array($role_name);
   }
+  // Add the site owner roles as well.
+  $role_names = array_merge($role_names, $site_owner_role_names);
   foreach ($role_names as $role_name) {
     $role = user_role_load_by_name($role_name);
     if ($role && !isset($account->roles[$role->rid])) {
