@@ -6,6 +6,16 @@
  */
 
 /**
+ * Initial delimiter string to enclose code added by acsf-init.
+ */
+define('ACSF_INIT_CODE_DELIMITER_START', '// ===== Added by acsf-init, please do not delete. Section start. =====');
+
+/**
+ * Closing delimiter string to enclose code added by acsf-init.
+ */
+define('ACSF_INIT_CODE_DELIMITER_END', '// ===== Added by acsf-init, please do not delete. Section end. =====');
+
+/**
  * Implements hook_drush_command().
  */
 function acsf_init_drush_command() {
@@ -15,7 +25,7 @@ function acsf_init_drush_command() {
       'callback' => 'drush_acsf_init',
       'description' => dt('Installs/updates the non-standard Drupal components for this repository to be compatible with Acquia Site Factory. This command will update in place, so there is no harm in running it multiple times.'),
       'options' => array(
-        'skip-default-settings' => dt('Do not overwrite the default settings.php file. Use this option when installing ACSF in a local environment.'),
+        'skip-default-settings' => dt('Do not edit the default settings.php file. Use this option when the edited default settings.php is causing issues in a local environment.'),
       ),
     ),
     'acsf-connect-factory' => array(
@@ -104,10 +114,6 @@ function drush_acsf_init() {
   // Copy the required files.
   foreach (acsf_init_get_required_files($repo_root) as $location) {
     $file = $location['filename'];
-    // Skip the default settings.php file if --skip-default-settings is set.
-    if ($skip_default_settings && $file == 'settings.php' && $location['source'] == 'sites/default') {
-      continue;
-    }
 
     $dest = sprintf('%s/%s', $location['dest'], $file);
     // Some files only contain a destination as they are already in place.
@@ -149,6 +155,78 @@ function drush_acsf_init() {
     }
   }
 
+  foreach (acsf_init_deprecated_files($repo_root) as $location) {
+    $file = sprintf('%s/%s', $location['dest'], $location['filename']);
+    if (file_exists($file)) {
+      if (md5_file($file) === $location['md5']) {
+        // If the file was not modified from the ACSF deprecated version, remove
+        // it.
+        drush_print(dt('Removing deprecated file !file.', array(
+          '!file' => $file,
+        )));
+        if (unlink($file)) {
+          drush_log(dt('Unlink success: !file', array('!file' => $file)), 'success', 'success');
+        }
+        else {
+          drush_set_error('UNLINK ERROR', dt('Unable to remove file at !file.', array('!file' => $file)));
+        }
+      }
+      elseif (drush_confirm(dt('A deprecated file was detected at !file.  You might not want to remove it if it contains only your own modifications.  Remove it?', array('!file' => $file)))) {
+        if (unlink($file)) {
+          drush_log(dt('Unlink success: !file', array('!file' => $file)), 'success', 'success');
+        }
+        else {
+          drush_set_error('UNLINK ERROR', dt('Unable to remove file at !file.', array('!file' => $file)));
+        }
+      }
+    }
+  }
+
+  // The default settings.php file needs special handling. On the ACSF
+  // infrastructure our own business logic needs to execute while on ACE or on
+  // a local environment the default settings.php could be used to drive other
+  // sites. For this reason the ACSF specific code will be included in the file
+  // instead of rewriting it to contain only our code.
+  if (!$skip_default_settings) {
+    drush_print(dt('Updating the default settings.php file with the ACSF specific business logic.'));
+    $edit_allowed = TRUE;
+    $default_settings_php_path = $repo_root . '/docroot/sites/default/settings.php';
+    if (file_exists($default_settings_php_path)) {
+      $edit_allowed = drush_confirm(dt('Destination file exists, continue?'));
+    }
+    if ($edit_allowed !== FALSE) {
+      // If the file exists, it could be set to 0444, so we have to ensure that
+      // it is writable.
+      if (file_exists($default_settings_php_path) && !is_writable($default_settings_php_path)) {
+        if (!chmod($default_settings_php_path, 0666)) {
+          drush_log(dt('Chmod Error: !file', array('!file' => $file)), 'error');
+        }
+      }
+      if (file_exists($default_settings_php_path)) {
+        // If the current default settings.php file has the same content as
+        // acsf.legacy.default.settings.php then this file can be rewritten
+        // according to the new approach. A simple strict equality check should
+        // be enough since the acsf-init-verify checked the deployed files by
+        // comparing md5 hashes, so even a single character difference would
+        // have caused an error in the code deployment process.
+        $current_default_settings_php = file_get_contents($default_settings_php_path);
+        $legacy_default_settings_php = file_get_contents($lib_path . '/sites/default/acsf.legacy.default.settings.php');
+        if ($current_default_settings_php === $legacy_default_settings_php) {
+          acsf_init_default_settings_php_create($default_settings_php_path);
+        }
+        else {
+          // Update the default settings.php file with the latest ACSF code.
+          acsf_init_default_settings_php_update($default_settings_php_path);
+        }
+      }
+      else {
+        // The default settings.php file does not exist yet, so create a new
+        // file with the necessary include.
+        acsf_init_default_settings_php_create($default_settings_php_path);
+      }
+    }
+  }
+
   // Verify that the files are in sync.
   clearstatcache();
   $result = drush_acsf_init_verify();
@@ -156,6 +234,71 @@ function drush_acsf_init() {
   if ($result) {
     drush_print(dt('Be sure to commit any changes to your repository before deploying.'));
   }
+}
+
+/**
+ * (Re-)creates the default settings.php file.
+ *
+ * @param string $default_settings_php_path
+ *   The path to the default settings.php file.
+ */
+function acsf_init_default_settings_php_create($default_settings_php_path) {
+  $result = file_put_contents($default_settings_php_path, "<?php\n\n" . acsf_init_default_settings_php_include_get() . "\n");
+  if ($result) {
+    drush_log(dt('File create success: sites/default/settings.php'), 'success');
+  }
+  else {
+    drush_log(dt('File create error: sites/default/settings.php'), 'error');
+  }
+}
+
+/**
+ * Updates the default settings.php with the ACSF specific script include.
+ *
+ * @param string $default_settings_php_path
+ *   The path to the default settings.php file.
+ */
+function acsf_init_default_settings_php_update($default_settings_php_path) {
+  $default_settings_php_contents = file_get_contents($default_settings_php_path);
+  // Check if the default settings.php contains our code block. The m modifier
+  // makes it possible to match text over multiple lines and the s modifier
+  // allows the . wildcard to match newline characters.
+  if (!preg_match('/' . preg_quote(ACSF_INIT_CODE_DELIMITER_START, '/') . '.*?' . preg_quote(ACSF_INIT_CODE_DELIMITER_END, '/') . '/ms', $default_settings_php_contents)) {
+    // Code block not detected: add it after the opening php tag.
+    drush_log(dt('ACSF include not detected in sites/default/settings.php.'), 'notice');
+    // Using preg_replace instead of str_replace to be able to control how many
+    // times the replace gets executed.
+    $default_settings_php_contents = preg_replace('/<\?php/', "<?php\n\n" . acsf_init_default_settings_php_include_get() . "\n", $default_settings_php_contents, 1, $count);
+    if ($count === 0) {
+      drush_log(dt('Could not find <?php tag in sites/default/settings.php.'), 'error');
+    }
+  }
+  else {
+    // Code block found: update it with the latest version.
+    drush_log(dt('ACSF include detected in sites/default/settings.php.'), 'notice');
+    $default_settings_php_contents = preg_replace('/' . preg_quote(ACSF_INIT_CODE_DELIMITER_START, '/') . '.*?' . preg_quote(ACSF_INIT_CODE_DELIMITER_END, '/') . '/ms', acsf_init_default_settings_php_include_get(), $default_settings_php_contents);
+  }
+  $result = file_put_contents($default_settings_php_path, $default_settings_php_contents);
+  if ($result) {
+    drush_log(dt('File edit success: sites/default/settings.php'), 'success');
+  }
+  else {
+    drush_log(dt('File edit error: sites/default/settings.php'), 'error');
+  }
+}
+
+/**
+ * Returns the code to be added to the default settings.php file.
+ */
+function acsf_init_default_settings_php_include_get() {
+  // Heredoc does not handle constants.
+  $delimiter_start = ACSF_INIT_CODE_DELIMITER_START;
+  $delimiter_end = ACSF_INIT_CODE_DELIMITER_END;
+  return <<<INCLUDE
+${delimiter_start}
+include dirname(__FILE__) . '/acsf.settings.php';
+${delimiter_end}
+INCLUDE;
 }
 
 /**
@@ -309,10 +452,6 @@ function drush_acsf_init_verify() {
   $error = FALSE;
   foreach (acsf_init_get_required_files($repo_root) as $location) {
     $file = $location['filename'];
-    // Skip the default settings.php file if --skip-default-settings is set.
-    if ($skip_default_settings && $file == 'settings.php' && $location['source'] == 'sites/default') {
-      continue;
-    }
 
     $dest = sprintf('%s/%s', $location['dest'], $file);
     // Some files only contain a destination as they are already in place.
@@ -354,6 +493,46 @@ function drush_acsf_init_verify() {
     }
   }
 
+  // Now check for deprecated files.
+  foreach (acsf_init_deprecated_files($repo_root) as $location) {
+    $file = sprintf('%s/%s', $location['dest'], $location['filename']);
+    if (file_exists($file)) {
+      if (md5_file($file) === $location['md5']) {
+        $error = TRUE;
+        drush_set_error('FILE DEPRECATED', dt('A deprecated file was found at !file.  Re-running acsf-init should be sufficient to remove it.', array('!file' => $file)));
+      }
+      else {
+        // Not setting this as an error because the file appears to be a custom
+        // file added by the customer (md5 didn't match).  Notify the customer
+        // about the anomaly.
+        drush_log(dt('A deprecated file was found at !file, but appears to have been modified.  This may be ok to leave in place if it only contains your customizations, but the ACSF RewriteRule directives should be manually removed.', array('!file' => $file)), 'warning', 'warning');
+      }
+    }
+  }
+
+  // Skip the default settings.php file if --skip-default-settings is set.
+  if (!$skip_default_settings) {
+    // Check that the default settings.php contains the necessary ACSF business
+    // logic.
+    $acsf_business_logic = acsf_init_default_settings_php_include_get();
+    // Break up the business logic by lines.
+    $acsf_business_logic_fragments = explode("\n", $acsf_business_logic);
+    // Examine each line in the business logic to make sure it appears in the
+    // file. This way minor indentation changes will not cause failure.
+    $missing_piece = FALSE;
+    $default_settings_php_contents = file_get_contents($repo_root . '/docroot/sites/default/settings.php');
+    foreach ($acsf_business_logic_fragments as $line) {
+      if (strpos($default_settings_php_contents, $line) === FALSE) {
+        $missing_piece = TRUE;
+        break;
+      }
+    }
+    if ($missing_piece) {
+      $error = TRUE;
+      drush_set_error('FILE OUT OF DATE', dt('The default settings.php file is out of date.'));
+    }
+  }
+
   if ($error) {
     drush_print(dt('Please run drush acsf-init to correct these problems and commit the resulting code changes.'));
     return FALSE;
@@ -391,6 +570,13 @@ function drush_acsf_uninstall() {
         drush_log(dt('Error'), 'error', 'error');
       }
     }
+  }
+
+  // Remove the ACSF specific business logic from the default setting.php.
+  if (file_exists($repo_root . '/docroot/sites/default/settings.php')) {
+    $default_settings_php_contents = file_get_contents($repo_root . '/docroot/sites/default/settings.php');
+    $default_settings_php_contents = preg_replace('/' . preg_quote(ACSF_INIT_CODE_DELIMITER_START, '/') . '.*?' . preg_quote(ACSF_INIT_CODE_DELIMITER_END, '/') . '/sm', '', $default_settings_php_contents);
+    file_put_contents($repo_root . '/docroot/sites/default/settings.php', $default_settings_php_contents);
   }
 }
 
@@ -500,23 +686,31 @@ function acsf_init_get_required_files($repo_root) {
       'dest' => sprintf('%s/sites/g', DRUPAL_ROOT),
     ),
     array(
-      'filename' => 'settings.php',
+      'filename' => 'acsf.settings.php',
       'source' => 'sites/default',
       'dest' => sprintf('%s/sites/default', DRUPAL_ROOT),
-      'mod' => 0644,
-    ),
-    array(
-      'filename' => 'acsf_cron',
-      'dest' => $acsf_path . '/scripts',
-      'mod' => 0550,
-      'test_executable' => TRUE,
-    ),
-    array(
-      'filename' => 'acsf_ssh',
-      'dest' => $acsf_path . '/scripts',
-      'mod' => 0550,
-      'test_executable' => TRUE,
     ),
   );
 
+}
+
+/**
+ * Returns a list of files that need to be removed from earlier releases.
+ *
+ * @param string $repo_root
+ *   Path to the repository's root directory.
+ *
+ * @return array
+ *   An array of arrays, where each of the nested arrays contains metadata about
+ *   a deprecated file.
+ */
+function acsf_init_deprecated_files($repo_root) {
+  return array(
+    array(
+      'filename' => '.htaccess',
+      'dest' => sprintf('%s/sites/g', DRUPAL_ROOT),
+      // MD5 of the released version of the file in 1.29.
+      'md5' => 'b2e8e6ad6227190c4e3dded54d041d48',
+    ),
+  );
 }
