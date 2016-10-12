@@ -1,0 +1,7 @@
+<IfModule mod_rewrite.c>
+  RewriteEngine on
+  # ACSF requirement: allow access to apc_rebuild.php.
+  RewriteCond %{REQUEST_URI} !^\/sites\/g\/apc_rebuild\.php$ [NC]
+  # Deny access to any other PHP files that do not match the rules above.
+  RewriteRule "\.php$" - [F,L]
+</IfModule>
