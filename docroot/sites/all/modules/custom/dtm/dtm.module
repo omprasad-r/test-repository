@@ -1,0 +1,161 @@
+<?php
+
+/**
+ * @file
+ * DTM allows arbitrary insertion of code into the head of the page
+ * based on path selection.
+ */
+
+/**
+ * Implements hook_menu().
+ */
+function dtm_menu() {
+  $items = array();
+  $items['admin/config/development/dtm'] = array(
+    'title' => 'DTM',
+    'description' => 'Configure <em>DTM</em>.',
+    'page callback' => 'dtm_overview',
+    'file' => 'dtm.admin.inc',
+    'access arguments' => array('administer dtm'),
+  );
+  $items['admin/config/development/dtm/add'] = array(
+    'title' => 'Add New DTM',
+    'page callback' => 'drupal_get_form',
+    'page arguments' => array('dtm_add_profile'),
+    'file' => 'dtm.admin.inc',
+    'access arguments' => array('administer dtm'),
+    'type' => MENU_CALLBACK,
+  );
+  $items['admin/config/development/dtm/%dtm_profile'] = array(
+    'title' => 'Edit DTM',
+    'page callback' => 'drupal_get_form',
+    'page arguments' => array('dtm_edit_profile', 4),
+    'file' => 'dtm.admin.inc',
+    'access arguments' => array('administer dtm'),
+    'type' => MENU_CALLBACK,
+  );
+  $items['admin/config/development/dtm/%dtm_profile/delete'] = array(
+    'title' => 'Delete DTM',
+    'page callback' => 'drupal_get_form',
+    'page arguments' => array('dtm_delete_profile_confirm', 4),
+    'file' => 'dtm.admin.inc',
+    'access arguments' => array('administer dtm'),
+    'type' => MENU_CALLBACK,
+  );
+  return $items;
+}
+
+
+/**
+ * Implements hook_forms().
+ */
+function dtm_forms($form_id, $arg) {
+  return array(
+    'dtm_add_profile' => array(
+      'callback' => 'dtm_edit_profile',
+    ),
+  );
+}
+
+
+/**
+ * Implements hook_permission().
+ */
+function dtm_permission() {
+  return array(
+    'administer dtm' => array(
+      'title' => t('Administer dtm'),
+      'description' => t('Insert code into the head of the page based on path selection.'),
+      'restrict access' => TRUE,
+    ),
+  );
+}
+
+
+/**
+ * Argument load handler for %dtm_profile URL placeholders
+ */
+function dtm_profile_load($arg) {
+  $settings = variable_get('dtm_profiles', array());
+  return isset($settings[$arg]) ? $settings[$arg] : FALSE;
+}
+
+
+/**
+ * Implements hook_process_html().
+ *
+ * This is used to inject any code onto the appropriate pages.
+ */
+function dtm_process_html(&$vars) {
+  $output = array();
+
+  $node = menu_get_object(); // This returns node details...
+
+  // Fetch the profile information stored in the DB.
+  $settings = variable_get('dtm_profiles', array());
+
+  // Allow other modules to alter profile settings. Additional profiles may be added here.
+  drupal_alter(basename(__FILE__, '.module') . '_profiles', $settings);
+
+  // If applicable, append each profile's code to the output.
+  foreach ($settings as $profile) {
+
+    $code_ext = '<script>
+
+						digitalData={
+						                settings:{
+						                                reportSuites:"wmggardensdevdtm"
+						                },
+						                content:{
+						                                artist:"[node:field_artist_name]",
+						                                label:"[node:field_artist_name1]"
+						                }
+						}
+				
+						digitalData.page.pageInfo.pageName = "[node:title]";
+						digitalData.page.category.primaryCategory = "";
+						digitalData.page.pageInfo.server = "[site:name] ";
+						digitalData.user.profile.profileID = Drupal.settings.server_variables.user_id;
+						
+						digitalData.page.category.pageType  = "[node:content-type]";
+						
+						digitalData.content.author  = "[node:author]";
+						digitalData.content.name  = Drupal.settings.server_variables.site_name + ":" + Drupal.settings.server_variables.entity_subtype;
+						digitalData.content.title  = Drupal.settings.server_variables.entity_title;
+						digitalData.content.date  = "[node:field_event_datetime]";
+						digitalData.content.category  = "";
+						digitalData.content.name  = "";
+						digitalData.content.title  = "[node:title]";
+						
+				</script>';
+
+    if (!path_is_admin(current_path())) {
+      if ($profile['scope'] != "page_bottom") {
+        $vars[$profile['scope']] .= token_replace($code_ext, array('node' => $node), array(
+          'sanitize' => FALSE,
+          'clear' => TRUE,
+          'weight' => 999
+        ));
+        $vars[$profile['scope']] .= token_replace("<script>" . $profile["code"] . "</script>", array('node' => $node), array(
+          'sanitize' => FALSE,
+          'clear' => TRUE,
+          'weight' => 999
+        ));
+        $vars[$profile['scope']] .= token_replace("<script async src='" . $profile['dtmcodeheader'] . "'
+		  ></script>", array('node' => $node), array(
+          'sanitize' => FALSE,
+          'clear' => TRUE,
+          'weight' => 999
+        ));
+      }
+      $profile['scope'] = "page_bottom";
+      if ($profile['scope'] == "page_bottom") {
+        $vars[$profile['scope']] .= token_replace('<script type="text/javascript">_satellite.pageBottom();</script>', array('node' => $node), array(
+          'sanitize' => FALSE,
+          'clear' => TRUE,
+          'weight' => 999
+        ));
+      }
+    }
+  }
+}
