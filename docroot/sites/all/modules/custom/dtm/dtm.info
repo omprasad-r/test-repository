@@ -1,5 +1,5 @@
 name = DTM
-description = Allows arbitrary insertion of code into the head and footer
+description = Allows abritrary insertion of code into the head and footer
 core = 7.x
 configure = admin/config/development/dtm
 dependencies[] = token

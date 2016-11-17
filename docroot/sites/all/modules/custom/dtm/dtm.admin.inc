@@ -27,8 +27,8 @@ function dtm_overview() {
     if (in_array($settings, variable_get('dtm_profiles', array()))) {
       // This profile is in the DB. It can be modified through the Web UI.
       $ops = implode(' | ', array(
-        l(t('Edit'), 'admin/config/development/dtm/' . $delta),
-        l(t('Delete'), 'admin/config/development/dtm/' . $delta . '/delete'),
+          l(t('Edit'), 'admin/config/development/dtm/' . $delta),
+          l(t('Delete'), 'admin/config/development/dtm/' . $delta . '/delete'),
       ));
     }
     else {
@@ -45,12 +45,10 @@ function dtm_overview() {
   }
 
   if (!empty($rows)) {
-    $rows[] = array(
-      array(
-        'colspan' => count($header),
-        'data' => l(t('Add another profile'), 'admin/config/development/dtm/add'),
-      )
-    );
+    $rows[] = array(array(
+      'colspan' => count($header),
+      'data' => l(t('Add another profile'), 'admin/config/development/dtm/add'),
+    ));
   }
 
   return array(
@@ -101,19 +99,19 @@ function dtm_edit_profile($form, &$form_state, $profile = array()) {
     '#title' => t('Extend Code'),
     '#description' => t('Enter the code you would like to insert into the footer of the code.<br> Example:digitalData.page.pageInfo.pageName:"[node:title]"'),
     '#required' => TRUE,
-    '#default_value' => $profile['code'],
-  );
-  $form['token_help'] = array(
-    '#title' => t('Replacement patterns'),
-    '#type' => 'fieldset',
-    '#collapsible' => TRUE,
-    '#collapsed' => TRUE,
-  );
+    '#default_value' => $profile['code'],	    
+	  );
+   $form['token_help'] = array(
+        '#title' => t('Replacement patterns'),
+        '#type' => 'fieldset',
+        '#collapsible' => TRUE,
+        '#collapsed' => TRUE,
+     );
 
-  $form['token_help']['help'] = array(
-    '#markup' => theme('token_tree', array('token_types' => array('node'))),
-  );
-  $form['scope'] = array(
+   $form['token_help']['help'] = array(
+        '#markup' => theme('token_tree', array('token_types' => array('node'))),
+      );
+   $form['scope'] = array(
     '#type' => 'hidden',
     '#title' => t('Scope of addition'),
     '#description' => t('Which section of the head would you like this snippet appended to?'),
@@ -124,6 +122,9 @@ function dtm_edit_profile($form, &$form_state, $profile = array()) {
     '#default_value' => "head",
     '#required' => TRUE,
   );
+
+
+	  
   $form['submit'] = array(
     '#type' => 'submit',
     '#value' => t('Save'),
@@ -142,7 +143,7 @@ function dtm_edit_profile_validate($form, &$form_state) {
   if (preg_match('/[^a-z0-9\-]/', $form_state['values']['name'])) {
     form_set_error('name', t('The name should only contain lower case letters, numbers and hyphens.'));
   }
-  elseif (($form_state['values']['name'] != $form_state['values']['name_orig']) && (isset($settings[$form_state['values']['name']]))) {
+  elseif ( ($form_state['values']['name'] != $form_state['values']['name_orig']) && (isset($settings[$form_state['values']['name']])) ) {
     form_set_error('name', t('This name has already been used. Please try another.'));
   }
 }
@@ -160,8 +161,8 @@ function dtm_edit_profile_submit($form, &$form_state) {
 
 
   $settings[$form_state['values']['name']] = array(
-    'name' => $form_state['values']['name'],
-    'code' => trim($form_state['values']['code']),
+    'name'  => $form_state['values']['name'],
+    'code'  => trim($form_state['values']['code']),
     'scope' => $form_state['values']['scope'],
     'dtmcodeheader' => $form_state['values']['dtmcodeheader'],
   );
@@ -192,8 +193,11 @@ function dtm_delete_profile_confirm($form, &$form_state, $profile) {
  */
 function dtm_delete_profile_confirm_submit($form, &$form_state) {
   $settings = variable_get('dtm_profiles', array());
+
   unset($settings[$form['#profile']['name']]);
+
   variable_set('dtm_profiles', $settings);
+
   $form_state['redirect'] = 'admin/config/development/dtm';
 }
 
