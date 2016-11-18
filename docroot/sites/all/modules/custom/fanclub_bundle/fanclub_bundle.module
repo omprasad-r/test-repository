@@ -8,15 +8,13 @@
 /**
  * Implements hook_menu().
  */
-
  function fanclub_bundle_menu() {
-
   $items = array();
 
   $items['admin/config/people/fanclub-bundle'] = array(
-  'title' => 'Fanclub Redemption Workflow',
+    'title' => 'Fanclub Redemption Workflow',
     'description' => 'Configure redemption workflow.',
-  'page callback' => 'drupal_get_form',
+    'page callback' => 'drupal_get_form',
     'page arguments' => array('fanclub_workflow_form'),
     'access arguments' => array('administer users'),
     'type' => MENU_NORMAL_ITEM,
@@ -25,112 +23,117 @@
   return $items;
 }
 
-
+/**
+ * ToDo: Om, please provide a function description and hook implementation if applicable
+ * Such as: Implements hook_form_alter()
+ */
 function fanclub_bundle_form_user_register_form_alter(&$form, &$form_state, $form_id) {
   $form['#validate'][] = 'fanclub_bundle_validate_register_form';
   $form['#submit'][] = 'fanclub_bundle_submit';
-  
 }
 
+/**
+ * ToDo: Om, please provide a function description and hook implementation if applicable
+ */
 function fanclub_bundle_form_details(&$form, &$form_state) {
-
   $fetched_redemption_code = $form_state['values'][variable_get('redemption_code_field')]['und'][0]['value'];
-  
+
   $code_node_name = variable_get('redemption_code_node');
 
   $code_available_name = 'field_data_' . variable_get('redemption_code_avl');
-  
+
   $code_available_value = variable_get('redemption_code_avl') . '_value';
-  
+
   $query = db_select('node', 'n');
   $query->join($code_available_name, 'a', 'n.nid = a.entity_id');
-  $query
-  ->fields('a' , array($code_available_value , 'entity_id'))
-  ->condition('n.status', '1')
-  ->where('(n.type = :nodename)', array(':nodename' => $code_node_name))
-  ->where('(n.title = :title)', array(':title' => $fetched_redemption_code));
+  $query->fields('a' , array($code_available_value , 'entity_id'))
+    ->condition('n.status', '1')
+    ->where('(n.type = :nodename)', array(':nodename' => $code_node_name))
+    ->where('(n.title = :title)', array(':title' => $fetched_redemption_code));
 
   $check_validcode = $query->execute()->fetchAssoc();
 
   return $check_validcode;
-
 }
 
+/**
+ * ToDo: Om, please provide a function description and hook implementation if applicable
+ */
 function fanclub_bundle_validate_register_form(&$form, &$form_state) {
-
   $code_status = fanclub_bundle_form_details($form, $form_state);
   $invalid_errmsg = variable_get('invalid_code_message');
   $used_errmsg = variable_get('used_code_message');
 
   if (!$code_status) {
-  form_set_error('field_redemption_code', check_plain(t($invalid_errmsg)));
+    form_set_error('field_redemption_code', check_plain(t($invalid_errmsg)));
   }
   else {
-  if ($code_status['field_available_value'] == "No") {
-  form_set_error('field_redemption_code', check_plain(t($used_errmsg)));
+    if ($code_status['field_available_value'] == "No") {
+      form_set_error('field_redemption_code', check_plain(t($used_errmsg)));
+    }
   }
-  } 
-
 }
 
-
+/**
+ * ToDo: Om, please provide a function description and hook implementation if applicable
+ */
 function fanclub_bundle_submit(&$form, &$form_state) {
-
   $code_associated_node = fanclub_bundle_form_details($form, $form_state);
 
   if ($code_associated_node['entity_id']) {
-  $node = node_load($code_associated_node['entity_id']);
-  $node -> field_available['und'][0]['value'] = "No";
-  node_save($node);
+    $node = node_load($code_associated_node['entity_id']);
+    $node -> field_available['und'][0]['value'] = "No";
+    node_save($node);
   }
+}
 
-  }
-
+/**
+ * ToDo: Om, please provide a function description and hook implementation if applicable
+ */
 function fanclub_workflow_form($form, &$form_state) {
-
   $form['redemption_code_field'] = array(
-  '#type' => 'textfield',
-  '#title' => t('Redemption Code Field'),
-  '#default_value' => variable_get('redemption_code_field', 'field_redemption_code'),
-  '#size' => 100,
-  '#required' => TRUE,
-  '#description' => t("Machine Name of the redemption code field in the registration form")
+    '#type' => 'textfield',
+    '#title' => t('Redemption Code Field'),
+    '#default_value' => variable_get('redemption_code_field', 'field_redemption_code'),
+    '#size' => 100,
+    '#required' => TRUE,
+    '#description' => t("Machine Name of the redemption code field in the registration form"),
   );
 
-   $form['redemption_code_node'] = array(
-  '#type' => 'textfield',
-  '#title' => t('Redemption Code Node'),
-  '#size' => 100,
-  '#default_value' => variable_get('redemption_code_node', 'redemption_codes'),
-  '#required' => TRUE,
-  '#description' => t("Machine name of the node where redemption codes are added/imported")
+  $form['redemption_code_node'] = array(
+    '#type' => 'textfield',
+    '#title' => t('Redemption Code Node'),
+    '#size' => 100,
+    '#default_value' => variable_get('redemption_code_node', 'redemption_codes'),
+    '#required' => TRUE,
+    '#description' => t("Machine name of the node where redemption codes are added/imported"),
   );
-  
+
   $form['redemption_code_avl'] = array(
-  '#type' => 'textfield',
-  '#title' => t('Redemption Code Available Field'),
-  '#size' => 100,
-  '#default_value' => variable_get('redemption_code_avl', 'field_available'),
-  '#required' => TRUE,
-  '#description' => t("The machine name of available status field in the <em>redemption code</em>'s node")
+    '#type' => 'textfield',
+    '#title' => t('Redemption Code Available Field'),
+    '#size' => 100,
+    '#default_value' => variable_get('redemption_code_avl', 'field_available'),
+    '#required' => TRUE,
+    '#description' => t("The machine name of available status field in the <em>redemption code</em>'s node"),
   );
-  
+
   $form['invalid_code_message'] = array(
-  '#type' => 'textarea',
-  '#title' => t('Error message for invalid Code'),
-  '#rows' => 3,
-  '#default_value' => variable_get('invalid_code_message', 'Enter Valid Redemption Code'),
-  '#required' => TRUE,
-  '#description' => t("Error message for invalid Code")
+    '#type' => 'textarea',
+    '#title' => t('Error message for invalid Code'),
+    '#rows' => 3,
+    '#default_value' => variable_get('invalid_code_message', 'Enter Valid Redemption Code'),
+    '#required' => TRUE,
+    '#description' => t("Error message for invalid Code"),
   );
-  
+
   $form['used_code_message'] = array(
-  '#type' => 'textarea',
-  '#title' => t('Error message for Already Used Code'),
-  '#rows' => 3,
-  '#default_value' => variable_get('used_code_message', 'The code you have entered has been used already. Please provide a new code.'),
-  '#required' => TRUE,
-  '#description' => t("Error message for Already Used Code")
+    '#type' => 'textarea',
+    '#title' => t('Error message for Already Used Code'),
+    '#rows' => 3,
+    '#default_value' => variable_get('used_code_message', 'The code you have entered has been used already. Please provide a new code.'),
+    '#required' => TRUE,
+    '#description' => t("Error message for Already Used Code"),
   );
 
   return system_settings_form($form);
