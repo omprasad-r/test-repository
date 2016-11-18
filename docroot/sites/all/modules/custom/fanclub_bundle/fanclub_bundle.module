@@ -38,15 +38,19 @@ function fanclub_bundle_form_details(&$form, &$form_state) {
   
   $code_node_name = variable_get('redemption_code_node');
 
-  $code_available_name = variable_get('redemption_code_avl');
+  $code_available_name = 'field_data_' . variable_get('redemption_code_avl');
+  
+  $code_available_value = variable_get('redemption_code_avl') . '_value';
+  
+  $query = db_select('node', 'n');
+  $query->join($code_available_name, 'a', 'n.nid = a.entity_id');
+  $query
+  ->fields('a' , array($code_available_value , 'entity_id'))
+  ->condition('n.status', '1')
+  ->where('(n.type = :nodename)', array(':nodename' => $code_node_name))
+  ->where('(n.title = :title)', array(':title' => $fetched_redemption_code));
 
-  $sql_validcode = "SELECT field_data_" . $code_available_name . "." . $code_available_name . "_value,nid FROM {node} node INNER JOIN {field_data_" . $code_available_name . "} field_data_" . $code_available_name . "
-	ON node.nid = field_data_" . $code_available_name . ".entity_id AND field_data_" . $code_available_name . ".entity_type = 'node' WHERE (( (node.status = '1') AND (node.type IN  (:nodename)) AND node.title = :title))";
-
-  $check_validcode = db_query($sql_validcode, array(
-  ':title' => $fetched_redemption_code,
-  ':nodename' => $code_node_name
-  ))->fetchAssoc(); 
+  $check_validcode = $query->execute()->fetchAssoc();
 
   return $check_validcode;
 
@@ -59,16 +63,11 @@ function fanclub_bundle_validate_register_form(&$form, &$form_state) {
   $used_errmsg = variable_get('used_code_message');
 
   if (!$code_status) {
-
   form_set_error('field_redemption_code', check_plain(t($invalid_errmsg)));
-
   }
   else {
-
   if ($code_status['field_available_value'] == "No") {
-
   form_set_error('field_redemption_code', check_plain(t($used_errmsg)));
-
   }
   } 
 
@@ -79,13 +78,13 @@ function fanclub_bundle_submit(&$form, &$form_state) {
 
   $code_associated_node = fanclub_bundle_form_details($form, $form_state);
 
-  if ($code_associated_node['nid']) {
-  $node1 = node_load($code_associated_node['nid']);
-  $node1 -> field_available['und'][0]['value'] = "No";
-  node_save($node1);
+  if ($code_associated_node['entity_id']) {
+  $node = node_load($code_associated_node['entity_id']);
+  $node -> field_available['und'][0]['value'] = "No";
+  node_save($node);
   }
 
-}
+  }
 
 function fanclub_workflow_form($form, &$form_state) {
 
