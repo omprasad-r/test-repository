@@ -81,7 +81,7 @@ function dtm_permission() {
  * Argument load handler for %dtm_profile URL placeholders
  */
  function dtm_profile_load($arg) {
- 	
+
   $settings = variable_get('dtm_profiles', array());
   return isset($settings[$arg]) ? $settings[$arg] : FALSE;
 }
@@ -96,24 +96,23 @@ function dtm_process_html(&$vars) {
   $output = array();
 
 $node = menu_get_object(); // This returns node details...
-	
-	  // Fetch the profile information stored in the DB.
-	  $settings = variable_get('dtm_profiles', array());
-	
-	  // Allow other modules to alter profile settings. Additional profiles may be added here.
-	  drupal_alter(basename(__FILE__, '.module') . '_profiles', $settings);
-	
-	  // If applicable, append each profile's code to the output.
-	  foreach ($settings as $profile) {
-	  	
-	    // Determine if the code should be visible on the current page.
-	    $path_visibility = isset($profile['path_visibility']) ? $profile['path_visibility'] : 0;
-	    $path_list = isset($profile['paths']) ? $profile['paths'] : '';
-		
-		
-	   // $page_match = dtm_match_page($path_visibility, $path_list);
-	  
-        $code_ext ='<script>
+
+  // Fetch the profile information stored in the DB.
+  $settings = variable_get('dtm_profiles', array());
+
+  // Allow other modules to alter profile settings. Additional profiles may be added here.
+  drupal_alter(basename(__FILE__, '.module') . '_profiles', $settings);
+
+  // If applicable, append each profile's code to the output.
+  foreach ($settings as $profile) {
+
+  // Determine if the code should be visible on the current page.
+  $path_visibility = isset($profile['path_visibility']) ? $profile['path_visibility'] : 0;
+  $path_list = isset($profile['paths']) ? $profile['paths'] : '';
+
+  // $page_match = dtm_match_page($path_visibility, $path_list);
+ 
+  $code_ext ='<script>
 				digitalData={
 						settings:{
 							reportSuites:"wmggardensdevdtm"
@@ -138,25 +137,22 @@ $node = menu_get_object(); // This returns node details...
 
 				}	
 				</script>';
-	  
-	  
-		 if ($profile['scope'] !="page_bottom") {
-		  	
-		  $vars[$profile['scope']] .= token_replace($code_ext, array('node' => $node), array('sanitize' => FALSE, 'clear' => TRUE, 'weight' => 999));
-		  $vars[$profile['scope']] .= token_replace("<script>".$profile["code"]."</script>", array('node' => $node), array('sanitize' => FALSE, 'clear' => TRUE, 'weight' => 999));
-		  $vars[$profile['scope']] .= token_replace("<script async src='".$profile['dtmcodeheader']."'
-		  ></script>", array('node' => $node), array('sanitize' => FALSE, 'clear' => TRUE, 'weight' => 999));
-		  }
-		 
-		 $profile['scope'] ="page_bottom";
-		 if ($profile['scope'] =="page_bottom") {
-		 $vars[$profile['scope']] .= token_replace('<script type="text/javascript">_satellite.pageBottom();</script>', array('node' => $node), array('sanitize' => FALSE, 'clear' => TRUE, 'weight' => 999));
-		 }
-		  
-	
-	  }
-	
+  
+  if ($profile['scope'] !="page_bottom") {
+  
+  $vars[$profile['scope']] .= token_replace($code_ext, array('node' => $node), array('sanitize' => FALSE, 'clear' => TRUE, 'weight' => 999));
+  $vars[$profile['scope']] .= token_replace("<script>" . $profile["code"] . "</script>", array('node' => $node), array('sanitize' => FALSE, 'clear' => TRUE, 'weight' => 999));
+  $vars[$profile['scope']] .= token_replace("<script async src='" . $profile['dtmcodeheader'] . "'></script>", array('node' => $node), array('sanitize' => FALSE, 'clear' => TRUE, 'weight' => 999));
+  
+  }
 
+  $profile['scope'] ="page_bottom";
+  if ($profile['scope'] =="page_bottom") {
+
+  $vars[$profile['scope']] .= token_replace('<script type="text/javascript">_satellite.pageBottom();</script>', array('node' => $node), array('sanitize' => FALSE, 'clear' => TRUE, 'weight' => 999));
+
+  }
+  }
 }
 
 function dtm_get_dtm_nid($entity_id, $entity_type) {
