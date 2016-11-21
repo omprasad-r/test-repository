@@ -100,20 +100,20 @@ function dtm_edit_profile($form, &$form_state, $profile = array()) {
     '#type' => 'textarea',
     '#title' => t('Extend Code'),
     '#description' => t('Enter the code you would like to insert into the footer of the code.<br> Example:digitalData.page.pageInfo.pageName:"[node:title]"'),
-  '#required' => TRUE,
-  '#default_value' => $profile['code'], 
+    '#required' => TRUE,
+    '#default_value' => $profile['code'], 
   );
-   $form['token_help'] = array(
-        '#title' => t('Replacement patterns'),
-        '#type' => 'fieldset',
-        '#collapsible' => TRUE,
-        '#collapsed' => TRUE,
-     );
+  $form['token_help'] = array(
+    '#title' => t('Replacement patterns'),
+    '#type' => 'fieldset',
+    '#collapsible' => TRUE,
+    '#collapsed' => TRUE,
+  );
 
-   $form['token_help']['help'] = array(
-        '#markup' => theme('token_tree', array('token_types' => array('node'))),
-      );
-   $form['scope'] = array(
+  $form['token_help']['help'] = array(
+    '#markup' => theme('token_tree', array('token_types' => array('node'))),
+  );
+  $form['scope'] = array(
     '#type' => 'hidden',
     '#title' => t('Scope of addition'),
     '#description' => t('Which section of the head would you like this snippet appended to?'),
@@ -124,8 +124,6 @@ function dtm_edit_profile($form, &$form_state, $profile = array()) {
     '#default_value' => "head",
     '#required' => TRUE,
   );
-
-
   
   $form['submit'] = array(
     '#type' => 'submit',
@@ -134,7 +132,6 @@ function dtm_edit_profile($form, &$form_state, $profile = array()) {
 
   return $form;
 }
-
 
 /**
  * Validate handler for the add/edit form
@@ -150,7 +147,6 @@ function dtm_edit_profile_validate($form, &$form_state) {
   }
 }
 
-
 /**
  * Submit handler for the add/edit form
  */
@@ -160,7 +156,6 @@ function dtm_edit_profile_submit($form, &$form_state) {
   if ($form_state['values']['name'] != $form_state['values']['name_orig']) {
     unset($settings[$form_state['values']['name_orig']]);
   }
-
 
   $settings[$form_state['values']['name']] = array(
     'name' => $form_state['values']['name'],
@@ -174,7 +169,6 @@ function dtm_edit_profile_submit($form, &$form_state) {
   $form_state['redirect'] = 'admin/config/development/dtm';
 }
 
-
 /**
  * Delete confirm form for removing a profile
  */
@@ -183,12 +177,11 @@ function dtm_delete_profile_confirm($form, &$form_state, $profile) {
 
   return confirm_form($form,
     t('Are you sure you want to delete the profile %name', array('%name' => $profile['name'])),
-    'admin/config/development/dtm',
-    t('This cannot be undone'),
-    t('Delete'), t('Cancel')
-  );
+      'admin/config/development/dtm',
+      t('This cannot be undone'),
+      t('Delete'), t('Cancel')
+    );
 }
-
 
 /**
  * Delete confirm form submit handler for removing a profile.
@@ -202,5 +195,3 @@ function dtm_delete_profile_confirm_submit($form, &$form_state) {
 
   $form_state['redirect'] = 'admin/config/development/dtm';
 }
-
-
