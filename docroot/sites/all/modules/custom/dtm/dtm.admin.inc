@@ -124,7 +124,6 @@ function dtm_edit_profile($form, &$form_state, $profile = array()) {
     '#default_value' => "head",
     '#required' => TRUE,
   );
-  
   $form['submit'] = array(
     '#type' => 'submit',
     '#value' => t('Save'),
