@@ -27,8 +27,8 @@ function dtm_overview() {
     if (in_array($settings, variable_get('dtm_profiles', array()))) {
       // This profile is in the DB. It can be modified through the Web UI.
       $ops = implode(' | ', array(
-          l(t('Edit'), 'admin/config/development/dtm/' . $delta),
-          l(t('Delete'), 'admin/config/development/dtm/' . $delta . '/delete'),
+	    l(t('Edit'), 'admin/config/development/dtm/' . $delta),
+        l(t('Delete'), 'admin/config/development/dtm/' . $delta . '/delete'),
       ));
     }
     else {
@@ -143,7 +143,7 @@ function dtm_edit_profile_validate($form, &$form_state) {
   if (preg_match('/[^a-z0-9\-]/', $form_state['values']['name'])) {
     form_set_error('name', t('The name should only contain lower case letters, numbers and hyphens.'));
   }
-  elseif ( ($form_state['values']['name'] != $form_state['values']['name_orig']) && (isset($settings[$form_state['values']['name']])) ) {
+  elseif (($form_state['values']['name'] != $form_state['values']['name_orig']) && (isset($settings[$form_state['values']['name']]))) {
     form_set_error('name', t('This name has already been used. Please try another.'));
   }
 }
@@ -161,8 +161,8 @@ function dtm_edit_profile_submit($form, &$form_state) {
 
 
   $settings[$form_state['values']['name']] = array(
-    'name'  => $form_state['values']['name'],
-    'code'  => trim($form_state['values']['code']),
+    'name' => $form_state['values']['name'],
+    'code' => trim($form_state['values']['code']),
     'scope' => $form_state['values']['scope'],
     'dtmcodeheader' => $form_state['values']['dtmcodeheader'],
   );

@@ -68,7 +68,7 @@ function dtm_forms($form_id, $arg) {
  */
 function dtm_permission() {
   return array(
-    'administer dtm' =>  array(
+    'administer dtm' => array(
       'title' => t('Administer dtm'),
       'description' => t('Insert code into the head of the page based on path selection.'),
       'restrict access' => TRUE,
@@ -80,7 +80,7 @@ function dtm_permission() {
 /**
  * Argument load handler for %dtm_profile URL placeholders
  */
- function dtm_profile_load($arg) {
+function dtm_profile_load($arg) {
 
   $settings = variable_get('dtm_profiles', array());
   return isset($settings[$arg]) ? $settings[$arg] : FALSE;
