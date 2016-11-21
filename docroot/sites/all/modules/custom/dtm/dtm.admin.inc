@@ -101,7 +101,7 @@ function dtm_edit_profile($form, &$form_state, $profile = array()) {
     '#title' => t('Extend Code'),
     '#description' => t('Enter the code you would like to insert into the footer of the code.<br> Example:digitalData.page.pageInfo.pageName:"[node:title]"'),
     '#required' => TRUE,
-    '#default_value' => $profile['code'], 
+    '#default_value' => $profile['code'],
   );
   $form['token_help'] = array(
     '#title' => t('Replacement patterns'),
