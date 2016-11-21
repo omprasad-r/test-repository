@@ -24,8 +24,9 @@
 }
 
 /**
- * ToDo: Om, please provide a function description and hook implementation if applicable
- * Such as: Implements hook_form_alter()
+ * Implements hook_form_alter()
+ *
+ * Calls the custom functions to validate the redemption code and alter the redemption code node status.
  */
 function fanclub_bundle_form_user_register_form_alter(&$form, &$form_state, $form_id) {
   $form['#validate'][] = 'fanclub_bundle_validate_register_form';
@@ -33,7 +34,10 @@ function fanclub_bundle_form_user_register_form_alter(&$form, &$form_state, $for
 }
 
 /**
- * ToDo: Om, please provide a function description and hook implementation if applicable
+ * Custom function to return the node detail array associated with the redemption code*
+ *
+ * Returns empty array when the redemption code is invalid
+ * Returns array with the nid and field_available_value when the redemption code is in system
  */
 function fanclub_bundle_form_details(&$form, &$form_state) {
   $fetched_redemption_code = $form_state['values'][variable_get('redemption_code_field')]['und'][0]['value'];
@@ -57,7 +61,8 @@ function fanclub_bundle_form_details(&$form, &$form_state) {
 }
 
 /**
- * ToDo: Om, please provide a function description and hook implementation if applicable
+ * Custom function to validate the redemption code
+ * and to set error messages based on the code status.
  */
 function fanclub_bundle_validate_register_form(&$form, &$form_state) {
   $code_status = fanclub_bundle_form_details($form, $form_state);
@@ -75,7 +80,7 @@ function fanclub_bundle_validate_register_form(&$form, &$form_state) {
 }
 
 /**
- * ToDo: Om, please provide a function description and hook implementation if applicable
+ * Custom function to update the availablity status of the redemption code
  */
 function fanclub_bundle_submit(&$form, &$form_state) {
   $code_associated_node = fanclub_bundle_form_details($form, $form_state);
@@ -88,7 +93,9 @@ function fanclub_bundle_submit(&$form, &$form_state) {
 }
 
 /**
- * ToDo: Om, please provide a function description and hook implementation if applicable
+ * Helper function for hook_menu()
+ *
+ * Provide conifgurable fields for the bundle's menu
  */
 function fanclub_workflow_form($form, &$form_state) {
   $form['redemption_code_field'] = array(
