@@ -27,7 +27,7 @@ function dtm_overview() {
     if (in_array($settings, variable_get('dtm_profiles', array()))) {
       // This profile is in the DB. It can be modified through the Web UI.
       $ops = implode(' | ', array(
-	    l(t('Edit'), 'admin/config/development/dtm/' . $delta),
+        l(t('Edit'), 'admin/config/development/dtm/' . $delta),
         l(t('Delete'), 'admin/config/development/dtm/' . $delta . '/delete'),
       ));
     }
