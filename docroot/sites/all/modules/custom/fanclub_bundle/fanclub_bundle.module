@@ -63,7 +63,6 @@ function fanclub_bundle_form_details(&$form, &$form_state) {
 /**
  * Custom function to validate the redemption code
  * and to set error messages based on the code status.
- * 
  */
 function fanclub_bundle_validate_register_form(&$form, &$form_state) {
   $code_status = fanclub_bundle_form_details($form, $form_state);
@@ -82,7 +81,6 @@ function fanclub_bundle_validate_register_form(&$form, &$form_state) {
 
 /**
  * Custom function to update the availablity status of the redemption code
- *
  */
 function fanclub_bundle_submit(&$form, &$form_state) {
   $code_associated_node = fanclub_bundle_form_details($form, $form_state);
