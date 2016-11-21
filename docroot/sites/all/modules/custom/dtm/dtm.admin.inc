@@ -49,7 +49,8 @@ function dtm_overview() {
       array(
         'colspan' => count($header),
         'data' => l(t('Add another profile'), 'admin/config/development/dtm/add'),
-      ));
+      )
+    );
   }
 
   return array(
