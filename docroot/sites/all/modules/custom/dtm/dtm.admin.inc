@@ -45,10 +45,11 @@ function dtm_overview() {
   }
 
   if (!empty($rows)) {
-    $rows[] = array(array(
-      'colspan' => count($header),
-      'data' => l(t('Add another profile'), 'admin/config/development/dtm/add'),
-    ));
+    $rows[] = array(
+      array(
+        'colspan' => count($header),
+        'data' => l(t('Add another profile'), 'admin/config/development/dtm/add'),
+      ));
   }
 
   return array(
