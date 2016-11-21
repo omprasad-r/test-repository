@@ -142,7 +142,7 @@ $node = menu_get_object(); // This returns node details...
   
   $vars[$profile['scope']] .= token_replace($code_ext, array('node' => $node), array('sanitize' => FALSE, 'clear' => TRUE, 'weight' => 999));
   $vars[$profile['scope']] .= token_replace("<script>" . $profile["code"] . "</script>", array('node' => $node), array('sanitize' => FALSE, 'clear' => TRUE, 'weight' => 999));
-  $vars[$profile['scope']] .= token_replace("<script async src='" . $profile['dtmcodeheader'] . "'></script>", array('node' => $node), array('sanitize' => FALSE, 'clear' => TRUE, 'weight' => 999));
+  $vars[$profile['scope']] .= token_replace("<script src='" . $profile['dtmcodeheader'] . "'></script>", array('node' => $node), array('sanitize' => FALSE, 'clear' => TRUE, 'weight' => 999));
   
   }
 
