@@ -1,7 +1,9 @@
 name = fanclub_bundle
 description = Allows redemption workflow
 core = 7.x
-configure = admin/config/people/fanclub-bundle
-dependencies[] = token
 
+configure = admin/structure/coupon
+files[] = includes/coupon.controller.inc
+
+dependencies[] = token
 version = "7.x"
