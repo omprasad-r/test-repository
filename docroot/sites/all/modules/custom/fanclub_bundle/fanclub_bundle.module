@@ -6,142 +6,303 @@
  */
 
 /**
+ * Implements hook_permission().
+ */
+function fanclub_bundle_permission() {
+  return array(
+    'administer coupon' => array(
+      'title' => t('Administer coupon'),
+      'restrict access' => TRUE,
+    ),
+  );
+}
+
+/**
  * Implements hook_menu().
  */
- function fanclub_bundle_menu() {
+function fanclub_bundle_menu() {
   $items = array();
-
-  $items['admin/config/people/fanclub-bundle'] = array(
-    'title' => 'Fanclub Redemption Workflow',
+  $items['admin/structure/coupon/settings'] = array(
+    'title' => 'Settings',
     'description' => 'Configure redemption workflow.',
     'page callback' => 'drupal_get_form',
     'page arguments' => array('fanclub_workflow_form'),
     'access arguments' => array('administer users'),
-    'type' => MENU_NORMAL_ITEM,
+    'type' => MENU_LOCAL_ACTION,
   );
 
+  $items['admin/structure/coupon/add'] = array(
+    'title' => 'Add Coupon!',
+    'page callback' => 'fanclub_coupon_add',
+    'access arguments' => array('administer users'),
+    'type' => MENU_LOCAL_ACTION,
+  );
+  $items['admin/structure/coupon/edit/%coupon'] = array(
+    'title' => 'Edit Coupon!',
+    'page callback' => 'fanclub_coupon_add',
+    'page arguments' => array(4),
+    'access arguments' => array('administer users'),
+  );
+  $items['admin/structure/coupon/delete/%coupon'] = array(
+    'title' => 'Delete Coupon!',
+    'page callback' => 'drupal_get_form',
+    'page arguments' => array('fanclub_coupon_delete', 4),
+    'access arguments' => array('administer users'),
+  );
   return $items;
 }
 
 /**
- * Implements hook_form_alter()
- *
- * Calls the custom functions to validate the redemption code and alter the redemption code node status.
+ * Implements hook_entity_info().
  */
-function fanclub_bundle_form_user_register_form_alter(&$form, &$form_state, $form_id) {
-  $form['#validate'][] = 'fanclub_bundle_validate_register_form';
-  $form['#submit'][] = 'fanclub_bundle_submit';
+function fanclub_bundle_entity_info() {
+  // Create a custom entity called coupon.
+  $return['coupon'] = array(
+    'label' => t('Coupon'),
+    'controller class' => 'RedemptionCouponController',
+    'base table' => 'redemption_coupon',
+    'uri callback' => 'coupon_uri',
+    'access callback' => 'fanclub_coupon_access_callback',
+    'fieldable' => TRUE,
+    'exportable' => TRUE,
+    'entity keys' => array(
+      'id' => 'cid',
+      'code' => 'code',
+    ),
+    'bundles' => array(
+      'coupon' => array(
+        'label' => 'coupon',
+        'admin' => array(
+          'path' => 'admin/structure/coupon',
+        ),
+      ),
+    ),
+    // Use the Admin UI controller to create the admin interface
+    'admin ui' => array(
+      'path' => 'admin/structure/coupon',
+      'controller class' => 'RedemptionCouponUIController',
+    ),
+    'view modes' => array(
+      'full' => array(
+        'label' => t('Full'),
+        'custom settings' => FALSE,
+      ),
+    )
+  );
+
+  return $return;
 }
 
 /**
- * Custom function to return the node detail array associated with the redemption code*
- *
- * Returns empty array when the redemption code is invalid
- * Returns array with the nid and field_available_value when the redemption code is in system
- */
-function fanclub_bundle_form_details(&$form, &$form_state) {
-  $fetched_redemption_code = $form_state['values'][variable_get('redemption_code_field')]['und'][0]['value'];
-
-  $code_node_name = variable_get('redemption_code_node');
-
-  $code_available_name = 'field_data_' . variable_get('redemption_code_avl');
-
-  $code_available_value = variable_get('redemption_code_avl') . '_value';
-
-  $query = db_select('node', 'n');
-  $query->join($code_available_name, 'a', 'n.nid = a.entity_id');
-  $query->fields('a' , array($code_available_value , 'entity_id'))
-    ->condition('n.status', '1')
-    ->where('(n.type = :nodename)', array(':nodename' => $code_node_name))
-    ->where('(n.title = :title)', array(':title' => $fetched_redemption_code));
-
-  $check_validcode = $query->execute()->fetchAssoc();
-
-  return $check_validcode;
-}
-
-/**
- * Custom function to validate the redemption code
- * and to set error messages based on the code status.
- */
-function fanclub_bundle_validate_register_form(&$form, &$form_state) {
-  $code_status = fanclub_bundle_form_details($form, $form_state);
-  $invalid_errmsg = variable_get('invalid_code_message');
-  $used_errmsg = variable_get('used_code_message');
-
-  if (!$code_status) {
-    form_set_error('field_redemption_code', check_plain(t($invalid_errmsg)));
-  }
-  else {
-    if ($code_status['field_available_value'] == "No") {
-      form_set_error('field_redemption_code', check_plain(t($used_errmsg)));
-    }
-  }
-}
-
-/**
- * Custom function to update the availablity status of the redemption code
- */
-function fanclub_bundle_submit(&$form, &$form_state) {
-  $code_associated_node = fanclub_bundle_form_details($form, $form_state);
-
-  if ($code_associated_node['entity_id']) {
-    $node = node_load($code_associated_node['entity_id']);
-    $node -> field_available['und'][0]['value'] = "No";
-    node_save($node);
-  }
-}
-
-/**
- * Helper function for hook_menu()
- *
- * Provide conifgurable fields for the bundle's menu
+ * Callback of the settings form.
  */
 function fanclub_workflow_form($form, &$form_state) {
   $form['redemption_code_field'] = array(
     '#type' => 'textfield',
     '#title' => t('Redemption Code Field'),
-    '#default_value' => variable_get('redemption_code_field', 'field_redemption_code'),
+    '#default_value' => variable_get('redemption_code_field'),
     '#size' => 100,
     '#required' => TRUE,
     '#description' => t("Machine Name of the redemption code field in the registration form"),
   );
-
-  $form['redemption_code_node'] = array(
-    '#type' => 'textfield',
-    '#title' => t('Redemption Code Node'),
-    '#size' => 100,
-    '#default_value' => variable_get('redemption_code_node', 'redemption_codes'),
-    '#required' => TRUE,
-    '#description' => t("Machine name of the node where redemption codes are added/imported"),
-  );
-
-  $form['redemption_code_avl'] = array(
-    '#type' => 'textfield',
-    '#title' => t('Redemption Code Available Field'),
-    '#size' => 100,
-    '#default_value' => variable_get('redemption_code_avl', 'field_available'),
-    '#required' => TRUE,
-    '#description' => t("The machine name of available status field in the <em>redemption code</em>'s node"),
-  );
-
   $form['invalid_code_message'] = array(
     '#type' => 'textarea',
     '#title' => t('Error message for invalid Code'),
     '#rows' => 3,
-    '#default_value' => variable_get('invalid_code_message', 'Enter Valid Redemption Code'),
+    '#default_value' => variable_get('invalid_code_message'),
     '#required' => TRUE,
     '#description' => t("Error message for invalid Code"),
   );
-
   $form['used_code_message'] = array(
     '#type' => 'textarea',
     '#title' => t('Error message for Already Used Code'),
     '#rows' => 3,
-    '#default_value' => variable_get('used_code_message', 'The code you have entered has been used already. Please provide a new code.'),
+    '#default_value' => variable_get('used_code_message'),
     '#required' => TRUE,
     '#description' => t("Error message for Already Used Code"),
   );
 
   return system_settings_form($form);
 }
+
+/**
+ * Implements callback for coupon add form.
+ */
+function fanclub_coupon_add($coupon = NULL) {
+  if (!isset($coupon)) {
+    $coupon = (object) array(
+      'cid' => '',
+      'type' => 'coupon',
+      'status' => '',
+    );
+  }
+  return drupal_get_form('coupon_add_form', $coupon);
+}
+
+/**
+ * Implements callback for coupon delete page.
+ */
+function fanclub_coupon_delete($form, &$form_state, $coupon) {
+  $question = "Are you sure you want to delete this coupon?";
+  $path = 'admin/structure/coupon';
+  $description = 'This action cannot be easily undone.';
+  $yes = 'Delete';
+  $no = 'Cancel';
+  return confirm_form($form, $question, $path, $description, $yes, $no = NULL, $name = 'confirm');
+}
+
+/**
+ * Implements hook_validate().
+ */
+function fanclub_coupon_delete_submit($form, &$form_state) {
+  $num_deleted = db_delete('redemption_coupon')
+    ->condition('cid', arg(4))
+    ->execute();
+  drupal_set_message("Coupon deleted successfully");
+  drupal_goto('admin/structure/coupon');
+}
+
+/**
+ * Implements a hook_form for add / edit of the coupons.
+ */
+function coupon_add_form($form, &$form_state, $coupon) {
+  $form['cid'] = array(
+    '#type' => 'hidden',
+    '#value' => $coupon->cid,
+  );
+  $form['code'] = array(
+    '#type' => 'textfield',
+    '#title' => t('Coupon Code'),
+    '#default_value' => $coupon->code,
+    '#required' => TRUE,
+  );
+  $form['status'] = array(
+    '#type' => 'select',
+    '#title' => t('Status'),
+    '#default_value' => $coupon->status,
+    '#options' => array(1 => 'Active', 0 => 'In Active'),
+    '#required' => TRUE,
+  );
+  $form['submit'] = array(
+    '#type' => 'submit',
+    '#value' => t('Save'),
+  );
+
+  field_attach_form('coupon', $coupon, $form, $form_state);
+
+  return $form;
+}
+
+/**
+ * Implements hook_validate().
+ */
+function coupon_add_form_validate($form, &$form_state) {
+  $coupon_submission = (object) $form_state['values'];
+  field_attach_form_validate('coupon', $coupon_submission, $form, $form_state);
+}
+
+/**
+ * Implements hook_submit().
+ */
+function coupon_add_form_submit($form, &$form_state) {
+  $coupon = (object) $form_state['values'];
+  field_attach_submit('coupon', $coupon, $form, $form_state);
+  $coupon = coupon_save($coupon);
+  $form_state['redirect'] = "admin/structure/coupon";
+}
+
+/**
+ * Implements hook_form_alter()
+ * Calls the custom functions to validate the redemption code and alter the redemption code node status.
+ */
+function fanclub_bundle_form_user_register_form_alter(&$form, &$form_state, $form_id) {
+  $form['#validate'][] = 'fanclub_bundle_validate_register_form';
+  $form['#submit'][] = 'fanclub_bundle_submit_register_form';
+}
+
+
+/**
+ * Helper function that validates the registration form.
+ */
+function fanclub_bundle_validate_register_form(&$form, &$form_state) {
+  $code_field = field_info_field(variable_get('redemption_code_field'));
+  if (isset($code_field) && !empty($code_field)) {
+    foreach ($code_field['bundles'] as $key => $bundle) {
+      if ($key != 'user') {
+        return;
+      }
+    }
+  }
+  else {
+    return;
+  }
+  $query = db_select("redemption_coupon", "r");
+  $query->fields("r");
+  $query->condition("r.code", $form_state['values'][variable_get('redemption_code_field')]);
+  $result = $query->execute()->fetchAll();
+  $invalid_errmsg = variable_get('invalid_code_message');
+  $used_errmsg = variable_get('used_code_message');
+  if (!isset($result)) {
+    form_set_error(variable_get('redemption_code_field'), check_plain(t($invalid_errmsg)));
+  }
+  else {
+    if ($result[0]->status != 1) {
+      form_set_error(variable_get('redemption_code_field'), check_plain(t($used_errmsg)));
+    }
+  }
+}
+
+/**
+ * Helper function that performs additional submit operation on the registration form.
+ */
+function fanclub_bundle_submit_register_form(&$form, &$form_state) {
+  $query = db_update('redemption_coupon');
+  $query->fields(array("status" => 1));
+  $query->condition("code", $form_state['values'][variable_get('redemption_code_field')]);
+  $query->execute();
+}
+
+/**
+ * URI callback for the entity.
+ */
+function coupon_uri($postit) {
+  return array(
+    'path' => 'coupon/' . $postit->id,
+  );
+}
+
+/**
+ * Implements hook_load().
+ */
+function coupon_load($cid = NULL, $reset = FALSE) {
+  $cids = (isset ($cid) ? array($cid) : array());
+  $coupons = coupon_load_multiple($cids, $reset);
+  return $coupons ? reset($coupons) : FALSE;
+}
+
+/**
+ * Implements hook_load_multiple().
+ */
+function coupon_load_multiple($cid = array(), $conditions = array(), $reset = FALSE) {
+  return entity_load('coupon', $cid, $conditions, $reset);
+}
+
+/**
+ * Implements a helper function to save the coupon.
+ */
+function coupon_save(&$coupon) {
+  return entity_get_controller('coupon')->save($coupon);
+}
+
+/**
+ * Implements access callback for the entity.
+ */
+function fanclub_coupon_access_callback() {
+  if (user_access('administer coupon')) {
+    return TRUE;
+  }
+  else {
+    return FALSE;
+  }
+}
+

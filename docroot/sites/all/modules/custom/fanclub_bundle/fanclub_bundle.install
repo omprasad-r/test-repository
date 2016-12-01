@@ -1,0 +1,34 @@
+<?php
+
+/**
+ * Implements hook_schema().
+ */
+function fanclub_bundle_schema() {
+  $schema['redemption_coupon'] = array(
+    'description' => 'The main store for our entity',
+    'fields' => array(
+      'cid' => array(
+        'description' => 'Coupon ID.',
+        'type' => 'serial',
+        'unsigned' => TRUE,
+        'not null' => TRUE,
+      ),
+      'code' => array(
+        'description' => 'The actual coupon code.',
+        'type' => 'varchar',
+        'length' => '255',
+        'not null' => TRUE
+      ),
+      'status' => array(
+        'description' => 'Indicates if the coupon is active or not.',
+        'type' => 'int',
+        'not null' => TRUE,
+        'size' => 'tiny',
+        'default' => 0
+      ),
+    ),
+    'primary key' => array('cid'),
+  );
+
+  return $schema;
+}
