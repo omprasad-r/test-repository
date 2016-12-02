@@ -257,7 +257,7 @@ function fanclub_bundle_validate_register_form(&$form, &$form_state) {
  */
 function fanclub_bundle_submit_register_form(&$form, &$form_state) {
   $query = db_update('redemption_coupon');
-  $query->fields(array("status" => 1));
+  $query->fields(array("status" => 0));
   $query->condition("code", $form_state['values'][variable_get('redemption_code_field')]);
   $query->execute();
 }
