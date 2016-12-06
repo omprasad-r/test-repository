@@ -132,7 +132,6 @@ function dtm_edit_profile($form, &$form_state, $profile = array()) {
   return $form;
 }
 
-
 /**
  * Validate handler for the add/edit form
  */
@@ -147,7 +146,6 @@ function dtm_edit_profile_validate($form, &$form_state) {
   }
 }
 
-
 /**
  * Submit handler for the add/edit form
  */
@@ -157,7 +155,6 @@ function dtm_edit_profile_submit($form, &$form_state) {
   if ($form_state['values']['name'] != $form_state['values']['name_orig']) {
     unset($settings[$form_state['values']['name_orig']]);
   }
-
 
   $settings[$form_state['values']['name']] = array(
     'name' => $form_state['values']['name'],
@@ -171,7 +168,6 @@ function dtm_edit_profile_submit($form, &$form_state) {
   $form_state['redirect'] = 'admin/config/development/dtm';
 }
 
-
 /**
  * Delete confirm form for removing a profile
  */
@@ -180,21 +176,21 @@ function dtm_delete_profile_confirm($form, &$form_state, $profile) {
 
   return confirm_form($form,
     t('Are you sure you want to delete the profile %name', array('%name' => $profile['name'])),
-    'admin/config/development/dtm',
-    t('This cannot be undone'),
-    t('Delete'), t('Cancel')
-  );
+      'admin/config/development/dtm',
+      t('This cannot be undone'),
+      t('Delete'), t('Cancel')
+    );
 }
-
 
 /**
  * Delete confirm form submit handler for removing a profile.
  */
 function dtm_delete_profile_confirm_submit($form, &$form_state) {
   $settings = variable_get('dtm_profiles', array());
+
   unset($settings[$form['#profile']['name']]);
+
   variable_set('dtm_profiles', $settings);
+
   $form_state['redirect'] = 'admin/config/development/dtm';
 }
-
-
