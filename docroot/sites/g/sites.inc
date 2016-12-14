@@ -70,6 +70,23 @@ function gardens_site_data_get_filepath() {
 }
 
 /**
+ * Returns the location of the private files directory.
+ *
+ * The private files directory is supposed to be kept outside of the docroot to
+ * make sure that its contents are not directly accessible. This directory
+ * should not have a symbolic link in the site's directory.
+ *
+ * @param string $db_role
+ *   The site's db role.
+ *
+ * @return string
+ *   The private files directory location.
+ */
+function gardens_site_data_get_private_files_directory($db_role) {
+  return "/mnt/files/{$_ENV['AH_SITE_GROUP']}.{$_ENV['AH_SITE_ENVIRONMENT']}/sites/g/files-private/{$db_role}";
+}
+
+/**
  * Fully refreshes the APC cached site/domain data, rewriting every key.
  */
 function gardens_site_data_refresh_all() {
@@ -98,6 +115,10 @@ function gardens_site_data_build_data(array $site, array $map) {
   // All sites use a conventional public file path.
   $db_name = $site['conf']['acsf_db_name'];
   $site['conf']['file_public_path'] = 'sites/g/files/' . $db_name . '/f';
+  $private_files_directory = gardens_site_data_get_private_files_directory($db_name);
+  if (file_exists($private_files_directory)) {
+    $site['conf']['file_private_path'] = $private_files_directory;
+  }
 
   return array(
     'dir' => "g/files/{$site['name']}",
