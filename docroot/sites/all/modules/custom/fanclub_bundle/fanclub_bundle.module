@@ -238,7 +238,7 @@ function fanclub_bundle_validate_register_form(&$form, &$form_state) {
   }
   $query = db_select("redemption_coupon", "r");
   $query->fields("r");
-  $query->condition("r.code", $form_state['values'][variable_get('redemption_code_field')]);
+  $query->condition("r.code", $form_state['values'][variable_get('redemption_code_field')][LANGUAGE_NONE][0]['value']);
   $result = $query->execute()->fetchAll();
   $invalid_errmsg = variable_get('invalid_code_message');
   $used_errmsg = variable_get('used_code_message');
@@ -258,7 +258,7 @@ function fanclub_bundle_validate_register_form(&$form, &$form_state) {
 function fanclub_bundle_submit_register_form(&$form, &$form_state) {
   $query = db_update('redemption_coupon');
   $query->fields(array("status" => 0));
-  $query->condition("code", $form_state['values'][variable_get('redemption_code_field')]);
+  $query->condition("code", $form_state['values'][variable_get('redemption_code_field')][LANGUAGE_NONE][0]['value']);
   $query->execute();
 }
 
