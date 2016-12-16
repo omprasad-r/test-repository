@@ -180,7 +180,11 @@ if (file_exists('/var/www/site-php')) {
 
   if (!empty($site_settings['conf'])) {
     foreach ((array) $site_settings['conf'] as $key => $value) {
-      $conf[$key] = $value;
+      // Do not override the private path if the customer has defined its value
+      // in a pre-settings-php hook.
+      if ($key !== 'file_private_path' || empty($conf['file_private_path'])) {
+        $conf[$key] = $value;
+      }
     }
   }
 }
