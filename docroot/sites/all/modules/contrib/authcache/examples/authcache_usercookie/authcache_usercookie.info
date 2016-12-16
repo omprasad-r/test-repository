@@ -1,0 +1,12 @@
+name = Authcache User Cookie
+description = Example authcache module passing name and profile-link of logged in users to theming layer via cookies.
+package = Example modules
+core = 7.x
+dependencies[] = authcache
+
+; Information added by Drupal.org packaging script on 2016-10-12
+version = "7.x-2.0"
+core = "7.x"
+project = "authcache"
+datestamp = "1476257642"
+
