@@ -1,0 +1,123 @@
+#!/usr/bin/env drush
+
+drush_print("View this script for instructions in the comments.");
+
+/*
+ * Jira ticket: WMG-552
+ * https://acquiaps.atlassian.net/browse/WMG-552
+ *
+ * Purpose: This script is for WMG-only and is intended to take a zip file of
+ * images and upload them directly to the files directory of a site as specified
+ * by the site's ID.
+ *
+ * This script is provided by Acquia as a one-time replacement for a previously
+ * written Ruby script. No warranty or support will be provided beyond the
+ * delivery of this script as agreed upon by Acquia and WMG.
+ *
+ * Delivered December 2016.
+ */
+
+/*
+ * Steps to run this script for copying files to a WMG site's files directory:
+ *
+ * 1. Make the script executable using this command:
+ *      $ chmod +x ./imgextractor.drush
+ *
+ * 2. Get the site ID of the site you want to upload files to using the Drush
+ *    alias and the vget command, like this:
+ *      $ drush @wmg.env vget file_public_path -l http://sitename
+ *
+ *    This will a value such as this: g2000004816
+ *
+ * 3. Using the site ID from the previous step, run the following command to
+ *    upload a zip file containing files to your site, for example:
+ *      $ ./imgextractor.drush @wmg.env path/to/files.zip g2000004816
+ *
+ *    The command should be run using following format:
+ *      $ ./imgextractor.drush @{sitegroup}.{env} {zip file} {site ID}
+ */
+
+$help_msg = <<<MSG
+--------------------------------------------------------------------------------
+-- ImgExtractor.drush Help                                                    --
+--------------------------------------------------------------------------------
+Steps to run this script for copying files to a WMG site's files directory:
+
+1. Make the script executable using this command:
+     $ chmod +x ./imgextractor.drush
+
+2. Get the site ID of the site you want to upload files to using the Drush
+   alias and the vget command, like this:
+     $ drush @wmg.env vget file_public_path -l http://sitename
+
+   This will a value such as this: g2000004816
+
+3. Using the site ID from the previous step, run the following command to
+   upload a zip file containing files to your site, for example:
+     $ ./imgextractor.drush @wmg.env path/to/files.zip g2000004816
+
+   The command should be run using following format:
+     $ ./imgextractor.drush @{sitegroup}.{env} {zip file} {site ID}
+--------------------------------------------------------------------------------
+MSG;
+
+// Get parameters.
+$alias = drush_shift();
+$file_path = drush_shift();
+$site = drush_shift();
+
+// Get the temp directory where we will extract the files.
+$temp_path = sys_get_temp_dir() . '/imgextractor';
+
+drush_print("Collecting parameters...\n");
+
+// Check the file extension.
+$extension = end((explode('.', $file_path)));
+if(empty($extension)){
+  drush_die("Please specify a correct zip path." . "\n\n" . $help_msg);
+}
+if(!in_array($extension, array('zip'))){
+  drush_die("The file extension is not supported.");
+}
+
+// Empty the temp directory and create a new one.
+if ( !drush_shell_exec("rm -rf $temp_path; mkdir $temp_path;") ){
+  drush_die("Could not create the directory.");
+}
+
+// Check if the zip file exists.
+if (!file_exists($file_path)) {
+   drush_die("Could not find the zip file." . "\n\n" . $help_msg);
+}
+
+// Extract the zip file.
+$zip = new ZipArchive;
+if ($zip->open($file_path) === TRUE) {
+  $zip->extractTo($temp_path);
+  $zip->close();
+}
+
+// Check if the zip file is correctly extracted.
+if(count(scandir($temp_path)) == 2){
+  drush_die("Either the zip contents are empty or could not be extracted.");
+}
+
+// Transfer the files to the server.
+$local_tasks = array($temp_path, "$alias:sites/g/files/$site/f/images");
+if( drush_invoke_process('@none', 'rsync', $local_tasks, array(), array('interactive' => TRUE)) ) {
+  drush_print("Files succesfully transfered to $alias ");
+}
+else {
+  drush_die("Oops! Something went wrong.");
+}
+
+// Removing local extract directory
+if ( !drush_shell_exec("rm -rf $temp_path") ){
+  drush_die("Could not delete the temporary files.");
+}
+
+// Clear the site cache.
+if( ! drush_invoke_process($alias, 'cc', array('all'), array(), array('interactive' => TRUE)) ) {
+  drush_die("Could not clear the site cache.");
+}
+
