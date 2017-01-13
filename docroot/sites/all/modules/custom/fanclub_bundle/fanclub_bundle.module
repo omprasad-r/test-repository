@@ -242,7 +242,7 @@ function fanclub_bundle_validate_register_form(&$form, &$form_state) {
   $result = $query->execute()->fetchAll();
   $invalid_errmsg = variable_get('invalid_code_message');
   $used_errmsg = variable_get('used_code_message');
-  if (!isset($result)) {
+  if (empty($result)) {
     form_set_error(variable_get('redemption_code_field'), check_plain(t($invalid_errmsg)));
   }
   else {
