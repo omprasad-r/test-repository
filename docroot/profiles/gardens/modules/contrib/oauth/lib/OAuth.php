@@ -47,7 +47,8 @@ class OAuthToken {
     return "oauth_token=" .
            OAuthUtil::urlencode_rfc3986($this->key) .
            "&oauth_token_secret=" .
-           OAuthUtil::urlencode_rfc3986($this->secret);
+           OAuthUtil::urlencode_rfc3986($this->secret) .
+           "&oauth_callback_confirmed=true";
   }
 
   function __toString() {
