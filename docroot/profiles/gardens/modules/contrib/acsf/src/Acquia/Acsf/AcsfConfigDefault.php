@@ -12,7 +12,7 @@ class AcsfConfigDefault extends AcsfConfig {
   /**
    * Keep the values from the config file in a shared static cache.
    *
-   * @var stdClass.
+   * @var object
    */
   protected static $cacheDefault;
 
@@ -46,6 +46,7 @@ class AcsfConfigDefault extends AcsfConfig {
    * username = "acquiagardensrpc"
    * password = "[password]"
    * url_suffix = "[stage].acquia-sites.com"
+   * ; The url_suffix is only present for staged sites. Also: see getUrlSuffix()
    *
    * @throws AcsfConfigMissingCredsException
    */
