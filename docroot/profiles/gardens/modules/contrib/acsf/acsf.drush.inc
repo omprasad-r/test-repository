@@ -184,13 +184,9 @@ function drush_acsf_site_scrub() {
     }
   }
 
-  // We will handle email addresses and passwords ourselves.
-  drush_set_option('sanitize-email', 'no');
-  drush_set_option('sanitize-password', 'no');
-
-  // Run the sanitization which allows customers to use
-  // hook_drush_sql_sanitize() to provide custom scrubbing.
-  drush_sql_sanitize();
+  // Run the sql-sanitize which allows customers to use custom scrubbing. We
+  // will handle email addresses and passwords ourselves.
+  drush_invoke_process('@self', 'sql-sanitize', array(), array('sanitize-email' => 'no', 'sanitize-password' => 'no'));
 
   // Mark this database as scrubbed.
   variable_set('acsf_site_scrubbed', 'scrubbed');

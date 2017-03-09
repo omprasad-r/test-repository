@@ -4,6 +4,8 @@
 /**
  * @file
  * Scrubs a site after its database has been copied.
+ *
+ * This happens on staging, not on site duplication.
  */
 
 if (empty($argv[3])) {
@@ -53,10 +55,11 @@ $command = sprintf(
 fwrite(STDERR, "Executing: $command;\n");
 $creds = json_decode(trim(shell_exec($command)));
 
-// Get the target URL suffix from the Factory.
+// Get the domain suffix for hosted sites, from factory creds data. This must
+// be present on staged environments, but is not on the production environment.
 $url_suffix = $creds->url_suffix;
 if (empty($url_suffix)) {
-  error('Could not retrieve Site Factory URL suffix.');
+  error("Could not retrieve hosted sites' domain suffix.");
 }
 
 // Create a new standard domain name.

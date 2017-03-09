@@ -9,7 +9,7 @@ namespace Acquia\Acsf;
 
 abstract class AcsfConfig {
 
-  // The URL of the remote service.
+  // The URL of the remote service (factory).
   protected $url;
 
   // The username of the remote service.
@@ -18,10 +18,10 @@ abstract class AcsfConfig {
   // The password of the remote service.
   protected $password;
 
-  // The signup suffix of the Factory.
+  // The optional signup suffix of the Factory. See getUrlSuffix() for caveat.
   protected $urlSuffix;
 
-  // The source URL of the Factory this was staged from.
+  // The optional source URL of the factory which our sites were staged from.
   protected $sourceUrl;
 
   // An optional Acquia Hosting sitegroup.
@@ -80,21 +80,31 @@ abstract class AcsfConfig {
   }
 
   /**
-   * Retrieves the config URL.
+   * Retrieves the URL of the remote service (factory).
    */
   public function getUrl() {
     return $this->url;
   }
 
   /**
-   * Retrieves the config URL suffix.
+   * Retrieves the domain suffix used for sites hosted on this ACSF environment.
+   *
+   * Please note: this is not always equal to the suffix of the factory URL. In
+   * practice it is, except when the site factory governs sites hosted in
+   * multiple regions across the world. In that case, sites hosted in specific
+   * regions have a specific domain suffix - which differs from the factory
+   * URL for at least one region.
+   *
+   * This value is empty on production sites; it is only set for staged sites.
    */
   public function getUrlSuffix() {
     return $this->urlSuffix;
   }
 
   /**
-   * Retrieves the source URL.
+   * Retrieves the URL of the production factory.
+   *
+   * This value is empty on production sites; it is only set for staged sites.
    */
   public function getSourceUrl() {
     return $this->sourceUrl;
