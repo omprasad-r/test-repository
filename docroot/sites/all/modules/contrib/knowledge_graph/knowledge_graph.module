@@ -170,7 +170,7 @@ function knowledge_graph_menu() {
       'bundle argument' => 4,
       'type' => MENU_NORMAL_ITEM,
       'title' => $type->label,
-      'description' => t('Add mapping using %label mapping scheme.', array('%label' => $type->label)),
+      'description' => 'Add mapping using %label mapping scheme.', array('%label' => $type->label),
       'access arguments' => array('administer knowledge_graph'),
       'page callback' => 'drupal_get_form',
       'page arguments' => array('knowledge_graph_form', $type),
@@ -187,14 +187,14 @@ function knowledge_graph_menu() {
   );
   $items['admin/structure/knowledge_graph/mappings'] = array(
     'type' => MENU_LOCAL_ACTION,
-    'title' => t('Knowledge graph entities'),
+    'title' => 'Knowledge graph entities',
     'access arguments' => array('administer knowledge_graph'),
     'page callback' => '_knowledge_graph_page_redirect',
     'page arguments' => array('admin/structure/knowledge_graph_maps'),
   );
   $items['admin/structure/knowledge_graph_maps/add-mapping'] = array(
     'type' => MENU_LOCAL_ACTION,
-    'title' => t('Add new knowledge graph mapping'),
+    'title' => 'Add new knowledge graph mapping',
     'access arguments' => array('administer knowledge_graph'),
     'page callback' => '_knowledge_graph_page_redirect',
     'page arguments' => array('admin/structure/knowledge_graph'),
@@ -365,7 +365,7 @@ function knowledge_graph_entity_view($entity, $type, $view_mode, $langcode) {
     ->propertyCondition('entity_type_ref', $type)
     ->propertyCondition('bundle_ref', $entity->type)
     ->propertyOrderBy('id', 'DESC')
-    ->range(0,1);
+    ->range(0, 1);
   $result = $query->execute();
   if (!empty($result)) {
     // Get id of map and get the json.
