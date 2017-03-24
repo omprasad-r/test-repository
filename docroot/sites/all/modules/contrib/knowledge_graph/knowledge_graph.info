@@ -1,0 +1,18 @@
+name = Knowledge Graph
+description = Provides json-ld output for entities
+core = 7.x
+package = Google
+version = 7.x-1.0-dev
+project = knowledge_graph
+
+dependencies[] = ctools
+dependencies[] = entity
+files[] = includes/Controller/KnowledgeGraphEntityController.php
+files[] = includes/Controller/KnowledgeGraphEntityUIController.php
+files[] = includes/Controller/KnowledgeGraphTypeUIController.php
+; Information added by Drupal.org packaging script on 2015-06-10
+version = "7.x-1.x-dev"
+core = "7.x"
+project = "knowledge_graph"
+datestamp = "1433928481"
+

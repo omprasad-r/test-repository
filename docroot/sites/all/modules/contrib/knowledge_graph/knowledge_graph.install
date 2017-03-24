@@ -1,0 +1,142 @@
+<?php
+
+/**
+ * Implements hook_schema().
+ */
+
+function knowledge_graph_schema() {
+  // Schema for the entity.
+  $schema['knowledge_graph'] = array(
+    'description' => 'The base table for knowledge graph entities.',
+    'fields' => array(
+      'id' => array(
+        'description' => 'The primary identifier for a knowledge graph entity.',
+        'type' => 'serial',
+        'unsigned' => TRUE,
+        'not null' => TRUE,
+      ),
+      'type' => array(
+        'description' => 'The type of this knowledge graph entity.',
+        'type' => 'varchar',
+        'length' => 32,
+        'not null' => TRUE,
+        'default' => '',
+      ),
+      'name' => array(
+        'description' => 'The machine-readable name of this knowledge_graph type.',
+        'type' => 'varchar',
+        'length' => 255,
+        'not null' => TRUE,
+      ),
+      'bundle' => array(
+        'description' => 'The bundle of the entity.',
+        'type' => 'varchar',
+        'length' => 255,
+        'not null' => TRUE,
+        'default' => '',
+      ),
+      'status' => array(
+        'type' => 'int',
+        'not null' => TRUE,
+        'default' => 0x01,
+        'size' => 'tiny',
+        'description' => 'The exportable status of the entity.',
+      ),
+      'module' => array(
+        'description' => 'The name of the providing module if the entity has been defined in code.',
+        'type' => 'varchar',
+        'length' => 255,
+        'not null' => FALSE,
+      ),
+      'entity_type_ref' => array(
+        'description' => 'The type of the mapped entity.',
+        'type' => 'varchar',
+        'length' => 255,
+        'not null' => TRUE,
+        'default' => '',
+      ),
+      'bundle_ref' => array(
+        'description' => 'The bundle of the mapped entity.',
+        'type' => 'varchar',
+        'length' => 255,
+        'not null' => TRUE,
+        'default' => '',
+      ),
+    ),
+    'primary key' => array('id'),
+  );
+  // Schema for the bundles.
+  $schema['knowledge_graph_type'] = array(
+    'description' => 'Stores information about all defined knowledge graph types.',
+    'fields' => array(
+      'id' => array(
+        'type' => 'serial',
+        'not null' => TRUE,
+        'description' => 'Primary Key: Unique knowledge graph type ID.',
+      ),
+      'type' => array(
+        'description' => 'The machine-readable name of this knowledge graph type.',
+        'type' => 'varchar',
+        'length' => 32,
+        'not null' => TRUE,
+      ),
+      'label' => array(
+        'description' => 'The human-readable name of this knowledge graph type.',
+        'type' => 'varchar',
+        'length' => 255,
+        'not null' => TRUE,
+        'default' => '',
+      ),
+      'status' => array(
+        'type' => 'int',
+        'not null' => TRUE,
+        // Set the default to ENTITY_CUSTOM without using the constant as it is
+        // not safe to use it at this point.
+        'default' => 0x01,
+        'size' => 'tiny',
+        'description' => 'The exportable status of the entity.',
+      ),
+      'module' => array(
+        'description' => 'The name of the providing module if the entity has been defined in code.',
+        'type' => 'varchar',
+        'length' => 255,
+        'not null' => FALSE,
+      ),
+    ),
+    'primary key' => array('id'),
+    'unique keys' => array(
+      'type' => array('type'),
+    ),
+  );
+
+  return $schema;
+}
+
+/**
+ * Implements hook_field_schema().
+ */
+function knowledge_graph_field_schema($field) {
+  if ($field['type'] == 'field_knowledge_graph_mapper') {
+    // Schema for the field "knowledge_graph_mapper".
+    $columns = array(
+      'field_name' => array(
+        'type' => 'varchar',
+        'not null' => TRUE,
+        'length' => '255',
+        'default' => '',
+      ),
+    );
+  }
+  return array(
+    'columns' => $columns,
+  );
+}
+
+/**
+ * Update the size of the name field.
+ */
+function knowledge_graph_update_7001(&$sandbox) {
+  $schema = knowledge_graph_schema();
+  db_change_field('knowledge_graph', 'name', 'name', $schema['knowledge_graph']['fields']['name']);
+}
+
