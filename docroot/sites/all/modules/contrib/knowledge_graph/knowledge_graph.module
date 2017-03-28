@@ -1,0 +1,391 @@
+<?php
+
+/**
+ * @file
+ * Implements the custom entities and fields. Also provides permissions, menu
+ * call backs and takes care of rendering the maps.
+ */
+
+/**
+ * Implements hook_entity_info().
+ */
+function knowledge_graph_entity_info() {
+  $return = array(
+    'knowledge_graph' => array(
+      'label' => t('Knowledge Graph Entity'),
+      'plural label' => t('Knowledge Graph Entities'),
+      'entity class' => 'Entity',
+      'controller class' => 'KnowledgeGraphEntityController',
+      'file' => 'includes/Controller/KnowledgeGraphEntityController.php',
+      'base table' => 'knowledge_graph',
+      'fieldable' => TRUE,
+      'exportable' => TRUE,
+      'entity keys' => array(
+        'id' => 'id',
+        'label' => 'name',
+        'bundle' => 'type',
+      ),
+      'bundles' => array(),
+      'bundle keys' => array(
+        'bundle' => 'type',
+      ),
+      'access callback' => 'knowledge_graph_type_access',
+      'module' => 'knowledge_graph',
+      'uri callback' => 'entity_class_uri',
+      'admin ui' => array(
+        'path' => 'admin/structure/knowledge_graph_maps',
+        'file' => 'includes/Controller/KnowledgeGraphEntityUIController.php',
+        'controller class' => 'KnowledgeGraphEntityUIController',
+      ),
+    ),
+  );
+  // Add bundle info but bypass entity_load() as we cannot use it here.
+  $types = db_select('knowledge_graph_type', 'id')
+    ->fields('id')
+    ->execute()
+    ->fetchAllAssoc('type');
+
+  foreach ($types as $type => $info) {
+    $return['knowledge_graph']['bundles'][$type] = array(
+      'label' => $info->label,
+      'admin' => array(
+        'path' => 'admin/structure/knowledge_graph/manage/%knowledge_graph_type',
+        'real path' => 'admin/structure/knowledge_graph/manage/' . $type,
+        'bundle argument' => 4,
+        'access arguments' => array('administer knowledge_graph'),
+      ),
+    );
+  }
+
+  $return['knowledge_graph_type'] = array(
+    'label' => t('Knowledge Graph Type'),
+    'plural label' => t('Knowledge Graph types'),
+    'description' => t('Types of Knowledge Graph Schemas'),
+    'entity class' => 'Entity',
+    'controller class' => 'EntityAPIControllerExportable',
+    'base table' => 'knowledge_graph_type',
+    'fieldable' => FALSE,
+    'bundle of' => 'knowledge_graph',
+    'exportable' => TRUE,
+    'entity keys' => array(
+      'id' => 'id',
+      'name' => 'type',
+      'label' => 'label',
+    ),
+    'access callback' => 'knowledge_graph_type_access',
+    'module' => 'knowledge_graph',
+    // Enable the entity API's admin UI.
+    'admin ui' => array(
+      'path' => 'admin/structure/knowledge_graph',
+      'file' => 'includes/Controller/KnowledgeGraphTypeUIController.php',
+      'controller class' => 'KnowledgeGraphTypeUIController',
+    ),
+  );
+
+  // Support entity cache module.
+  if (module_exists('entitycache')) {
+    $return['knowledge_graph']['field cache'] = FALSE;
+    $return['knowledge_graph']['entity cache'] = TRUE;
+  }
+
+  return $return;
+}
+
+/**
+ * Implements hook_field_info().
+ */
+function knowledge_graph_field_info() {
+  return array(
+    'field_knowledge_graph_mapper' => array(
+      'label' => t('Knowledge Graph Mapper'),
+      'description' => t('Maps existing fields to knowledge graph type fields and stores the properties.'),
+      'default_widget' => 'knowledge_graph_mapper',
+      'default_formatter' => 'knowledge_graph_mapper_formatter',
+      'instance_settings' => array('group' => '', 'property' => ''),
+      'property_type' => 'text',
+    ),
+  );
+}
+
+/**
+ * Implements hook_field_widget_info().
+ */
+function knowledge_graph_field_widget_info() {
+  return array(
+    'knowledge_graph_mapper' => array(
+      'label' => t('Knowledge Graph Mapper'),
+      'field types' => array('field_knowledge_graph_mapper'),
+    ),
+  );
+}
+
+/**
+ * Implements hook_field_instance_settings_form().
+ */
+function knowledge_graph_field_instance_settings_form($field, $instance) {
+  $settings = $instance['settings'];
+  $form = array();
+
+  if ($field['type'] == 'field_knowledge_graph_mapper') {
+    $form['group'] = array(
+      '#title' => t('Group'),
+      '#description' => t('Which group should this field be located, i.e. "location". Leave empty if this mapping should be on the root level.'),
+      '#type' => 'textfield',
+      '#max_length' => '255',
+      '#default_value' => !empty($settings['group']) ? $settings['group'] : '',
+    );
+    $form['property'] = array(
+      '#title' => t('Property'),
+      '#description' => t('Which property should this mapping be attached to, i.e. "name". Will be combined with the group setting if set.'),
+      '#type' => 'textfield',
+      '#max_length' => '255',
+      '#default_value' => !empty($settings['property']) ? $settings['property'] : '',
+    );
+  }
+  return $form;
+}
+
+/*
+ * Implements hook_permission().
+ */
+function knowledge_graph_permission() {
+  $permissions = array(
+    'administer knowledge_graph' => array(
+      'title' => t('Administer knowledge graph types'),
+    ),
+  );
+  return $permissions;
+}
+
+/**
+ * Implements hook_menu().
+ */
+function knowledge_graph_menu() {
+  $items = array();
+  $types = knowledge_graph_get_types();
+
+  foreach ($types as $type) {
+    // Add mapping for a knowledge graph type.
+    $items['admin/structure/knowledge_graph/map/' . $type->type] = array(
+      'bundle argument' => 4,
+      'type' => MENU_NORMAL_ITEM,
+      'title' => $type->label,
+      'description' => 'Add mapping using %label mapping scheme.', array('%label' => $type->label),
+      'access arguments' => array('administer knowledge_graph'),
+      'page callback' => 'drupal_get_form',
+      'page arguments' => array('knowledge_graph_form', $type),
+      'file' => 'KnowledgeGraphEntityUIController.php',
+      'file path' => drupal_get_path('module', 'knowledge_graph') . '/includes/Controller'
+    );
+  }
+  $items['admin/structure/knowledge_graph_maps/map/' . $type->type . '/view/%'] = array(
+    'type' => MENU_CALLBACK,
+    'title' => 'View map',
+    'access arguments' => array('administer knowledge_graph'),
+    'page callback' => 'knowledge_graph_map_view',
+    'page arguments' => array(4, 6),
+  );
+  $items['admin/structure/knowledge_graph/mappings'] = array(
+    'type' => MENU_LOCAL_ACTION,
+    'title' => 'Knowledge graph entities',
+    'access arguments' => array('administer knowledge_graph'),
+    'page callback' => '_knowledge_graph_page_redirect',
+    'page arguments' => array('admin/structure/knowledge_graph_maps'),
+  );
+  $items['admin/structure/knowledge_graph_maps/add-mapping'] = array(
+    'type' => MENU_LOCAL_ACTION,
+    'title' => 'Add new knowledge graph mapping',
+    'access arguments' => array('administer knowledge_graph'),
+    'page callback' => '_knowledge_graph_page_redirect',
+    'page arguments' => array('admin/structure/knowledge_graph'),
+  );
+  return $items;
+}
+
+/**
+ * Implements hook_menu_alter().
+ */
+function knowledge_graph_menu_alter(&$items) {
+  // Hide link for adding new knowledge graph map.
+  $items['admin/structure/knowledge_graph_maps/add']['access callback'] = FALSE;
+}
+
+/**
+ * Access callback for the entity API.
+ *
+ * @param $op
+ *   The operation being performed. One of 'view', 'update', 'create', 'delete'
+ *   or just 'edit' (being the same as 'create' or 'update').
+ * @param $knowledge_graph
+ *   (optional) A knowledge_graph to check access for. If nothing is given, access for
+ *   all knowledge_graphs is determined.
+ * @param $account
+ *   (optional) The user to check for. Leave it to NULL to check for the global user.
+ *
+ * @return boolean
+ *   Whether access is allowed or not.
+ */
+function knowledge_graph_type_access($op, $knowledge_graph = NULL, $account = NULL) {
+  return user_access('administer knowledge_graph', $account);
+}
+
+/**
+ * Gets an array of all knowledge graph types, keyed by the type name.
+ *
+ * @param $type_name
+ *   If set, the type with the given name is returned.
+ * @return KnowledgegraphType[]
+ *   Depending whether $type isset, an array of knowledge graph types or a single one.
+ */
+function knowledge_graph_get_types($type_name = NULL) {
+  $types = entity_load_multiple_by_name('knowledge_graph_type', isset($type_name) ? array($type_name) : FALSE);
+  return isset($type_name) ? reset($types) : $types;
+}
+
+/**
+ * Menu argument loader; Load a knowledge_graph type by string.
+ *
+ * @param $type
+ *   The machine-readable name of a knowledge_graph type to load.
+ * @return
+ *   A knowledge_graph type array or FALSE if $type does not exist.
+ */
+function knowledge_graph_type_load($type) {
+  return knowledge_graph_get_types($type);
+}
+
+/**
+ * Fetch a knowledge graph object.
+ *
+ * @param $id
+ *   Integer specifying the knowledge_graph id.
+ * @param $reset
+ *   A boolean indicating that the internal cache should be reset.
+ * @return
+ *   A fully-loaded $knowledge_graph object or FALSE if it cannot be loaded.
+ *
+ * @see knowledge_graph_load_multiple()
+ */
+function knowledge_graph_load($id, $reset = FALSE) {
+  $knowledge_graph = knowledge_graph_load_multiple(array($id), array(), $reset);
+  return reset($knowledge_graph);
+}
+
+/**
+ * Load multiple knowledge_graphs based on certain conditions.
+ *
+ * @param $iids
+ *   An array of knowledge_graph IDs.
+ * @param $conditions
+ *   An array of conditions to match against the {knowledge_graph} table.
+ * @param $reset
+ *   A boolean indicating that the internal cache should be reset.
+ * @return
+ *   An array of knowledge_graph objects, indexed by kid.
+ *
+ * @see entity_load()
+ * @see knowledge_graph_load()
+ * @see knowledge_graph_load_by_user()
+ */
+function knowledge_graph_load_multiple($ids = array(), $conditions = array(), $reset = FALSE) {
+  return entity_load('knowledge_graph', $ids, $conditions, $reset);
+}
+
+/**
+ * Menu Callback for viewing a scheme for one or multiple entities.
+ * @param entity $knowledge_graph
+ *   The scheme to be mapped.
+ * @param string $id
+ *   The id of the entities to be mapped as string. For multiple entities the
+ *   plus sign is supported, i.e. 1+2+3 .
+ */
+function knowledge_graph_map_view($knowledge_graph, $id) {
+  $map_content = knowledge_graph_target_load($knowledge_graph, $id);
+  return knowledge_graph_entity_view_modified('knowledge_graph', array($knowledge_graph), 'json-ld', NULL, NULL, $map_content);
+}
+
+/**
+ * Menu callback for editing an existing knowledge graph.
+ */
+function knowledge_graph_map_edit($entity) {
+  return drupal_get_form('knowledge_graph_mapping_add_form', $entity);
+}
+/**
+ * Menu callback for deleting an existing knowledge graph.
+ */
+function knowledge_graph_map_delete($entity) {
+  return drupal_get_form('knowledge_graph_mapping_delete_form', $entity);
+}
+
+/**
+ * Helper function to load a entity to be mapped based on the entity id.
+ * Can also load multiple entities at once.
+ * @param $knowledge_graph
+ * @param $id
+ * @return mixed
+ */
+function knowledge_graph_target_load($knowledge_graph, $id) {
+  if (!is_numeric($id)) {
+    $ids = explode(' ', $id);
+  }
+  else {
+    $ids = array($id);
+  }
+  return entity_load($knowledge_graph->entity_type_ref, $ids);
+}
+
+/**
+ * View entity with additional arguments.
+ * @param $map_content
+ *  Entity to be mapped.
+ * 
+ * @see entity_view().
+ */
+function knowledge_graph_entity_view_modified($entity_type, $entities, $view_mode = 'full', $langcode = NULL, $page = NULL, $map_content) {
+  $info = entity_get_info($entity_type);
+  if (isset($info['view callback'])) {
+    $entities = entity_key_array_by_property($entities, $info['entity keys']['id']);
+    return $info['view callback']($entities, $view_mode, $langcode, $entity_type);
+  }
+  elseif (in_array('EntityAPIControllerInterface', class_implements($info['controller class']))) {
+    return entity_get_controller($entity_type)->view($entities, $view_mode, $langcode, $page, $map_content);
+  }
+  return FALSE;
+}
+
+/**
+ * Implements hook_entity_view().
+ */
+function knowledge_graph_entity_view($entity, $type, $view_mode, $langcode) {
+  if (!isset($entity->type)) {
+    return;
+  }
+  $query = new EntityFieldQuery();
+  $query->entityCondition('entity_type', 'knowledge_graph')
+    ->propertyCondition('entity_type_ref', $type)
+    ->propertyCondition('bundle_ref', $entity->type)
+    ->propertyOrderBy('id', 'DESC')
+    ->range(0, 1);
+  $result = $query->execute();
+  if (!empty($result)) {
+    // Get id of map and get the json.
+    $map_id = current($result['knowledge_graph'])->id;
+    $map = knowledge_graph_load($map_id);
+    $json = knowledge_graph_entity_view_modified('knowledge_graph', array($map), 'json-ld', NULL, NULL, $entity);
+    $script = '<script type="application/ld+json">[' . $json . ']</script>';
+    $element = array(
+      '#type' => 'markup',
+      '#markup' => $script,
+    );
+    drupal_add_html_head($element, 'knowledge_graph');
+  }
+}
+
+
+
+/**
+ * Helper function to redirect menu page callback.
+ */
+function _knowledge_graph_page_redirect($path) {
+  drupal_goto($path);
+}

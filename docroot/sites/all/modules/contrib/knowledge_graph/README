@@ -1,0 +1,72 @@
+CONTENTS OF THIS FILE
+---------------------
+
+ INTRODUCTION
+ ------------
+ The Knowledge Graph Module allows to build schemas from schema.org using the field ui. A schema can be used to
+ map content type fields and properties as a schema property and output it as JSON-LD in the HTML head.
+
+ REQUIREMENTS
+ ------------
+
+ * Entity API (https://www.drupal.org/project/entity)
+ * Chaos tool suite (ctools) (https://www.drupal.org/project/ctools)
+
+ RECOMMEND MODULES
+ -----------------
+
+ * Field Group (https://www.drupal.org/project/field_group):
+   When enabled, you can add a group to direct fields (see below). May be required later.
+
+ INSTALLATION
+ ------------
+
+  * Install as you would normally install a contributed Drupal module. See:
+    https://drupal.org/documentation/install/modules-themes/modules-7
+    for further information.
+
+ CONFIGURATION
+ -------------
+
+   1. Creating a schema
+
+     This module provides the entity "Knowledge Graph Entity" which stores the mapping of one schema for one content type.
+     First, create a Knowledge Graph Type which is a bundle of the Knowledge Graph Entity. A Knowledge Graph Type represents
+     a schema from schema.org.
+
+     To create a Knowledge Graph Type, go to /admin/structure/knowledge_graph and add a knowledge graph type. Add new
+     fields using "Manage Fields".
+     This module provides a new field type "Knowledge Graph Mapper" which later will take
+     care of mapping values of a content type. When adding a field of this type, you can set "group" and "property" of this
+     mapping in the field settings of the instance. This should match with the schema definition on schema.org. If you want
+     this field to be rendered as "location.name", you have to set "location" as "group" and "name" as property.
+     (Note: This may change in the future if we decide to fully require the field group module.)
+     You can also add fields of different field types which will be rendered directly (called "Direct Fields" in this module).
+     A common practice would be to add a "@type" field which will declare the type of your mapping matching the type on
+     schema.org.
+     To render direct fields in groups in a schema, we currently require you to use the Field Group module. If you want to
+     add a "location.@type" field, you have to add a field group "group_location" and add a "@type" field in this group.
+     The module will then take the "location" out of "group_location" as group and the field label as property.
+
+   2. Map a content type
+
+    After creating a map, you should see a button "Add mapping" which will direct you to a page where you can define which
+    property of field value should be mapped on which field in the schema. You can select every column of every field.
+    Note: Entity Reference Fields are also supported up to the first level. If you want to get a value of a referenced entity,
+    you should see all values of the referenced entity available in the drop downs.
+
+   3. View the JSON-LD
+
+    After creating the map, you should see the JSON-LD output in the HTML head when viewing your node.
+
+    You can test your schema output on https://developers.google.com/structured-data/testing-tool/
+
+ MAINTAINERS
+ -----------
+ Current maintainers:
+ * Lucio Waßill (Cyberschorsch) https://www.drupal.org/u/cyberschorsch
+ * Steffen Rühlmann (SteffenR) https://www.drupal.org/u/steffenr
+
+This project has been sponsored by:
+
+* undpaul (http://wwww.undpaul.de)
