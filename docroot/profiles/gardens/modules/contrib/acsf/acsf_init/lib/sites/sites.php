@@ -44,7 +44,27 @@ if (empty($_SERVER['HTTP_HOST']) || !is_acquia_host()) {
   return;
 }
 
-require_once dirname(__FILE__) . '/g/sites.inc';
+// There are some drush commands which run other commands as a post execution
+// task, for example the drush updb which automatically executes a cache clear
+// or rebuild after the update has finished, however this is handled by invoking
+// the relevant drush command in a different process on the same site. Since we
+// are calling these drush commands without an alias, drush8 is trying to
+// discover if there is an alias that covers the current site, and in the
+// process it walks over the drush aliases file and includes the sites.php for
+// each entry. In our case drush will include the sites.php for the live and the
+// update environment causing a fatal php error because sites.php includes
+// sites.inc and the functions would be redefined on the fly.
+// When calling the commands with an alias a different issue surfaces: starting
+// from drush7, drush is static caching the alias entries as is, meaning that
+// the extra root and uri parameters we pass to the drush command do not get
+// applied to the static alias entry and when drush is trying to run the cache
+// clear or rebuild using this static cache then it is going to try to run it on
+// the wrong site.
+// Therefore, for the time being, safeguard the sites.inc inclusion and avoid
+// using aliases.
+if (!function_exists('gardens_site_data_load_file')) {
+  require_once dirname(__FILE__) . '/g/sites.inc';
+}
 
 // Drush site-install gets confused about the uri when we specify the
 // --sites-subdir option. The HTTP_HOST is set incorrectly and we can't
