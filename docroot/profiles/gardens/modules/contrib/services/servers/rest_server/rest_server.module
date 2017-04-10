@@ -55,7 +55,6 @@ function rest_server_request_parsers() {
     $parsers = array(
       'application/x-www-form-urlencoded' => 'ServicesParserURLEncoded',
       'application/json' => 'ServicesParserJSON',
-      'application/vnd.php.serialized' => 'ServicesParserPHP',
       'multipart/form-data' => 'ServicesParserMultipart',
       'application/xml' => 'ServicesParserXML',
       'text/xml' => 'ServicesParserXML',

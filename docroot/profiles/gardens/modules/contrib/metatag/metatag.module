@@ -683,12 +683,13 @@ function metatag_entity_view($entity, $entity_type, $view_mode, $langcode) {
     // hook_metatag_page_cache_cid_parts_alter().
     drupal_alter('metatag_page_cache_cid_parts', $cid_parts);
 
-    $cid = "output:{$entity_type}:{$entity_id}:{$langcode}:" . hash('sha256', serialize($cid_parts));
-
-    if ($cache = cache_get($cid, 'cache_metatag')) {
-      $output = $cache->data;
-    }
-    else {
+    // See gardens_profile specific patch for SA-CONTRIB-2017-019 / DG-16967:
+    //$cid = "output:{$entity_type}:{$entity_id}:{$langcode}:" . hash('sha256', serialize($cid_parts));
+    //
+    //if ($cache = cache_get($cid, 'cache_metatag')) {
+    //  $output = $cache->data;
+    //}
+    //else {
       // Separate the meta tags.
       $metatags = isset($entity->metatags) ? $entity->metatags : array();
 
@@ -713,8 +714,8 @@ function metatag_entity_view($entity, $entity_type, $view_mode, $langcode) {
 
       // Render the metatags and save to the cache.
       $output = metatag_metatags_view($instance, $metatags, $options);
-      cache_set($cid, $output, 'cache_metatag');
-    }
+      //cache_set($cid, $output, 'cache_metatag');
+    //}
 
     // We need to register the term's metatags, so we can later fetch them.
     // @see metatag_page_build().
@@ -1149,15 +1150,16 @@ function metatag_page_build(&$page) {
     // hook_metatag_page_cache_cid_parts_alter().
     drupal_alter('metatag_page_cache_cid_parts', $cid_parts);
 
-    $cid = "output:{$instance}:" . hash('sha256', serialize($cid_parts));
-
-    if ($cache = cache_get($cid, 'cache_metatag')) {
-      $metatags = $cache->data;
-    }
-    else {
+    // See gardens_profile specific patch for SA-CONTRIB-2017-019 / DG-16967:
+    //$cid = "output:{$instance}:" . hash('sha256', serialize($cid_parts));
+    //
+    //if ($cache = cache_get($cid, 'cache_metatag')) {
+    //  $metatags = $cache->data;
+    //}
+    //else {
       $metatags = metatag_metatags_view($instance, array());
-      cache_set($cid, $metatags, 'cache_metatag');
-    }
+      //cache_set($cid, $metatags, 'cache_metatag');
+    //}
 
     $page['content']['metatags'][$instance] = $metatags;
   }
@@ -1188,15 +1190,16 @@ function metatag_page_build(&$page) {
     // hook_metatag_page_cache_cid_parts_alter().
     drupal_alter('metatag_page_cache_cid_parts', $cid_parts);
 
-    $cid = "output:{$instance}:" . hash('sha256', serialize($cid_parts));
-
-    if ($cache = cache_get($cid, 'cache_metatag')) {
-      $metatags = $cache->data;
-    }
-    else {
+    // See gardens_profile specific patch for SA-CONTRIB-2017-019 / DG-16967:
+    //$cid = "output:{$instance}:" . hash('sha256', serialize($cid_parts));
+    //
+    //if ($cache = cache_get($cid, 'cache_metatag')) {
+    //  $metatags = $cache->data;
+    //}
+    //else {
       $metatags = metatag_metatags_view($instance, array());
-      cache_set($cid, $metatags, 'cache_metatag');
-    }
+      //cache_set($cid, $metatags, 'cache_metatag');
+    //}
     $page['content']['metatags'][$instance] = $metatags;
   }
 }
