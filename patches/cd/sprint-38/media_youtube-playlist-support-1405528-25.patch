@@ -1,0 +1,189 @@
+diff --git a/includes/MediaInternetYouTubeHandler.inc b/includes/MediaInternetYouTubeHandler.inc
+index 986f785..57b30f0 100644
+--- a/includes/MediaInternetYouTubeHandler.inc
++++ b/includes/MediaInternetYouTubeHandler.inc
+@@ -11,7 +11,20 @@
+  * @see hook_media_internet_providers().
+  */
+ class MediaInternetYouTubeHandler extends MediaInternetBaseHandler {
++
+   public function parse($embedCode) {
++    $list_patterns = array(
++      '@youtube\.com/playlist[#\?].*?list=([^"\& ]+)@i',
++      '@youtube\.com/view_play_list[#\?].*?p=([^"\& ]+)@i',
++    );
++
++    foreach ($list_patterns as $pattern) {
++      preg_match($pattern, $embedCode, $matches);
++
++      if (isset($matches[1]) && self::validId($matches[1], 'l')) {
++        return file_stream_wrapper_uri_normalize('youtube://l/' . $matches[1]);
++      }
++    }
+     // http://youtube.com/watch/*
+     // http://youtube.com/embed/*
+     // http://youtube.com/v/*
+@@ -19,6 +32,9 @@ class MediaInternetYouTubeHandler extends MediaInternetBaseHandler {
+     // http://youtu.be/*
+     // http://gdata.youtube.com/feeds/api/videos/*
+     $patterns = array(
++      '@youtube\.com/watch[#\?].*?v=([^"\& ]+).*&list=([^"\& ]+)@i',
++      '@youtu\.be/([^"\&\? ]+)\?list=([^"\& ]+)@i',
++      '@youtube\.com/embed/([^"\&\? ]+)\?list=([^"\& ]+)@i',
+       '@youtube\.com/watch[#\?].*?v=([^"\& ]+)@i',
+       '@youtube\.com/embed/([^"\&\? ]+)@i',
+       '@youtube\.com/v/([^"\&\? ]+)@i',
+@@ -28,11 +44,15 @@ class MediaInternetYouTubeHandler extends MediaInternetBaseHandler {
+     );
+ 
+     foreach ($patterns as $pattern) {
+-      preg_match($pattern, $embedCode, $matches);
++      preg_match_all($pattern, $embedCode, $matches);
+       // @TODO: Parse is called often. Refactor so that valid ID is checked
+       // when a video is added, but not every time the embedCode is parsed.
+-      if (isset($matches[1]) && self::validId($matches[1])) {
+-        return file_stream_wrapper_uri_normalize('youtube://v/' . $matches[1]);
++      if (isset($matches[1][0]) && self::validId($matches[1][0])) {
++        $uri = 'youtube://v/' . $matches[1][0];
++        if (isset($matches[2][0]) && self::validId($matches[2][0], 'l')) {
++          $uri .= '/l/' . $matches[2][0];
++         }
++        return file_stream_wrapper_uri_normalize($uri);
+       }
+     }
+   }
+@@ -87,8 +107,8 @@ class MediaInternetYouTubeHandler extends MediaInternetBaseHandler {
+    *   TRUE if the video ID is valid, or throws a
+    *   MediaInternetValidationException otherwise.
+    */
+-  static public function validId($id) {
+-    $uri = file_stream_wrapper_uri_normalize('youtube://v/' . check_plain($id));
++  static public function validId($id, $type = 'v') {
++    $uri = file_stream_wrapper_uri_normalize('youtube://' . $type . '/' . check_plain($id));
+     $external_url = file_create_url($uri);
+     $oembed_url = url('http://www.youtube.com/oembed', array('query' => array('url' => $external_url, 'format' => 'json')));
+     $response = drupal_http_request($oembed_url, array('method' => 'HEAD'));
+diff --git a/includes/MediaYouTubeStreamWrapper.inc b/includes/MediaYouTubeStreamWrapper.inc
+index 72f925f..2dcfc92 100644
+--- a/includes/MediaYouTubeStreamWrapper.inc
++++ b/includes/MediaYouTubeStreamWrapper.inc
+@@ -27,6 +27,15 @@ class MediaYouTubeStreamWrapper extends MediaReadOnlyStreamWrapper {
+       $data = drupal_json_decode($response->data);
+       return $data['thumbnail_url'];
+     }
++    elseif ($response->code == 401) {
++      throw new MediaInternetValidationException("Embedding has been disabled for this video.");
++    }
++    elseif ($response->code == 404) {
++      return "http://s.ytimg.com/yts/img/image-hh-404-vflvCykRp.png";
++    }
++    elseif ($response->code != 200) {
++      throw new MediaInternetValidationException("The YouTube video ID is invalid or the video was deleted.");
++    }
+     else {
+       throw new Exception("Error Processing Request. (Error: {$response->code}, {$response->error})");
+       return;
+@@ -37,8 +46,9 @@ class MediaYouTubeStreamWrapper extends MediaReadOnlyStreamWrapper {
+     $parts = $this->get_parameters();
+     // There's no need to hide thumbnails, always use the public system rather
+     // than file_default_scheme().
+-    $local_path = 'public://media-youtube/' . check_plain($parts['v']) . '.jpg';
+ 
++    $id = array_pop($parts);
++    $local_path = file_default_scheme() . '://media-youtube/' . check_plain($id) . '.jpg';
+     if (!file_exists($local_path)) {
+       $dirname = drupal_dirname($local_path);
+       file_prepare_directory($dirname, FILE_CREATE_DIRECTORY | FILE_MODIFY_PERMISSIONS);
+@@ -54,4 +64,31 @@ class MediaYouTubeStreamWrapper extends MediaReadOnlyStreamWrapper {
+ 
+     return $local_path;
+   }
++
++  /**
++   * Updates $base_url depending on whether the embed is a video or playlist.
++   */
++  function setBaseUrl($parameters) {
++    if (isset($parameters['l'])) {
++      if (!isset($parameters['v'])) {
++        $this->base_url = 'http://youtube.com/playlist';
++      }
++      $parameters['list'] = $parameters['l'];
++      unset($parameters['l']);
++    }
++    return $parameters;
++  }
++
++  /**
++   * Returns a url in the format "http://www.youtube.com/watch?v=qsPQN4MiTeE".
++   *
++   * Overrides interpolateUrl() defined in MediaReadOnlyStreamWrapper.
++   */
++  function interpolateUrl() {
++    if ($parameters = $this->get_parameters()) {
++      $parameters = $this->setBaseUrl($parameters);
++      return $this->base_url . '?' . http_build_query($parameters);
++    }
++  }
++
+ }
+diff --git a/themes/media_youtube.theme.inc b/themes/media_youtube.theme.inc
+index 25e339e..69f7ba0 100644
+--- a/themes/media_youtube.theme.inc
++++ b/themes/media_youtube.theme.inc
+@@ -13,7 +13,16 @@ function media_youtube_preprocess_media_youtube_video(&$variables) {
+   // Build the URI.
+   $wrapper = file_stream_wrapper_get_instance_by_uri($variables['uri']);
+   $parts = $wrapper->get_parameters();
+-  $variables['video_id'] = check_plain($parts['v']);
++  if (isset($parts['v'])) {
++    $variables['embed_type'] = 'video';
++    $variables['video_id'] = check_plain($parts['v']);
++    $embed_path = '/embed/' . $variables['video_id'];
++  }
++  elseif (isset($parts['l'])) {
++    $variables['embed_type'] = 'playlist';
++    $variables['video_id'] = check_plain($parts['l']);
++    $embed_path = '/embed/videoseries';
++  }
+ 
+   // Make the file object available.
+   $file_object = file_uri_to_object($variables['uri']);
+@@ -85,19 +94,20 @@ function media_youtube_preprocess_media_youtube_video(&$variables) {
+     }
+   }
+ 
+-  // Non-query options.
+-  if ($variables['options']['nocookie']) {
+-    $url_base = 'youtube-nocookie.com';
++  if ($variables['options']['protocol_specify']) {
++    $protocol = $variables['options']['protocol'];
+   }
+   else {
+-    $url_base = 'youtube.com';
++    $protocol = '';
+   }
+ 
+-  if ($variables['options']['protocol_specify']) {
+-    $protocol = $variables['options']['protocol'];
++  // Non-query options.
++  if ($variables['options']['nocookie']) {
++    $url_base = 'youtube-nocookie.com';
+   }
+   else {
+-    $protocol = '';
++    $url_base = 'youtube.com';
++    $protocol = 'http:';
+   }
+ 
+   // Add some options as their own template variables.
+@@ -123,6 +133,9 @@ function media_youtube_preprocess_media_youtube_video(&$variables) {
+   // to use for the alternative content.
+   $variables['alternative_content'] = t('Video of @title', array('@title' => $variables['title']));
+ 
++  if (isset($parts['l'])) {
++    $query['list'] = $parts['l'];
++  }
+   // Build the iframe URL with options query string.
+-  $variables['url'] = url($protocol . '//www.' . $url_base . '/embed/' . $variables['video_id'], array('query' => $query, 'external' => TRUE));
++  $variables['url'] = url($protocol . '//www.' . $url_base . $embed_path, array('query' => $query, 'external' => TRUE));
+ }
