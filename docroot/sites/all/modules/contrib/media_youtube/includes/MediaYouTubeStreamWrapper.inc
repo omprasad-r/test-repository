@@ -17,9 +17,7 @@ class MediaYouTubeStreamWrapper extends MediaReadOnlyStreamWrapper {
   }
 
   function getOriginalThumbnailPath() {
-    $parts = $this->get_parameters();
-    $uri = file_stream_wrapper_uri_normalize('youtube://v/' . check_plain($parts['v']));
-    $external_url = file_create_url($uri);
+    $external_url = $this->getExternalUrl();
     $oembed_url = url('http://www.youtube.com/oembed', array('query' => array('url' => $external_url, 'format' => 'json')));
     $response = drupal_http_request($oembed_url);
 
