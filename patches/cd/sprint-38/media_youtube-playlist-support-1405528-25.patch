@@ -64,10 +64,21 @@ index 986f785..57b30f0 100644
      $oembed_url = url('http://www.youtube.com/oembed', array('query' => array('url' => $external_url, 'format' => 'json')));
      $response = drupal_http_request($oembed_url, array('method' => 'HEAD'));
 diff --git a/includes/MediaYouTubeStreamWrapper.inc b/includes/MediaYouTubeStreamWrapper.inc
-index 72f925f..2dcfc92 100644
+index 72f925f..273a149 100644
 --- a/includes/MediaYouTubeStreamWrapper.inc
 +++ b/includes/MediaYouTubeStreamWrapper.inc
-@@ -27,6 +27,15 @@ class MediaYouTubeStreamWrapper extends MediaReadOnlyStreamWrapper {
+@@ -17,9 +17,7 @@ class MediaYouTubeStreamWrapper extends MediaReadOnlyStreamWrapper {
+   }
+ 
+   function getOriginalThumbnailPath() {
+-    $parts = $this->get_parameters();
+-    $uri = file_stream_wrapper_uri_normalize('youtube://v/' . check_plain($parts['v']));
+-    $external_url = file_create_url($uri);
++    $external_url = $this->getExternalUrl();
+     $oembed_url = url('http://www.youtube.com/oembed', array('query' => array('url' => $external_url, 'format' => 'json')));
+     $response = drupal_http_request($oembed_url);
+ 
+@@ -27,6 +25,15 @@ class MediaYouTubeStreamWrapper extends MediaReadOnlyStreamWrapper {
        $data = drupal_json_decode($response->data);
        return $data['thumbnail_url'];
      }
@@ -83,7 +94,7 @@ index 72f925f..2dcfc92 100644
      else {
        throw new Exception("Error Processing Request. (Error: {$response->code}, {$response->error})");
        return;
-@@ -37,8 +46,9 @@ class MediaYouTubeStreamWrapper extends MediaReadOnlyStreamWrapper {
+@@ -37,8 +44,9 @@ class MediaYouTubeStreamWrapper extends MediaReadOnlyStreamWrapper {
      $parts = $this->get_parameters();
      // There's no need to hide thumbnails, always use the public system rather
      // than file_default_scheme().
@@ -94,7 +105,7 @@ index 72f925f..2dcfc92 100644
      if (!file_exists($local_path)) {
        $dirname = drupal_dirname($local_path);
        file_prepare_directory($dirname, FILE_CREATE_DIRECTORY | FILE_MODIFY_PERMISSIONS);
-@@ -54,4 +64,31 @@ class MediaYouTubeStreamWrapper extends MediaReadOnlyStreamWrapper {
+@@ -54,4 +62,31 @@ class MediaYouTubeStreamWrapper extends MediaReadOnlyStreamWrapper {
  
      return $local_path;
    }
