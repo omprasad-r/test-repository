@@ -129,13 +129,23 @@ function youtube_iframe_file_formatter_info() {
 function youtube_iframe_file_formatter_view($file, $display, $langcode) {
   $scheme = file_uri_scheme($file->uri);
   // WYSIWYG does not yet support video inside a running editor instance.
-  $youtube_video = explode('youtube://v/', $file->uri);
+  $autoplay = '?autoplay=' . $display['settings']['autoplay'];
+  if (strpos($file->uri, 'youtube://v/') !== false) {
+    $youtube_video = explode('youtube://v/', $file->uri);
+    $video_id = $youtube_video[1];
+  }
+  else{
+    $youtube_video = explode('youtube://l/', $file->uri);
+    $video_id = $youtube_video[1];
+    $videoseries = 'videoseries?list=';
+    $autoplay = '';
+  }
   if ($scheme == 'youtube' && empty($file->override['wysiwyg'])) {
     $element = array(
       '#markup' => t('<iframe id="player-@vid" width="@width" height="@height"
-src="http://www.youtube.com/embed/@vid?autoplay=@autoplay">
-</iframe>', array('@vid' => $youtube_video[1], '@height' => $display['settings']['height'],
-        '@width' => $display['settings']['width'], '@autoplay' => $display['settings']['autoplay'])),
+src="http://www.youtube.com/embed/@videoseries@vid@autoplay">
+</iframe>', array('@videoseries' => $videoseries, '@vid' => $video_id, '@height' => $display['settings']['height'],
+        '@width' => $display['settings']['width'], '@autoplay' => $autoplay)),
     );
 
     return $element;
