@@ -8,10 +8,16 @@
   *
   */
 
-  if (
-    (strpos($_GET['q'], 'user') === 0) || (strpos($_GET['q'], 'user/register') === 0) || (strpos($_GET['q'], 'user/password') === 0) ||
-    (strpos($_GET['q'], 'user/') === 0 && preg_match('/^user\/[\d]+\/edit/', $_GET['q']) === 1)
-   ) {
-  ini_set('memory_limit', '512M');
+ $url = $_SERVER['SERVER_NAME'];
+ $str_arr = explode('.',$url);
   
-} 
+  if ( 
+	($str_arr[0] =="http://vivoconcerti") || ($str_arr[0] =="https://vivoconcerti") || ($str_arr[0] =="vivoconcerti") ){ 
+	  if (
+		(strpos($_GET['q'], 'user') === 0) || (strpos($_GET['q'], 'user/register') === 0) || (strpos($_GET['q'], 'user/password') === 0) ||
+		(strpos($_GET['q'], 'user/') === 0 && (preg_match('/^user\/[\d]+\/edit/', $_GET['q']) === 1))
+	   ) {
+	  ini_set('memory_limit', '128M');
+	} 
+  }	
+ 
