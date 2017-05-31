@@ -684,9 +684,6 @@ class EmailVerifier {
       $this->$key = $value;
     }
     $this->message_muted = variable_get('gardens_client_verification_message_muted', NULL);
-    if (!$this->isVerified()) {
-      $this->scheduleStatusCheck();
-    }
   }
 
   /**
@@ -732,20 +729,6 @@ class EmailVerifier {
    */
   public function needsSiteBlock() {
     return !$this->isVerified() && $this->warn_site_deletion;
-  }
-
-  /**
-   * Get information from the Gardener about this site's verification status.
-   */
-  private function scheduleStatusCheck() {
-    // If we haven't requested verification status from the gardener recently,
-    // schedule a check at the end of this page request. Never do this during
-    // installation, since the site (especially dev sites) might not be set up
-    // correctly for it yet.
-    $recheck_at = $this->last_updated + self::CACHE_STATUS_FOR;
-    if (REQUEST_TIME > $recheck_at && !drupal_installation_attempted()) {
-      drupal_register_shutdown_function('gardens_client_phone_home');
-    }
   }
 
   /**
