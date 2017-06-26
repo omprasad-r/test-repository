@@ -147,7 +147,7 @@ function youtube_iframe_file_formatter_view($file, $display, $langcode) {
       '#markup' => t('<iframe id="player-@vid" width="@width" height="@height"
 src="http://www.youtube.com/embed/@videoseries@vid@autoplay@enablejsapi">
 </iframe>', array('@videoseries' => $videoseries, '@vid' => $video_id, '@height' => $display['settings']['height'],
-        '@width' => $display['settings']['width'], '@autoplay' => $autoplay)),
+        '@width' => $display['settings']['width'], '@autoplay' => $autoplay, '@enablejsapi' => $enablejsapi)),
     );
 
     return $element;
