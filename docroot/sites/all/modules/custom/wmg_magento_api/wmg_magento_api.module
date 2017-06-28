@@ -11,13 +11,13 @@ include_once 'wmg_magento_api.features.inc';
  */
 function wmg_magento_api_menu() {
   $items = array();
-  $items['admin/structure/fanclub/settings'] = array(
-    'title' => t('Fanclub Settings'),
+  $items['/admin/config/system/fanclub'] = array(
+    'title' => t('Fan Club Magento API Settings'),
     'description' => 'Provides fanclub settings.',
     'page callback' => 'drupal_get_form',
     'page arguments' => array('wmg_magento_api_settings_form'),
     'access arguments' => array('administer users'),
-    'type' => MENU_LOCAL_ACTION,
+    'type' => MENU_NORMAL_ITEM,
   );
   return $items;
 }
