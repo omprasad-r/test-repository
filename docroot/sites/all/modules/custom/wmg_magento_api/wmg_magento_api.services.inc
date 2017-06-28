@@ -19,11 +19,11 @@ function wmg_magento_api_default_services_endpoint() {
   $endpoint->authentication = array();
   $endpoint->server_settings = array(
     'formatters' => array(
-      'bencode' => TRUE,
       'json' => TRUE,
-      'php' => TRUE,
-      'xml' => TRUE,
+      'bencode' => FALSE,
       'jsonp' => FALSE,
+      'php' => FALSE,
+      'xml' => FALSE,
     ),
     'parsers' => array(
       'application/json' => TRUE,
