@@ -106,3 +106,36 @@ function _wmg_magento_api_services_resources_get_status($uid) {
   }
   return FALSE;
 }
+
+/**
+ * Implements hook_token_info().
+ */
+function wmg_magento_api_token_info() {
+
+  $info['tokens']['user']['fan-club-store-link'] = array(
+    'name' => t("Fanclub Store Link"),
+    'description' => t("Fanclub Store Link"),
+  );
+  return $info;
+}
+
+/**
+ * Implements hook_tokens().
+ */
+function wmg_magento_api_tokens($type, $tokens, array $data = array(), array $options = array()) {
+  $replacements = array();
+
+  // Check if token type is user
+  if($type == 'user'){
+    foreach ($tokens as $name => $original) {
+      switch ($name) {
+        // Check token is fan-club-store-link
+        case 'fan-club-store-link':
+          global $user;
+          $replacements[$original] = variable_get('wmg_magento_api_product_url') . "?dfmn=" . $user->uid;
+          break;
+      }
+    }
+  }
+  return $replacements;
+}
