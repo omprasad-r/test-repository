@@ -42,6 +42,13 @@ function wmg_magento_api_settings_form($form, &$form_state) {
     '#options' => $roles,
     '#description' => t("Please select the role that will be used for fanclub access."),
   );
+  $form['fanclub_role']['wmg_magento_api_product_url'] = array(
+    '#type' => 'textfield',
+    '#title' => t('Magento Subscription Product URL'),
+    '#default_value' => variable_get('wmg_magento_api_product_url'),
+    '#required' => TRUE,
+    '#description' => t("Please add the product URL without any parameters (e.g. http://www.example.com)."),
+  );
   return system_settings_form($form);
 }
 
@@ -49,28 +56,42 @@ function wmg_magento_api_services_resources() {
   $user_resource = array(
     'subscription' => array(
       'actions' => array(
-        'add' => array(
+        'update_profile' => array(
           'help' => 'Adds subscription for the user',
-          'callback' => '_wmg_magento_api_services_resources_add',
+          'callback' => '_wmg_magento_api_services_update_profile',
           'args' => array(
             array(
               'name' => 'uid',
               'type' => 'int',
-              'description' => 'A valid user id',
+              'description' => 'A valid User ID',
               'source' => array('data' => 'uid'),
+              'optional' => FALSE,
+            ),
+            array(
+              'name' => 'subscription_status',
+              'type' => 'int',
+              'description' => 'The subscription status',
+              'source' => array('data' => 'subscription_status'),
+              'optional' => FALSE,
+            ),
+            array(
+              'name' => 'recurring_profile_id',
+              'type' => 'string',
+              'description' => 'The Recurring Profile ID',
+              'source' => array('data' => 'recurring_profile_id'),
               'optional' => FALSE,
             ),
           ),
           'access callback' => 'services_access_menu',
         ),
-        'getstatus' => array(
+        'get_profile' => array(
           'help' => 'Adds subscription for the user',
-          'callback' => '_wmg_magento_api_services_resources_get_status',
+          'callback' => '_wmg_magento_api_services_resources_get_profile',
           'args' => array(
             array(
               'name' => 'uid',
               'type' => 'int',
-              'description' => 'A valid user id',
+              'description' => 'A valid User ID',
               'source' => array('data' => 'uid'),
               'optional' => FALSE,
             ),
@@ -86,23 +107,78 @@ function wmg_magento_api_services_resources() {
 /**
  * Callback for adding subscription.
  */
-function _wmg_magento_api_services_resources_add($uid) {
-  $fanclub_role = variable_get('wmg_magento_api_fanclub_role');
-  $role = user_role_load($fanclub_role);
-  $user = user_load($uid);
-  $user->roles = $user->roles + array($role->rid => $role->name);
-  user_save($user);
+function _wmg_magento_api_services_update_profile($uid, $subscription_status, $recurring_profile_id) {
+  if ($subscription_status == 'active') {
+    $fanclub_role = variable_get('wmg_magento_api_fanclub_role');
+    $role = user_role_load($fanclub_role);
+    $user = user_load($uid);
+    $user->roles = $user->roles + array($role->rid => $role->name);
+    if (isset($recurring_profile_id)) {
+      $user->field_recurring_profile_id[LANGUAGE_NONE][0]['value'] = $recurring_profile_id;
+    }
+    user_save($user);
+  }
+  elseif ($subscription_status == 'inactive') {
+    $fanclub_role = variable_get('wmg_magento_api_fanclub_role');
+    $role = user_role_load($fanclub_role);
+    $user = user_load($uid);
+    if (isset($user->roles[$role->rid])){
+      unset($user->roles[$role->rid]);
+    }
+    user_save($user);
+  }
+  else {
+    return FALSE;
+  }
   return TRUE;
 }
 
 /**
  * Callback for getting subscription status.
  */
-function _wmg_magento_api_services_resources_get_status($uid) {
+function _wmg_magento_api_services_resources_get_profile($uid) {
   $user = user_load($uid);
+  $subscription_status = 'inactive';
+  $recurring_profile_id = '';
+  if (isset($user->field_recurring_profile_id)){
+    $recurring_profile_id = $user->field_recurring_profile_id[LANGUAGE_NONE][0]['value'];
+  }
   $fanclub_role = variable_get('wmg_magento_api_fanclub_role');
   if (array_key_exists($fanclub_role, $user->roles)) {
-    return TRUE;
+    $subscription_status = 'active';
   }
-  return FALSE;
+  return array('subscription_status' => $subscription_status, 'recurring_profile_id' => $recurring_profile_id);
+}
+
+/**
+ * Implements hook_token_info().
+ */
+function wmg_magento_api_token_info() {
+
+  $info['tokens']['user']['fan-club-store-link'] = array(
+    'name' => t("Fanclub Store Link"),
+    'description' => t("Fanclub Store Link"),
+  );
+  return $info;
+}
+
+/**
+ * Implements hook_tokens().
+ */
+function wmg_magento_api_tokens($type, $tokens, array $data = array(), array $options = array()) {
+  $replacements = array();
+
+  // Check if token type is user
+  if($type == 'user'){
+    foreach ($tokens as $name => $original) {
+      switch ($name) {
+        // Check token is fan-club-store-link
+        case 'fan-club-store-link':
+          global $user;
+          $replacements[$original] = variable_get('wmg_magento_api_product_url') . "?dfmn=" . $user->uid;
+          break;
+      }
+    }
+  }
+  return $replacements;
 }
