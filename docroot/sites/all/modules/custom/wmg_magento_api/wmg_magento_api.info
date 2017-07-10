@@ -1,11 +1,15 @@
 name = wmg_magento_api
 description = Provides API's for magento integration.
 core = 7.x
-package = Features
+package = Other
 version = 7.x-1.0
 project = wmg_magento_api
 dependencies[] = ctools
+dependencies[] = features
 dependencies[] = services
+dependencies[] = text
 features[ctools][] = services:services:3
 features[features_api][] = api:2
+features[field_base][] = field_recurring_profile_id
+features[field_instance][] = user-user-field_recurring_profile_id
 features[services_endpoint][] = restapi
