@@ -37,10 +37,10 @@ function wmg_magento_api_default_services_endpoint() {
   $endpoint->resources = array(
     'subscription' => array(
       'actions' => array(
-        'add' => array(
+        'update_profile' => array(
           'enabled' => '1',
         ),
-        'getstatus' => array(
+        'get_profile' => array(
           'enabled' => '1',
         ),
       ),
