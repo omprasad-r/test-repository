@@ -132,7 +132,7 @@ function _wmg_magento_api_services_update_profile($uid, $subscription_status, $r
   $secret_key = variable_get('wmg_magento_api_secret_key');
   if ($magento_api_key != $secret_key) {
     if (module_exists('flog')) {
-      flog_it($magento_api_key, 'Secret key did not match.');
+      flog_it(array('received_key' => $magento_api_key, 'expected_key' => $secret_key), 'Secret key did not match.');
     }
     return 'access denied';
   }
@@ -168,7 +168,7 @@ function _wmg_magento_api_services_resources_get_profile($uid, $magento_api_key)
   $secret_key = variable_get('wmg_magento_api_secret_key');
   if ($magento_api_key != $secret_key) {
     if (module_exists('flog')) {
-      flog_it($magento_api_key, 'Secret key did not match.');
+      flog_it(array('received_key' => $magento_api_key, 'expected_key' => $secret_key), 'Secret key did not match.');
     }
     return 'access denied';
   }
