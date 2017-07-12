@@ -232,7 +232,7 @@ function drush_acsf_init() {
   $result = drush_acsf_init_verify();
 
   if ($result) {
-    drush_print(dt('Be sure to commit any changes to your repository before deploying.'));
+    drush_print(dt("Be sure to commit any changes to your repository before deploying. This includes files like sites/default/settings.php; you can use 'git status --ignored' to make sure no changes are inadvertantly ignored by a custom git configuration."));
   }
 }
 
@@ -684,6 +684,11 @@ function acsf_init_get_required_files($repo_root) {
       'filename' => 'sites.inc',
       'source' => 'sites/g',
       'dest' => sprintf('%s/sites/g', DRUPAL_ROOT),
+    ),
+    array(
+      'filename' => '.gitignore',
+      'source' => 'sites/default',
+      'dest' => sprintf('%s/sites/default', DRUPAL_ROOT),
     ),
     array(
       'filename' => 'acsf.settings.php',
