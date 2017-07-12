@@ -1,0 +1,36 @@
+<?php
+/**
+ * @file
+ *  Provides logging for the Magento services.
+ */
+
+/**
+ * Implements hook_services_request_preprocess_alter().
+ */
+function wmg_api_logger_services_request_preprocess_alter(&$controller, &$args) {
+  if (module_exists('flog')) {
+    global $services_log_globals, $user;
+    $services_log_globals['controller'] = $controller;
+    $services_log_globals['args'] = $args;
+    $services_log_globals['uid'] = $user->uid;
+    flog_it($services_log_globals, 'Magento Fan Club API service request.');
+  }
+}
+
+/**
+ * Implements hook_services_request_postprocess_alter().
+ */
+function wmg_api_logger_services_request_postprocess_alter(&$controller, &$args, &$result) {
+  if (module_exists('flog')) {
+    flog_it($result, 'Magento Fan Club API service results.');
+  }
+}
+
+/**
+ * Implements hook_rest_server_execute_errors_alter().
+ */
+function wmg_api_logger_rest_server_execute_errors_alter($errors, $controller, $args) {
+  if (module_exists('flog')) {
+    flog_it($errors, 'Magento Fan Club API error log.');
+  }
+}
