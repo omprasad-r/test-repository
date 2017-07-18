@@ -1,0 +1,5 @@
+name = wmg_api_logger
+description = Provides API's logging.
+core = 7.x
+package = Other
+version = 7.x-1.0
