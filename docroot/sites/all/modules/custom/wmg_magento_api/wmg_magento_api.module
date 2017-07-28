@@ -56,6 +56,60 @@ function wmg_magento_api_settings_form($form, &$form_state) {
     '#required' => TRUE,
     '#description' => t("Secret key for API request."),
   );
+  $form['fanclub_api_calls'] = array(
+    '#type' => 'fieldset',
+    '#title' => t('Magento API Calls'),
+    '#weight' => 5,
+    '#collapsible' => FALSE,
+    '#collapsed' => FALSE,
+  );
+  $form['fanclub_api_calls']['wmg_magento_api_soap_url'] = array(
+    '#type' => 'textfield',
+    '#title' => t('SOAP URL'),
+    '#default_value' => variable_get('wmg_magento_api_soap_url'),
+    '#required' => FALSE,
+    '#description' => t("Please add the product URL without any parameters (e.g. http://www.example.com)."),
+  );
+  $form['fanclub_api_calls']['wmg_magento_api_soap_caching'] = array(
+    '#type' => 'checkbox',
+    '#title' => t('WSDL Caching'),
+    '#default_value' => variable_get('wmg_magento_api_soap_caching', 0),
+    '#options' => array(1 => 'On', 0 => 'Off'),
+    '#description' => t("Should be checked if the WSDL caching should be enabled."),
+  );
+  $form['fanclub_api_calls']['wmg_magento_api_soap_username'] = array(
+    '#type' => 'textfield',
+    '#title' => t('SOAP Login Username'),
+    '#default_value' => variable_get('wmg_magento_api_soap_username'),
+    '#prefix' => '<br/>',
+    '#required' => FALSE,
+  );
+  $form['fanclub_api_calls']['wmg_magento_api_soap_password'] = array(
+    '#type' => 'textfield',
+    '#title' => t('SOAP Login Password'),
+    '#default_value' => variable_get('wmg_magento_api_soap_password'),
+    '#required' => FALSE,
+  );
+  $form['fanclub_api_calls']['wmg_magento_api_soap_authentication'] = array(
+    '#type' => 'checkbox',
+    '#title' => t('Use SOAP Authentication'),
+    '#default_value' => variable_get('wmg_magento_api_soap_authentication', 0),
+    '#options' => array(1 => 'On', 0 => 'Off'),
+    '#prefix' => '<br/>',
+    '#description' => t("Should be checked soap authentication is required."),
+  );
+  $form['fanclub_api_calls']['wmg_magento_api_soap_auth_user'] = array(
+    '#type' => 'textfield',
+    '#title' => t('SOAP Authentication Username'),
+    '#default_value' => variable_get('wmg_magento_api_soap_auth_user'),
+    '#required' => FALSE,
+  );
+  $form['fanclub_api_calls']['wmg_magento_api_soap_auth_password'] = array(
+    '#type' => 'textfield',
+    '#title' => t('SOAP Authentication Password'),
+    '#default_value' => variable_get('wmg_magento_api_soap_auth_password'),
+    '#required' => FALSE,
+  );
   return system_settings_form($form);
 }
 
