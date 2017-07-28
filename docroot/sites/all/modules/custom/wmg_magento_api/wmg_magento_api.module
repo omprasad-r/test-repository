@@ -23,6 +23,31 @@ function wmg_magento_api_menu() {
 }
 
 /**
+ * Implements hook_block_info().
+ */
+function wmg_magento_api_block_info() {
+  $blocks['fan_club_info'] = array(
+    'info' => t('Fan Club Account Info.'),
+    'cache' => DRUPAL_CACHE_PER_USER,
+  );
+  return $blocks;
+}
+
+/**
+ * Implements hook_block_view().
+ */
+function wmg_magento_api_block_view($delta = '') {
+  $block = array();
+  switch ($delta) {
+    case 'fan_club_info':
+      $block['subject'] = t('Fan Club Account Info');
+      $block['content'] = _wmg_magento_api_info_block_content();
+      break;
+  }
+  return $block;
+}
+
+/**
  * Implements a system settings form.
  */
 function wmg_magento_api_settings_form($form, &$form_state) {
@@ -199,17 +224,15 @@ function _wmg_magento_api_services_update_profile($uid, $subscription_status, $r
       $user->field_recurring_profile_id[LANGUAGE_NONE][0]['value'] = $recurring_profile_id;
     }
     user_save($user);
-  }
-  elseif ($subscription_status == 'inactive') {
+  } elseif ($subscription_status == 'inactive') {
     $fanclub_role = variable_get('wmg_magento_api_fanclub_role');
     $role = user_role_load($fanclub_role);
     $user = user_load($uid);
-    if (isset($user->roles[$role->rid])){
+    if (isset($user->roles[$role->rid])) {
       unset($user->roles[$role->rid]);
     }
     user_save($user);
-  }
-  else {
+  } else {
     return FALSE;
   }
   return TRUE;
@@ -229,7 +252,7 @@ function _wmg_magento_api_services_resources_get_profile($uid, $magento_api_key)
   $user = user_load($uid);
   $subscription_status = 'inactive';
   $recurring_profile_id = '';
-  if (isset($user->field_recurring_profile_id)){
+  if (isset($user->field_recurring_profile_id)) {
     $recurring_profile_id = $user->field_recurring_profile_id[LANGUAGE_NONE][0]['value'];
   }
   $fanclub_role = variable_get('wmg_magento_api_fanclub_role');
@@ -258,7 +281,7 @@ function wmg_magento_api_tokens($type, $tokens, array $data = array(), array $op
   $replacements = array();
 
   // Check if token type is user
-  if($type == 'user'){
+  if ($type == 'user') {
     foreach ($tokens as $name => $original) {
       switch ($name) {
         // Check token is fan-club-store-link
@@ -270,4 +293,74 @@ function wmg_magento_api_tokens($type, $tokens, array $data = array(), array $op
     }
   }
   return $replacements;
+}
+
+/**
+ * Helper function to generate info block content().
+ */
+function _wmg_magento_api_info_block_content()
+{
+  global $user;
+  $user = user_load($user->uid);
+  $output = '<ul>';
+  $fanclub_role = variable_get('wmg_magento_api_fanclub_role');
+  if (array_key_exists($fanclub_role, $user->roles)) {
+    // Check if the results are available in the cache.
+    if ($cache = cache_get('fanclub_account_info' . $user->uid, 'cache')) {
+      if ($cache->expire > REQUEST_TIME) {
+        return $cache->data;
+      }
+    }
+
+    $soapParameters = array();
+    $wsdl_caching_enabled = variable_get('wmg_magento_api_soap_caching', 0);
+    $wsdl_authentication_enabled = variable_get('wmg_magento_api_soap_authentication', 0);
+    $soap_url_wsdl = variable_get('wmg_magento_api_soap_url', 0);
+    $soap_user = variable_get('wmg_magento_api_soap_username', 0);
+    $soap_password = variable_get('wmg_magento_api_soap_password', 0);
+
+    // Check for WSDL Caching.
+    if ($wsdl_caching_enabled == FALSE) {
+      ini_set("soap.wsdl_cache_enabled", "0");
+    }
+
+    // Check for WSDL Authentication.
+    if ($wsdl_authentication_enabled) {
+      $soapParameters = Array(
+        'login' => variable_get('wmg_magento_api_soap_auth_user', 0),
+        'password' => variable_get('wmg_magento_api_soap_auth_password', 0)
+      );
+    }
+    if (isset($soap_url_wsdl) && !empty($soap_url_wsdl)) {
+      try {
+        // Initiate SOAP Client.
+        $soapClient = new SoapClient($soap_url_wsdl, $soapParameters);
+        // Soap Login.
+        $session = $soapClient->login($soap_user, $soap_password);
+        // Check for the recurring profile id.
+        if (isset($user->field_recurring_profile_id)) {
+          $recurring_profile_id = $user->field_recurring_profile_id[LANGUAGE_NONE][0]['value'];
+          $result = $soapClient->recurringProfileInfo($session, $recurring_profile_id);
+          $output .= '<li>' . t('Membership Active') . '</li>';
+          if ($result->auto_renew) {
+            foreach ($result->scheduled_payments as $payments) {
+              if ($payments->status == 'upcoming') {
+                $output .= '<li>' . t('Will auto-renew on') . $result->expiration_date . '</li>';
+              }
+            }
+          } else {
+            $output .= '<li>' . t('Will expire on') . $result->expiration_date . '</li>';
+          }
+        }
+      } catch (Exception $e) {
+        flog_it($e, 'Magento API Call ended with exception');
+      }
+    }
+  } else {
+    $output .= '<li>' . t('Membership Not Active') . '</li>';
+  }
+  $output .= '</ul>';
+  // Set cache.
+  cache_set('fanclub_account_info' . $user->uid, $output, 'cache', time() + 60 * 60);
+  return $output;
 }
