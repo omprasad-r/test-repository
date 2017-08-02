@@ -1,7 +1,7 @@
 name = ACSF Connector
 description = This is the module that connects a Drupal codebase to Acquia Cloud Site Factory.
 core = 7.x
-acsf_version = 1.38.0
+acsf_version = 1.39.0
 package = Acquia Cloud Site Factory
 dependencies[] = acsf_duplication
 dependencies[] = acsf_openid
