@@ -67,12 +67,12 @@ function wmg_magento_api_settings_form($form, &$form_state) {
     '#options' => $roles,
     '#description' => t("Please select the role that will be used for fanclub access."),
   );
-  $form['fanclub_role']['wmg_magento_api_product_url'] = array(
+  $form['fanclub_role']['wmg_magento_api_uid_field_name'] = array(
     '#type' => 'textfield',
-    '#title' => t('Magento Subscription Product URL'),
-    '#default_value' => variable_get('wmg_magento_api_product_url'),
+    '#title' => t('UID Field Name'),
+    '#default_value' => variable_get('wmg_magento_api_uid_field_name', 'dfmn'),
     '#required' => TRUE,
-    '#description' => t("Please add the product URL without any parameters (e.g. http://www.example.com)."),
+    '#description' => t("Variable name for UID in Magento store links, defaults to <em>dfmn</em>. Rendered token will appear as <em>dfmn=25271</em> where 25271 is the current UID. Token presumes it is following a link that includes a ? and possibly other variables."),
   );
   $form['fanclub_role']['wmg_magento_api_secret_key'] = array(
     '#type' => 'textfield',
@@ -267,9 +267,9 @@ function _wmg_magento_api_services_resources_get_profile($uid, $magento_api_key)
  */
 function wmg_magento_api_token_info() {
 
-  $info['tokens']['user']['fan-club-store-link'] = array(
-    'name' => t("Fanclub Store Link"),
-    'description' => t("Fanclub Store Link"),
+  $info['tokens']['user']['fan-club-uid'] = array(
+    'name' => t("Fan Club UID"),
+    'description' => t("Fan Club UID"),
   );
   return $info;
 }
@@ -285,9 +285,9 @@ function wmg_magento_api_tokens($type, $tokens, array $data = array(), array $op
     foreach ($tokens as $name => $original) {
       switch ($name) {
         // Check token is fan-club-store-link
-        case 'fan-club-store-link':
+        case 'fan-club-uid':
           global $user;
-          $replacements[$original] = variable_get('wmg_magento_api_product_url') . "?dfmn=" . $user->uid;
+          $replacements[$original] = variable_get('wmg_magento_api_uid_field_name', 'dfmn') . "=" . $user->uid;
           break;
       }
     }
