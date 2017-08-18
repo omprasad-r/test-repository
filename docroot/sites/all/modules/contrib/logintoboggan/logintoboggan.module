@@ -306,26 +306,6 @@ function logintoboggan_form_user_pass_reset_alter(&$form, &$form_state) {
 }
 
 /**
- * Implement hook_form_user_admin_permissions_alter().
- *
- * @ingroup logintoboggan_core
- */
-function logintoboggan_form_user_admin_permissions_alter(&$form, &$form_state) {
-  // If the pre-auth role isn't the auth user, then add it as a setting.
-  $id = logintoboggan_validating_id();
-  if ($id != DRUPAL_AUTHENTICATED_RID) {
-    $form['#attached']['js'][] = array(
-      'data' => array(
-        'LoginToboggan' => array(
-          'preAuthID' => $id,
-        ),
-      ),
-      'type' => 'setting',
-    );
-  }
-}
-
-/**
  * Implement hook_form_alter().
  *
  * @ingroup logintoboggan_core
@@ -410,7 +390,10 @@ function logintoboggan_js_alter(&$javascript) {
     // prevent the pre-auth role's checkboxes from being automatically disabled
     // when the auth user's checkboxes are checked.
     if ($id != DRUPAL_AUTHENTICATED_RID) {
-      $javascript['modules/user/user.permissions.js']['data'] = drupal_get_path('module', 'logintoboggan') . '/logintoboggan.permissions.js';
+      $javascript['settings']['data'][] = array('LoginToboggan' => array('preAuthID' => $id));
+      $file = drupal_get_path('module', 'logintoboggan') . '/logintoboggan.permissions.js';
+      $javascript[$file] = drupal_js_defaults($file);
+      $javascript[$file]['weight'] = 999;
     }
   }
 }
